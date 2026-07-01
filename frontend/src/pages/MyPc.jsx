@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, MonitorDown, Sparkles, Loader2, Rocket } from "lucide-react";
+import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket } from "lucide-react";
 import api, { formatApiErrorDetail } from "@/lib/api";
 
 const SPEC_LABELS = { os: "Sistema operativo", cpu: "CPU", gpu: "GPU", ram: "RAM", disk: "Storage", motherboard: "Scheda madre", resolution: "Risoluzione" };
@@ -23,15 +23,17 @@ function composeSpec(key, d) {
   }
   if (key === "ram") {
     const x = [];
+    if (d.ram_type) x.push(d.ram_type);
     if (d.ram_speed_mhz) x.push(`${d.ram_speed_mhz}MHz`);
     if (d.ram_modules) x.push(`${d.ram_modules} moduli`);
     return x.length ? `${v} · ${x.join(" · ")}` : v;
   }
+  if (key === "os") return d.form_factor ? `${v} · ${d.form_factor}` : v;
   if (key === "resolution") return d.refresh_hz ? `${v} @ ${d.refresh_hz}Hz` : v;
   return v;
 }
 
-const STATUS_ICON = { ok: <CheckCircle2 size={16} className="text-[#00FF66]" />, warn: <AlertTriangle size={16} className="text-[#E5FF00]" />, bad: <XCircle size={16} className="text-[#FF3B30]" /> };
+const STATUS_ICON = { ok: <CheckCircle2 size={16} className="text-[#00FF66]" />, warn: <AlertTriangle size={16} className="text-[#E5FF00]" />, bad: <XCircle size={16} className="text-[#FF3B30]" />, unknown: <HelpCircle size={16} className="text-zinc-600" /> };
 
 function ScoreRing({ score, grade }) {
   const color = score >= 85 ? "#00FF66" : score >= 70 ? "#E5FF00" : score >= 50 ? "#FFA500" : "#FF3B30";
@@ -111,11 +113,31 @@ export default function MyPc() {
               {health.checks.map((c, i) => (
                 <div key={i} data-testid={`check-${i}`} className="flex items-start gap-2 bg-black border border-[#1A1A24] p-3">
                   {STATUS_ICON[c.status]}
-                  <div><div className="text-sm text-zinc-200">{c.label}</div><div className="text-xs text-zinc-500">{c.message}</div></div>
+                  <div className="min-w-0">
+                    <div className="text-sm text-zinc-200">{c.label}</div>
+                    <div className="text-xs text-zinc-500">{c.message}</div>
+                    {c.fix && <div className="text-xs text-[#E5FF00] mt-1">→ {c.fix}</div>}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
+          {(health.gpu_temp != null || health.cpu_temp != null) && (
+            <div className="mt-4 flex flex-wrap gap-3 border-t border-[#1A1A24] pt-3">
+              {health.cpu_temp != null && (
+                <div className="flex items-center gap-2 text-sm" data-testid="cpu-temp">
+                  <Thermometer size={15} className={health.cpu_temp >= 90 ? "text-[#FF3B30]" : health.cpu_temp >= 80 ? "text-[#E5FF00]" : "text-[#00FF66]"} />
+                  <span className="text-zinc-500">CPU</span> <span className="font-bold">{health.cpu_temp}°C</span>
+                </div>
+              )}
+              {health.gpu_temp != null && (
+                <div className="flex items-center gap-2 text-sm" data-testid="gpu-temp">
+                  <Thermometer size={15} className={health.gpu_temp >= 85 ? "text-[#FF3B30]" : health.gpu_temp >= 75 ? "text-[#E5FF00]" : "text-[#00FF66]"} />
+                  <span className="text-zinc-500">GPU</span> <span className="font-bold">{health.gpu_temp}°C</span>
+                </div>
+              )}
+            </div>
+          )}
           {health.driver_version && (
             <div className="mt-4 text-xs text-zinc-500 flex items-center gap-2 border-t border-[#1A1A24] pt-3">
               Driver GPU: <span className="text-zinc-300">{health.driver_version}</span>

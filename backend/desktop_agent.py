@@ -52,41 +52,76 @@ def _clean(v):
     return " ".join(v.split()).strip() if v else ""
 
 
+def nvsmi():
+    """Return dict from nvidia-smi if available, else None."""
+    out = run("nvidia-smi --query-gpu=name,memory.total,memory.used,temperature.gpu,"
+              "utilization.gpu,driver_version --format=csv,noheader,nounits")
+    if not out or "not recognized" in out.lower() or "not found" in out.lower() or out.startswith("errore"):
+        return None
+    parts = [p.strip() for p in out.splitlines()[0].split(",")]
+    if len(parts) < 6:
+        return None
+    try:
+        return {"name": parts[0], "vram_total_mb": int(float(parts[1])),
+                "vram_used_mb": int(float(parts[2])), "temp": int(float(parts[3])),
+                "util": int(float(parts[4])), "driver": parts[5]}
+    except Exception:
+        return None
+
+
+_NV = None
+
+
+def get_nv():
+    global _NV
+    if _NV is None:
+        _NV = nvsmi() or {}
+    return _NV
+
+
 def collect_specs():
     s = {}
     s["os"] = _clean(ps("(Get-CimInstance Win32_OperatingSystem).Caption"))
+    s["os_build"] = _clean(ps("(Get-CimInstance Win32_OperatingSystem).BuildNumber"))
+    # chassis: laptop vs desktop
+    ct = ps("(Get-CimInstance Win32_SystemEnclosure).ChassisTypes -join ','")
+    s["form_factor"] = "Laptop" if any(x in (ct or "") for x in ["8", "9", "10", "14", "30", "31", "32"]) else "Desktop"
     # CPU with cores/threads/clock
     s["cpu"] = _clean(ps("(Get-CimInstance Win32_Processor | Select-Object -First 1).Name"))
-    cores = ps("(Get-CimInstance Win32_Processor | Select-Object -First 1).NumberOfCores")
-    threads = ps("(Get-CimInstance Win32_Processor | Select-Object -First 1).NumberOfLogicalProcessors")
-    clock = ps("[math]::round((Get-CimInstance Win32_Processor | Select-Object -First 1).MaxClockSpeed/1000,2)")
-    s["cpu_cores"] = cores
-    s["cpu_threads"] = threads
-    s["cpu_clock_ghz"] = clock
-    # GPU: prefer discrete (skip basic/virtual adapters)
-    gpu_name = _clean(ps("$g=Get-CimInstance Win32_VideoController | "
-                         "Where-Object { $_.Name -notmatch 'Basic|Virtual|Remote|Meta|Parsec|Citrix' } | "
-                         "Select-Object -First 1; $g.Name"))
-    if not gpu_name:
-        gpu_name = _clean(ps("(Get-CimInstance Win32_VideoController | Select-Object -First 1).Name"))
-    s["gpu"] = gpu_name
-    # VRAM from registry (accurate for >4GB) with fallback to AdapterRAM
-    vram = ps("$k=Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}' "
-              "-ErrorAction SilentlyContinue; $m=0; foreach($i in $k){ $q=(Get-ItemProperty $i.PSPath -Name "
-              "'HardwareInformation.qwMemorySize' -ErrorAction SilentlyContinue).'HardwareInformation.qwMemorySize'; "
-              "if($q -and $q -gt $m){$m=$q} }; if($m -gt 0){[math]::round($m/1GB,0)}")
-    if not vram:
-        vram = ps("[math]::round((Get-CimInstance Win32_VideoController | Select-Object -First 1).AdapterRAM/1GB,0)")
-    s["gpu_vram_gb"] = vram
-    s["gpu_driver_version"] = _clean(ps("(Get-CimInstance Win32_VideoController | Select-Object -First 1).DriverVersion"))
-    refresh = ps("(Get-CimInstance Win32_VideoController | Select-Object -First 1).CurrentRefreshRate")
-    s["refresh_hz"] = refresh
-    # RAM: total + speed + module count + type
+    s["cpu_cores"] = ps("(Get-CimInstance Win32_Processor | Select-Object -First 1).NumberOfCores")
+    s["cpu_threads"] = ps("(Get-CimInstance Win32_Processor | Select-Object -First 1).NumberOfLogicalProcessors")
+    s["cpu_clock_ghz"] = ps("[math]::round((Get-CimInstance Win32_Processor | Select-Object -First 1).MaxClockSpeed/1000,2)")
+    # GPU: prefer nvidia-smi (exact), else discrete via WMI
+    nv = get_nv()
+    if nv.get("name"):
+        s["gpu"] = nv["name"]
+        s["gpu_vram_gb"] = str(round(nv["vram_total_mb"] / 1024))
+        s["gpu_driver_version"] = nv["driver"]
+    else:
+        gpu_name = _clean(ps("$g=Get-CimInstance Win32_VideoController | "
+                             "Where-Object { $_.Name -notmatch 'Basic|Virtual|Remote|Meta|Parsec|Citrix' } | "
+                             "Select-Object -First 1; $g.Name"))
+        if not gpu_name:
+            gpu_name = _clean(ps("(Get-CimInstance Win32_VideoController | Select-Object -First 1).Name"))
+        s["gpu"] = gpu_name
+        vram = ps("$k=Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}' "
+                  "-ErrorAction SilentlyContinue; $m=0; foreach($i in $k){ $q=(Get-ItemProperty $i.PSPath -Name "
+                  "'HardwareInformation.qwMemorySize' -ErrorAction SilentlyContinue).'HardwareInformation.qwMemorySize'; "
+                  "if($q -and $q -gt $m){$m=$q} }; if($m -gt 0){[math]::round($m/1GB,0)}")
+        if not vram:
+            vram = ps("[math]::round((Get-CimInstance Win32_VideoController | Select-Object -First 1).AdapterRAM/1GB,0)")
+        s["gpu_vram_gb"] = vram
+        s["gpu_driver_version"] = _clean(ps("(Get-CimInstance Win32_VideoController | Select-Object -First 1).DriverVersion"))
+    s["refresh_hz"] = ps("(Get-CimInstance Win32_VideoController | "
+                         "Where-Object {$_.CurrentRefreshRate -gt 0} | "
+                         "Sort-Object CurrentRefreshRate -Descending | Select-Object -First 1).CurrentRefreshRate")
+    # RAM: total + speed + module count + DDR type
     ram_total = ps("[math]::round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,0)")
     s["ram"] = f"{ram_total} GB" if ram_total else ""
     s["ram_speed_mhz"] = ps("(Get-CimInstance Win32_PhysicalMemory | Select-Object -First 1).Speed")
     s["ram_modules"] = ps("(Get-CimInstance Win32_PhysicalMemory | Measure-Object).Count")
-    # Motherboard
+    smt = ps("(Get-CimInstance Win32_PhysicalMemory | Select-Object -First 1).SMBIOSMemoryType")
+    s["ram_type"] = {"20": "DDR", "21": "DDR2", "24": "DDR3", "26": "DDR4", "34": "DDR5"}.get((smt or "").strip(), "")
     s["motherboard"] = _clean(ps("(Get-CimInstance Win32_BaseBoard).Manufacturer + ' ' + "
                                  "(Get-CimInstance Win32_BaseBoard).Product"))
     # Storage: primary disk model + type (SSD/HDD/NVMe) + size
@@ -104,7 +139,6 @@ def collect_specs():
         model = _clean(ps("(Get-CimInstance Win32_DiskDrive | Select-Object -First 1).Model"))
         size = ps("[math]::round(((Get-CimInstance Win32_DiskDrive | Measure-Object -Property Size -Sum).Sum)/1GB,0)")
         s["disk"] = _clean(f"{model} ({size} GB)") if model else ""
-    # Resolution
     res = ps("$v=Get-CimInstance Win32_VideoController | Select-Object -First 1; "
              "\"$($v.CurrentHorizontalResolution)x$($v.CurrentVerticalResolution)\"")
     s["resolution"] = res if res and "x" in res else ""
@@ -145,6 +179,22 @@ def collect_health():
     ddate = ps("$d=(Get-CimInstance Win32_VideoController | Select-Object -First 1).DriverDate; "
                "if($d){$d.ToString('yyyy-MM-dd')}")
     h["gpu_driver_date"] = ddate if ddate and "-" in ddate else None
+    # Temperatures (GPU via nvidia-smi, CPU via WMI thermal zone - best effort)
+    nv = get_nv()
+    if nv.get("temp") is not None:
+        h["gpu_temp"] = nv["temp"]
+        h["gpu"] = nv.get("name") or h["gpu"]
+        h["gpu_driver_version"] = nv.get("driver") or h["gpu_driver_version"]
+        if nv.get("vram_total_mb"):
+            h["vram_used_pct"] = round(nv["vram_used_mb"] / nv["vram_total_mb"] * 100)
+    cpu_t = ps("$t=Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature "
+               "-ErrorAction SilentlyContinue | Select-Object -First 1; "
+               "if($t){[math]::round(($t.CurrentTemperature-2732)/10,0)}")
+    try:
+        if cpu_t and int(cpu_t) > 0:
+            h["cpu_temp"] = int(cpu_t)
+    except Exception:
+        pass
     return h
 
 

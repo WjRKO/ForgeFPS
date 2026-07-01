@@ -68,6 +68,8 @@ def specs_to_text(specs: dict) -> str:
         lines.append(f"GPU: {gpu}" + (f" ({', '.join(g_extra)})" if g_extra else ""))
     if d.get("ram"):
         r_extra = []
+        if d.get("ram_type"):
+            r_extra.append(d["ram_type"])
         if d.get("ram_speed_mhz"):
             r_extra.append(f"{d['ram_speed_mhz']} MHz")
         if d.get("ram_modules"):
@@ -508,56 +510,95 @@ async def get_specs(user: dict = Depends(get_current_user)):
 
 def _days_since(date_str: str):
     try:
-        d = datetime.fromisoformat(date_str[:10])
-        return (datetime.now() - d).days
+        d = datetime.fromisoformat(str(date_str)[:10]).replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - d).days
     except Exception:
         return None
 
 
 def compute_health(health: dict) -> dict:
-    score = 100
     checks = []
+    total_weight = 0
+    lost = 0
 
-    def add(ok, warn, label, msg_ok, msg_bad, penalty):
-        nonlocal score
-        status = "ok" if ok else ("warn" if warn else "bad")
-        if not ok:
-            score -= penalty
-        checks.append({"label": label, "status": status, "message": msg_ok if ok else msg_bad})
+    def check(cid, label, weight, value, thresholds, fmt, fix, higher_bad=True, present=True):
+        nonlocal total_weight, lost
+        if not present or value is None:
+            checks.append({"id": cid, "label": label, "status": "unknown",
+                           "message": "Dato non disponibile", "fix": None})
+            return
+        ok_t, warn_t = thresholds
+        if higher_bad:
+            status = "ok" if value <= ok_t else ("warn" if value <= warn_t else "bad")
+        else:
+            status = "ok" if value >= ok_t else ("warn" if value >= warn_t else "bad")
+        total_weight += weight
+        if status == "bad":
+            lost += weight
+        elif status == "warn":
+            lost += weight * 0.5
+        checks.append({"id": cid, "label": label, "status": status,
+                       "message": fmt(value), "fix": None if status == "ok" else fix})
 
-    temp = health.get("temp_mb", 0) or 0
-    add(temp < 1500, temp < 5000, "File temporanei", "Puliti", f"{int(temp)} MB da liberare", 12)
+    temp = health.get("temp_mb")
+    check("temp", "File temporanei", 8, temp, (1500, 5000),
+          lambda v: f"{int(v)} MB", "Esegui la pulizia file temporanei (Desktop Agent opz. 1)",
+          present="temp_mb" in health)
 
-    startup_count = health.get("startup_count", 0) or 0
-    add(startup_count <= 8, startup_count <= 15, "Programmi all'avvio",
-        f"{startup_count} (ok)", f"{startup_count} programmi rallentano il boot", 12)
+    check("startup", "Programmi all'avvio", 10, health.get("startup_count"), (8, 15),
+          lambda v: f"{int(v)} programmi", "Disabilita gli avvii non essenziali (pagina 'Il mio PC')",
+          present="startup_count" in health)
 
     power = (health.get("power_plan") or "").lower()
     hp = "high" in power or "prestazioni elevate" in power or "ultimate" in power
-    add(hp, False, "Piano energetico", "Alte prestazioni", "Non impostato su alte prestazioni", 15)
+    total_weight += 15
+    if not hp:
+        lost += 15
+    checks.append({"id": "power", "label": "Piano energetico",
+                   "status": "ok" if hp else "bad",
+                   "message": "Alte prestazioni" if hp else "Non ottimale",
+                   "fix": None if hp else "Attiva 'Alte prestazioni' (Desktop Agent opz. 3)"})
 
-    add(bool(health.get("game_mode")), False, "Game Mode", "Attivo", "Disattivato", 10)
-    add(bool(health.get("gpu_scheduling")), False, "GPU Scheduling", "Attivo", "Disattivato (HAGS off)", 8)
+    for cid, label, key, wt, fix in [
+        ("game_mode", "Game Mode", "game_mode", 8, "Attiva Game Mode (Desktop Agent opz. 5)"),
+        ("hags", "GPU Scheduling (HAGS)", "gpu_scheduling", 6, "Abilita HAGS (Desktop Agent opz. 5)")]:
+        present = key in health
+        val = bool(health.get(key))
+        total_weight += wt if present else 0
+        if present and not val:
+            lost += wt
+        checks.append({"id": cid, "label": label,
+                       "status": ("ok" if val else "bad") if present else "unknown",
+                       "message": ("Attivo" if val else "Disattivato") if present else "Dato non disponibile",
+                       "fix": None if (val or not present) else fix})
 
-    ram = health.get("ram_used_pct")
-    if ram is not None:
-        add(ram < 80, ram < 90, "Uso RAM", f"{ram}%", f"{ram}% (elevato)", 10)
+    check("ram", "Uso RAM", 10, health.get("ram_used_pct"), (80, 90),
+          lambda v: f"{int(v)}% in uso", "Chiudi app in background o aggiungi RAM",
+          present="ram_used_pct" in health)
 
-    disk = health.get("disk_free_pct")
-    if disk is not None:
-        add(disk > 12, disk > 6, "Spazio disco", f"{disk}% libero", f"Solo {disk}% libero", 12)
+    check("disk", "Spazio disco (C:)", 12, health.get("disk_free_pct"), (12, 6),
+          lambda v: f"{int(v)}% libero", "Libera spazio: pulizia disco (Desktop Agent opz. 6)",
+          higher_bad=False, present="disk_free_pct" in health)
 
-    driver_date = health.get("gpu_driver_date")
-    if driver_date:
-        days = _days_since(driver_date)
-        if days is not None:
-            add(days < 180, days < 365, "Driver GPU",
-                f"Aggiornato ({days}g fa)", f"Vecchio: {days} giorni. Aggiornalo.", 12)
+    days = _days_since(health.get("gpu_driver_date")) if health.get("gpu_driver_date") else None
+    check("driver", "Driver GPU", 12, days, (180, 365),
+          lambda v: f"aggiornato {int(v)} giorni fa", "Aggiorna i driver della GPU",
+          present=days is not None)
 
+    check("gpu_temp", "Temperatura GPU", 12, health.get("gpu_temp"), (75, 84),
+          lambda v: f"{int(v)}°C", "Migliora airflow/curva ventole: rischio throttling",
+          present="gpu_temp" in health)
+
+    check("cpu_temp", "Temperatura CPU", 10, health.get("cpu_temp"), (80, 89),
+          lambda v: f"{int(v)}°C", "Verifica dissipatore/pasta termica: rischio throttling",
+          present="cpu_temp" in health)
+
+    score = round(100 * (1 - (lost / total_weight))) if total_weight else 100
     score = max(0, min(100, score))
     grade = "Ottimo" if score >= 85 else "Buono" if score >= 70 else "Da migliorare" if score >= 50 else "Critico"
     return {"score": score, "grade": grade, "checks": checks,
             "driver_version": health.get("gpu_driver_version"),
+            "gpu_temp": health.get("gpu_temp"), "cpu_temp": health.get("cpu_temp"),
             "gpu": health.get("gpu"), "updated_at": now_iso()}
 
 
