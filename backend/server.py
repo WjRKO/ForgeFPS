@@ -252,12 +252,24 @@ async def set_manual_price(product_id: str, data: ManualPriceInput, user: dict =
     p = await db.products.find_one({"id": product_id, "user_id": str(user["_id"])})
     if not p:
         raise HTTPException(status_code=404, detail="Prodotto non trovato")
+    old = p.get("current_price")
     low = p.get("lowest_price")
     new_low = data.price if (low is None or data.price < low) else low
     await db.products.update_one({"id": product_id}, {"$set": {
         "current_price": data.price, "initial_price": p.get("initial_price") or data.price,
         "lowest_price": new_low, "status": "ok", "last_error": None, "updated_at": now_iso()}})
     await db.price_history.insert_one(_record_history(product_id, data.price))
+    target = p.get("target_price")
+    dropped = old is not None and data.price < old
+    hit_target = target is not None and data.price <= target
+    if dropped or hit_target:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "user_id": str(user["_id"]), "product_id": product_id,
+            "title": p.get("title"), "old_price": old, "new_price": data.price,
+            "currency": p.get("currency", "EUR"), "type": "target" if hit_target else "drop",
+            "message": (f"Prezzo target raggiunto! Ora {data.price}" if hit_target
+                        else f"Prezzo sceso da {old} a {data.price}"),
+            "read": False, "created_at": now_iso()})
     return await db.products.find_one({"id": product_id}, {"_id": 0})
 
 
