@@ -18,12 +18,14 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 
 ## Implemented (2026-07-01)
 - Auth completo (register/login/me/logout/refresh/forgot/reset, brute-force lockout, admin seed)
-- AI Advisor chat (streaming, sessioni persistenti)
+- AI Advisor chat (streaming, sessioni persistenti) — ora PERSONALIZZATO con hardware reale del PC
 - Build Generator (AI, JSON strutturato, salvataggio build)
 - Price Tracker (track by URL, ricerca Amazon, prezzo manuale fallback, target price, storico prezzi + chart)
-- Notifiche (cali prezzo / target raggiunto, su refresh scraping E su prezzo manuale)
-- Dashboard stats, Desktop Agent scaricabile (.py Windows)
-- Tested: backend 100%, frontend 100%
+- Notifiche in-app (cali prezzo / target) su refresh scraping E su prezzo manuale
+- Dashboard stats, Desktop Agent scaricabile (.py Windows, token account incluso)
+- NEW: Web Push notifications (VAPID + service worker) sui cali di prezzo — toggle nel dropdown notifiche
+- NEW: Rilevamento hardware reale del PC via desktop agent (opzione 7) → /api/agent/report-specs (auth token) → specs mostrate in "Il mio PC" e usate dall'AI Advisor per consigli su misura
+- Tested: iteration_1 100%, iteration_2 100% (29/29 backend, frontend OK)
 
 ## Known Constraints
 - Amazon blocca lo scraping HTTP (anti-bot) → fallback prezzo manuale (flusso principale)
