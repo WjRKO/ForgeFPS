@@ -1,0 +1,96 @@
+{
+  "theme": "dark",
+  "archetype": "7 (Electric & Neon) paired with Tactical Precision",
+  "brand_identity": {
+    "vibe": "Elite, Stealthy, High-Performance, Cybernetic",
+    "description": "An AI PC Optimization Advisor and Build Generator tailored for PC Gamers, Streamers, and hardware enthusiasts. Uses a high-tech performance aesthetic heavily grounded in deep void blacks with sharp, aggressive accents of Cyber Yellow (Volt) and Matrix Green. The interface feels like a premium command center or tactical HUD."
+  },
+  "typography": {
+    "heading_font": "Unbounded",
+    "body_font": "JetBrains Mono",
+    "scale": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-black",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-semibold",
+      "h4": "text-lg sm:text-xl font-medium",
+      "body": "text-sm sm:text-base leading-relaxed",
+      "overline": "text-xs tracking-[0.2em] uppercase font-bold text-zinc-500"
+    },
+    "notes": "Do not exceed text-6xl for H1. Always use Unbounded for headings with tight tracking to give a solid, premium tech feel. JetBrains Mono is strictly for all body text, prices, hardware specs, and data tables to evoke a terminal/diagnostic aesthetic."
+  },
+  "colors": {
+    "background": {
+      "base": "#050505",
+      "surface": "#0F0F12",
+      "panel": "#141419",
+      "glass": "bg-black/60 backdrop-blur-xl"
+    },
+    "border": {
+      "default": "#2A2A35",
+      "subtle": "#1A1A24",
+      "active": "#E5FF00"
+    },
+    "text": {
+      "primary": "#FAFAFA",
+      "secondary": "#A1A1AA",
+      "muted": "#52525B"
+    },
+    "accents": {
+      "primary_cta": "#E5FF00",
+      "primary_cta_hover": "#D4EC00",
+      "success_tracking": "#00FF66",
+      "alert_spike": "#FF3B30"
+    },
+    "notes": "Use the Tinted Grey rule: no pure gray. All surfaces are tinted slightly towards Indigo/Obsidian. Primary CTA (Cyber Yellow) is used sparingly—only for main actions like 'Optimize PC' or 'Save Build'. Use Laser Green specifically for Price Drops/Healthy metrics, and Alert Red for Price Spikes."
+  },
+  "spacing_and_layout": {
+    "strategy": "The 'Control Room' Grid for dashboard (dense, gap-6). Bento layout for Build Generators.",
+    "containers": "Generous padding inside cards (p-6 to p-8). Mobile-first responsive grids.",
+    "alignment": "Left-align dense text and tables. Only center-align empty states or main hero CTA.",
+    "border_radius": "Sharp edges or minimal rounding (rounded-sm max). No pill-shaped buttons unless explicitly required by a switch component."
+  },
+  "surfaces_and_effects": {
+    "headers_and_nav": "Crystal Glassmorphism (bg-black/60 backdrop-blur-xl border-b border-white/10). Sticky top.",
+    "cards": "Flat background (#0F0F12), 1px subtle border (#2A2A35). On hover: border glows slightly and subtle Y-translation.",
+    "ai_chat": "Retro-Futurism/Terminal Look. Mono-font responses.",
+    "price_tracker": "Grid Borders styling. Expose the skeleton with right and bottom borders for grid items."
+  },
+  "components": {
+    "buttons": "Sharp corners. Cyber Yellow background with Deep Black text for primary. Subtle hover states.",
+    "inputs": "Shadcn highly customized. Flat black background, visible bottom border, focus state highlights with Cyber Yellow.",
+    "charts": "Use Recharts customized with Matrix Green (#00FF66) for price drops and Alert Red (#FF3B30) for price increases. Dark grid lines (#2A2A35).",
+    "tables": "Dense, monospace font for all numbers/prices. Left-aligned product names, right-aligned prices.",
+    "icons": "Use lucide-react or @phosphor-icons/react."
+  },
+  "animations": {
+    "hover_states": "Interactive elements must shift border color and slight text color shift. Avoid heavy background color shifts.",
+    "transitions": "Use 'transition: transform 0.2s ease, border-color 0.2s ease'.",
+    "ai_typing": "Terminal-style rapid typing reveal for AI advice."
+  },
+  "media": {
+    "hero_build": {
+      "url": "https://images.pexels.com/photos/16062772/pexels-photo-16062772.jpeg",
+      "description": "Vibrant RGB lighting on modern computer hardware. Use as the Hero background with a heavy black overlay (bg-black/70) or gradient mask to ensure text contrast.",
+      "category": "hero"
+    },
+    "ai_pattern": {
+      "url": "https://images.pexels.com/photos/10653941/pexels-photo-10653941.jpeg",
+      "description": "Dynamic abstract photograph of blue light patterns. Use inside the AI Chat window or as a subtle structural background under the Build Generator.",
+      "category": "background"
+    }
+  },
+  "testing": {
+    "attributes": "All interactive elements (buttons, inputs, links, tabs) MUST include data-testid attributes (e.g., data-testid='optimize-pc-btn', data-testid='price-tracker-input')."
+  },
+  "instructions_to_main_agent": [
+    "Build with React/Next.js and Tailwind CSS.",
+    "Integrate Shadcn UI but aggressively override the default light-theme aesthetic to match the dark Obsidian/Cyber Yellow palette.",
+    "Ensure 'JetBrains Mono' is loaded and applied correctly to numeric data (prices, specs, tracking URLs).",
+    "Ensure 'Unbounded' is used for headings with tight tracking.",
+    "Use the media URLs provided; DO NOT use placeholders.",
+    "Include data-testid attributes on all interactive elements.",
+    "Build the AI PC Optimization Advisor as a chat-like interface.",
+    "Build the Product Tracker with clear visual indicators (Green/Red) for price changes.",
+    "Create a comprehensive Dashboard layout using the 'Control Room' grid."
+  ]
+}
