@@ -27,8 +27,9 @@ def build_chat(session_id: str, system: str = ADVISOR_SYSTEM) -> LlmChat:
 async def stream_advisor(session_id: str, history: list, message: str, specs_text: str = ""):
     system = ADVISOR_SYSTEM
     if specs_text:
-        system += ("\n\n[SPECIFICHE HARDWARE DELL'UTENTE - usa questi dati per consigli su misura]\n"
-                   + specs_text)
+        system += ("\n\n[SPECIFICHE HARDWARE DELL'UTENTE - usa questi dati per consigli su misura. "
+                   "Identifica con precisione generazione e fascia di CPU e GPU (es. Ampere/Ada, Zen3/Zen4) "
+                   "e adatta i consigli al tier esatto]\n" + specs_text)
     chat = build_chat(session_id, system)
     # replay history into context
     context = ""
@@ -142,7 +143,9 @@ async def estimate_fps(specs_text: str, game: str, resolution: str) -> dict:
     prompt = (
         f"Hardware:\n{specs_text or 'sconosciuto'}\n\n"
         f"Gioco: {game}. Risoluzione: {resolution}.\n"
-        "Stima gli FPS medi realistici e restituisci un JSON con struttura ESATTA:\n"
+        "Identifica con precisione il tier esatto di CPU e GPU (generazione e fascia) e considera VRAM, "
+        "frequenza RAM e refresh del monitor. Stima gli FPS medi realistici basandoti su benchmark noti "
+        "per quella specifica combinazione hardware. Restituisci un JSON con struttura ESATTA:\n"
         "{\n"
         '  "game": "nome gioco",\n'
         '  "resolution": "risoluzione",\n'

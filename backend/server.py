@@ -45,12 +45,44 @@ def specs_to_text(specs: dict) -> str:
     if not specs:
         return ""
     d = specs.get("data", {})
-    parts = []
-    for label, key in [("OS", "os"), ("CPU", "cpu"), ("GPU", "gpu"), ("RAM", "ram"),
-                       ("Storage", "disk"), ("Scheda madre", "motherboard"), ("Risoluzione", "resolution")]:
-        if d.get(key):
-            parts.append(f"{label}: {d[key]}")
-    return "\n".join(parts)
+    lines = []
+    if d.get("os"):
+        lines.append(f"OS: {d['os']}")
+    if d.get("cpu"):
+        cpu = d["cpu"]
+        extra = []
+        if d.get("cpu_cores"):
+            extra.append(f"{d['cpu_cores']} core")
+        if d.get("cpu_threads"):
+            extra.append(f"{d['cpu_threads']} thread")
+        if d.get("cpu_clock_ghz"):
+            extra.append(f"{d['cpu_clock_ghz']} GHz")
+        lines.append(f"CPU: {cpu}" + (f" ({', '.join(extra)})" if extra else ""))
+    if d.get("gpu"):
+        gpu = d["gpu"]
+        g_extra = []
+        if d.get("gpu_vram_gb"):
+            g_extra.append(f"{d['gpu_vram_gb']} GB VRAM")
+        if d.get("gpu_driver_version"):
+            g_extra.append(f"driver {d['gpu_driver_version']}")
+        lines.append(f"GPU: {gpu}" + (f" ({', '.join(g_extra)})" if g_extra else ""))
+    if d.get("ram"):
+        r_extra = []
+        if d.get("ram_speed_mhz"):
+            r_extra.append(f"{d['ram_speed_mhz']} MHz")
+        if d.get("ram_modules"):
+            r_extra.append(f"{d['ram_modules']} moduli")
+        lines.append(f"RAM: {d['ram']}" + (f" ({', '.join(r_extra)})" if r_extra else ""))
+    if d.get("disk"):
+        lines.append(f"Storage: {d['disk']}")
+    if d.get("motherboard"):
+        lines.append(f"Scheda madre: {d['motherboard']}")
+    if d.get("resolution"):
+        res = d["resolution"]
+        if d.get("refresh_hz"):
+            res += f" @ {d['refresh_hz']}Hz"
+        lines.append(f"Monitor: {res}")
+    return "\n".join(lines)
 
 
 async def create_notification(user_id: str, product: dict, old_price, new_price, hit_target: bool):

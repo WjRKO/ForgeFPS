@@ -48,22 +48,67 @@ def _folder_size_mb(path):
     return round(total / (1024 * 1024), 1)
 
 
+def _clean(v):
+    return " ".join(v.split()).strip() if v else ""
+
+
 def collect_specs():
     s = {}
-    s["os"] = ps("(Get-CimInstance Win32_OperatingSystem).Caption")
-    s["cpu"] = ps("(Get-CimInstance Win32_Processor).Name")
-    s["gpu"] = ps("(Get-CimInstance Win32_VideoController).Name -join ', '")
-    ram = ps("[math]::round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,0)")
-    s["ram"] = f"{ram} GB" if ram else ""
-    s["motherboard"] = ps("(Get-CimInstance Win32_BaseBoard).Manufacturer + ' ' + "
-                          "(Get-CimInstance Win32_BaseBoard).Product")
-    disk = ps("(Get-CimInstance Win32_DiskDrive | Select-Object -First 1).Model")
-    size = ps("[math]::round(((Get-CimInstance Win32_DiskDrive | Measure-Object -Property Size -Sum).Sum)/1GB,0)")
-    s["disk"] = (f"{disk} ({size} GB)" if disk else "").strip()
+    s["os"] = _clean(ps("(Get-CimInstance Win32_OperatingSystem).Caption"))
+    # CPU with cores/threads/clock
+    s["cpu"] = _clean(ps("(Get-CimInstance Win32_Processor | Select-Object -First 1).Name"))
+    cores = ps("(Get-CimInstance Win32_Processor | Select-Object -First 1).NumberOfCores")
+    threads = ps("(Get-CimInstance Win32_Processor | Select-Object -First 1).NumberOfLogicalProcessors")
+    clock = ps("[math]::round((Get-CimInstance Win32_Processor | Select-Object -First 1).MaxClockSpeed/1000,2)")
+    s["cpu_cores"] = cores
+    s["cpu_threads"] = threads
+    s["cpu_clock_ghz"] = clock
+    # GPU: prefer discrete (skip basic/virtual adapters)
+    gpu_name = _clean(ps("$g=Get-CimInstance Win32_VideoController | "
+                         "Where-Object { $_.Name -notmatch 'Basic|Virtual|Remote|Meta|Parsec|Citrix' } | "
+                         "Select-Object -First 1; $g.Name"))
+    if not gpu_name:
+        gpu_name = _clean(ps("(Get-CimInstance Win32_VideoController | Select-Object -First 1).Name"))
+    s["gpu"] = gpu_name
+    # VRAM from registry (accurate for >4GB) with fallback to AdapterRAM
+    vram = ps("$k=Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}' "
+              "-ErrorAction SilentlyContinue; $m=0; foreach($i in $k){ $q=(Get-ItemProperty $i.PSPath -Name "
+              "'HardwareInformation.qwMemorySize' -ErrorAction SilentlyContinue).'HardwareInformation.qwMemorySize'; "
+              "if($q -and $q -gt $m){$m=$q} }; if($m -gt 0){[math]::round($m/1GB,0)}")
+    if not vram:
+        vram = ps("[math]::round((Get-CimInstance Win32_VideoController | Select-Object -First 1).AdapterRAM/1GB,0)")
+    s["gpu_vram_gb"] = vram
+    s["gpu_driver_version"] = _clean(ps("(Get-CimInstance Win32_VideoController | Select-Object -First 1).DriverVersion"))
+    refresh = ps("(Get-CimInstance Win32_VideoController | Select-Object -First 1).CurrentRefreshRate")
+    s["refresh_hz"] = refresh
+    # RAM: total + speed + module count + type
+    ram_total = ps("[math]::round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,0)")
+    s["ram"] = f"{ram_total} GB" if ram_total else ""
+    s["ram_speed_mhz"] = ps("(Get-CimInstance Win32_PhysicalMemory | Select-Object -First 1).Speed")
+    s["ram_modules"] = ps("(Get-CimInstance Win32_PhysicalMemory | Measure-Object).Count")
+    # Motherboard
+    s["motherboard"] = _clean(ps("(Get-CimInstance Win32_BaseBoard).Manufacturer + ' ' + "
+                                 "(Get-CimInstance Win32_BaseBoard).Product"))
+    # Storage: primary disk model + type (SSD/HDD/NVMe) + size
+    try:
+        disk_info = ps("$d=Get-PhysicalDisk -ErrorAction SilentlyContinue | Select-Object -First 1; "
+                       "if($d){ $t=switch($d.MediaType){3{'HDD'}4{'SSD'}default{''}}; "
+                       "$bus=if($d.BusType -eq 17){'NVMe '}else{''}; "
+                       "$sz=[math]::round($d.Size/1GB,0); \"$($d.FriendlyName)|$bus$t|$sz\" }")
+    except Exception:
+        disk_info = ""
+    if disk_info and "|" in disk_info:
+        model, dtype, dsize = (disk_info.split("|") + ["", "", ""])[:3]
+        s["disk"] = _clean(f"{model} {dtype} ({dsize} GB)")
+    else:
+        model = _clean(ps("(Get-CimInstance Win32_DiskDrive | Select-Object -First 1).Model"))
+        size = ps("[math]::round(((Get-CimInstance Win32_DiskDrive | Measure-Object -Property Size -Sum).Sum)/1GB,0)")
+        s["disk"] = _clean(f"{model} ({size} GB)") if model else ""
+    # Resolution
     res = ps("$v=Get-CimInstance Win32_VideoController | Select-Object -First 1; "
              "\"$($v.CurrentHorizontalResolution)x$($v.CurrentVerticalResolution)\"")
     s["resolution"] = res if res and "x" in res else ""
-    return s
+    return {k: v for k, v in s.items() if v not in (None, "", "0")}
 
 
 def collect_health():

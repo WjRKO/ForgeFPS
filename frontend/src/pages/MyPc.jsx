@@ -4,6 +4,33 @@ import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, Monitor
 import api, { formatApiErrorDetail } from "@/lib/api";
 
 const SPEC_LABELS = { os: "Sistema operativo", cpu: "CPU", gpu: "GPU", ram: "RAM", disk: "Storage", motherboard: "Scheda madre", resolution: "Risoluzione" };
+
+function composeSpec(key, d) {
+  const v = d[key];
+  if (!v) return null;
+  if (key === "cpu") {
+    const x = [];
+    if (d.cpu_cores) x.push(`${d.cpu_cores}C`);
+    if (d.cpu_threads) x.push(`${d.cpu_threads}T`);
+    if (d.cpu_clock_ghz) x.push(`${d.cpu_clock_ghz}GHz`);
+    return x.length ? `${v} · ${x.join(" / ")}` : v;
+  }
+  if (key === "gpu") {
+    const x = [];
+    if (d.gpu_vram_gb) x.push(`${d.gpu_vram_gb}GB VRAM`);
+    if (d.gpu_driver_version) x.push(`driver ${d.gpu_driver_version}`);
+    return x.length ? `${v} · ${x.join(" · ")}` : v;
+  }
+  if (key === "ram") {
+    const x = [];
+    if (d.ram_speed_mhz) x.push(`${d.ram_speed_mhz}MHz`);
+    if (d.ram_modules) x.push(`${d.ram_modules} moduli`);
+    return x.length ? `${v} · ${x.join(" · ")}` : v;
+  }
+  if (key === "resolution") return d.refresh_hz ? `${v} @ ${d.refresh_hz}Hz` : v;
+  return v;
+}
+
 const STATUS_ICON = { ok: <CheckCircle2 size={16} className="text-[#00FF66]" />, warn: <AlertTriangle size={16} className="text-[#E5FF00]" />, bad: <XCircle size={16} className="text-[#FF3B30]" /> };
 
 function ScoreRing({ score, grade }) {
@@ -104,7 +131,7 @@ export default function MyPc() {
           {Object.entries(SPEC_LABELS).filter(([k]) => specs.data[k]).map(([k, label]) => (
             <div key={k} className="bg-[#0F0F12] p-4" data-testid={`spec-${k}`}>
               <div className="text-xs uppercase tracking-widest text-zinc-500">{label}</div>
-              <div className="text-sm text-zinc-100 mt-1">{specs.data[k]}</div>
+              <div className="text-sm text-zinc-100 mt-1">{composeSpec(k, specs.data)}</div>
             </div>
           ))}
         </div>
