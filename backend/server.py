@@ -78,7 +78,12 @@ def specs_to_text(specs: dict) -> str:
     if d.get("disk"):
         lines.append(f"Storage: {d['disk']}")
     if d.get("motherboard"):
-        lines.append(f"Scheda madre: {d['motherboard']}")
+        mb = d["motherboard"]
+        if d.get("bios"):
+            mb += f" [BIOS: {d['bios']}]"
+        lines.append(f"Scheda madre (da WMI, può essere un codice OEM es. MS-7C56=MSI B550): {mb}")
+    if d.get("system_model") and d["system_model"].lower() not in (d.get("motherboard", "").lower(), "system product name"):
+        lines.append(f"Modello sistema: {d['system_model']}")
     if d.get("resolution"):
         res = d["resolution"]
         if d.get("refresh_hz"):

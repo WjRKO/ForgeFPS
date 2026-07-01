@@ -28,8 +28,9 @@ async def stream_advisor(session_id: str, history: list, message: str, specs_tex
     system = ADVISOR_SYSTEM
     if specs_text:
         system += ("\n\n[SPECIFICHE HARDWARE DELL'UTENTE - usa questi dati per consigli su misura. "
-                   "Identifica con precisione generazione e fascia di CPU e GPU (es. Ampere/Ada, Zen3/Zen4) "
-                   "e adatta i consigli al tier esatto]\n" + specs_text)
+                   "Identifica con precisione generazione e fascia di CPU e GPU (es. Ampere/Ada, Zen3/Zen4). "
+                   "Se la scheda madre è indicata come codice OEM (es. MS-7C56, MS-7B86), traducilo nel nome "
+                   "commerciale reale (es. MSI B550 Tomahawk) e verifica la compatibilità del socket/chipset]\n" + specs_text)
     chat = build_chat(session_id, system)
     # replay history into context
     context = ""

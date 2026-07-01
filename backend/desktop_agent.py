@@ -122,8 +122,25 @@ def collect_specs():
     s["ram_modules"] = ps("(Get-CimInstance Win32_PhysicalMemory | Measure-Object).Count")
     smt = ps("(Get-CimInstance Win32_PhysicalMemory | Select-Object -First 1).SMBIOSMemoryType")
     s["ram_type"] = {"20": "DDR", "21": "DDR2", "24": "DDR3", "26": "DDR4", "34": "DDR5"}.get((smt or "").strip(), "")
-    s["motherboard"] = _clean(ps("(Get-CimInstance Win32_BaseBoard).Manufacturer + ' ' + "
-                                 "(Get-CimInstance Win32_BaseBoard).Product"))
+    # Motherboard: manufacturer + product (+ version/code). Clean vendor name.
+    mb_mfg = _clean(ps("(Get-CimInstance Win32_BaseBoard).Manufacturer"))
+    mb_prod = _clean(ps("(Get-CimInstance Win32_BaseBoard).Product"))
+    mb_ver = _clean(ps("(Get-CimInstance Win32_BaseBoard).Version"))
+    vendor_map = {"micro-star": "MSI", "asustek": "ASUS", "gigabyte": "Gigabyte",
+                  "asrock": "ASRock", "hewlett": "HP", "dell": "Dell", "lenovo": "Lenovo",
+                  "acer": "Acer", "biostar": "Biostar", "nzxt": "NZXT"}
+    low = mb_mfg.lower()
+    for k, v in vendor_map.items():
+        if k in low:
+            mb_mfg = v
+            break
+    mb = " ".join(x for x in [mb_mfg, mb_prod] if x)
+    # Product often is an OEM board code (e.g. MS-7C56); include version if it adds info
+    if mb_ver and mb_ver.lower() not in ("1.0", "x.x", "default string", mb_prod.lower()) and len(mb_ver) > 2:
+        mb += f" (rev {mb_ver})"
+    s["motherboard"] = _clean(mb)
+    s["system_model"] = _clean(ps("(Get-CimInstance Win32_ComputerSystem).Model"))
+    s["bios"] = _clean(ps("(Get-CimInstance Win32_BIOS).Manufacturer + ' ' + (Get-CimInstance Win32_BIOS).SMBIOSBIOSVersion"))
     # Storage: primary disk model + type (SSD/HDD/NVMe) + size
     try:
         disk_info = ps("$d=Get-PhysicalDisk -ErrorAction SilentlyContinue | Select-Object -First 1; "
