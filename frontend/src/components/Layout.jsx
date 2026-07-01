@@ -1,6 +1,6 @@
 import { NavLink, useNavigate, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff } from "lucide-react";
+import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
@@ -10,7 +10,9 @@ const NAV = [
   { to: "/app", label: "Dashboard", icon: LayoutDashboard, end: true, id: "dashboard" },
   { to: "/app/advisor", label: "AI Advisor", icon: MessageSquareCode, id: "advisor" },
   { to: "/app/builds", label: "Build Generator", icon: Cpu, id: "builds" },
+  { to: "/app/upgrade", label: "Upgrade & FPS", icon: Rocket, id: "upgrade" },
   { to: "/app/tracker", label: "Price Tracker", icon: LineChart, id: "tracker" },
+  { to: "/app/pc", label: "Il mio PC", icon: Activity, id: "pc" },
   { to: "/app/desktop", label: "Desktop Agent", icon: MonitorDown, id: "desktop" },
 ];
 

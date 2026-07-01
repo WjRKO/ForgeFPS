@@ -97,3 +97,83 @@ def _parse_json(text: str) -> dict:
             except Exception:
                 pass
     raise ValueError("Impossibile generare la build, riprova.")
+
+
+async def _run_json(session_id: str, system: str, prompt: str) -> dict:
+    chat = build_chat(session_id, system)
+    text = ""
+    async for event in chat.stream_message(UserMessage(text=prompt)):
+        if isinstance(event, TextDelta):
+            text += event.content
+        elif isinstance(event, StreamDone):
+            break
+    return _parse_json(text)
+
+
+UPGRADE_SYSTEM = ("Sei un tecnico esperto di upgrade PC per gaming/streaming. Analizzi l'hardware attuale, "
+                  "individui il collo di bottiglia e proponi SOLO i componenti da cambiare. "
+                  "Rispondi SOLO con JSON valido, senza markdown.")
+
+
+async def generate_upgrade(specs_text: str, budget: int, goal: str) -> dict:
+    prompt = (
+        f"Hardware attuale dell'utente:\n{specs_text or 'sconosciuto'}\n\n"
+        f"Obiettivo: {goal}. Budget upgrade massimo: {budget} EUR.\n"
+        "Analizza e restituisci un JSON con questa struttura ESATTA:\n"
+        "{\n"
+        '  "bottleneck": "componente collo di bottiglia (es. GPU)",\n'
+        '  "assessment": "valutazione sintetica in italiano (2-3 frasi)",\n'
+        '  "recommendations": [\n'
+        '    {"category":"GPU","current":"pezzo attuale o n/d","suggested":"modello consigliato","price":numero,"priority":"alta|media|bassa","reason":"perché in italiano","expected_gain":"es. +40% FPS a 1440p"}\n'
+        "  ],\n"
+        '  "estimated_total": numero_eur,\n'
+        '  "keep": ["componenti che vanno bene e NON cambiare"]\n'
+        "}\n"
+        "Includi solo upgrade sensati entro il budget. Prezzi realistici mercato europeo. Testi in italiano."
+    )
+    return await _run_json("upgrade", UPGRADE_SYSTEM, prompt)
+
+
+FPS_SYSTEM = ("Sei un benchmark expert. Stimi gli FPS attesi di un gioco su un dato hardware. "
+              "Rispondi SOLO con JSON valido, senza markdown.")
+
+
+async def estimate_fps(specs_text: str, game: str, resolution: str) -> dict:
+    prompt = (
+        f"Hardware:\n{specs_text or 'sconosciuto'}\n\n"
+        f"Gioco: {game}. Risoluzione: {resolution}.\n"
+        "Stima gli FPS medi realistici e restituisci un JSON con struttura ESATTA:\n"
+        "{\n"
+        '  "game": "nome gioco",\n'
+        '  "resolution": "risoluzione",\n'
+        '  "estimates": [\n'
+        '    {"preset":"Basso","fps":numero},{"preset":"Medio","fps":numero},{"preset":"Alto","fps":numero},{"preset":"Ultra","fps":numero}\n'
+        "  ],\n"
+        '  "recommended_preset": "preset consigliato per il miglior compromesso",\n'
+        '  "notes": "consigli di settaggio in italiano (2-3 punti)",\n'
+        '  "confidence": "alta|media|bassa"\n'
+        "}\n"
+        "Se l'hardware è sconosciuto, dai una stima generica e imposta confidence bassa. Testi in italiano."
+    )
+    return await _run_json("fps", FPS_SYSTEM, prompt)
+
+
+STARTUP_SYSTEM = ("Sei un esperto di ottimizzazione avvio Windows. Analizzi i programmi in avvio automatico "
+                  "e indichi quali disabilitare in sicurezza. Rispondi SOLO con JSON valido, senza markdown.")
+
+
+async def analyze_startup(startup_list: list) -> dict:
+    items = "\n".join(f"- {s}" for s in startup_list[:40]) or "nessun dato"
+    prompt = (
+        f"Programmi in avvio automatico rilevati:\n{items}\n\n"
+        "Restituisci un JSON con struttura ESATTA:\n"
+        "{\n"
+        '  "items": [\n'
+        '    {"name":"nome programma","recommendation":"disabilita|mantieni|valuta","reason":"motivo breve in italiano","safe":true}\n'
+        "  ],\n"
+        '  "summary": "riassunto in italiano di cosa disabilitare per un boot più veloce"\n'
+        "}\n"
+        "Non consigliare MAI di disabilitare antivirus, driver audio/grafici o servizi di sistema critici. Testi in italiano."
+    )
+    return await _run_json("startup", STARTUP_SYSTEM, prompt)
+

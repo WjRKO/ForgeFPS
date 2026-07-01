@@ -124,6 +124,22 @@ export default function Tracker() {
         <div className="p-5 border-b border-[#2A2A35] text-xs uppercase tracking-[0.2em] text-zinc-500">
           I tuoi prodotti ({products.length})
         </div>
+        {(() => {
+          const groups = {};
+          products.forEach((p) => { if (p.group) { groups[p.group] = groups[p.group] || { count: 0, total: 0 }; groups[p.group].count++; groups[p.group].total += p.current_price || 0; } });
+          const entries = Object.entries(groups);
+          if (!entries.length) return null;
+          return (
+            <div className="p-4 border-b border-[#2A2A35] flex flex-wrap gap-2" data-testid="group-summary">
+              {entries.map(([name, g]) => (
+                <div key={name} className="bg-black border border-[#2A2A35] px-3 py-2">
+                  <div className="text-xs text-zinc-500 truncate max-w-[180px]">{name}</div>
+                  <div className="text-sm font-bold">{g.count} pezzi · <span className="text-[#E5FF00]">€{g.total.toFixed(2)}</span></div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
         {products.length === 0 ? (
           <div className="p-10 text-center text-zinc-500 text-sm">Nessun prodotto tracciato. Aggiungi un link o cerca un prodotto.</div>
         ) : (

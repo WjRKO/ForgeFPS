@@ -1,0 +1,51 @@
+{
+  "summary": "Iteration 3 (Health Score + Upgrade AI + FPS AI + Startup AI + Track-Components + report-specs w/ health+startup) fully verified. Backend: 41 passed / 1 skipped in pytest (added 12 new tests covering pc-health available/unavailable/good/bad values, upgrade/analyze with & without specs, fps/estimate with & without specs, startup/analyze with & without data, /builds/{id}/track, /upgrade/track with products.group persistence, and report-specs accepting health+startup). Real Claude JSON was validated: /upgrade/analyze returned bottleneck='GPU' + RTX 4070 Super recommendation; /fps/estimate returned 4 preset estimates (Basso/Medio/Alto/Ultra with fps values); /startup/analyze returned per-item recommendations. Frontend: admin login OK; nav-upgrade + nav-pc visible & clickable; /app/pc shows health-score=27 (Critico) with correct checklist (Piano energetico bad, Game Mode bad, Driver GPU bad 881g, RAM ok, GPU Scheduling ok, File temporanei warn, Spazio disco warn); hardware spec cards (CPU Ryzen 7 5800X, GPU RTX 3070, RAM 32 GB, OS Windows 11); analyze-startup-btn works (Steam DISABILITA, Discord VALUTA, Spotify DISABILITA, OneDrive VALUTA); /app/upgrade shows analyze-upgrade-btn -> bottleneck+recommendations+track-upgrade-btn; fps-game-input + estimate-fps-btn produces fps-bar-0..3 (Fortnite 1440p: 280/180/130/90 Basso/Medio/Alto/Ultra, Consigliato: Alto); track-upgrade-btn successfully created products with group visible on /app/tracker group-summary. No admin saved builds present, so track-build-{id} button was not exercised (feature verified via code review + presence of the button in BuildGenerator.jsx). Regression: auth, tracker, notifications, push (subscribe/unsubscribe/vapid-key/test), stats, agent/token, report-specs all still green.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/upgrade/analyze & /fps/estimate & /startup/analyze", "issue": "AI calls have no timeout guard on the server side (rely on client timeout); a stalled Claude request could hold a worker. Consider asyncio.wait_for(30s)."},
+      {"endpoint": "POST /api/builds/{id}/track & /upgrade/track", "issue": "No idempotency — clicking the button twice creates duplicate tracked products in the same group (observed: 3 identical 'GPU: RTX 4070 Super' rows after multiple track-upgrade clicks). Consider dedupe by (group, name) or return existing group."},
+      {"endpoint": "POST /api/upgrade/track", "issue": "TrackComponentsInput.components is a raw list (no per-item schema). Accepts arbitrary dicts. Consider Pydantic sub-model {category, suggested/name, price}."},
+      {"endpoint": "GET /api/pc-health", "issue": "compute_health uses datetime.now() (naive local time) vs driver_date (naive from isoformat) — works but is timezone-fragile. Also silently drops the check if driver_date is missing rather than reporting 'unknown'."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Track upgrade duplicates", "issue": "Each click of 'Traccia i pezzi' on Upgrade page creates a NEW group entry — user can end up with 3 identical Upgrade Test groups in tracker (visible in screenshot). No user feedback that the group already exists.", "affected_selectors": ["track-upgrade-btn", "group-summary"]}
+    ],
+    "design_issues": [
+      {"screen": "/app/pc", "issues": ["Health Score ring 'CRITICO' label very small under the score number — could be more prominent on a 27/100 score. Otherwise contrast/spacing/typography all clean."]},
+      {"screen": "/app/tracker", "issues": ["Group summary chips show only 3 groups inline but no scroll indicator when many groups exist; grouped products are not visually grouped in the products list itself (they mix with URL-tracked items)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Dedupe /upgrade/track and /builds/{id}/track by (user_id, group, title) so a second click updates instead of creating duplicates.",
+    "OPTIONAL: Add asyncio.wait_for(30s) around ai_engine._run_json calls in /upgrade/analyze, /fps/estimate, /startup/analyze.",
+    "OPTIONAL: Strong Pydantic schema on TrackComponentsInput.components items.",
+    "OPTIONAL: In compute_health, add a 'driver GPU' check with status='unknown' when gpu_driver_date is missing so the checklist is complete."
+  ],
+  "critical_code_review_comments": [
+    "server.py: /upgrade/track and /builds/{id}/track have no dedupe — repeated clicks silently create duplicate products (verified in screenshot). Low-friction UX bug.",
+    "server.py compute_health(): if a health key (ram_used_pct, disk_free_pct, gpu_driver_date) is missing, the corresponding check is skipped instead of reported as 'unknown'. This means score/checks[] length varies with input completeness, which can confuse the UI.",
+    "server.py: ai_engine calls are wrapped in try/except -> 502, but there's no server-side timeout. A hung Claude call blocks a worker for the client's full timeout.",
+    "ai_engine.py: _run_json presumably parses model output as JSON; if Claude returns ```json wrapped output the parser must strip fences (not directly verified here since happy-path succeeded — flagging for defensive review).",
+    "server.py: /pc-health returns {available: false} with 200 even when the user is authenticated but has no health — semantically fine, but the frontend must special-case this (MyPc.jsx does, good).",
+    "MyPc.jsx: hasSpecs check only looks at specs?.data?.cpu — a spec doc with GPU but no CPU would incorrectly render the empty-state page.",
+    "Tracker.jsx group-summary: no way to expand/collapse a group or filter products by group; grouped products still appear mixed with URL-tracked ones in the flat list."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100% (41/41 executed, 1 skipped by design)", "frontend": "100% (all iteration-3 testids present and functional)"},
+  "test_credentials": "admin@boostpc.io / admin123 — has stored specs (Ryzen 7 5800X/RTX 3070/32 GB), health (bad values -> score 27), and startup list (Steam/Discord/Spotify/OneDrive). Data is re-seeded by tests via _seed_specs_health_startup helper.",
+  "seed_data_creation": "Backend tests call _seed_specs_health_startup(admin_session) to guarantee admin has specs+health+startup before health/upgrade/fps/startup tests. Uses the user's real agent token (X-Agent-Token). Fresh users for negative tests use unique UUID emails via /api/auth/register.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: `cd /app/backend && pytest tests/backend_test.py -n 0 --junitxml=/app/test_reports/pytest/pytest_results.xml`. Expected 41 pass, 1 skip. Iteration-3 testids: nav-upgrade, nav-pc (Layout sidebar), health-score, check-0..N, spec-cpu/gpu/ram/os (MyPc.jsx), analyze-startup-btn (MyPc.jsx), analyze-upgrade-btn, upg-rec-0..N, track-upgrade-btn, fps-game-input, estimate-fps-btn, fps-bar-0..3 (Upgrade.jsx), track-build-{id} (BuildGenerator.jsx saved-builds section — only visible when saved builds exist), group-summary (Tracker.jsx). Admin currently has stored specs+health+startup and 5+ tracked products from tests. To test track-build-{id} manually you need to first save a build (POST /api/builds/generate then save) — admin currently has no saved builds.",
+  "rca of the issue": "No blocking issues. Only medium-priority UX/robustness suggestions above. AI integrations (Claude) live and returning well-formed JSON: /upgrade/analyze -> {bottleneck, assessment, recommendations[{category,suggested,price,notes,priority}], estimated_total, keep[]}; /fps/estimate -> {game, resolution, estimates[4 presets with fps], recommended_preset, notes, confidence}; /startup/analyze -> {items[{name, recommendation:'DISABILITA'|'VALUTA'|'MANTIENI', reason, safe}], summary}. compute_health() correctly penalizes bad values (score 27 for temp_mb=3200, startup=14, power=Balanced, game_mode=false, driver 881 days old) and gives high scores for good ones."
+}

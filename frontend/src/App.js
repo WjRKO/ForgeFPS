@@ -11,6 +11,8 @@ import BuildGenerator from "@/pages/BuildGenerator";
 import Tracker from "@/pages/Tracker";
 import ProductDetail from "@/pages/ProductDetail";
 import DesktopAgent from "@/pages/DesktopAgent";
+import MyPc from "@/pages/MyPc";
+import Upgrade from "@/pages/Upgrade";
 import { Loader2 } from "lucide-react";
 
 function Protected({ children }) {
@@ -41,8 +43,10 @@ function App() {
               <Route index element={<Dashboard />} />
               <Route path="advisor" element={<Advisor />} />
               <Route path="builds" element={<BuildGenerator />} />
+              <Route path="upgrade" element={<Upgrade />} />
               <Route path="tracker" element={<Tracker />} />
               <Route path="tracker/:id" element={<ProductDetail />} />
+              <Route path="pc" element={<MyPc />} />
               <Route path="desktop" element={<DesktopAgent />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

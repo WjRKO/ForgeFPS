@@ -333,3 +333,243 @@ class TestAIGracefulErrors:
         assert "__SESSION__" in text
         # Should contain either normal content or "Errore AI" gracefully
         # (we don't fail if error present - that's the graceful case)
+
+
+# ==================================================================
+# Iteration 3 - Health / Upgrade / FPS / Startup / Track components
+# ==================================================================
+
+# Helper: ensure a user has specs+health+startup stored via agent token
+def _seed_specs_health_startup(session, health_overrides=None, startup=None):
+    tr = session.get(f"{API}/agent/token", timeout=15)
+    assert tr.status_code == 200
+    token = tr.json()["token"]
+    health = {
+        "temp_mb": 3200, "startup_count": 14, "power_plan": "Balanced",
+        "game_mode": False, "gpu_scheduling": True, "ram_used_pct": 72,
+        "disk_free_pct": 9, "gpu_driver_version": "551.23",
+        "gpu_driver_date": "2024-02-01",
+    }
+    if health_overrides:
+        health.update(health_overrides)
+    payload = {
+        "data": {"cpu": "Ryzen 7 5800X", "gpu": "RTX 3070",
+                 "ram": "32 GB", "os": "Windows 11"},
+        "health": health,
+        "startup": startup if startup is not None else ["Steam", "Discord", "Spotify", "OneDrive"],
+    }
+    r = requests.post(f"{API}/agent/report-specs", json=payload,
+                      headers={"X-Agent-Token": token}, timeout=15)
+    assert r.status_code == 200, f"seed failed: {r.status_code} {r.text}"
+    return token
+
+
+# ---------- PC Health ----------
+class TestPCHealth:
+    def test_pc_health_unavailable_when_no_data(self, user_session):
+        # Fresh user - initially no health stored (only specs may have been set earlier)
+        # We create a brand-new session for isolation
+        s = requests.Session()
+        email = f"health_none_{uuid.uuid4().hex[:8]}@example.com"
+        r = s.post(f"{API}/auth/register", json={"email": email, "password": "Password123!", "name": "T"}, timeout=30)
+        assert r.status_code == 200
+        r = s.get(f"{API}/pc-health", timeout=15)
+        assert r.status_code == 200
+        assert r.json() == {"available": False}
+
+    def test_pc_health_bad_values_lower_score(self, admin_session):
+        _seed_specs_health_startup(admin_session)  # bad-ish values
+        r = admin_session.get(f"{API}/pc-health", timeout=15)
+        assert r.status_code == 200
+        h = r.json()
+        assert h.get("available") is True
+        assert 0 <= h["score"] <= 100
+        assert h["score"] < 85, f"bad values should reduce score, got {h['score']}"
+        assert h["grade"] in ("Ottimo", "Buono", "Da migliorare", "Critico")
+        assert isinstance(h["checks"], list) and len(h["checks"]) >= 5
+        statuses = {c["status"] for c in h["checks"]}
+        assert statuses & {"ok", "warn", "bad"}
+        # driver_version echo
+        assert h.get("driver_version") == "551.23"
+
+    def test_pc_health_good_values_high_score(self, admin_session):
+        _seed_specs_health_startup(admin_session, health_overrides={
+            "temp_mb": 200, "startup_count": 5, "power_plan": "High Performance",
+            "game_mode": True, "gpu_scheduling": True, "ram_used_pct": 40,
+            "disk_free_pct": 55, "gpu_driver_version": "551.23",
+            "gpu_driver_date": (time.strftime("%Y-%m-%d")),
+        })
+        r = admin_session.get(f"{API}/pc-health", timeout=15)
+        assert r.status_code == 200
+        h = r.json()
+        assert h["score"] >= 85, f"good values should give high score, got {h['score']}"
+        assert h["grade"] == "Ottimo"
+
+    def test_pc_health_requires_auth(self):
+        r = requests.get(f"{API}/pc-health", timeout=15)
+        assert r.status_code == 401
+
+
+# ---------- Upgrade Analyze (AI) ----------
+class TestUpgradeAnalyze:
+    def test_upgrade_without_specs_returns_400(self):
+        s = requests.Session()
+        email = f"upg_nospecs_{uuid.uuid4().hex[:8]}@example.com"
+        r = s.post(f"{API}/auth/register", json={"email": email, "password": "Password123!", "name": "T"}, timeout=30)
+        assert r.status_code == 200
+        r = s.post(f"{API}/upgrade/analyze", json={"budget": 800, "goal": "gaming"}, timeout=30)
+        assert r.status_code == 400
+        assert "detail" in r.json()
+
+    def test_upgrade_with_specs_returns_ai_json(self, admin_session):
+        _seed_specs_health_startup(admin_session)
+        r = admin_session.post(f"{API}/upgrade/analyze",
+                               json={"budget": 900, "goal": "gaming 1440p"}, timeout=90)
+        assert r.status_code == 200, f"unexpected {r.status_code}: {r.text[:400]}"
+        body = r.json()
+        # Real Claude JSON shape
+        assert "bottleneck" in body
+        assert "recommendations" in body and isinstance(body["recommendations"], list)
+        assert len(body["recommendations"]) > 0
+        # Save first rec category for track test
+        first = body["recommendations"][0]
+        assert "suggested" in first or "name" in first
+        pytest.shared_upgrade_recs = body["recommendations"]
+
+
+# ---------- FPS Estimate (AI) ----------
+class TestFPSEstimate:
+    def test_fps_with_specs(self, admin_session):
+        _seed_specs_health_startup(admin_session)
+        r = admin_session.post(f"{API}/fps/estimate",
+                               json={"game": "Fortnite", "resolution": "1440p"}, timeout=90)
+        assert r.status_code == 200, f"unexpected {r.status_code}: {r.text[:400]}"
+        body = r.json()
+        assert body.get("game")
+        assert body.get("resolution") == "1440p"
+        est = body.get("estimates")
+        assert isinstance(est, list) and len(est) >= 3
+        for e in est[:4]:
+            assert "fps" in e or "avg_fps" in e or "preset" in e
+
+    def test_fps_without_specs_still_works(self):
+        s = requests.Session()
+        email = f"fps_nospecs_{uuid.uuid4().hex[:8]}@example.com"
+        r = s.post(f"{API}/auth/register", json={"email": email, "password": "Password123!", "name": "T"}, timeout=30)
+        assert r.status_code == 200
+        r = s.post(f"{API}/fps/estimate",
+                   json={"game": "Valorant", "resolution": "1080p"}, timeout=90)
+        assert r.status_code == 200, f"unexpected {r.status_code}: {r.text[:400]}"
+        body = r.json()
+        assert "estimates" in body
+
+
+# ---------- Startup Analyze (AI) ----------
+class TestStartupAnalyze:
+    def test_startup_without_data_400(self):
+        s = requests.Session()
+        email = f"startup_none_{uuid.uuid4().hex[:8]}@example.com"
+        r = s.post(f"{API}/auth/register", json={"email": email, "password": "Password123!", "name": "T"}, timeout=30)
+        assert r.status_code == 200
+        r = s.post(f"{API}/startup/analyze", timeout=30)
+        assert r.status_code == 400
+
+    def test_startup_with_data(self, admin_session):
+        _seed_specs_health_startup(admin_session)
+        r = admin_session.post(f"{API}/startup/analyze", timeout=90)
+        assert r.status_code == 200, f"unexpected {r.status_code}: {r.text[:400]}"
+        body = r.json()
+        assert "items" in body and isinstance(body["items"], list)
+        assert len(body["items"]) >= 1
+        it = body["items"][0]
+        assert "name" in it
+        assert "recommendation" in it or "reason" in it
+
+
+# ---------- Track Build Components / Track Upgrade ----------
+class TestTrackComponents:
+    def test_track_build_creates_products(self, admin_session):
+        # First generate & save a build (or use existing). Use generate then simulate saving? 
+        # Save uses different flow. Instead, insert a build directly via generate + save endpoints if any.
+        # Check builds list
+        r = admin_session.get(f"{API}/builds", timeout=15)
+        assert r.status_code == 200
+        builds = r.json()
+        if not builds:
+            # Generate one via AI (may return 502 if no balance). If unavailable, skip.
+            gen = admin_session.post(f"{API}/builds/generate",
+                                     json={"budget": 1000, "use_case": "gaming",
+                                           "resolution": "1080p", "notes": "test"}, timeout=90)
+            if gen.status_code != 200:
+                pytest.skip(f"cannot obtain saved build (generate={gen.status_code})")
+            # Save if endpoint exists
+            build_data = gen.json()
+            save = admin_session.post(f"{API}/builds", json=build_data, timeout=15)
+            if save.status_code != 200:
+                pytest.skip(f"no /builds save endpoint success ({save.status_code})")
+            r = admin_session.get(f"{API}/builds", timeout=15)
+            builds = r.json()
+        if not builds:
+            pytest.skip("no saved builds to test track")
+        build_id = builds[0]["id"]
+        r = admin_session.post(f"{API}/builds/{build_id}/track", timeout=30)
+        assert r.status_code == 200, f"track build failed: {r.status_code} {r.text}"
+        body = r.json()
+        assert body.get("ok") is True
+        assert "tracked" in body
+        assert "group" in body and isinstance(body["group"], str) and len(body["group"]) > 0
+        pytest.shared_build_group = body["group"]
+
+        # Verify products list has 'group' field for those items
+        rp = admin_session.get(f"{API}/products", timeout=15)
+        assert rp.status_code == 200
+        grouped = [p for p in rp.json() if p.get("group") == body["group"]]
+        assert len(grouped) >= 1
+        assert grouped[0].get("platform") == "build-component"
+
+    def test_track_upgrade_creates_products(self, admin_session):
+        _seed_specs_health_startup(admin_session)
+        # Ensure we have upgrade recs
+        recs = getattr(pytest, "shared_upgrade_recs", None)
+        if not recs:
+            u = admin_session.post(f"{API}/upgrade/analyze",
+                                   json={"budget": 700, "goal": "gaming"}, timeout=90)
+            if u.status_code != 200:
+                pytest.skip(f"upgrade/analyze failed: {u.status_code}")
+            recs = u.json().get("recommendations") or []
+        if not recs:
+            pytest.skip("no upgrade recommendations available")
+        group_name = f"Upgrade Test {uuid.uuid4().hex[:6]}"
+        # Ensure each rec has suggested key (may be name)
+        norm = []
+        for r in recs[:3]:
+            norm.append({
+                "category": r.get("category", "GPU"),
+                "suggested": r.get("suggested") or r.get("name") or "Componente",
+                "price": r.get("price", 300),
+            })
+        resp = admin_session.post(f"{API}/upgrade/track",
+                                  json={"group": group_name, "components": norm}, timeout=30)
+        assert resp.status_code == 200, f"track upgrade failed: {resp.status_code} {resp.text}"
+        body = resp.json()
+        assert body.get("group") == group_name
+        assert body.get("tracked", 0) >= 1
+        # Verify in /products
+        rp = admin_session.get(f"{API}/products", timeout=15)
+        assert rp.status_code == 200
+        matched = [p for p in rp.json() if p.get("group") == group_name]
+        assert len(matched) >= 1
+
+
+# ---------- report-specs accepts health+startup ----------
+class TestReportSpecsHealthStartup:
+    def test_report_specs_accepts_health_and_startup(self, admin_session):
+        token = _seed_specs_health_startup(admin_session)
+        # Read back via pc-specs
+        r = admin_session.get(f"{API}/pc-specs", timeout=15)
+        assert r.status_code == 200
+        doc = r.json()
+        assert doc.get("health") is not None
+        assert doc["health"]["gpu_driver_version"] == "551.23"
+        assert isinstance(doc.get("startup"), list)
+        assert "Steam" in doc["startup"]

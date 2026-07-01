@@ -190,6 +190,52 @@ async def delete_build(build_id: str, user: dict = Depends(get_current_user)):
     return {"ok": True}
 
 
+async def _track_components(uid: str, group: str, components: list) -> int:
+    created = 0
+    for c in components:
+        name = c.get("name") or c.get("suggested")
+        if not name:
+            continue
+        price = c.get("price")
+        pid = str(uuid.uuid4())
+        doc = {"id": pid, "user_id": uid, "url": "",
+               "title": f"{c.get('category', '')}: {name}".strip(": "),
+               "platform": "build-component", "image": None, "currency": "EUR",
+               "current_price": price, "initial_price": price, "lowest_price": price,
+               "target_price": None, "status": "ok" if price is not None else "no_price",
+               "last_error": None, "group": group,
+               "created_at": now_iso(), "updated_at": now_iso()}
+        await db.products.insert_one(doc)
+        if price is not None:
+            await db.price_history.insert_one(_record_history(pid, price))
+        created += 1
+    return created
+
+
+class TrackComponentsInput(BaseModel):
+    group: str
+    components: list
+
+
+@api.post("/builds/{build_id}/track")
+async def track_build(build_id: str, user: dict = Depends(get_current_user)):
+    b = await db.builds.find_one({"id": build_id, "user_id": str(user["_id"])}, {"_id": 0})
+    if not b:
+        raise HTTPException(status_code=404, detail="Build non trovata")
+    build = b.get("build", {})
+    group = build.get("name", "Build")
+    created = await _track_components(str(user["_id"]), group, build.get("components", []))
+    return {"ok": True, "tracked": created, "group": group}
+
+
+@api.post("/upgrade/track")
+async def track_upgrade(data: TrackComponentsInput, user: dict = Depends(get_current_user)):
+    comps = [{"category": c.get("category"), "name": c.get("suggested"), "price": c.get("price")}
+             for c in data.components]
+    created = await _track_components(str(user["_id"]), data.group, comps)
+    return {"ok": True, "tracked": created, "group": data.group}
+
+
 # ---------- Product Search ----------
 @api.post("/products/search")
 async def product_search(data: SearchInput, user: dict = Depends(get_current_user)):
@@ -394,6 +440,8 @@ async def get_or_create_agent_token(uid: str) -> str:
 
 class SpecsInput(BaseModel):
     data: dict
+    health: Optional[dict] = None
+    startup: Optional[list] = None
 
 
 @api.get("/agent/token")
@@ -407,15 +455,125 @@ async def report_specs(data: SpecsInput, x_agent_token: str = Header(default="")
     if not rec:
         raise HTTPException(status_code=401, detail="Token agent non valido")
     uid = rec["user_id"]
-    await db.pc_specs.update_one({"user_id": uid},
-                                 {"$set": {"user_id": uid, "data": data.data, "updated_at": now_iso()}},
-                                 upsert=True)
+    fields = {"user_id": uid, "data": data.data, "updated_at": now_iso()}
+    if data.health is not None:
+        fields["health"] = data.health
+    if data.startup is not None:
+        fields["startup"] = data.startup
+    await db.pc_specs.update_one({"user_id": uid}, {"$set": fields}, upsert=True)
     return {"ok": True}
 
 
 @api.get("/pc-specs")
 async def get_specs(user: dict = Depends(get_current_user)):
     return await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+
+
+def _days_since(date_str: str):
+    try:
+        d = datetime.fromisoformat(date_str[:10])
+        return (datetime.now() - d).days
+    except Exception:
+        return None
+
+
+def compute_health(health: dict) -> dict:
+    score = 100
+    checks = []
+
+    def add(ok, warn, label, msg_ok, msg_bad, penalty):
+        nonlocal score
+        status = "ok" if ok else ("warn" if warn else "bad")
+        if not ok:
+            score -= penalty
+        checks.append({"label": label, "status": status, "message": msg_ok if ok else msg_bad})
+
+    temp = health.get("temp_mb", 0) or 0
+    add(temp < 1500, temp < 5000, "File temporanei", "Puliti", f"{int(temp)} MB da liberare", 12)
+
+    startup_count = health.get("startup_count", 0) or 0
+    add(startup_count <= 8, startup_count <= 15, "Programmi all'avvio",
+        f"{startup_count} (ok)", f"{startup_count} programmi rallentano il boot", 12)
+
+    power = (health.get("power_plan") or "").lower()
+    hp = "high" in power or "prestazioni elevate" in power or "ultimate" in power
+    add(hp, False, "Piano energetico", "Alte prestazioni", "Non impostato su alte prestazioni", 15)
+
+    add(bool(health.get("game_mode")), False, "Game Mode", "Attivo", "Disattivato", 10)
+    add(bool(health.get("gpu_scheduling")), False, "GPU Scheduling", "Attivo", "Disattivato (HAGS off)", 8)
+
+    ram = health.get("ram_used_pct")
+    if ram is not None:
+        add(ram < 80, ram < 90, "Uso RAM", f"{ram}%", f"{ram}% (elevato)", 10)
+
+    disk = health.get("disk_free_pct")
+    if disk is not None:
+        add(disk > 12, disk > 6, "Spazio disco", f"{disk}% libero", f"Solo {disk}% libero", 12)
+
+    driver_date = health.get("gpu_driver_date")
+    if driver_date:
+        days = _days_since(driver_date)
+        if days is not None:
+            add(days < 180, days < 365, "Driver GPU",
+                f"Aggiornato ({days}g fa)", f"Vecchio: {days} giorni. Aggiornalo.", 12)
+
+    score = max(0, min(100, score))
+    grade = "Ottimo" if score >= 85 else "Buono" if score >= 70 else "Da migliorare" if score >= 50 else "Critico"
+    return {"score": score, "grade": grade, "checks": checks,
+            "driver_version": health.get("gpu_driver_version"),
+            "gpu": health.get("gpu"), "updated_at": now_iso()}
+
+
+@api.get("/pc-health")
+async def pc_health(user: dict = Depends(get_current_user)):
+    doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+    if not doc or not doc.get("health"):
+        return {"available": False}
+    result = compute_health(doc["health"])
+    result["available"] = True
+    return result
+
+
+class GoalInput(BaseModel):
+    budget: int = Field(default=800, ge=50, le=10000)
+    goal: str = "gaming e streaming"
+
+
+@api.post("/upgrade/analyze")
+async def upgrade_analyze(data: GoalInput, user: dict = Depends(get_current_user)):
+    specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+    if not specs or not specs.get("data"):
+        raise HTTPException(status_code=400, detail="Nessun hardware rilevato. Usa il Desktop Agent (opzione 7) per inviare le specifiche.")
+    try:
+        return await ai_engine.generate_upgrade(specs_to_text(specs), data.budget, data.goal)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+class FpsInput(BaseModel):
+    game: str
+    resolution: str = "1080p"
+
+
+@api.post("/fps/estimate")
+async def fps_estimate(data: FpsInput, user: dict = Depends(get_current_user)):
+    specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+    try:
+        return await ai_engine.estimate_fps(specs_to_text(specs) if specs else "", data.game, data.resolution)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@api.post("/startup/analyze")
+async def startup_analyze(user: dict = Depends(get_current_user)):
+    doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+    startup = (doc or {}).get("startup") or []
+    if not startup:
+        raise HTTPException(status_code=400, detail="Nessun dato di avvio. Usa il Desktop Agent (opzione 7).")
+    try:
+        return await ai_engine.analyze_startup(startup)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 # ---------- Desktop Agent ----------

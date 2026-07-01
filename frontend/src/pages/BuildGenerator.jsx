@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Cpu, Loader2, Save, Trash2, Zap, Sparkles } from "lucide-react";
+import { Cpu, Loader2, Save, Trash2, Zap, Sparkles, LineChart as LineIcon } from "lucide-react";
+import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
 
 const USE_CASES = ["Streaming + Gaming", "Gaming competitivo (FPS)", "Streaming professionale", "Content creation + Gaming"];
@@ -83,6 +84,11 @@ export default function BuildGenerator() {
 
   const remove = async (id) => { await api.delete(`/builds/${id}`); loadSaved(); };
 
+  const trackBuild = async (id) => {
+    try { const { data } = await api.post(`/builds/${id}/track`); toast.success(`${data.tracked} componenti aggiunti al Price Tracker`); }
+    catch { toast.error("Errore nel tracking"); }
+  };
+
   return (
     <div className="max-w-6xl mx-auto fade-up">
       <div className="mb-6">
@@ -149,6 +155,10 @@ export default function BuildGenerator() {
                       </div>
                       <button data-testid={`delete-build-${s.id}`} onClick={() => remove(s.id)} className="text-zinc-500 hover:text-[#FF3B30]"><Trash2 size={16} /></button>
                     </div>
+                    <button data-testid={`track-build-${s.id}`} onClick={() => trackBuild(s.id)}
+                      className="mt-3 flex items-center gap-2 border border-[#2A2A35] px-3 py-1.5 text-xs hover:border-[#E5FF00] transition-colors">
+                      <LineIcon size={13} /> Traccia i pezzi nel Price Tracker
+                    </button>
                   </div>
                 ))}
               </div>
