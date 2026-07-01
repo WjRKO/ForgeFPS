@@ -197,9 +197,14 @@ async def _track_components(uid: str, group: str, components: list) -> int:
         if not name:
             continue
         price = c.get("price")
+        title = f"{c.get('category', '')}: {name}".strip(": ")
+        existing = await db.products.find_one({"user_id": uid, "group": group, "title": title})
+        if existing:
+            await db.products.update_one({"id": existing["id"]}, {"$set": {
+                "current_price": price, "updated_at": now_iso()}})
+            continue
         pid = str(uuid.uuid4())
-        doc = {"id": pid, "user_id": uid, "url": "",
-               "title": f"{c.get('category', '')}: {name}".strip(": "),
+        doc = {"id": pid, "user_id": uid, "url": "", "title": title,
                "platform": "build-component", "image": None, "currency": "EUR",
                "current_price": price, "initial_price": price, "lowest_price": price,
                "target_price": None, "status": "ok" if price is not None else "no_price",

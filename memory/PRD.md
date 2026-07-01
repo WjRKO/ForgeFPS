@@ -24,8 +24,18 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - Notifiche in-app (cali prezzo / target) su refresh scraping E su prezzo manuale
 - Dashboard stats, Desktop Agent scaricabile (.py Windows, token account incluso)
 - NEW: Web Push notifications (VAPID + service worker) sui cali di prezzo — toggle nel dropdown notifiche
-- NEW: Rilevamento hardware reale del PC via desktop agent (opzione 7) → /api/agent/report-specs (auth token) → specs mostrate in "Il mio PC" e usate dall'AI Advisor per consigli su misura
-- Tested: iteration_1 100%, iteration_2 100% (29/29 backend, frontend OK)
+- NEW: Rilevamento hardware reale del PC via desktop agent (opzione 7) → specs usate dall'AI Advisor
+- Tested: iteration_1/2/3 tutte 100%
+
+## Iteration 3 (2026-07-01) — 7 nuove feature
+- Upgrade AI: analizza hardware reale, trova collo di bottiglia, consiglia solo i pezzi da cambiare (/api/upgrade/analyze)
+- Traccia componenti build/upgrade con 1 click (con dedupe) → gruppi e budget totale nel Price Tracker
+- Health Score PC 0-100 + checklist (temp, avvio, piano energetico, game mode, HAGS, RAM, disco, driver)
+- Flag driver GPU obsoleti (in health) con link aggiornamento
+- Programmi all'avvio: lista dal desktop agent + analisi AI su cosa disabilitare (/api/startup/analyze)
+- Stima FPS per gioco su hardware reale (/api/fps/estimate)
+- Backup/ripristino tweak nel desktop agent (opzione 8)
+- Nuove pagine: "Il mio PC" (/app/pc), "Upgrade & FPS" (/app/upgrade)
 
 ## Known Constraints
 - Amazon blocca lo scraping HTTP (anti-bot) → fallback prezzo manuale (flusso principale)
