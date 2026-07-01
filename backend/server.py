@@ -4,12 +4,13 @@ load_dotenv(Path(__file__).parent / ".env")
 
 import os
 import uuid
+import secrets
 import logging
 import asyncio
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Header
 from fastapi.responses import StreamingResponse, PlainTextResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -19,6 +20,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from auth import build_auth_router, seed_admin
 from scraper import scrape_product, search_products
 import ai_engine
+import push
 from desktop_agent import AGENT_SCRIPT
 
 mongo_url = os.environ["MONGO_URL"]
@@ -37,6 +39,35 @@ scheduler = AsyncIOScheduler()
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
+
+
+def specs_to_text(specs: dict) -> str:
+    if not specs:
+        return ""
+    d = specs.get("data", {})
+    parts = []
+    for label, key in [("OS", "os"), ("CPU", "cpu"), ("GPU", "gpu"), ("RAM", "ram"),
+                       ("Storage", "disk"), ("Scheda madre", "motherboard"), ("Risoluzione", "resolution")]:
+        if d.get(key):
+            parts.append(f"{label}: {d[key]}")
+    return "\n".join(parts)
+
+
+async def create_notification(user_id: str, product: dict, old_price, new_price, hit_target: bool):
+    payload_title = product.get("title")
+    notif = {
+        "id": str(uuid.uuid4()), "user_id": user_id, "product_id": product["id"],
+        "title": payload_title, "old_price": old_price, "new_price": new_price,
+        "currency": product.get("currency", "EUR"),
+        "type": "target" if hit_target else "drop",
+        "message": (f"Prezzo target raggiunto! Ora {new_price}" if hit_target
+                    else f"Prezzo sceso da {old_price} a {new_price}"),
+        "read": False, "created_at": now_iso()}
+    await db.notifications.insert_one(notif)
+    await push.send_push_to_user(db, user_id, {
+        "title": "📉 Calo di prezzo!" if not hit_target else "🎯 Prezzo target!",
+        "body": f"{payload_title} → {new_price} {product.get('currency', 'EUR')}",
+        "url": f"/app/tracker/{product['id']}"})
 
 
 # ---------- Models ----------
@@ -103,12 +134,14 @@ async def advisor_chat(data: ChatMessageInput, user: dict = Depends(get_current_
         {"session_id": session_id, "user_id": uid}, {"_id": 0}).sort("created_at", 1).to_list(500)
     await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "user_id": uid,
                                        "role": "user", "content": data.message, "created_at": now_iso()})
+    specs = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0})
+    specs_text = specs_to_text(specs)
 
     async def gen():
         yield f"__SESSION__{session_id}__\n"
         full = ""
         try:
-            async for chunk in ai_engine.stream_advisor(session_id, history, data.message):
+            async for chunk in ai_engine.stream_advisor(session_id, history, data.message, specs_text):
                 full += chunk
                 yield chunk
         except Exception as e:
@@ -223,14 +256,8 @@ async def _refresh_one(product: dict) -> dict:
         dropped = old is not None and price < old
         hit_target = target is not None and price <= target
         if dropped or hit_target:
-            await db.notifications.insert_one({
-                "id": str(uuid.uuid4()), "user_id": product["user_id"], "product_id": product["id"],
-                "title": product.get("title"), "old_price": old, "new_price": price,
-                "currency": product.get("currency", "EUR"),
-                "type": "target" if hit_target else "drop",
-                "message": (f"Prezzo target raggiunto! Ora {price}" if hit_target
-                            else f"Prezzo sceso da {old} a {price}"),
-                "read": False, "created_at": now_iso()})
+            merged = {**product, **update, "id": product["id"], "user_id": product["user_id"]}
+            await create_notification(product["user_id"], merged, old, price, hit_target)
             notified = True
     await db.products.update_one({"id": product["id"]}, {"$set": update})
     update["notified"] = notified
@@ -263,13 +290,7 @@ async def set_manual_price(product_id: str, data: ManualPriceInput, user: dict =
     dropped = old is not None and data.price < old
     hit_target = target is not None and data.price <= target
     if dropped or hit_target:
-        await db.notifications.insert_one({
-            "id": str(uuid.uuid4()), "user_id": str(user["_id"]), "product_id": product_id,
-            "title": p.get("title"), "old_price": old, "new_price": data.price,
-            "currency": p.get("currency", "EUR"), "type": "target" if hit_target else "drop",
-            "message": (f"Prezzo target raggiunto! Ora {data.price}" if hit_target
-                        else f"Prezzo sceso da {old} a {data.price}"),
-            "read": False, "created_at": now_iso()})
+        await create_notification(str(user["_id"]), {**p, "id": product_id}, old, data.price, hit_target)
     return await db.products.find_one({"id": product_id}, {"_id": 0})
 
 
@@ -326,10 +347,84 @@ async def stats(user: dict = Depends(get_current_user)):
     }
 
 
+# ---------- Push Notifications ----------
+class PushSubInput(BaseModel):
+    subscription: dict
+
+
+@api.get("/push/vapid-public-key")
+async def vapid_public_key():
+    return {"publicKey": push.get_public_key()}
+
+
+@api.post("/push/subscribe")
+async def push_subscribe(data: PushSubInput, user: dict = Depends(get_current_user)):
+    uid = str(user["_id"])
+    endpoint = data.subscription.get("endpoint")
+    await db.push_subscriptions.update_one(
+        {"user_id": uid, "subscription.endpoint": endpoint},
+        {"$set": {"user_id": uid, "subscription": data.subscription, "created_at": now_iso()}},
+        upsert=True)
+    return {"ok": True}
+
+
+@api.post("/push/unsubscribe")
+async def push_unsubscribe(data: PushSubInput, user: dict = Depends(get_current_user)):
+    endpoint = data.subscription.get("endpoint")
+    await db.push_subscriptions.delete_one({"user_id": str(user["_id"]), "subscription.endpoint": endpoint})
+    return {"ok": True}
+
+
+@api.post("/push/test")
+async def push_test(user: dict = Depends(get_current_user)):
+    await push.send_push_to_user(db, str(user["_id"]), {
+        "title": "🔔 BOOST PC", "body": "Le notifiche push sono attive!", "url": "/app/tracker"})
+    return {"ok": True}
+
+
+# ---------- PC Hardware Specs ----------
+async def get_or_create_agent_token(uid: str) -> str:
+    rec = await db.agent_tokens.find_one({"user_id": uid})
+    if rec:
+        return rec["token"]
+    token = secrets.token_urlsafe(24)
+    await db.agent_tokens.insert_one({"user_id": uid, "token": token, "created_at": now_iso()})
+    return token
+
+
+class SpecsInput(BaseModel):
+    data: dict
+
+
+@api.get("/agent/token")
+async def agent_token(user: dict = Depends(get_current_user)):
+    return {"token": await get_or_create_agent_token(str(user["_id"]))}
+
+
+@api.post("/agent/report-specs")
+async def report_specs(data: SpecsInput, x_agent_token: str = Header(default="")):
+    rec = await db.agent_tokens.find_one({"token": x_agent_token})
+    if not rec:
+        raise HTTPException(status_code=401, detail="Token agent non valido")
+    uid = rec["user_id"]
+    await db.pc_specs.update_one({"user_id": uid},
+                                 {"$set": {"user_id": uid, "data": data.data, "updated_at": now_iso()}},
+                                 upsert=True)
+    return {"ok": True}
+
+
+@api.get("/pc-specs")
+async def get_specs(user: dict = Depends(get_current_user)):
+    return await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+
+
 # ---------- Desktop Agent ----------
 @api.get("/desktop-agent/download")
-async def download_agent():
-    return PlainTextResponse(AGENT_SCRIPT, headers={
+async def download_agent(user: dict = Depends(get_current_user)):
+    token = await get_or_create_agent_token(str(user["_id"]))
+    backend = os.environ.get("FRONTEND_URL", "http://localhost:8001")
+    script = AGENT_SCRIPT.replace("__BACKEND_URL__", backend).replace("__AGENT_TOKEN__", token)
+    return PlainTextResponse(script, headers={
         "Content-Disposition": "attachment; filename=boostpc_agent.py"})
 
 
@@ -369,6 +464,10 @@ async def startup():
     await db.login_attempts.create_index("identifier")
     await db.products.create_index("user_id")
     await db.price_history.create_index("product_id")
+    await db.agent_tokens.create_index("token")
+    await db.agent_tokens.create_index("user_id")
+    await db.push_subscriptions.create_index("user_id")
+    await db.pc_specs.create_index("user_id")
     await seed_admin(db)
     Path("/app/memory").mkdir(exist_ok=True)
     with open("/app/memory/test_credentials.md", "w") as f:

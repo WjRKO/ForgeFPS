@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, Plus, Trash2, Loader2, MessageSquareCode, Terminal } from "lucide-react";
+import { Send, Plus, Trash2, Loader2, MessageSquareCode, Terminal, Cpu } from "lucide-react";
 import api, { API } from "@/lib/api";
 
 const SUGGESTIONS = [
@@ -15,12 +15,13 @@ export default function Advisor() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [specs, setSpecs] = useState(null);
   const endRef = useRef(null);
 
   const loadSessions = async () => {
     try { const { data } = await api.get("/advisor/sessions"); setSessions(data); } catch {}
   };
-  useEffect(() => { loadSessions(); }, []);
+  useEffect(() => { loadSessions(); api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {}); }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const openSession = async (id) => {
@@ -83,6 +84,11 @@ export default function Advisor() {
       <div className="mb-6">
         <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">// AI Advisor</div>
         <h1 className="font-display font-black text-3xl tracking-tighter">Ottimizzazione PC</h1>
+        {specs?.data?.cpu && (
+          <div data-testid="specs-badge" className="inline-flex items-center gap-2 mt-3 text-xs text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-3 py-1.5">
+            <Cpu size={13} /> Consigli personalizzati per: {specs.data.cpu}{specs.data.gpu ? ` · ${specs.data.gpu}` : ""}
+          </div>
+        )}
       </div>
 
       <div className="grid lg:grid-cols-[240px_1fr] gap-4">

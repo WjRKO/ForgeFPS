@@ -24,8 +24,12 @@ def build_chat(session_id: str, system: str = ADVISOR_SYSTEM) -> LlmChat:
                    system_message=system).with_model(MODEL_PROVIDER, MODEL_NAME)
 
 
-async def stream_advisor(session_id: str, history: list, message: str):
-    chat = build_chat(session_id)
+async def stream_advisor(session_id: str, history: list, message: str, specs_text: str = ""):
+    system = ADVISOR_SYSTEM
+    if specs_text:
+        system += ("\n\n[SPECIFICHE HARDWARE DELL'UTENTE - usa questi dati per consigli su misura]\n"
+                   + specs_text)
+    chat = build_chat(session_id, system)
     # replay history into context
     context = ""
     if history:

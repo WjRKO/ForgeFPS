@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 2 (push notifications + real PC hardware detection) fully verified. Backend: 29/29 pytest tests PASS including 12 NEW tests (push subscribe/unsubscribe/test/vapid-key, agent/token idempotency + auth, report-specs with valid/invalid X-Agent-Token, pc-specs read-back with persistence, desktop-agent download now 401 unauth / 200 authed with token+backend injected placeholders replaced, and manual-price-drop-now-creates-notification). Frontend: admin login → topbar bell dropdown shows toggle-push-btn (data-testid ok), /app/desktop shows download-agent-btn AND 'Il mio PC' spec fields (CPU=Ryzen 7 5800X, GPU=RTX 3070, RAM=32 GB, OS=Windows 11), /app/advisor shows specs-badge='Consigli personalizzati per: Ryzen 7 5800X · RTX 3070'. Advisor chat streams real Claude response and system prompt uses the stored specs (response referenced the Ryzen 7 5800X directly). Regression pass: auth, tracker, manual/target price, notifications, stats, builds all green. Web-push real delivery cannot be tested headlessly (fake endpoint) but /api/push/test returns 200 gracefully without crashing.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/desktop-agent/download", "issue": "The injected BACKEND_URL comes from env FRONTEND_URL (default 'http://localhost:8001'). It works because FRONTEND_URL is set to the public preview URL in backend/.env, but semantically the agent should hit the BACKEND URL, not the frontend. Consider renaming env or adding BACKEND_URL env for clarity."},
+      {"endpoint": "POST /api/push/subscribe", "issue": "No schema validation on subscription.endpoint / keys — a client could submit an empty dict and it would still upsert. Consider Pydantic sub-model."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: introduce a dedicated BACKEND_URL env for desktop-agent injection instead of reusing FRONTEND_URL.",
+    "OPTIONAL: strict Pydantic validation on PushSubInput.subscription (require endpoint + keys.p256dh + keys.auth).",
+    "OPTIONAL: purge dead push subscriptions on 401/403 (currently only 404/410 are cleaned)."
+  ],
+  "critical_code_review_comments": [
+    "server.py:425 uses os.environ.get('FRONTEND_URL', 'http://localhost:8001') as the BACKEND_URL for the agent script — coincidentally works because same public host serves both, but the naming is misleading.",
+    "push.py silently swallows all non-404/410 WebPushException — good for uptime, but a repeated bad private key would go unnoticed; consider a metrics counter.",
+    "server.py: create_notification always calls push.send_push_to_user without try/except — push.py itself handles errors, but a future refactor could regress this. Consider wrapping defensively.",
+    "desktop_agent.py AGENT_SCRIPT is a large embedded raw string (~180 lines) — consider moving to a .py.tpl file for easier maintenance/linting.",
+    "server.py: agent_tokens have no rotation / revocation endpoint — a leaked token is valid forever. Minor for MVP."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100% (29/29)", "frontend": "100%"},
+  "test_credentials": "Admin admin@boostpc.io/admin123 works and has stored PC specs (Ryzen 7 5800X / RTX 3070 / 32 GB / Windows 11).",
+  "seed_data_creation": "Per-test users created via /api/auth/register with unique UUID suffix. Admin's specs persist across runs.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run backend tests serial: `cd /app/backend && pytest tests/backend_test.py -n 0`. All 29 tests should pass. Frontend routes: /login, /register, /app (dashboard), /app/tracker, /app/tracker/:id, /app/advisor, /app/builds, /app/desktop. Key testids added this iteration: toggle-push-btn (in Layout notifications dropdown, only visible when Notification API supported — always true in Chromium), download-agent-btn, spec-cpu/spec-gpu/spec-ram/spec-os (on Desktop page), specs-badge (on Advisor when user has specs). Push actual delivery cannot be validated headlessly — endpoints just need to not crash.",
+  "rca of the issue": "No blocking issues. All new features working end-to-end. AI streaming personalization confirmed live (Claude response referenced the Ryzen 7 5800X from stored specs). Manual price drop now correctly triggers both in-app notification AND push send attempt (verified via test_lower_manual_price_creates_notification)."
+}

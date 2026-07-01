@@ -1,16 +1,22 @@
 AGENT_SCRIPT = r'''#!/usr/bin/env python3
 """
 BOOST PC AI - Desktop Agent (Windows)
-Companion locale che esegue azioni REALI di ottimizzazione sul PC.
+Companion locale che esegue azioni REALI di ottimizzazione sul PC
+e rileva l'hardware per inviarlo al tuo account BOOST PC (consigli AI su misura).
 Uso:  python boostpc_agent.py
 Richiede Windows. Alcune azioni richiedono privilegi di amministratore.
 """
 import os
 import sys
+import json
 import shutil
 import subprocess
 import tempfile
 import ctypes
+import urllib.request
+
+BACKEND_URL = "__BACKEND_URL__"
+AGENT_TOKEN = "__AGENT_TOKEN__"
 
 
 def is_admin():
@@ -25,6 +31,53 @@ def run(cmd):
         return subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout.strip()
     except Exception as e:
         return f"errore: {e}"
+
+
+def ps(cmd):
+    return run('powershell -NoProfile -Command "%s"' % cmd)
+
+
+def detect_hardware():
+    print("\n[*] Rilevamento hardware in corso...")
+    specs = {}
+    specs["os"] = ps("(Get-CimInstance Win32_OperatingSystem).Caption + ' ' + "
+                     "(Get-CimInstance Win32_OperatingSystem).Version") or "Windows"
+    specs["cpu"] = ps("(Get-CimInstance Win32_Processor).Name")
+    gpu = ps("(Get-CimInstance Win32_VideoController).Name -join ', '")
+    specs["gpu"] = gpu
+    ram = ps("[math]::round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,0)")
+    specs["ram"] = f"{ram} GB" if ram else ""
+    specs["motherboard"] = ps("(Get-CimInstance Win32_BaseBoard).Manufacturer + ' ' + "
+                              "(Get-CimInstance Win32_BaseBoard).Product")
+    disk = ps("(Get-CimInstance Win32_DiskDrive | Select-Object -First 1).Model")
+    size = ps("[math]::round(((Get-CimInstance Win32_DiskDrive | "
+              "Measure-Object -Property Size -Sum).Sum)/1GB,0)")
+    specs["disk"] = (f"{disk} ({size} GB)" if disk else "").strip()
+    res = ps("$s=Get-CimInstance Win32_VideoController | Select-Object -First 1; "
+             "\"$($s.CurrentHorizontalResolution)x$($s.CurrentVerticalResolution)\"")
+    specs["resolution"] = res if res and "x" in res else ""
+    for k, v in specs.items():
+        print(f"    {k.upper():14}: {v or 'n/d'}")
+    return specs
+
+
+def send_specs():
+    if "__AGENT" in AGENT_TOKEN or not BACKEND_URL.startswith("http"):
+        print("\n[!] Token non configurato. Riscarica l'agent dal tuo account BOOST PC.")
+        return
+    specs = detect_hardware()
+    payload = json.dumps({"data": specs}).encode("utf-8")
+    req = urllib.request.Request(f"{BACKEND_URL}/api/agent/report-specs", data=payload,
+                                 headers={"Content-Type": "application/json",
+                                          "X-Agent-Token": AGENT_TOKEN}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            if r.status == 200:
+                print("\n[OK] Specifiche inviate! Apri l'AI Advisor per consigli su misura.")
+            else:
+                print(f"\n[!] Risposta server: {r.status}")
+    except Exception as e:
+        print(f"\n[!] Invio fallito: {e}")
 
 
 def clean_temp():
@@ -64,8 +117,8 @@ def high_performance_power():
 
 def top_processes():
     print("\n[4] Processi che consumano piu' RAM:")
-    out = run('powershell "Get-Process | Sort-Object WS -Descending | Select-Object -First 8 '
-              'Name,@{N=\'RAM_MB\';E={[math]::round($_.WS/1MB,1)}} | Format-Table -AutoSize"')
+    out = ps("Get-Process | Sort-Object WS -Descending | Select-Object -First 8 "
+             "Name,@{N='RAM_MB';E={[math]::round($_.WS/1MB,1)}} | Format-Table -AutoSize | Out-String")
     print(out or "    (impossibile leggere i processi)")
 
 
@@ -91,11 +144,12 @@ def menu():
         "4": ("Mostra processi pesanti", top_processes),
         "5": ("Tweak gaming (Game Mode/GPU)", gaming_tweaks),
         "6": ("Pulizia disco Windows", disk_cleanup),
-        "A": ("Esegui TUTTO", None),
+        "7": ("Rileva hardware e invia al cloud", send_specs),
+        "A": ("Esegui ottimizzazioni (1-6)", None),
     }
-    print("=" * 50)
+    print("=" * 52)
     print("   BOOST PC AI - Desktop Agent")
-    print("=" * 50)
+    print("=" * 52)
     if not is_admin():
         print("[!] Suggerito eseguire come Amministratore per tutte le azioni.")
     for k, (label, _) in actions.items():

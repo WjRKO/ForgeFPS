@@ -1,5 +1,6 @@
-import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu } from "lucide-react";
-import { API } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu, RefreshCw, CheckCircle2 } from "lucide-react";
+import api, { API } from "@/lib/api";
 
 const ACTIONS = [
   { icon: HardDrive, title: "Pulizia file temporanei", desc: "Rimuove cache e file temporanei di Windows liberando spazio su disco." },
@@ -7,10 +8,17 @@ const ACTIONS = [
   { icon: Cpu, title: "Processi pesanti", desc: "Mostra i processi che consumano piu' RAM per chiuderli." },
   { icon: Wind, title: "Tweak gaming", desc: "Abilita Game Mode e Hardware-Accelerated GPU Scheduling." },
   { icon: Terminal, title: "Flush DNS", desc: "Svuota la cache DNS per ridurre problemi di rete e latenza." },
-  { icon: ShieldCheck, title: "Pulizia disco", desc: "Avvia lo strumento di pulizia disco integrato di Windows." },
+  { icon: ShieldCheck, title: "Rileva hardware + invia", desc: "Rileva CPU/GPU/RAM del PC e le invia per consigli AI su misura." },
 ];
 
+const SPEC_LABELS = { os: "Sistema operativo", cpu: "CPU", gpu: "GPU", ram: "RAM", disk: "Storage", motherboard: "Scheda madre", resolution: "Risoluzione" };
+
 export default function DesktopAgent() {
+  const [specs, setSpecs] = useState(null);
+
+  const load = async () => { try { const { data } = await api.get("/pc-specs"); setSpecs(data); } catch {} };
+  useEffect(() => { load(); }, []);
+
   return (
     <div className="max-w-5xl mx-auto fade-up">
       <div className="mb-6">
@@ -24,9 +32,10 @@ export default function DesktopAgent() {
           <div className="flex-1">
             <h2 className="font-display font-bold text-xl mb-2">BOOST PC Desktop Agent (Windows)</h2>
             <p className="text-zinc-400 text-sm leading-relaxed mb-5 max-w-2xl">
-              Per motivi di sicurezza il browser non può modificare il tuo sistema. Scarica il companion locale in Python:
-              esegue azioni <span className="text-[#E5FF00]">reali</span> di ottimizzazione direttamente su Windows.
-              Avvialo con <code className="text-[#00FF66]">python boostpc_agent.py</code> (consigliato come Amministratore).
+              Il browser non può modificare il sistema. Scarica il companion locale in Python: esegue azioni
+              <span className="text-[#E5FF00]"> reali</span> di ottimizzazione e rileva l'hardware del tuo PC.
+              Il file è <span className="text-[#00FF66]">già collegato al tuo account</span> (token incluso): avvialo con
+              <code className="text-[#00FF66]"> python boostpc_agent.py</code> e scegli l'opzione 7 per inviare le specifiche.
             </p>
             <a data-testid="download-agent-btn" href={`${API}/desktop-agent/download`}
               className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-6 py-3 hover:bg-[#D4EC00] transition-colors volt-glow">
@@ -34,6 +43,32 @@ export default function DesktopAgent() {
             </a>
           </div>
         </div>
+      </div>
+
+      <div className="bg-[#0F0F12] border border-[#2A2A35] mb-6">
+        <div className="p-5 border-b border-[#2A2A35] flex items-center justify-between">
+          <span className="text-xs uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2"><Cpu size={14} className="text-[#E5FF00]" /> Il mio PC</span>
+          <button data-testid="refresh-specs-btn" onClick={load} className="text-zinc-500 hover:text-[#E5FF00]"><RefreshCw size={15} /></button>
+        </div>
+        {specs?.data ? (
+          <div>
+            <div className="p-4 flex items-center gap-2 text-xs text-[#00FF66] border-b border-[#1A1A24]">
+              <CheckCircle2 size={14} /> Hardware rilevato · l'AI Advisor userà questi dati per consigli su misura
+            </div>
+            <div className="grid sm:grid-cols-2 gap-px bg-[#1A1A24]">
+              {Object.entries(SPEC_LABELS).filter(([k]) => specs.data[k]).map(([k, label]) => (
+                <div key={k} className="bg-[#0F0F12] p-4" data-testid={`spec-${k}`}>
+                  <div className="text-xs uppercase tracking-widest text-zinc-500">{label}</div>
+                  <div className="text-sm text-zinc-100 mt-1">{specs.data[k]}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="p-8 text-center text-zinc-500 text-sm">
+            Nessuna specifica ricevuta. Scarica ed esegui l'agent, poi scegli l'opzione <span className="text-[#E5FF00]">7</span> per inviare l'hardware.
+          </div>
+        )}
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-[#2A2A35] border border-[#2A2A35]">
@@ -44,13 +79,6 @@ export default function DesktopAgent() {
             <p className="text-zinc-500 text-xs leading-relaxed">{a.desc}</p>
           </div>
         ))}
-      </div>
-
-      <div className="mt-6 bg-black border border-[#2A2A35] p-5 font-mono text-xs text-zinc-400">
-        <div className="text-[#00FF66] mb-2"># Requisiti</div>
-        <div>1. Windows 10/11 + Python 3.9+</div>
-        <div>2. Scarica il file e avvialo: <span className="text-[#E5FF00]">python boostpc_agent.py</span></div>
-        <div>3. Scegli un'azione dal menu (o "A" per eseguirle tutte)</div>
       </div>
     </div>
   );

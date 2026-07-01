@@ -129,9 +129,9 @@ class TestProducts:
         p = r.json()
         assert p["target_price"] == 400.0
 
-    def test_manual_price_drop_triggers_no_notification_but_lower_manual_ok(self, user_session):
-        """Setting a lower manual price doesn't create notification (only refresh does),
-        but should update lowest_price."""
+    def test_manual_price_lower_updates_lowest_price(self, user_session):
+        """Setting a lower manual price should update lowest_price
+        AND (new iteration) create a drop notification."""
         pid = pytest.shared_product_id
         r = user_session.put(f"{API}/products/{pid}/price", json={"price": 380.0}, timeout=15)
         assert r.status_code == 200
@@ -179,14 +179,135 @@ class TestStats:
             assert key in s
 
 
-# ---------- Desktop Agent ----------
+# ---------- Desktop Agent (now requires auth + injects token) ----------
 class TestDesktopAgent:
-    def test_download_agent(self):
+    def test_download_agent_unauth_401(self):
         r = requests.get(f"{API}/desktop-agent/download", timeout=30)
+        assert r.status_code == 401
+
+    def test_download_agent_authed_injects_token(self, user_session):
+        r = user_session.get(f"{API}/desktop-agent/download", timeout=30)
         assert r.status_code == 200
-        assert len(r.text) > 100
-        # should be python-ish text
-        assert "import" in r.text or "def " in r.text or "#" in r.text
+        text = r.text
+        assert len(text) > 100
+        assert "import" in text
+        # Placeholders should be replaced
+        assert "__AGENT_TOKEN__" not in text
+        assert "__BACKEND_URL__" not in text
+        # Should contain agent token variable
+        assert "AGENT_TOKEN =" in text
+        assert "BACKEND_URL =" in text
+
+
+# ---------- Push Notifications ----------
+class TestPush:
+    def test_vapid_public_key(self):
+        r = requests.get(f"{API}/push/vapid-public-key", timeout=15)
+        assert r.status_code == 200
+        body = r.json()
+        assert "publicKey" in body
+        assert isinstance(body["publicKey"], str)
+        assert len(body["publicKey"]) > 20
+
+    def test_subscribe_and_unsubscribe(self, user_session):
+        fake_sub = {
+            "endpoint": f"https://fcm.googleapis.com/fake/{uuid.uuid4().hex}",
+            "keys": {"p256dh": "BFakeP256dhKey123", "auth": "FakeAuthKey"}
+        }
+        r = user_session.post(f"{API}/push/subscribe",
+                              json={"subscription": fake_sub}, timeout=15)
+        assert r.status_code == 200
+        assert r.json() == {"ok": True}
+        # unsubscribe
+        r = user_session.post(f"{API}/push/unsubscribe",
+                              json={"subscription": fake_sub}, timeout=15)
+        assert r.status_code == 200
+
+    def test_subscribe_requires_auth(self):
+        fake_sub = {"endpoint": "https://fcm.googleapis.com/x", "keys": {}}
+        r = requests.post(f"{API}/push/subscribe", json={"subscription": fake_sub}, timeout=15)
+        assert r.status_code == 401
+
+    def test_push_test_endpoint_graceful(self, user_session):
+        # Subscribe fake first so send_push_to_user has a target (will fail delivery but must not crash).
+        fake_sub = {
+            "endpoint": f"https://fcm.googleapis.com/fake/{uuid.uuid4().hex}",
+            "keys": {"p256dh": "BFakeP256dhKey123", "auth": "FakeAuthKey"}
+        }
+        user_session.post(f"{API}/push/subscribe", json={"subscription": fake_sub}, timeout=15)
+        r = user_session.post(f"{API}/push/test", timeout=30)
+        assert r.status_code == 200
+        assert r.json() == {"ok": True}
+
+
+# ---------- Agent Token + Specs ----------
+class TestAgentSpecs:
+    def test_agent_token_returns_token(self, user_session):
+        r = user_session.get(f"{API}/agent/token", timeout=15)
+        assert r.status_code == 200
+        body = r.json()
+        assert "token" in body
+        assert isinstance(body["token"], str)
+        assert len(body["token"]) > 10
+        # idempotent - same token on second call
+        r2 = user_session.get(f"{API}/agent/token", timeout=15)
+        assert r2.json()["token"] == body["token"]
+        user_session.agent_token = body["token"]
+
+    def test_agent_token_requires_auth(self):
+        r = requests.get(f"{API}/agent/token", timeout=15)
+        assert r.status_code == 401
+
+    def test_report_specs_invalid_token_401(self):
+        r = requests.post(f"{API}/agent/report-specs",
+                          json={"data": {"cpu": "x"}},
+                          headers={"X-Agent-Token": "not-a-real-token-xyz"},
+                          timeout=15)
+        assert r.status_code == 401
+
+    def test_report_specs_with_valid_token_and_read_back(self, user_session):
+        # get token
+        tr = user_session.get(f"{API}/agent/token", timeout=15)
+        token = tr.json()["token"]
+        payload = {"data": {"cpu": "Ryzen 7 5800X", "gpu": "RTX 3070",
+                            "ram": "32 GB", "os": "Windows 11"}}
+        r = requests.post(f"{API}/agent/report-specs",
+                          json=payload, headers={"X-Agent-Token": token}, timeout=15)
+        assert r.status_code == 200
+        assert r.json() == {"ok": True}
+        # persistence
+        r = user_session.get(f"{API}/pc-specs", timeout=15)
+        assert r.status_code == 200
+        specs = r.json()
+        assert specs is not None
+        assert specs["data"]["cpu"] == "Ryzen 7 5800X"
+        assert specs["data"]["gpu"] == "RTX 3070"
+
+    def test_pc_specs_requires_auth(self):
+        r = requests.get(f"{API}/pc-specs", timeout=15)
+        assert r.status_code == 401
+
+
+# ---------- Manual price drop now sends push (graceful) ----------
+class TestManualPriceCreatesNotification:
+    def test_lower_manual_price_creates_notification(self, admin_session):
+        # Create a product for admin
+        url = f"https://www.amazon.it/dp/TESTNOTIF{uuid.uuid4().hex[:6]}"
+        r = admin_session.post(f"{API}/products/track",
+                               json={"url": url, "target_price": 100}, timeout=60)
+        assert r.status_code == 200
+        pid = r.json()["id"]
+        # Set initial price high
+        r = admin_session.put(f"{API}/products/{pid}/price", json={"price": 500.0}, timeout=15)
+        assert r.status_code == 200
+        # Now set a lower price -> should create notification
+        before = admin_session.get(f"{API}/notifications", timeout=15).json()
+        r = admin_session.put(f"{API}/products/{pid}/price", json={"price": 300.0}, timeout=30)
+        assert r.status_code == 200
+        after = admin_session.get(f"{API}/notifications", timeout=15).json()
+        assert len(after) > len(before), "Manual lower price should create a notification"
+        # cleanup
+        admin_session.delete(f"{API}/products/{pid}", timeout=15)
 
 
 # ---------- AI (expected graceful failure due to no balance) ----------
