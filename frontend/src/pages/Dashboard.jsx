@@ -1,0 +1,88 @@
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { LineChart, Cpu, MessageSquareCode, PiggyBank, Bell, ArrowRight, Zap } from "lucide-react";
+import api from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+
+function Stat({ icon: Icon, label, value, accent, testid }) {
+  return (
+    <div data-testid={testid} className="bg-[#0F0F12] border border-[#2A2A35] p-6 card-hover">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">{label}</span>
+        <Icon size={18} className={accent || "text-[#E5FF00]"} />
+      </div>
+      <div className="font-display font-black text-3xl tracking-tighter">{value}</div>
+    </div>
+  );
+}
+
+export default function Dashboard() {
+  const { user } = useAuth();
+  const [stats, setStats] = useState(null);
+  const [products, setProducts] = useState([]);
+
+  useEffect(() => {
+    api.get("/stats").then(({ data }) => setStats(data)).catch(() => {});
+    api.get("/products").then(({ data }) => setProducts(data.slice(0, 5))).catch(() => {});
+  }, []);
+
+  return (
+    <div className="max-w-6xl mx-auto fade-up">
+      <div className="mb-8">
+        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">// Command Center</div>
+        <h1 className="font-display font-black text-3xl sm:text-4xl tracking-tighter">Ciao, {user?.name || "Gamer"}</h1>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <Stat testid="stat-tracked" icon={LineChart} label="Prodotti tracciati" value={stats?.tracked_products ?? "—"} />
+        <Stat testid="stat-builds" icon={Cpu} label="Build salvate" value={stats?.builds ?? "—"} />
+        <Stat testid="stat-chats" icon={MessageSquareCode} label="Sessioni AI" value={stats?.chat_sessions ?? "—"} />
+        <Stat testid="stat-saved" icon={PiggyBank} label="Risparmio (€)" value={stats ? stats.total_saved : "—"} accent="text-[#00FF66]" />
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-4">
+        <Link to="/app/advisor" data-testid="quick-advisor" className="bg-[#0F0F12] border border-[#2A2A35] p-6 card-hover group">
+          <MessageSquareCode size={22} className="text-[#E5FF00] mb-4" />
+          <h3 className="font-display font-semibold text-lg mb-1">Ottimizza il PC</h3>
+          <p className="text-zinc-500 text-sm mb-3">Chiedi consigli all'AI advisor</p>
+          <span className="text-[#E5FF00] text-sm inline-flex items-center gap-1">Apri <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" /></span>
+        </Link>
+        <Link to="/app/builds" data-testid="quick-builds" className="bg-[#0F0F12] border border-[#2A2A35] p-6 card-hover group">
+          <Cpu size={22} className="text-[#E5FF00] mb-4" />
+          <h3 className="font-display font-semibold text-lg mb-1">Genera una build</h3>
+          <p className="text-zinc-500 text-sm mb-3">Gaming/streaming sul tuo budget</p>
+          <span className="text-[#E5FF00] text-sm inline-flex items-center gap-1">Apri <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" /></span>
+        </Link>
+        <Link to="/app/tracker" data-testid="quick-tracker" className="bg-[#0F0F12] border border-[#2A2A35] p-6 card-hover group">
+          <LineChart size={22} className="text-[#E5FF00] mb-4" />
+          <h3 className="font-display font-semibold text-lg mb-1">Traccia un prezzo</h3>
+          <p className="text-zinc-500 text-sm mb-3">Monitora Amazon & altri store</p>
+          <span className="text-[#E5FF00] text-sm inline-flex items-center gap-1">Apri <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" /></span>
+        </Link>
+      </div>
+
+      <div className="mt-8 bg-[#0F0F12] border border-[#2A2A35]">
+        <div className="p-5 border-b border-[#2A2A35] flex items-center justify-between">
+          <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">Prodotti recenti</span>
+          <Link to="/app/tracker" className="text-[#E5FF00] text-xs hover:underline">Vedi tutti</Link>
+        </div>
+        {products.length === 0 ? (
+          <div className="p-8 text-center text-zinc-500 text-sm">Nessun prodotto tracciato. <Link to="/app/tracker" className="text-[#E5FF00]">Aggiungine uno</Link>.</div>
+        ) : (
+          products.map((p) => (
+            <Link to={`/app/tracker/${p.id}`} key={p.id} className="flex items-center gap-4 p-4 border-b border-[#1A1A24] hover:bg-[#141419] transition-colors">
+              <div className="w-10 h-10 bg-black border border-[#2A2A35] flex items-center justify-center overflow-hidden">
+                {p.image ? <img src={p.image} alt="" className="w-full h-full object-contain" /> : <Zap size={14} className="text-zinc-600" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm truncate">{p.title}</div>
+                <div className="text-xs text-zinc-500">{p.platform}</div>
+              </div>
+              <div className="text-sm font-bold">{p.current_price != null ? `${p.current_price} ${p.currency}` : "—"}</div>
+            </Link>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
