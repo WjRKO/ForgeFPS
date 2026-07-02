@@ -47,3 +47,15 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - P2: Rilevamento hardware PC reale via desktop agent (specs → consigli personalizzati)
 - P2: Confronto prezzi multi-store (eBay, Amazon), storico più ricco
 - P2: Export/condivisione build
+
+## Iteration 4 (2026-07-02) — Refactor & cleanup
+- server.py monolitico (~730 righe) spezzato in moduli manutenibili:
+  - database.py (client+db+now_iso), settings.py (config), models.py (Pydantic), helpers.py (dominio: specs_to_text, compute_health, notifiche/push, refresh prezzo, track componenti, agent token)
+  - routers/: advisor.py, builds.py, products.py, pc.py, push_routes.py
+  - auth.py LASCIATO INTATTO (già testato)
+- Precisione hardware: nvidia-smi (VRAM/temp/driver esatti), RAM DDR4/5, storage NVMe, socket+chipset, desktop/laptop
+- Fix scheda madre: query Win32_BaseBoard robusta (-First 1) + traduzione codici OEM via AI
+- Health Score: scoring pesato, stato "unknown", temperature GPU/CPU, consigli di fix
+- Timeout server-side (45s) su tutte le chiamate AI
+- Frontend: fix warning eslint (ProductDetail useCallback), DesktopAgent semplificato
+- Regressione iteration_4: backend 41/41, frontend 100%, nessuna regressione
