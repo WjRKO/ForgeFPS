@@ -57,7 +57,7 @@ def build(get_current_user):
                 break
             if q not in out:
                 out.append(q)
-        return {"suggestions": out[:4], "personalized": bool(health or gpu)}
+        return {"suggestions": out[:4], "personalized": bool(health)}
 
 
     @r.get("/sessions/{session_id}")
