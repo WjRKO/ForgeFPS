@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, RefreshCw, ExternalLink, Zap, Target, Euro, Loader2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
@@ -11,12 +11,12 @@ export default function ProductDetail() {
   const [target, setTarget] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const { data } = await api.get(`/products/${id}`);
     setP(data);
     setTarget(data.target_price ?? "");
-  };
-  useEffect(() => { load(); }, [id]);
+  }, [id]);
+  useEffect(() => { load(); }, [load]);
 
   const refresh = async () => { setBusy(true); try { await api.post(`/products/${id}/refresh`); await load(); } finally { setBusy(false); } };
   const saveManual = async () => { if (!manual) return; await api.put(`/products/${id}/price`, { price: Number(manual) }); setManual(""); load(); };

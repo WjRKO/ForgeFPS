@@ -1,0 +1,45 @@
+{
+  "summary": "REGRESSION test after backend refactor (server.py split into database.py/models.py/helpers.py/settings.py/routers/{advisor,builds,products,pc,push_routes}.py; auth.py untouched; minor frontend cleanup). All endpoints and behavior IDENTICAL to iteration 3. Backend: 41 passed / 1 skipped in 93.9s (pytest tests/backend_test.py -n 0). All routes still respond under /api/... via kubernetes ingress. Auth (register/login/me/logout, admin login, invalid pw 401, unauth 401) OK. Products (track amazon URL manual flow, list, detail w/ history, PUT price, PUT target, lower price creates notification+lowest_price update, POST search AI, DELETE) OK. Notifications, Stats, Desktop Agent download (401 unauth, 200 authed with __AGENT_TOKEN__/__BACKEND_URL__ replaced), Push (vapid, subscribe/unsubscribe, auth required, test graceful), Agent Specs (token idempotent, invalid token 401, valid token stores CPU/GPU/RAM/OS + health + startup, pc-specs read-back OK, auth required) OK. PC Health (available:false for fresh user, bad values score<85 with driver_version echo, good values score>=85 Ottimo, auth required) OK. Upgrade Analyze (400 without specs; real Claude JSON returned bottleneck+recommendations for admin with specs). FPS Estimate (returns estimates for admin + fresh user). Startup Analyze (400 without data; items[] with recommendations for admin). Track Upgrade (creates products in group with platform=build-component). Track Build skipped by design (no saved builds exist for admin). report-specs still persists health.gpu_driver_version=551.23 and startup array. Frontend: login (admin@boostpc.io/admin123) -> /app OK. All 7 nav items present (nav-dashboard, nav-advisor, nav-builds, nav-upgrade, nav-tracker, nav-pc, nav-desktop) — sidebar 'Desktop Agent' link uses id 'desktop'. Dashboard renders stats (5 tracked / 0 builds / 4 sessions / 80 saved) and recent products list. /app/pc: health-score=38 (Critico), 10 checks including Driver GPU (881 giorni fa), spec cards (Ryzen 7 5800X, RTX 3070, 32 GB, Windows 11), Temperatura GPU/CPU 'Dato non disponibile' cards. /app/upgrade: Analizza upgrade -> real Claude bottleneck='GPU' + RTX 4070 Super €599 recommendation + track-upgrade-btn; Stima FPS -> 4 fps-bar-{0..3}. /app/desktop: 'Scarica l'agent (.py)' download link present + feature grid + how-to. /app/tracker: group-summary chips 'Upgrade Test aff808 1 pezzi €620' + 'Upgrade Test 1 pezzi €580' visible; 5 products listed (3 build-component, 2 manual amazon.it). Push toggle-push-btn present in bell dropdown. No console errors. All iteration-3 issues (dedupe of /upgrade/track, missing gpu_temp/cpu_temp check when unknown, driver_date TZ) still present but non-blocking — same as previous report.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/upgrade/track & POST /api/builds/{id}/track", "issue": "No idempotency — repeated clicks create duplicate products in same group (confirmed on tracker: 2 'Upgrade Test' groups with identical RTX 4070 Super at 620 and 580 EUR from prior test runs). Dedupe by (user_id, group, title) recommended."},
+      {"endpoint": "POST /api/upgrade/analyze /fps/estimate /startup/analyze", "issue": "No server-side timeout guard around Claude call; a hung request blocks the worker for the full 45s client timeout."},
+      {"endpoint": "GET /api/pc-health", "issue": "compute_health uses datetime.now() (naive) vs isoformat-parsed driver_date (naive) — timezone-fragile. Also gpu_temp/cpu_temp appear as 'Dato non disponibile' when absent but there is no explicit 'unknown' status entry in checks[], which the UI now renders as informational cards (behavior unchanged from iter 3)."},
+      {"endpoint": "POST /api/upgrade/track", "issue": "TrackComponentsInput.components accepts raw dict list without a per-item Pydantic schema — arbitrary keys allowed."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/app/tracker", "issues": ["Grouped build-component products are not visually separated from URL-tracked ones in the flat list; only shown via chips at top. Duplicated 'Upgrade Test' chips visible due to backend no-dedupe."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Dedupe /upgrade/track and /builds/{id}/track by (user_id, group, title).",
+    "OPTIONAL: Wrap ai_engine calls in /upgrade/analyze, /fps/estimate, /startup/analyze with asyncio.wait_for(30s).",
+    "OPTIONAL: Add strong Pydantic sub-model for TrackComponentsInput.components items.",
+    "OPTIONAL: Emit 'unknown' status check entry for gpu_temp / cpu_temp / gpu_driver_date when missing so checks[] is stable-length."
+  ],
+  "critical_code_review_comments": [
+    "Refactor is clean: /app/backend/{database,models,helpers,settings}.py + routers/{advisor,builds,products,pc,push_routes}.py compose the API surface without behavior change; auth.py is untouched as claimed. All URLs remain /api/... — regression matches iteration 3 exactly.",
+    "helpers.compute_health still skips checks entirely when a health key is missing (drives variable checks[] length); consider always appending an 'unknown' entry so the UI never shifts.",
+    "helpers.track_components / /upgrade/track have no dedupe — repeated clicks silently duplicate products.",
+    "routers/pc.py AI endpoints still lack server-side timeouts around ai_engine._run_json().",
+    "Frontend Layout.jsx nav items id='desktop' (not 'agent'); testids nav-desktop confirmed working — iteration_3 note referenced 'nav-agent' which never existed, this is not a regression.",
+    "MyPc.jsx hasSpecs still gates on specs?.data?.cpu only — a spec doc with GPU but no CPU would render empty state (unchanged from iter 3)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (41/41 executed, 1 skipped by design)", "frontend": "100% (all critical flows verified)"},
+  "test_credentials": "admin@boostpc.io / admin123 — has stored specs (Ryzen 7 5800X/RTX 3070/32 GB/Windows 11), health (Critico score 38), 4 startup entries. Seed helper _seed_specs_health_startup re-seeds via /api/agent/token + /api/agent/report-specs X-Agent-Token header.",
+  "seed_data_creation": "No new seed data introduced. Existing backend_test.py _seed_specs_health_startup helper used by iter-3 health/upgrade/fps/startup tests. Fresh users are created per test via /api/auth/register with UUID emails.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression: `cd /app/backend && pytest tests/backend_test.py -n 0 --junitxml=/app/test_reports/pytest/pytest_results.xml -v` — expect 41 passed / 1 skipped in ~90s. Skipped test is TestTrackComponents::test_track_build_creates_products (admin has no saved builds; AI generate hits Claude but /builds save endpoint returns non-200 for the shape returned by /builds/generate — verify server.py routers/builds.py POST /api/builds body model if needed). Frontend regression: login admin@boostpc.io/admin123 -> verify nav items nav-{dashboard,advisor,builds,upgrade,tracker,pc,desktop}. Verify /app/pc health-score + check-N + spec-{cpu,gpu,ram,os} + analyze-startup-btn. Verify /app/upgrade analyze-upgrade-btn (~15s AI call) -> upg-rec-N + track-upgrade-btn; fps-game-input + estimate-fps-btn -> fps-bar-0..3. Verify /app/desktop 'Scarica' download link. Verify /app/tracker group-summary chips. Push toggle-push-btn in notifications-btn dropdown. Advisor chat uses <input type=text> (not textarea).",
+  "rca of the issue": "No regressions from the refactor. All backend endpoints and all frontend integrations behave identically to iteration 3. The only findings are pre-existing optional improvements already documented in iteration_3.json."
+}
