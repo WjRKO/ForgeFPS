@@ -51,6 +51,11 @@ class GoalInput(BaseModel):
     goal: str = "gaming e streaming"
 
 
+class PcSpecsInput(BaseModel):
+    data: dict
+    source: Optional[str] = "manual"
+
+
 class FpsInput(BaseModel):
     game: str
     resolution: str = "1080p"

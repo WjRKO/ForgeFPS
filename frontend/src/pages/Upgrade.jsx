@@ -58,7 +58,7 @@ export default function Upgrade() {
       {hasSpecs === false && (
         <div className="bg-[#0F0F12] border border-[#E5FF00]/40 p-4 mb-4 text-sm text-zinc-300 flex items-center gap-3">
           <MonitorDown size={18} className="text-[#E5FF00]" />
-          Per consigli basati sul tuo hardware reale, invia le specifiche dal <Link to="/app/desktop" className="text-[#E5FF00] hover:underline">Desktop Agent</Link>. La stima FPS funziona comunque.
+          Per consigli di upgrade inserisci le tue specifiche in <Link to="/app/pc" className="text-[#E5FF00] hover:underline">Il mio PC</Link> (rilevamento browser o manuale, senza download). La stima FPS funziona comunque.
         </div>
       )}
 

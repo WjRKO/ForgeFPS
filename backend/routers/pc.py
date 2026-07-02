@@ -7,7 +7,7 @@ import ai_engine
 from database import db, now_iso
 from helpers import specs_to_text, compute_health, get_or_create_agent_token
 from desktop_agent import AGENT_SCRIPT
-from models import SpecsInput, GoalInput, FpsInput
+from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput
 
 
 def build(get_current_user):
@@ -34,6 +34,18 @@ def build(get_current_user):
     @r.get("/pc-specs")
     async def get_specs(user: dict = Depends(get_current_user)):
         return await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+
+    @r.post("/pc-specs")
+    async def save_specs(payload: PcSpecsInput, user: dict = Depends(get_current_user)):
+        uid = str(user["_id"])
+        existing = await db.pc_specs.find_one({"user_id": uid})
+        base = (existing or {}).get("data", {}) if existing else {}
+        merged = {**base, **{k: v for k, v in payload.data.items() if v not in (None, "")}}
+        await db.pc_specs.update_one(
+            {"user_id": uid},
+            {"$set": {"user_id": uid, "data": merged, "source": payload.source, "updated_at": now_iso()}},
+            upsert=True)
+        return await db.pc_specs.find_one({"user_id": uid}, {"_id": 0})
 
     @r.get("/pc-health")
     async def pc_health(user: dict = Depends(get_current_user)):

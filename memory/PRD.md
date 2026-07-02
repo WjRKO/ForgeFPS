@@ -59,3 +59,13 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - Timeout server-side (45s) su tutte le chiamate AI
 - Frontend: fix warning eslint (ProductDetail useCallback), DesktopAgent semplificato
 - Regressione iteration_4: backend 41/41, frontend 100%, nessuna regressione
+
+## Iteration 5 (2026-07-02) — App "agent-optional"
+- Rilevamento hardware dal BROWSER (lib/detectSpecs.js): GPU (WebGL), thread CPU, RAM, OS, risoluzione — zero download
+- Form specifiche manuale (components/SpecsForm.jsx) con opzione "Rileva dal browser" + campi avanzati (mobo/socket/chipset)
+- Nuovo endpoint POST /api/pc-specs (cookie auth) che fa merge non distruttivo (browser+manuale+agent coesistono), source="manual"
+- MyPc: empty state e pulsante "Modifica" mostrano il form; sezione avvio nascosta senza dati agent
+- Upgrade: banner rimanda a "Il mio PC" per inserimento senza download
+- Advisor/Build/Upgrade/FPS/Tracker ora usabili SENZA scaricare l'agent. Agent resta opzionale per Health Score/temperature/ottimizzazioni reali
+- Verificato via curl: save manual specs + upgrade con specs manuali OK; frontend compila pulito
+- BACKLOG: comando PowerShell one-liner (irm ... | iex) come alternativa leggera all'agent .py (no Python)

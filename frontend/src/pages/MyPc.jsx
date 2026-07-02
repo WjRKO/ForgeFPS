@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket } from "lucide-react";
+import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket, Pencil } from "lucide-react";
 import api, { formatApiErrorDetail } from "@/lib/api";
+import SpecsForm from "@/components/SpecsForm";
 
 const SPEC_LABELS = { os: "Sistema operativo", cpu: "CPU", gpu: "GPU", ram: "RAM", disk: "Storage", motherboard: "Scheda madre", resolution: "Risoluzione" };
 
@@ -66,6 +67,7 @@ export default function MyPc() {
   const [startup, setStartup] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [err, setErr] = useState("");
+  const [editing, setEditing] = useState(false);
 
   const load = async () => {
     try { const { data } = await api.get("/pc-specs"); setSpecs(data); } catch {}
@@ -80,19 +82,23 @@ export default function MyPc() {
     finally { setAnalyzing(false); }
   };
 
-  const hasSpecs = specs?.data?.cpu;
+  const hasSpecs = specs?.data?.cpu || specs?.data?.gpu;
 
-  if (!hasSpecs) {
+  if (!hasSpecs || editing) {
     return (
       <div className="max-w-3xl mx-auto fade-up">
         <div className="mb-6"><div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">// Il mio PC</div>
           <h1 className="font-display font-black text-3xl tracking-tighter">Analisi del PC</h1></div>
-        <div className="bg-[#0F0F12] border border-[#2A2A35] p-12 text-center">
-          <MonitorDown size={40} className="text-[#E5FF00] mx-auto mb-4" />
-          <h3 className="font-display font-semibold text-lg mb-2">Nessun dato rilevato</h3>
-          <p className="text-zinc-500 text-sm mb-6">Scarica il Desktop Agent ed esegui l'opzione 7 per inviare hardware e stato di salute.</p>
-          <Link to="/app/desktop" data-testid="go-desktop-btn" className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-6 py-3 hover:bg-[#D4EC00] transition-colors">
-            <MonitorDown size={18} /> Vai al Desktop Agent
+        <div className="mb-4 bg-[#0F0F12] border border-[#2A2A35] p-5 text-sm text-zinc-400">
+          Inserisci le tue specifiche per usare subito Advisor, Upgrade e stima FPS — <span className="text-[#E5FF00]">senza scaricare nulla</span>.
+          Usa "Rileva dal browser" per compilare in automatico, oppure inserisci a mano.
+        </div>
+        <SpecsForm initial={specs?.data || {}}
+          onSaved={(d) => { setSpecs(d); setEditing(false); load(); }}
+          onCancel={hasSpecs ? () => setEditing(false) : undefined} />
+        <div className="mt-4 text-center">
+          <Link to="/app/desktop" data-testid="go-desktop-btn" className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-[#E5FF00] transition-colors">
+            <MonitorDown size={16} /> Vuoi Health Score, temperature e ottimizzazioni reali? Usa il Desktop Agent
           </Link>
         </div>
       </div>
@@ -105,6 +111,7 @@ export default function MyPc() {
         <div><div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">// Il mio PC</div>
           <h1 className="font-display font-black text-3xl tracking-tighter">Analisi del PC</h1></div>
         <div className="flex gap-2">
+          <button data-testid="edit-specs-btn" onClick={() => setEditing(true)} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] transition-colors"><Pencil size={15} /> Modifica</button>
           <Link to="/app/upgrade" data-testid="to-upgrade-btn" className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] transition-colors"><Rocket size={15} /> Upgrade</Link>
           <button data-testid="refresh-pc-btn" onClick={load} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] transition-colors"><RefreshCw size={15} /> Aggiorna</button>
         </div>
@@ -165,7 +172,7 @@ export default function MyPc() {
         </div>
       </div>
 
-      <div className="bg-[#0F0F12] border border-[#2A2A35]">
+      <div className="bg-[#0F0F12] border border-[#2A2A35]" style={{ display: (specs.startup || []).length ? "block" : "none" }}>
         <div className="p-5 border-b border-[#2A2A35] flex items-center justify-between">
           <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">Programmi all'avvio</span>
           <button data-testid="analyze-startup-btn" onClick={analyzeStartup} disabled={analyzing}
