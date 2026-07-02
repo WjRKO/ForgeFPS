@@ -13,6 +13,7 @@ import ProductDetail from "@/pages/ProductDetail";
 import DesktopAgent from "@/pages/DesktopAgent";
 import MyPc from "@/pages/MyPc";
 import Upgrade from "@/pages/Upgrade";
+import Admin from "@/pages/Admin";
 import { Loader2 } from "lucide-react";
 
 function Protected({ children }) {
@@ -26,6 +27,14 @@ function Guest({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen bg-[#050505]" />;
   if (user) return <Navigate to="/app" replace />;
+  return children;
+}
+
+function AdminOnly({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="animate-spin text-[#E5FF00]" size={32} /></div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== "admin") return <Navigate to="/app" replace />;
   return children;
 }
 
@@ -48,6 +57,7 @@ function App() {
               <Route path="tracker/:id" element={<ProductDetail />} />
               <Route path="pc" element={<MyPc />} />
               <Route path="desktop" element={<DesktopAgent />} />
+              <Route path="admin" element={<AdminOnly><Admin /></AdminOnly>} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

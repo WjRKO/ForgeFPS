@@ -1,6 +1,6 @@
 import { NavLink, useNavigate, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket } from "lucide-react";
+import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
@@ -14,6 +14,7 @@ const NAV = [
   { to: "/app/tracker", label: "Price Tracker", icon: LineChart, id: "tracker" },
   { to: "/app/pc", label: "Il mio PC", icon: Activity, id: "pc" },
   { to: "/app/desktop", label: "Desktop Agent", icon: MonitorDown, id: "desktop" },
+  { to: "/app/admin", label: "Admin", icon: Shield, id: "admin", adminOnly: true },
 ];
 
 function Notifications() {
@@ -106,7 +107,7 @@ export default function Layout() {
           <span className="font-display font-black tracking-tighter text-lg">BOOST<span className="text-[#E5FF00]">PC</span></span>
         </div>
         <nav className="flex-1 p-3 space-y-1">
-          {NAV.map((n) => (
+          {NAV.filter((n) => !n.adminOnly || user?.role === "admin").map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end} data-testid={`nav-${n.id}`}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${

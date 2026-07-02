@@ -59,3 +59,7 @@ class PcSpecsInput(BaseModel):
 class FpsInput(BaseModel):
     game: str
     resolution: str = "1080p"
+
+
+class RoleInput(BaseModel):
+    role: str
