@@ -41,9 +41,10 @@ class PushSubInput(BaseModel):
 
 
 class SpecsInput(BaseModel):
-    data: dict
+    data: Optional[dict] = None
     health: Optional[dict] = None
     startup: Optional[list] = None
+    benchmark: Optional[dict] = None
 
 
 class GoalInput(BaseModel):

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket, Pencil } from "lucide-react";
+import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket, Pencil, Gauge, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import SpecsForm from "@/components/SpecsForm";
 
@@ -42,6 +42,68 @@ function composeSpec(key, d) {
 
 const STATUS_ICON = { ok: <CheckCircle2 size={16} className="text-[#00FF66]" />, warn: <AlertTriangle size={16} className="text-[#E5FF00]" />, bad: <XCircle size={16} className="text-[#FF3B30]" />, unknown: <HelpCircle size={16} className="text-zinc-600" /> };
 
+const BENCH_METRICS = [
+  { key: "overall", label: "Punteggio totale", unit: "", higherBetter: true },
+  { key: "cpu_score", label: "CPU", unit: "", higherBetter: true },
+  { key: "ram_mbps", label: "RAM", unit: "MB/s", higherBetter: true },
+  { key: "disk_write_mbps", label: "Disco (scrittura)", unit: "MB/s", higherBetter: true },
+  { key: "disk_read_mbps", label: "Disco (lettura)", unit: "MB/s", higherBetter: true },
+  { key: "ping_ms", label: "Ping (1.1.1.1)", unit: "ms", higherBetter: false },
+  { key: "free_ram_pct", label: "RAM libera", unit: "%", higherBetter: true },
+];
+
+function BenchmarkCard({ bench }) {
+  const latest = bench?.latest;
+  if (!latest) return null;
+  const before = latest.before;
+  const after = latest.after || latest;
+  const hasCompare = !!before;
+
+  return (
+    <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-4" data-testid="benchmark-card">
+      <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4 flex items-center gap-2">
+        <Gauge size={14} className="text-[#00E0FF]" /> Benchmark {hasCompare ? "· Prima / Dopo ottimizzazione" : "· Ultima misurazione"}
+      </div>
+      {!hasCompare && (
+        <p className="text-xs text-zinc-500 mb-4">
+          Esegui l'ottimizzazione dal Desktop Agent (modalità <span className="text-[#E5FF00]">optimize</span>) per vedere il confronto prima/dopo.
+        </p>
+      )}
+      <div className="grid sm:grid-cols-2 gap-2">
+        {BENCH_METRICS.map((m) => {
+          const av = after?.[m.key];
+          if (av == null) return null;
+          const bv = before?.[m.key];
+          let delta = null, improved = null;
+          if (hasCompare && bv != null && bv !== 0) {
+            delta = Math.round(((av - bv) / bv) * 100);
+            improved = m.higherBetter ? av >= bv : av <= bv;
+          }
+          return (
+            <div key={m.key} className={`bg-black border border-[#1A1A24] p-3 ${m.key === "overall" ? "sm:col-span-2 border-[#00E0FF]/40" : ""}`} data-testid={`bench-${m.key}`}>
+              <div className="flex items-center justify-between">
+                <div className="text-xs uppercase tracking-widest text-zinc-500">{m.label}</div>
+                {delta != null && (
+                  <div className={`flex items-center gap-1 text-xs font-bold ${improved ? "text-[#00FF66]" : "text-[#FF3B30]"}`}>
+                    {delta > 0 ? <TrendingUp size={13} /> : delta < 0 ? <TrendingDown size={13} /> : <Minus size={13} />}
+                    {delta > 0 ? "+" : ""}{delta}%
+                  </div>
+                )}
+              </div>
+              <div className="flex items-baseline gap-2 mt-1">
+                {hasCompare && bv != null && <span className="text-sm text-zinc-600 line-through">{bv}{m.unit}</span>}
+                <span className={`font-display font-black ${m.key === "overall" ? "text-2xl text-[#00E0FF]" : "text-lg text-zinc-100"}`}>{av}{m.unit}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {latest.ts && <div className="mt-3 text-xs text-zinc-600 border-t border-[#1A1A24] pt-3">Ultima esecuzione: {new Date(latest.ts).toLocaleString("it-IT")}</div>}
+    </div>
+  );
+}
+
+
 function ScoreRing({ score, grade }) {
   const color = score >= 85 ? "#00FF66" : score >= 70 ? "#E5FF00" : score >= 50 ? "#FFA500" : "#FF3B30";
   const circumference = 2 * Math.PI * 52;
@@ -65,6 +127,7 @@ export default function MyPc() {
   const [specs, setSpecs] = useState(null);
   const [health, setHealth] = useState(null);
   const [startup, setStartup] = useState(null);
+  const [bench, setBench] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [err, setErr] = useState("");
   const [editing, setEditing] = useState(false);
@@ -72,6 +135,7 @@ export default function MyPc() {
   const load = async () => {
     try { const { data } = await api.get("/pc-specs"); setSpecs(data); } catch {}
     try { const { data } = await api.get("/pc-health"); setHealth(data.available ? data : null); } catch {}
+    try { const { data } = await api.get("/pc-benchmark"); setBench(data.latest ? data : null); } catch {}
   };
   useEffect(() => { load(); }, []);
 
@@ -159,6 +223,8 @@ export default function MyPc() {
           )}
         </div>
       )}
+
+      {bench && <BenchmarkCard bench={bench} />}
 
       <div className="bg-[#0F0F12] border border-[#2A2A35] mb-4">
         <div className="p-5 border-b border-[#2A2A35] text-xs uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2"><Cpu size={14} className="text-[#E5FF00]" /> Hardware</div>

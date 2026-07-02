@@ -24,13 +24,26 @@ def build(get_current_user):
         if not rec:
             raise HTTPException(status_code=401, detail="Token agent non valido")
         uid = rec["user_id"]
-        fields = {"user_id": uid, "data": data.data, "updated_at": now_iso()}
+        fields = {"user_id": uid, "updated_at": now_iso()}
+        if data.data:
+            fields["data"] = data.data
         if data.health is not None:
             fields["health"] = data.health
         if data.startup is not None:
             fields["startup"] = data.startup
+        if data.benchmark is not None:
+            record = {**data.benchmark, "user_id": uid, "created_at": now_iso()}
+            fields["benchmark"] = record
+            await db.benchmarks.insert_one({**record})
         await db.pc_specs.update_one({"user_id": uid}, {"$set": fields}, upsert=True)
         return {"ok": True}
+
+    @r.get("/pc-benchmark")
+    async def pc_benchmark(user: dict = Depends(get_current_user)):
+        uid = str(user["_id"])
+        doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "benchmark": 1})
+        history = await db.benchmarks.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(10)
+        return {"latest": (doc or {}).get("benchmark"), "history": history}
 
     @r.get("/pc-specs")
     async def get_specs(user: dict = Depends(get_current_user)):
@@ -98,7 +111,7 @@ def build(get_current_user):
         if not rec:
             return PlainTextResponse("Write-Host '[BOOST PC] Token non valido. Riapri la pagina Desktop Agent.' -ForegroundColor Red",
                                      media_type="text/plain")
-        if mode not in ("sync", "optimize", "restore"):
+        if mode not in ("sync", "optimize", "restore", "benchmark"):
             mode = "sync"
         backend = os.environ.get("FRONTEND_URL", "http://localhost:8001")
         script = (PS_SCRIPT.replace("__BACKEND_URL__", backend)

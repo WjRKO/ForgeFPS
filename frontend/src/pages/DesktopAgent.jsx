@@ -7,12 +7,12 @@ import api, { API } from "@/lib/api";
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 
 const ACTIONS = [
-  { icon: HardDrive, title: "Pulizia file temporanei", desc: "Rimuove cache e file temporanei di Windows liberando spazio su disco." },
-  { icon: Gauge, title: "Piano energetico prestazioni", desc: "Attiva il profilo High Performance per massimizzare CPU e GPU." },
-  { icon: Cpu, title: "Rileva hardware/salute", desc: "Rileva CPU/GPU/RAM/temperature e le invia per analisi e consigli AI." },
-  { icon: Wind, title: "Tweak gaming", desc: "Abilita Game Mode e Hardware-Accelerated GPU Scheduling." },
-  { icon: Terminal, title: "Flush DNS", desc: "Svuota la cache DNS per ridurre problemi di rete e latenza." },
-  { icon: ShieldCheck, title: "Backup / Ripristino tweak", desc: "Salva lo stato prima delle modifiche e ripristina quando vuoi." },
+  { icon: Gauge, title: "Benchmark prima/dopo", desc: "Misura CPU, RAM, disco e latenza di rete prima e dopo l'ottimizzazione per vedere il guadagno reale." },
+  { icon: Wind, title: "Boost gaming/FPS", desc: "Ultimate Performance, Game DVR off, priorità GPU/CPU ai giochi e GPU Scheduling (HAGS)." },
+  { icon: Terminal, title: "Meno lag / latenza", desc: "Disattiva Nagle, network throttling e accelerazione mouse per input più reattivo online." },
+  { icon: HardDrive, title: "Debloat & pulizia", desc: "Rimuove app superflue, telemetria, ads di Windows e pulisce temp + cache Windows Update." },
+  { icon: Cpu, title: "Rileva hardware/salute", desc: "Rileva CPU/GPU/RAM/temperature e le invia per analisi e consigli AI su misura." },
+  { icon: ShieldCheck, title: "Backup / Ripristino tweak", desc: "Ogni modifica è salvata: ripristini tutto con un comando quando vuoi. Sicuro e reversibile." },
 ];
 
 function CmdRow({ label, cmd, testid, accent }) {
@@ -59,7 +59,8 @@ export default function DesktopAgent() {
         </div>
 
         <CmdRow label="1 · Sincronizza (sicuro, rileva e invia hardware/salute)" cmd={cmd("sync")} testid="ps-sync" accent="text-[#00FF66]" />
-        <CmdRow label="2 · Ottimizza (applica tweak — apri PowerShell come Amministratore)" cmd={cmd("optimize")} testid="ps-optimize" accent="text-[#E5FF00]" />
+        <CmdRow label="2 · Benchmark (misura CPU/RAM/disco/rete — nessun cambiamento)" cmd={cmd("benchmark")} testid="ps-benchmark" accent="text-[#00E0FF]" />
+        <CmdRow label="3 · Ottimizza + benchmark prima/dopo (apri PowerShell come Amministratore)" cmd={cmd("optimize")} testid="ps-optimize" accent="text-[#E5FF00]" />
 
         <div className="flex items-center gap-2 text-xs text-zinc-500 mt-2">
           <RotateCcw size={13} /> Ripristino tweak:
