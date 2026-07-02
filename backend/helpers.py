@@ -157,6 +157,46 @@ def compute_health(health: dict) -> dict:
             "gpu": health.get("gpu"), "updated_at": now_iso()}
 
 
+def pc_context_text(specs: dict) -> str:
+    """Rich PC context for the AI Advisor: hardware + health + temps + benchmark + startup."""
+    if not specs:
+        return ""
+    parts = [specs_to_text(specs)]
+    health = specs.get("health")
+    if health:
+        h = compute_health(health)
+        parts.append(f"\n[SALUTE PC] Health Score: {h['score']}/100 ({h['grade']}).")
+        issues = [c for c in h["checks"] if c["status"] in ("warn", "bad")]
+        if issues:
+            parts.append("Problemi rilevati (usa questi per consigli mirati):")
+            for c in issues:
+                line = f"- {c['label']}: {c['message']}"
+                if c.get("fix"):
+                    line += f" -> {c['fix']}"
+                parts.append(line)
+        temps = []
+        if h.get("cpu_temp") is not None:
+            temps.append(f"CPU {h['cpu_temp']}°C")
+        if h.get("gpu_temp") is not None:
+            temps.append(f"GPU {h['gpu_temp']}°C")
+        if temps:
+            parts.append("Temperature: " + ", ".join(temps))
+        if h.get("driver_version"):
+            parts.append(f"Driver GPU installato: {h['driver_version']}")
+    bench = specs.get("benchmark")
+    if bench:
+        a = bench.get("after") or bench
+        if isinstance(a, dict) and a.get("overall") is not None:
+            parts.append(f"\n[BENCHMARK] CPU {a.get('cpu_score')}, RAM {a.get('ram_mbps')} MB/s, "
+                         f"Disco W/R {a.get('disk_write_mbps')}/{a.get('disk_read_mbps')} MB/s, "
+                         f"Ping {a.get('ping_ms')} ms, punteggio totale {a.get('overall')}")
+    startup = specs.get("startup")
+    if startup:
+        parts.append(f"\n[AVVIO] {len(startup)} programmi all'avvio: " + ", ".join(startup[:15]))
+    return "\n".join(p for p in parts if p)
+
+
+
 # ---------- Product tracking helpers ----------
 def record_history(product_id: str, price: float) -> dict:
     return {"product_id": product_id, "price": price, "recorded_at": now_iso()}

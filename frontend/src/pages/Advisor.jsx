@@ -1,13 +1,58 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, Plus, Trash2, Loader2, MessageSquareCode, Terminal, Cpu } from "lucide-react";
+import { Send, Plus, Trash2, Loader2, MessageSquareCode, Terminal, Cpu, Copy, Check } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import api, { API } from "@/lib/api";
 
-const SUGGESTIONS = [
+const DEFAULT_SUGGESTIONS = [
   "Come riduco l'input lag per il gaming competitivo?",
   "Migliori impostazioni OBS per streaming a 1080p60",
   "Come ottimizzo Windows 11 per FPS massimi?",
   "Tweak per abbassare le temperature della GPU",
 ];
+
+function CodeBlock({ children }) {
+  const [copied, setCopied] = useState(false);
+  const text = String(children).replace(/\n$/, "");
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text); } catch { const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <div className="relative my-2 group/code" data-testid="ai-code-block">
+      <button onClick={copy} data-testid="ai-code-copy"
+        className="absolute top-2 right-2 flex items-center gap-1 border border-[#2A2A35] bg-[#0F0F12] px-2 py-1 text-[10px] text-zinc-400 hover:border-[#E5FF00] hover:text-white transition-colors">
+        {copied ? <Check size={12} className="text-[#00FF66]" /> : <Copy size={12} />} {copied ? "Copiato" : "Copia"}
+      </button>
+      <pre className="bg-black border border-[#2A2A35] p-3 pr-16 overflow-x-auto text-xs text-[#00FF66] leading-relaxed">
+        <code>{text}</code>
+      </pre>
+    </div>
+  );
+}
+
+const MD = {
+  pre({ children }) {
+    const codeEl = Array.isArray(children) ? children[0] : children;
+    const text = codeEl?.props?.children ?? "";
+    return <CodeBlock>{text}</CodeBlock>;
+  },
+  code({ children }) {
+    return <code className="bg-black/60 border border-[#2A2A35] px-1 py-0.5 text-[#00E0FF] text-[0.85em]">{children}</code>;
+  },
+  h1: ({ children }) => <h3 className="font-display font-bold text-base mt-3 mb-1">{children}</h3>,
+  h2: ({ children }) => <h3 className="font-display font-bold text-base mt-3 mb-1">{children}</h3>,
+  h3: ({ children }) => <h4 className="font-display font-semibold text-sm mt-2 mb-1">{children}</h4>,
+  ul: ({ children }) => <ul className="list-disc pl-5 my-1 space-y-0.5">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-5 my-1 space-y-0.5">{children}</ol>,
+  li: ({ children }) => <li className="text-sm">{children}</li>,
+  p: ({ children }) => <p className="my-1 text-sm leading-relaxed">{children}</p>,
+  strong: ({ children }) => <strong className="text-white font-bold">{children}</strong>,
+  a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="text-[#E5FF00] hover:underline">{children}</a>,
+  table: ({ children }) => <div className="overflow-x-auto my-2"><table className="w-full text-xs border border-[#2A2A35]">{children}</table></div>,
+  th: ({ children }) => <th className="border border-[#2A2A35] px-2 py-1 text-left bg-[#141419]">{children}</th>,
+  td: ({ children }) => <td className="border border-[#2A2A35] px-2 py-1">{children}</td>,
+};
 
 export default function Advisor() {
   const [sessions, setSessions] = useState([]);
@@ -16,12 +61,17 @@ export default function Advisor() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [specs, setSpecs] = useState(null);
+  const [suggestions, setSuggestions] = useState(DEFAULT_SUGGESTIONS);
   const endRef = useRef(null);
 
   const loadSessions = async () => {
     try { const { data } = await api.get("/advisor/sessions"); setSessions(data); } catch {}
   };
-  useEffect(() => { loadSessions(); api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {}); }, []);
+  useEffect(() => {
+    loadSessions();
+    api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {});
+    api.get("/advisor/suggestions").then(({ data }) => { if (data?.suggestions?.length) setSuggestions(data.suggestions); }).catch(() => {});
+  }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const openSession = async (id) => {
@@ -119,7 +169,7 @@ export default function Advisor() {
                 <h3 className="font-display font-semibold text-lg mb-2">BOOST AI Terminal</h3>
                 <p className="text-zinc-500 text-sm mb-6 max-w-sm">Chiedi qualsiasi cosa su ottimizzazione, gaming e streaming.</p>
                 <div className="grid sm:grid-cols-2 gap-2 w-full max-w-lg">
-                  {SUGGESTIONS.map((s, i) => (
+                  {suggestions.map((s, i) => (
                     <button key={i} data-testid={`suggestion-${i}`} onClick={() => send(s)}
                       className="text-left text-xs text-zinc-400 border border-[#2A2A35] p-3 hover:border-[#E5FF00] hover:text-white transition-colors">
                       {s}
@@ -130,9 +180,13 @@ export default function Advisor() {
             )}
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[80%] px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${
-                  m.role === "user" ? "bg-[#E5FF00] text-black" : "bg-black border border-[#2A2A35] text-zinc-200"}`}>
-                  {m.content || (streaming && i === messages.length - 1 ? <span className="cursor-blink">▋</span> : "")}
+                <div className={`max-w-[80%] px-4 py-3 text-sm leading-relaxed ${
+                  m.role === "user" ? "bg-[#E5FF00] text-black whitespace-pre-wrap" : "bg-black border border-[#2A2A35] text-zinc-200"}`}>
+                  {m.role === "user"
+                    ? m.content
+                    : (m.content
+                        ? <div className="ai-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={MD}>{m.content}</ReactMarkdown></div>
+                        : (streaming && i === messages.length - 1 ? <span className="cursor-blink">▋</span> : ""))}
                 </div>
               </div>
             ))}
