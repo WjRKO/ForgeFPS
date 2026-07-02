@@ -439,12 +439,14 @@ function Show-Gui {
     $b = New-Object System.Windows.Forms.Button
     $b.Text = $text; $b.Location = New-Object System.Drawing.Point($x, 66); $b.Size = New-Object System.Drawing.Size(150, 30)
     $b.FlatStyle = 'Flat'; $b.ForeColor = [System.Drawing.Color]::White; $b.BackColor = [System.Drawing.Color]::FromArgb(30,30,38)
+    $b.Tag = $key
     $b.Add_Click({
+      $k = $this.Tag
       foreach ($t in $script:TWEAKS) {
-        if ($key -eq 'completo') { $script:CHECKS[$t.id].Checked = $true }
-        else { $script:CHECKS[$t.id].Checked = ($script:PRESETS[$key] -contains $t.id) }
+        if ($k -eq 'completo') { $script:CHECKS[$t.id].Checked = $true }
+        else { $script:CHECKS[$t.id].Checked = ($script:PRESETS[$k] -contains $t.id) }
       }
-    }.GetNewClosure())
+    })
     $form.Controls.Add($b)
   }
   New-Preset '🏆 Competitivo' 70 'competitivo'
