@@ -7,6 +7,7 @@ import ai_engine
 from database import db, now_iso
 from helpers import specs_to_text, compute_health, get_or_create_agent_token
 from desktop_agent import AGENT_SCRIPT
+from ps_agent import PS_SCRIPT
 from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput
 
 
@@ -90,5 +91,18 @@ def build(get_current_user):
         backend = os.environ.get("FRONTEND_URL", "http://localhost:8001")
         script = AGENT_SCRIPT.replace("__BACKEND_URL__", backend).replace("__AGENT_TOKEN__", token)
         return PlainTextResponse(script, headers={"Content-Disposition": "attachment; filename=boostpc_agent.py"})
+
+    @r.get("/agent/script")
+    async def agent_script(t: str = "", mode: str = "sync"):
+        rec = await db.agent_tokens.find_one({"token": t})
+        if not rec:
+            return PlainTextResponse("Write-Host '[BOOST PC] Token non valido. Riapri la pagina Desktop Agent.' -ForegroundColor Red",
+                                     media_type="text/plain")
+        if mode not in ("sync", "optimize", "restore"):
+            mode = "sync"
+        backend = os.environ.get("FRONTEND_URL", "http://localhost:8001")
+        script = (PS_SCRIPT.replace("__BACKEND_URL__", backend)
+                  .replace("__AGENT_TOKEN__", t).replace("__MODE__", mode))
+        return PlainTextResponse(script, media_type="text/plain")
 
     return r
