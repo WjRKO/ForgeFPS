@@ -8,7 +8,7 @@ const BACKEND = process.env.REACT_APP_BACKEND_URL;
 
 const ACTIONS = [
   { icon: Gauge, title: "Benchmark prima/dopo", desc: "Misura CPU, RAM, disco e latenza di rete prima e dopo l'ottimizzazione per vedere il guadagno reale." },
-  { icon: Wind, title: "Boost gaming/FPS", desc: "Ultimate Performance, Game DVR off, priorità GPU/CPU ai giochi e GPU Scheduling (HAGS)." },
+  { icon: Wind, title: "Pannello grafico ottimizzazioni", desc: "Il comando 'Ottimizza' apre una finestra con checkbox: scegli quali tweak applicare e vedi lo stato attuale di ognuno." },
   { icon: Terminal, title: "Meno lag / latenza", desc: "Disattiva Nagle, network throttling e accelerazione mouse per input più reattivo online." },
   { icon: HardDrive, title: "Debloat & pulizia", desc: "Rimuove app superflue, telemetria, ads di Windows e pulisce temp + cache Windows Update." },
   { icon: Cpu, title: "Rileva hardware/salute", desc: "Rileva CPU/GPU/RAM/temperature e le invia per analisi e consigli AI su misura." },
@@ -60,7 +60,7 @@ export default function DesktopAgent() {
 
         <CmdRow label="1 · Sincronizza (sicuro, rileva e invia hardware/salute)" cmd={cmd("sync")} testid="ps-sync" accent="text-[#00FF66]" />
         <CmdRow label="2 · Benchmark (misura CPU/RAM/disco/rete — nessun cambiamento)" cmd={cmd("benchmark")} testid="ps-benchmark" accent="text-[#00E0FF]" />
-        <CmdRow label="3 · Ottimizza + benchmark prima/dopo (apri PowerShell come Amministratore)" cmd={cmd("optimize")} testid="ps-optimize" accent="text-[#E5FF00]" />
+        <CmdRow label="3 · Ottimizza — apre una finestra grafica per scegliere i tweak (esegui come Amministratore)" cmd={cmd("optimize")} testid="ps-optimize" accent="text-[#E5FF00]" />
 
         <div className="flex items-center gap-2 text-xs text-zinc-500 mt-2">
           <RotateCcw size={13} /> Ripristino tweak:
