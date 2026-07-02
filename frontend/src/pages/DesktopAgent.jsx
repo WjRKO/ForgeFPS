@@ -8,8 +8,8 @@ const BACKEND = process.env.REACT_APP_BACKEND_URL;
 
 const ACTIONS = [
   { icon: Gauge, title: "Benchmark prima/dopo", desc: "Misura CPU, RAM, disco e latenza di rete prima e dopo l'ottimizzazione per vedere il guadagno reale." },
-  { icon: Wind, title: "Pannello grafico ottimizzazioni", desc: "Il comando 'Ottimizza' apre una finestra con checkbox: scegli quali tweak applicare e vedi lo stato attuale di ognuno." },
-  { icon: Terminal, title: "Meno lag / latenza", desc: "Disattiva Nagle, network throttling e accelerazione mouse per input più reattivo online." },
+  { icon: Wind, title: "Pannello grafico a categorie", desc: "Il comando 'Ottimizza' apre una finestra con tab (Gaming/Latenza/Rete/Sistema), preset Competitivo/Streaming/Completo e 26 tweak con stato attuale." },
+  { icon: Terminal, title: "Tweak pro NVIDIA/AMD/OBS", desc: "MSI mode GPU (latenza DPC), MPO off (fix schermo nero OBS), timer resolution, OBS ad alta priorità, disabilita telemetria NVIDIA / ULPS AMD." },
   { icon: HardDrive, title: "Debloat & pulizia", desc: "Rimuove app superflue, telemetria, ads di Windows e pulisce temp + cache Windows Update." },
   { icon: Cpu, title: "Rileva hardware/salute", desc: "Rileva CPU/GPU/RAM/temperature e le invia per analisi e consigli AI su misura." },
   { icon: ShieldCheck, title: "Backup / Ripristino tweak", desc: "Ogni modifica è salvata: ripristini tutto con un comando quando vuoi. Sicuro e reversibile." },

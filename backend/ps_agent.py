@@ -1,11 +1,11 @@
 """PowerShell agent, served at GET /api/agent/script and run via `irm ... | iex`.
 Modes:
   sync      -> safe: detect hardware/health/startup and report (no changes)
-  benchmark -> run a quick CPU/RAM/disk/network benchmark and report it
-  optimize  -> opens a graphical window (WinForms) to CHOOSE which tweaks to apply,
-               shows each tweak's current state, and runs a before/after benchmark
+  benchmark -> quick CPU/RAM/disk/network benchmark and report it
+  optimize  -> graphical window (WinForms) with tweaks grouped in TABS + presets,
+               shows each tweak's current state, before/after benchmark
   restore   -> revert every tweak from the backup file
-All tweaks are backed up before being applied so `restore` fully reverts them."""
+All reg/service/DNS/power tweaks are backed up before being applied so `restore` reverts them."""
 
 PS_SCRIPT = r'''
 $ErrorActionPreference = 'SilentlyContinue'
@@ -25,7 +25,7 @@ function Test-Admin {
   return ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# ---------------- Backup registry helpers ----------------
+# ---------------- Backup helpers ----------------
 $script:BK = @{}
 if (Test-Path $BACKUP) { try { $script:BK = Get-Content $BACKUP -Raw | ConvertFrom-Json | ConvertTo-HashtableSafe } catch { $script:BK = @{} } }
 
@@ -42,6 +42,16 @@ function Set-Reg($path, $name, $type, $value) {
 }
 function Save-Backup { $script:BK | ConvertTo-Json -Depth 6 | Set-Content $BACKUP }
 
+function Get-RegVal($path, $name) { return (Get-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue).$name }
+function Get-GpuPnp { $g = Get-CimInstance Win32_VideoController | Where-Object { $_.PNPDeviceID -like 'PCI*' } | Select-Object -First 1; return $g.PNPDeviceID }
+function Get-GpuVendor {
+  $g = (Get-CimInstance Win32_VideoController | Where-Object { $_.Name -notmatch 'Basic|Virtual|Remote|Meta' } | Select-Object -First 1).Name
+  if ($g -match 'NVIDIA|GeForce|RTX|GTX') { return 'NVIDIA' }
+  if ($g -match 'AMD|Radeon|RX ') { return 'AMD' }
+  if ($g -match 'Intel|Arc|UHD|Iris') { return 'Intel' }
+  return 'n/d'
+}
+
 # ---------------- Hardware / health detection ----------------
 function Get-Specs {
   $s = @{}
@@ -53,7 +63,6 @@ function Get-Specs {
   $s.cpu = $cpu.Name; $s.cpu_cores = "$($cpu.NumberOfCores)"; $s.cpu_threads = "$($cpu.NumberOfLogicalProcessors)"
   $s.cpu_clock_ghz = "$([math]::Round($cpu.MaxClockSpeed/1000,2))"
   $s.cpu_socket = "$($cpu.SocketDesignation)"
-
   $nv = & nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader,nounits 2>$null
   if ($nv) {
     $p = ($nv | Select-Object -First 1).Split(',')
@@ -65,14 +74,12 @@ function Get-Specs {
     if ($g.AdapterRAM -gt 0) { $s.gpu_vram_gb = "$([math]::Round($g.AdapterRAM/1GB))" }
   }
   $s.refresh_hz = "$((Get-CimInstance Win32_VideoController | Where-Object {$_.CurrentRefreshRate -gt 0} | Sort-Object CurrentRefreshRate -Descending | Select-Object -First 1).CurrentRefreshRate)"
-
   $ram = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB)
   $s.ram = "$ram GB"
   $pm = Get-CimInstance Win32_PhysicalMemory
   $s.ram_speed_mhz = "$(($pm | Select-Object -First 1).Speed)"
   $s.ram_modules = "$(($pm | Measure-Object).Count)"
   $s.ram_type = @{ '20'='DDR'; '21'='DDR2'; '24'='DDR3'; '26'='DDR4'; '34'='DDR5' }["$(($pm | Select-Object -First 1).SMBIOSMemoryType)"]
-
   $b = Get-CimInstance Win32_BaseBoard | Where-Object { $_.Product -and $_.Product -notmatch 'Base Board|Default string|To be filled|None' } | Select-Object -First 1
   if (-not $b) { $b = Get-CimInstance Win32_BaseBoard | Select-Object -First 1 }
   $mfg = "$($b.Manufacturer)"
@@ -83,7 +90,6 @@ function Get-Specs {
   $s.system_model = "$((Get-CimInstance Win32_ComputerSystem).Model)"
   $bi = Get-CimInstance Win32_BIOS | Select-Object -First 1
   $s.bios = "$($bi.Manufacturer) $($bi.SMBIOSBIOSVersion)"
-
   if ($s.motherboard -match '\b([XZBHA]\d{3}E?)\b') { $s.chipset = $matches[1].ToUpper() }
   if ($s.cpu_socket -notmatch 'AM\d|LGA|sTR|sWRX|SP\d|TR4') {
     switch -Regex ($s.chipset) {
@@ -123,9 +129,7 @@ function Get-Health {
   return $h
 }
 
-function Get-StartupList {
-  return @(Get-CimInstance Win32_StartupCommand | Select-Object -ExpandProperty Name | Select-Object -First 40)
-}
+function Get-StartupList { return @(Get-CimInstance Win32_StartupCommand | Select-Object -ExpandProperty Name | Select-Object -First 40) }
 
 # ---------------- Benchmark ----------------
 function Run-Benchmark {
@@ -135,37 +139,28 @@ function Run-Benchmark {
   for ($i = 0; $i -lt 3000000; $i++) { $acc += [math]::Sqrt($i) }
   $sw.Stop()
   $r.cpu_score = [int]([math]::Round(3000000 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001) / 1000))
-
   $size = 64MB
-  $buf = New-Object byte[] $size
-  $dst = New-Object byte[] $size
-  $sw.Restart()
-  for ($i = 0; $i -lt 5; $i++) { [Array]::Copy($buf, $dst, $size) }
-  $sw.Stop()
+  $buf = New-Object byte[] $size; $dst = New-Object byte[] $size
+  $sw.Restart(); for ($i = 0; $i -lt 5; $i++) { [Array]::Copy($buf, $dst, $size) }; $sw.Stop()
   $r.ram_mbps = [int]([math]::Round((5 * $size / 1MB) / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
-
   $tmp = Join-Path $env:TEMP 'boostpc_bench.bin'
-  $data = New-Object byte[] (64MB)
-  (New-Object Random).NextBytes($data)
+  $data = New-Object byte[] (64MB); (New-Object Random).NextBytes($data)
   $sw.Restart(); [System.IO.File]::WriteAllBytes($tmp, $data); $sw.Stop()
   $r.disk_write_mbps = [int]([math]::Round(64 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
   $sw.Restart(); $null = [System.IO.File]::ReadAllBytes($tmp); $sw.Stop()
   $r.disk_read_mbps = [int]([math]::Round(64 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
   Remove-Item $tmp -ErrorAction SilentlyContinue
-
   try {
     $png = New-Object System.Net.NetworkInformation.Ping
     $tot = 0; $n = 0
     for ($i = 0; $i -lt 4; $i++) { $res = $png.Send('1.1.1.1', 2000); if ($res.Status -eq 'Success') { $tot += $res.RoundtripTime; $n++ } }
     $r.ping_ms = if ($n -gt 0) { [int]([math]::Round($tot / $n)) } else { 0 }
   } catch { $r.ping_ms = 0 }
-
   $o = Get-CimInstance Win32_OperatingSystem
   $r.free_ram_pct = [int]([math]::Round($o.FreePhysicalMemory / $o.TotalVisibleMemorySize * 100))
   $r.overall = [int]([math]::Round($r.cpu_score + $r.ram_mbps/50.0 + $r.disk_write_mbps/50.0 + $r.disk_read_mbps/50.0 + [math]::Max(0, 120 - $r.ping_ms) + $r.free_ram_pct))
   return $r
 }
-
 function Show-Bench($r, $title) {
   Say "`n   [$title]" 'Cyan'
   Say ("   CPU {0} | RAM {1} MB/s | Disco W/R {2}/{3} MB/s | Ping {4} ms | PUNTEGGIO {5}" -f `
@@ -175,20 +170,14 @@ function Show-Bench($r, $title) {
 # ---------------- Reporting ----------------
 function Send-Data($specs, $health, $startup) {
   $body = @{ data = $specs; health = $health; startup = $startup } | ConvertTo-Json -Depth 6 -Compress
-  try {
-    Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' `
-      -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null
-  } catch {}
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
 }
 function Send-Benchmark($rec) {
   $body = @{ benchmark = $rec } | ConvertTo-Json -Depth 6 -Compress
-  try {
-    Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' `
-      -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null
-  } catch {}
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
 }
 
-# ---------------- Cleanup + individual tweak actions ----------------
+# ---------------- Tweak actions ----------------
 function Do-Cleanup {
   Get-ChildItem $env:TEMP -Recurse -Force 2>$null | Remove-Item -Recurse -Force 2>$null
   Stop-Service wuauserv -Force 2>$null
@@ -203,6 +192,13 @@ function Do-Power {
   powercfg -duplicatescheme $ultimate 2>$null | Out-Null
   powercfg -setactive $ultimate 2>$null
   if ($LASTEXITCODE -ne 0) { powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null }
+  # min/max processor 100%, core parking off, USB selective suspend off, PCIe ASPM off
+  powercfg /setacvalueindex scheme_current sub_processor 893dee8e-2bef-41e0-89c6-b55d0929964c 100 2>$null
+  powercfg /setacvalueindex scheme_current sub_processor bc5038f7-23e0-4960-96da-33abaf5935ec 100 2>$null
+  powercfg /setacvalueindex scheme_current sub_processor 0cc5b647-c1df-4637-891a-dec35c318583 100 2>$null
+  powercfg /setacvalueindex scheme_current 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0 2>$null
+  powercfg /setacvalueindex scheme_current 501a4d13-42af-4429-9fd1-a8218c268e20 ee12f906-d277-404b-b6da-e5fa1a576df5 0 2>$null
+  powercfg -setactive scheme_current 2>$null
 }
 function Do-Gaming {
   Set-Reg 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode' 'DWord' 1
@@ -221,37 +217,68 @@ function Do-Priority {
   Set-Reg $games 'SFIO Priority' 'String' 'High'
   Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' 'Win32PrioritySeparation' 'DWord' 26
 }
+function Do-Mpo { Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\Dwm' 'OverlayTestMode' 'DWord' 5 }
+function Do-GpuMsi {
+  $pnp = Get-GpuPnp
+  if ($pnp) { $p = "HKLM:\SYSTEM\CurrentControlSet\Enum\$pnp\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties"; Set-Reg $p 'MSISupported' 'DWord' 1 }
+}
+function Do-AmdUlps {
+  $root = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+  Get-ChildItem $root 2>$null | ForEach-Object {
+    $dd = (Get-ItemProperty $_.PSPath -Name DriverDesc -ErrorAction SilentlyContinue).DriverDesc
+    if ($dd -match 'AMD|Radeon') { Set-Reg $_.PSPath 'EnableUlps' 'DWord' 0 }
+  }
+}
+function Do-NvidiaTel {
+  Get-ScheduledTask -TaskName 'NvTmRep*','NvProfileUpdater*','NvTmMon*','NvTmRepOnLogon*','NvDriverUpdateCheckDaily*' -ErrorAction SilentlyContinue | Disable-ScheduledTask -ErrorAction SilentlyContinue | Out-Null
+  Stop-Service 'NvTelemetryContainer' -Force 2>$null
+  $svc = Get-Service 'NvTelemetryContainer' -ErrorAction SilentlyContinue
+  if ($svc -and -not $script:BK.ContainsKey('svc::NvTelemetryContainer')) { $script:BK['svc::NvTelemetryContainer'] = "$($svc.StartType)"; Set-Service 'NvTelemetryContainer' -StartupType Disabled 2>$null }
+}
+function Do-Hibernate { if (-not $script:BK.ContainsKey('hib')) { $script:BK['hib'] = 'on' }; powercfg -h off 2>$null }
 function Do-Mouse {
   Set-Reg 'HKCU:\Control Panel\Mouse' 'MouseSpeed' 'String' '0'
   Set-Reg 'HKCU:\Control Panel\Mouse' 'MouseThreshold1' 'String' '0'
   Set-Reg 'HKCU:\Control Panel\Mouse' 'MouseThreshold2' 'String' '0'
 }
+function Do-Timer { Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel' 'GlobalTimerResolutionRequests' 'DWord' 1 }
+function Do-Usb {
+  Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Enum\USB' -ErrorAction SilentlyContinue | ForEach-Object {
+    Get-ChildItem $_.PSPath -ErrorAction SilentlyContinue | ForEach-Object {
+      $dp = Join-Path $_.PSPath 'Device Parameters'
+      if (Test-Path $dp) { Set-Reg $dp 'EnhancedPowerManagementEnabled' 'DWord' 0 }
+    }
+  }
+}
+function Do-StickyKeys {
+  Set-Reg 'HKCU:\Control Panel\Accessibility\StickyKeys' 'Flags' 'String' '506'
+  Set-Reg 'HKCU:\Control Panel\Accessibility\Keyboard Response' 'Flags' 'String' '122'
+  Set-Reg 'HKCU:\Control Panel\Accessibility\ToggleKeys' 'Flags' 'String' '58'
+}
+function Do-StartupDelay { Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize' 'StartupDelayInMSec' 'DWord' 0 }
 function Do-Visual { Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' 'VisualFXSetting' 'DWord' 2 }
 function Do-Network {
   $ifRoot = 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces'
-  Get-ChildItem $ifRoot 2>$null | ForEach-Object {
-    $p = Join-Path $ifRoot $_.PSChildName
-    Set-Reg $p 'TcpAckFrequency' 'DWord' 1
-    Set-Reg $p 'TCPNoDelay' 'DWord' 1
-  }
+  Get-ChildItem $ifRoot 2>$null | ForEach-Object { $p = Join-Path $ifRoot $_.PSChildName; Set-Reg $p 'TcpAckFrequency' 'DWord' 1; Set-Reg $p 'TCPNoDelay' 'DWord' 1 }
   netsh int tcp set global autotuninglevel=normal 2>$null | Out-Null
   netsh int tcp set global ecncapability=enabled 2>$null | Out-Null
   netsh int tcp set global rss=enabled 2>$null | Out-Null
 }
 function Do-Dns {
   $adapter = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
-  if ($adapter -and -not $script:BK.ContainsKey("dns::$($adapter.Name)")) {
-    $script:BK["dns::$($adapter.Name)"] = 'reset'
-    Set-DnsClientServerAddress -InterfaceAlias $adapter.Name -ServerAddresses ('1.1.1.1','1.0.0.1') 2>$null
-  }
+  if ($adapter -and -not $script:BK.ContainsKey("dns::$($adapter.Name)")) { $script:BK["dns::$($adapter.Name)"] = 'reset'; Set-DnsClientServerAddress -InterfaceAlias $adapter.Name -ServerAddresses ('1.1.1.1','1.0.0.1') 2>$null }
+}
+function Do-Qos { Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit' 'DWord' 0 }
+function Do-DeliveryOpt {
+  Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode' 'DWord' 0
+  Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' 'DODownloadMode' 'DWord' 0
+}
+function Do-ObsPriority {
+  foreach ($exe in 'obs64.exe','obs32.exe') { $p = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\$exe\PerfOptions"; Set-Reg $p 'CpuPriorityClass' 'DWord' 3 }
 }
 function Do-Telemetry {
   $svc = Get-Service DiagTrack -ErrorAction SilentlyContinue
-  if ($svc -and -not $script:BK.ContainsKey('svc::DiagTrack')) {
-    $script:BK['svc::DiagTrack'] = "$($svc.StartType)"
-    Stop-Service DiagTrack -Force 2>$null
-    Set-Service DiagTrack -StartupType Disabled 2>$null
-  }
+  if ($svc -and -not $script:BK.ContainsKey('svc::DiagTrack')) { $script:BK['svc::DiagTrack'] = "$($svc.StartType)"; Stop-Service DiagTrack -Force 2>$null; Set-Service DiagTrack -StartupType Disabled 2>$null }
 }
 function Do-Ads {
   $cdm = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
@@ -259,50 +286,97 @@ function Do-Ads {
   Set-Reg $cdm 'SystemPaneSuggestionsEnabled' 'DWord' 0
   Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' 'DisableWindowsConsumerFeatures' 'DWord' 1
 }
+function Do-BgApps {
+  Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' 'GlobalUserDisabled' 'DWord' 1
+  Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy' 'LetAppsRunInBackground' 'DWord' 2
+}
+function Do-GamebarRec {
+  Set-Reg 'HKCU:\System\GameConfigStore' 'GameDVR_Enabled' 'DWord' 0
+  Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled' 'DWord' 0
+}
+function Do-SearchIndex {
+  $svc = Get-Service WSearch -ErrorAction SilentlyContinue
+  if ($svc -and -not $script:BK.ContainsKey('svc::WSearch')) { $script:BK['svc::WSearch'] = "$($svc.StartType)"; Stop-Service WSearch -Force 2>$null; Set-Service WSearch -StartupType Disabled 2>$null }
+}
 $script:BLOAT = @('Microsoft.549981C3F5F10','Microsoft.BingNews','Microsoft.BingWeather','Microsoft.GetHelp',
   'Microsoft.Getstarted','Microsoft.WindowsFeedbackHub','Microsoft.MicrosoftSolitaireCollection',
   'Microsoft.People','Microsoft.WindowsMaps','Microsoft.3DBuilder','Microsoft.MixedReality.Portal',
   'king.com.CandyCrushSaga','Microsoft.SkypeApp')
-function Do-Debloat {
-  foreach ($pkg in $script:BLOAT) {
-    $app = Get-AppxPackage -Name $pkg -ErrorAction SilentlyContinue
-    if ($app) { $app | Remove-AppxPackage -ErrorAction SilentlyContinue }
-  }
-}
+function Do-Debloat { foreach ($pkg in $script:BLOAT) { $app = Get-AppxPackage -Name $pkg -ErrorAction SilentlyContinue; if ($app) { $app | Remove-AppxPackage -ErrorAction SilentlyContinue } } }
 
-# ---------------- Tweak catalogue (id / name / desc / current state / apply) ----------------
+# ---------------- Tweak catalogue (cat / id / name / desc / state / apply) ----------------
 $script:TWEAKS = @(
-  @{ id='clean'; name='Pulizia temp + cache Windows Update'; desc='Rimuove file temporanei, cache aggiornamenti e svuota il DNS.';
-     state={ $mb=0; Get-ChildItem $env:TEMP -Recurse -File -Force 2>$null | ForEach-Object { $mb+=$_.Length }; "$([math]::Round($mb/1MB)) MB da pulire" }; apply={ Do-Cleanup } }
-  @{ id='power'; name='Piano energetico prestazioni massime'; desc='Attiva Ultimate/High Performance per CPU e GPU sempre al massimo.';
-     state={ $p=(powercfg /getactivescheme); if($p -match 'high|ultimate|prestazioni elevate'){'Gia ottimale'}else{'Da ottimizzare'} }; apply={ Do-Power } }
-  @{ id='gaming'; name='Boost gaming (Game Mode, HAGS, Game DVR off)'; desc='Attiva Game Mode e GPU Scheduling, disattiva Game DVR (piu FPS).';
-     state={ $g=(Get-ItemProperty 'HKCU:\Software\Microsoft\GameBar' -Name AllowAutoGameMode).AllowAutoGameMode; if($g -eq 1){'Game Mode attivo'}else{'Da ottimizzare'} }; apply={ Do-Gaming } }
-  @{ id='priority'; name='Priorita GPU/CPU ai giochi'; desc='MMCSS + Win32PrioritySeparation: piu risorse ai giochi in primo piano.';
-     state={ $r=(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' -Name SystemResponsiveness).SystemResponsiveness; if($r -eq 0){'Gia ottimale'}else{'Da ottimizzare'} }; apply={ Do-Priority } }
-  @{ id='mouse'; name='Accelerazione mouse OFF (raw input)'; desc='Disattiva la accelerazione per una mira piu precisa e costante.';
-     state={ $m=(Get-ItemProperty 'HKCU:\Control Panel\Mouse' -Name MouseSpeed).MouseSpeed; if("$m" -eq '0'){'Gia disattivata'}else{'Attiva (da disattivare)'} }; apply={ Do-Mouse } }
-  @{ id='visual'; name='Effetti visivi: modalita prestazioni'; desc='Riduce animazioni/trasparenze per una UI piu reattiva.';
-     state={ $v=(Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' -Name VisualFXSetting).VisualFXSetting; if($v -eq 2){'Gia in prestazioni'}else{'Da ottimizzare'} }; apply={ Do-Visual } }
-  @{ id='network'; name='Rete: Nagle OFF + TCP tuning'; desc='Riduce la latenza online (Nagle disattivato, autotuning/ECN/RSS).';
-     state={ 'Applica per ridurre lag online' }; apply={ Do-Network } }
-  @{ id='dns'; name='DNS veloci (Cloudflare 1.1.1.1)'; desc='Imposta DNS 1.1.1.1/1.0.0.1 sulla scheda attiva (reversibile a DHCP).';
+  # GAMING & FPS
+  @{ cat='gaming'; id='power'; name='Piano energetico prestazioni massime'; desc='Ultimate Performance + core parking off, processore 100%, USB suspend/PCIe ASPM off.';
+     state={ $p=(powercfg /getactivescheme); if($p -match 'high|ultimate|prestazioni elevate'){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Power } }
+  @{ cat='gaming'; id='gaming'; name='Boost gaming (Game Mode, HAGS, Game DVR off)'; desc='Game Mode + GPU Scheduling on, Game DVR off (piu FPS in game).';
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode') -eq 1){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Gaming } }
+  @{ cat='gaming'; id='priority'; name='Priorita GPU/CPU ai giochi (MMCSS)'; desc='Piu risorse ai giochi in primo piano + responsiveness al massimo.';
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' 'SystemResponsiveness') -eq 0){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Priority } }
+  @{ cat='gaming'; id='mpo'; name='Disabilita MPO (Multi-Plane Overlay)'; desc='Risolve stutter/flickering e lo SCHERMO NERO in OBS Game Capture.';
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows\Dwm' 'OverlayTestMode') -eq 5){'Disabilitato'}else{'Attivo (da disabilitare)'} }; apply={ Do-Mpo } }
+  @{ cat='gaming'; id='gpu_msi'; name='GPU: MSI mode ON (latenza DPC)'; desc='Message Signaled Interrupts sulla GPU: riduce la latenza DPC (NVIDIA/AMD).';
+     state={ $pnp=Get-GpuPnp; if($pnp){ $v=Get-RegVal "HKLM:\SYSTEM\CurrentControlSet\Enum\$pnp\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties" 'MSISupported'; if($v -eq 1){'Attivo'}else{'Da attivare'} }else{'n/d'} }; apply={ Do-GpuMsi } }
+  @{ cat='gaming'; id='amd_ulps'; name='AMD: disabilita ULPS'; desc='Ultra Low Power State off sulle Radeon: meno stutter/latenza (solo GPU AMD).';
+     state={ if((Get-GpuVendor) -eq 'AMD'){'GPU AMD: applicabile'}else{'Solo GPU AMD'} }; apply={ Do-AmdUlps } }
+  @{ cat='gaming'; id='nvidia_tel'; name='NVIDIA: disabilita telemetria'; desc='Disattiva task/servizio di telemetria NVIDIA: meno background (solo GPU NVIDIA).';
+     state={ if((Get-GpuVendor) -eq 'NVIDIA'){'GPU NVIDIA: applicabile'}else{'Solo GPU NVIDIA'} }; apply={ Do-NvidiaTel } }
+  @{ cat='gaming'; id='hibernate'; name='Disabilita ibernazione'; desc='Rimuove hiberfil.sys: libera diversi GB su disco.';
+     state={ 'Applica per liberare spazio' }; apply={ Do-Hibernate } }
+  # LATENZA & INPUT
+  @{ cat='input'; id='mouse'; name='Accelerazione mouse OFF (raw input)'; desc='Mira piu precisa e costante: disattiva la enhance pointer precision.';
+     state={ if("$(Get-RegVal 'HKCU:\Control Panel\Mouse' 'MouseSpeed')" -eq '0'){'Gia disattivata'}else{'Attiva (da disattivare)'} }; apply={ Do-Mouse } }
+  @{ cat='input'; id='timer'; name='Timer resolution globale'; desc='Richieste timer resolution globali (Win11): scheduling piu costante nei giochi.';
+     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel' 'GlobalTimerResolutionRequests') -eq 1){'Attivo'}else{'Da attivare'} }; apply={ Do-Timer } }
+  @{ cat='input'; id='usb'; name='USB power management OFF'; desc='Evita cali di polling di mouse/tastiera (input drop).';
+     state={ 'Applica per input stabile' }; apply={ Do-Usb } }
+  @{ cat='input'; id='stickykeys'; name='Sticky/Filter/Toggle Keys OFF'; desc='Niente popup che ti buttano fuori dal gioco premendo Shift ripetuto.';
+     state={ if("$(Get-RegVal 'HKCU:\Control Panel\Accessibility\StickyKeys' 'Flags')" -eq '506'){'Disattivati'}else{'Attivi (da disattivare)'} }; apply={ Do-StickyKeys } }
+  @{ cat='input'; id='startupdelay'; name='Startup delay app ridotto'; desc='Le app all avvio partono subito, niente ritardo artificiale.';
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize' 'StartupDelayInMSec') -eq 0){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-StartupDelay } }
+  # RETE & STREAMING
+  @{ cat='network'; id='network'; name='Rete: Nagle OFF + TCP tuning'; desc='Riduce la latenza online (Nagle off, autotuning/ECN/RSS).';
+     state={ 'Applica per meno lag online' }; apply={ Do-Network } }
+  @{ cat='network'; id='dns'; name='DNS veloci (Cloudflare 1.1.1.1)'; desc='DNS 1.1.1.1/1.0.0.1 sulla scheda attiva (reversibile a DHCP).';
      state={ $a=Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1; if($a){ $d=(Get-DnsClientServerAddress -InterfaceAlias $a.Name -AddressFamily IPv4).ServerAddresses -join ','; if($d -match '1.1.1.1'){'Gia Cloudflare'}else{"Attuale: $d"} }else{'n/d'} }; apply={ Do-Dns } }
-  @{ id='telemetry'; name='Telemetria (DiagTrack) OFF'; desc='Disattiva il servizio di telemetria: meno CPU e rete in background.';
-     state={ $s=Get-Service DiagTrack -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){'Attiva (da disattivare)'}else{'Gia disattivata'} }; apply={ Do-Telemetry } }
-  @{ id='ads'; name='Suggerimenti/ads di Windows OFF'; desc='Disattiva app suggerite e contenuti promozionali nel menu Start.';
+  @{ cat='network'; id='qos'; name='Rimuovi 20% banda riservata QoS'; desc='NonBestEffortLimit=0: recupera la banda riservata da Windows.';
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit') -eq 0){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Qos } }
+  @{ cat='network'; id='deliveryopt'; name='Delivery Optimization P2P OFF'; desc='Windows non usa piu la tua banda in upload per distribuire aggiornamenti: stream piu stabile.';
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode') -eq 0){'Disattivato'}else{'Attivo (da disattivare)'} }; apply={ Do-DeliveryOpt } }
+  @{ cat='network'; id='obs_priority'; name='OBS ad alta priorita'; desc='obs64/obs32.exe partono con priorita CPU alta: encoding piu fluido durante lo stream.';
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\obs64.exe\PerfOptions' 'CpuPriorityClass') -eq 3){'Attivo'}else{'Da attivare'} }; apply={ Do-ObsPriority } }
+  # SISTEMA & DEBLOAT
+  @{ cat='system'; id='clean'; name='Pulizia temp + cache Windows Update'; desc='Rimuove file temporanei, cache aggiornamenti e svuota il DNS.';
+     state={ $mb=0; Get-ChildItem $env:TEMP -Recurse -File -Force 2>$null | ForEach-Object { $mb+=$_.Length }; "$([math]::Round($mb/1MB)) MB da pulire" }; apply={ Do-Cleanup } }
+  @{ cat='system'; id='visual'; name='Effetti visivi: modalita prestazioni'; desc='Riduce animazioni/trasparenze per una UI piu reattiva.';
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' 'VisualFXSetting') -eq 2){'Prestazioni'}else{'Da ottimizzare'} }; apply={ Do-Visual } }
+  @{ cat='system'; id='telemetry'; name='Telemetria (DiagTrack) OFF'; desc='Disattiva il servizio di telemetria: meno CPU e rete in background.';
+     state={ $s=Get-Service DiagTrack -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){'Attiva (da disattivare)'}else{'Disattivata'} }; apply={ Do-Telemetry } }
+  @{ cat='system'; id='ads'; name='Suggerimenti/ads di Windows OFF'; desc='Disattiva app suggerite e contenuti promozionali nel menu Start.';
      state={ 'Applica per rimuovere ads' }; apply={ Do-Ads } }
-  @{ id='debloat'; name='Debloat app superflue (UWP)'; desc='Rimuove Xbox/Bing/Solitaire/Candy Crush ecc. (reinstallabili dallo Store).';
+  @{ cat='system'; id='bgapps'; name='App in background OFF (globale)'; desc='Blocca le app UWP in background: meno consumo di CPU/RAM.';
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' 'GlobalUserDisabled') -eq 1){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-BgApps } }
+  @{ cat='system'; id='gamebar_rec'; name='Xbox Game Bar recording OFF'; desc='Disattiva la registrazione in background della Game Bar.';
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled') -eq 0){'Disattivato'}else{'Attivo (da disattivare)'} }; apply={ Do-GamebarRec } }
+  @{ cat='system'; id='debloat'; name='Debloat app superflue (UWP)'; desc='Rimuove Xbox/Bing/Solitaire/Candy Crush ecc. (reinstallabili dallo Store).';
      state={ $n=0; foreach($p in $script:BLOAT){ if(Get-AppxPackage -Name $p -ErrorAction SilentlyContinue){$n++} }; "$n app rimovibili" }; apply={ Do-Debloat } }
+  @{ cat='system'; id='search_index'; name='Windows Search indexing OFF (invasivo)'; desc='Meno carico disco/CPU, ma disattiva l indicizzazione della ricerca file.';
+     state={ $s=Get-Service WSearch -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){'Attivo'}else{'Disattivato'} }; apply={ Do-SearchIndex } }
 )
+
+$script:PRESETS = @{
+  'competitivo' = @('power','gaming','priority','mpo','gpu_msi','amd_ulps','nvidia_tel','mouse','timer','usb','stickykeys','network','qos','visual','bgapps')
+  'streaming'   = @('power','gaming','priority','mpo','gpu_msi','amd_ulps','nvidia_tel','network','dns','qos','deliveryopt','obs_priority','telemetry','ads','bgapps','gamebar_rec')
+}
 
 # ---------------- Restore ----------------
 function Invoke-Restore {
   if (-not (Test-Path $BACKUP)) { return 'Nessun backup trovato.' }
   $b = Get-Content $BACKUP -Raw | ConvertFrom-Json | ConvertTo-HashtableSafe
   if ($b.ContainsKey('power_plan') -and $b['power_plan']) { powercfg -setactive $b['power_plan'] 2>$null }
+  if ($b.ContainsKey('hib')) { powercfg -h on 2>$null }
   foreach ($k in $b.Keys) {
-    if ($k -eq 'power_plan') { continue }
+    if ($k -eq 'power_plan' -or $k -eq 'hib') { continue }
     if ($k.StartsWith('svc::')) {
       $svcName = $k.Substring(5); $st = $b[$k]
       $mode = switch -Wildcard ($st) { 'Auto*' {'Automatic'} 'Manual' {'Manual'} 'Disabled' {'Disabled'} default {'Manual'} }
@@ -340,134 +414,120 @@ function Show-Gui {
 
   $form = New-Object System.Windows.Forms.Form
   $form.Text = 'BOOST PC AI - Ottimizzazioni'
-  $form.Size = New-Object System.Drawing.Size(660, 760)
+  $form.Size = New-Object System.Drawing.Size(700, 860)
   $form.StartPosition = 'CenterScreen'
-  $form.BackColor = $bg
-  $form.ForeColor = [System.Drawing.Color]::White
+  $form.BackColor = $bg; $form.ForeColor = [System.Drawing.Color]::White
   $form.Font = New-Object System.Drawing.Font('Segoe UI', 9)
 
   $title = New-Object System.Windows.Forms.Label
-  $title.Text = 'BOOST PC  -  Seleziona cosa ottimizzare'
-  $title.ForeColor = $acc
-  $title.Font = New-Object System.Drawing.Font('Segoe UI', 13, [System.Drawing.FontStyle]::Bold)
-  $title.Location = New-Object System.Drawing.Point(16, 12)
-  $title.AutoSize = $true
+  $title.Text = 'BOOST PC  -  Ottimizzazioni per streamer & gamer'
+  $title.ForeColor = $acc; $title.Font = New-Object System.Drawing.Font('Segoe UI', 13, [System.Drawing.FontStyle]::Bold)
+  $title.Location = New-Object System.Drawing.Point(16, 12); $title.AutoSize = $true
   $form.Controls.Add($title)
 
   $adminLbl = New-Object System.Windows.Forms.Label
-  $adminLbl.Location = New-Object System.Drawing.Point(18, 44)
-  $adminLbl.AutoSize = $true
+  $adminLbl.Location = New-Object System.Drawing.Point(18, 44); $adminLbl.AutoSize = $true
   if ($isAdmin) { $adminLbl.Text = 'Amministratore: SI - tutte le ottimizzazioni disponibili.'; $adminLbl.ForeColor = [System.Drawing.Color]::FromArgb(0,255,102) }
   else { $adminLbl.Text = 'Amministratore: NO - alcune opzioni non verranno applicate. Usa il pulsante in basso.'; $adminLbl.ForeColor = [System.Drawing.Color]::FromArgb(255,59,48) }
   $form.Controls.Add($adminLbl)
 
-  $panel = New-Object System.Windows.Forms.Panel
-  $panel.Location = New-Object System.Drawing.Point(14, 72)
-  $panel.Size = New-Object System.Drawing.Size(618, 360)
-  $panel.AutoScroll = $true
-  $panel.BackColor = $bg2
-  $form.Controls.Add($panel)
-
-  $script:CHECKS = @{}
-  $y = 8
-  foreach ($t in $script:TWEAKS) {
-    $cb = New-Object System.Windows.Forms.CheckBox
-    $cb.Checked = $true
-    $cb.ForeColor = [System.Drawing.Color]::White
-    $cb.Font = New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
-    $cb.Location = New-Object System.Drawing.Point(10, $y)
-    $cb.AutoSize = $true
-    $cb.Text = ("{0}    [{1}]" -f $t.name, (& $t.state))
-    $panel.Controls.Add($cb)
-    $script:CHECKS[$t.id] = $cb
-    $y += 22
-    $d = New-Object System.Windows.Forms.Label
-    $d.Text = $t.desc
-    $d.ForeColor = $gray
-    $d.Location = New-Object System.Drawing.Point(30, $y)
-    $d.MaximumSize = New-Object System.Drawing.Size(560, 0)
-    $d.AutoSize = $true
-    $panel.Controls.Add($d)
-    $y += 32
+  # Preset buttons
+  $presetLbl = New-Object System.Windows.Forms.Label
+  $presetLbl.Text = 'Preset:'; $presetLbl.Location = New-Object System.Drawing.Point(18, 70); $presetLbl.AutoSize = $true; $presetLbl.ForeColor = $gray
+  $form.Controls.Add($presetLbl)
+  function New-Preset($text, $x, $key) {
+    $b = New-Object System.Windows.Forms.Button
+    $b.Text = $text; $b.Location = New-Object System.Drawing.Point($x, 66); $b.Size = New-Object System.Drawing.Size(150, 30)
+    $b.FlatStyle = 'Flat'; $b.ForeColor = [System.Drawing.Color]::White; $b.BackColor = [System.Drawing.Color]::FromArgb(30,30,38)
+    $b.Add_Click({
+      foreach ($t in $script:TWEAKS) {
+        if ($key -eq 'completo') { $script:CHECKS[$t.id].Checked = $true }
+        else { $script:CHECKS[$t.id].Checked = ($script:PRESETS[$key] -contains $t.id) }
+      }
+    }.GetNewClosure())
+    $form.Controls.Add($b)
   }
+  New-Preset '🏆 Competitivo' 70 'competitivo'
+  New-Preset '🎥 Streaming' 226 'streaming'
+  New-Preset '🧰 Completo' 382 'completo'
+
+  # Tabs by category
+  $tc = New-Object System.Windows.Forms.TabControl
+  $tc.Location = New-Object System.Drawing.Point(14, 104); $tc.Size = New-Object System.Drawing.Size(660, 400)
+  $cats = @(
+    @{ key='gaming';  title='🎮 Gaming & FPS' },
+    @{ key='input';   title='⚡ Latenza & Input' },
+    @{ key='network'; title='🌐 Rete & Streaming' },
+    @{ key='system';  title='🧹 Sistema & Debloat' }
+  )
+  $script:CHECKS = @{}
+  foreach ($c in $cats) {
+    $tp = New-Object System.Windows.Forms.TabPage; $tp.Text = $c.title; $tp.BackColor = $bg2
+    $panel = New-Object System.Windows.Forms.Panel; $panel.Dock = 'Fill'; $panel.AutoScroll = $true; $panel.BackColor = $bg2
+    $y = 8
+    foreach ($t in $script:TWEAKS) {
+      if ($t.cat -ne $c.key) { continue }
+      $cb = New-Object System.Windows.Forms.CheckBox
+      $cb.Checked = ($t.id -ne 'search_index')
+      $cb.ForeColor = [System.Drawing.Color]::White
+      $cb.Font = New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
+      $cb.Location = New-Object System.Drawing.Point(10, $y); $cb.AutoSize = $true
+      $cb.Text = ("{0}    [{1}]" -f $t.name, (& $t.state))
+      $panel.Controls.Add($cb); $script:CHECKS[$t.id] = $cb; $y += 22
+      $d = New-Object System.Windows.Forms.Label; $d.Text = $t.desc; $d.ForeColor = $gray
+      $d.Location = New-Object System.Drawing.Point(30, $y); $d.MaximumSize = New-Object System.Drawing.Size(600, 0); $d.AutoSize = $true
+      $panel.Controls.Add($d); $y += 34
+    }
+    $tp.Controls.Add($panel); $tc.TabPages.Add($tp)
+  }
+  $form.Controls.Add($tc)
 
   $benchCb = New-Object System.Windows.Forms.CheckBox
   $benchCb.Text = 'Esegui benchmark PRIMA/DOPO per misurare il guadagno reale'
-  $benchCb.Checked = $true
-  $benchCb.ForeColor = [System.Drawing.Color]::FromArgb(0,224,255)
-  $benchCb.Location = New-Object System.Drawing.Point(18, 440)
-  $benchCb.AutoSize = $true
-  $form.Controls.Add($benchCb)
-  $script:BENCHCB = $benchCb
-
-  $selAll = New-Object System.Windows.Forms.Button
-  $selAll.Text = 'Seleziona tutto'
-  $selAll.Location = New-Object System.Drawing.Point(18, 466)
-  $selAll.Size = New-Object System.Drawing.Size(120, 28)
-  $selAll.FlatStyle = 'Flat'; $selAll.ForeColor = [System.Drawing.Color]::White
-  $selAll.Add_Click({ foreach($c in $script:CHECKS.Values){ $c.Checked = $true } })
-  $form.Controls.Add($selAll)
-
-  $selNone = New-Object System.Windows.Forms.Button
-  $selNone.Text = 'Deseleziona tutto'
-  $selNone.Location = New-Object System.Drawing.Point(146, 466)
-  $selNone.Size = New-Object System.Drawing.Size(130, 28)
-  $selNone.FlatStyle = 'Flat'; $selNone.ForeColor = [System.Drawing.Color]::White
-  $selNone.Add_Click({ foreach($c in $script:CHECKS.Values){ $c.Checked = $false } })
-  $form.Controls.Add($selNone)
+  $benchCb.Checked = $true; $benchCb.ForeColor = [System.Drawing.Color]::FromArgb(0,224,255)
+  $benchCb.Location = New-Object System.Drawing.Point(18, 512); $benchCb.AutoSize = $true
+  $form.Controls.Add($benchCb); $script:BENCHCB = $benchCb
 
   $out = New-Object System.Windows.Forms.TextBox
   $out.Multiline = $true; $out.ReadOnly = $true; $out.ScrollBars = 'Vertical'
-  $out.Location = New-Object System.Drawing.Point(14, 502)
-  $out.Size = New-Object System.Drawing.Size(618, 150)
-  $out.BackColor = [System.Drawing.Color]::Black
-  $out.ForeColor = [System.Drawing.Color]::FromArgb(0,255,102)
+  $out.Location = New-Object System.Drawing.Point(14, 540); $out.Size = New-Object System.Drawing.Size(660, 200)
+  $out.BackColor = [System.Drawing.Color]::Black; $out.ForeColor = [System.Drawing.Color]::FromArgb(0,255,102)
   $out.Font = New-Object System.Drawing.Font('Consolas', 9)
-  $form.Controls.Add($out)
-  $script:OUT = $out
+  $form.Controls.Add($out); $script:OUT = $out
   function GuiLog($m) { $script:OUT.AppendText("$m`r`n"); [System.Windows.Forms.Application]::DoEvents() }
 
   $applyBtn = New-Object System.Windows.Forms.Button
-  $applyBtn.Text = 'APPLICA SELEZIONATI'
-  $applyBtn.Location = New-Object System.Drawing.Point(14, 664)
-  $applyBtn.Size = New-Object System.Drawing.Size(200, 40)
+  $applyBtn.Text = 'APPLICA SELEZIONATI'; $applyBtn.Location = New-Object System.Drawing.Point(14, 752); $applyBtn.Size = New-Object System.Drawing.Size(200, 42)
   $applyBtn.FlatStyle = 'Flat'; $applyBtn.BackColor = $acc; $applyBtn.ForeColor = [System.Drawing.Color]::Black
   $applyBtn.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
-  $script:APPLYBTN = $applyBtn
+  $form.Controls.Add($applyBtn); $script:APPLYBTN = $applyBtn
   $applyBtn.Add_Click({
     $script:APPLYBTN.Enabled = $false
     $before = $null
     if ($script:BENCHCB.Checked) { GuiLog 'Benchmark PRIMA in corso...'; $before = Run-Benchmark; GuiLog ("  Punteggio PRIMA: {0}" -f $before.overall) }
-    foreach ($t in $script:TWEAKS) {
-      if ($script:CHECKS[$t.id].Checked) { GuiLog ("-> {0}" -f $t.name); & $t.apply }
-    }
+    foreach ($t in $script:TWEAKS) { if ($script:CHECKS[$t.id].Checked) { GuiLog ("-> {0}" -f $t.name); & $t.apply } }
     Save-Backup
     if ($script:BENCHCB.Checked) {
       GuiLog 'Benchmark DOPO in corso...'; $after = Run-Benchmark
-      $pct = $(if($before.overall){[math]::Round(($after.overall-$before.overall)/$before.overall*100)}else{0})
+      $pct = $(if ($before.overall) { [math]::Round(($after.overall - $before.overall) / $before.overall * 100) } else { 0 })
       GuiLog ("  Punteggio DOPO: {0}  (variazione {1}%)" -f $after.overall, $pct)
       Send-Benchmark @{ before = $before; after = $after; ts = (Get-Date).ToString('o') }
     }
     foreach ($t in $script:TWEAKS) { $script:CHECKS[$t.id].Text = ("{0}    [{1}]" -f $t.name, (& $t.state)) }
-    $specs = Get-Specs; $health = Get-Health; $startup = Get-StartupList; Send-Data $specs $health $startup
+    Send-Data (Get-Specs) (Get-Health) (Get-StartupList)
     GuiLog 'FATTO. Dati inviati a BOOST PC. Riavvio consigliato.'
     $script:APPLYBTN.Enabled = $true
   })
-  $form.Controls.Add($applyBtn)
 
   $restoreBtn = New-Object System.Windows.Forms.Button
-  $restoreBtn.Text = 'RIPRISTINA'
-  $restoreBtn.Location = New-Object System.Drawing.Point(224, 664)
-  $restoreBtn.Size = New-Object System.Drawing.Size(140, 40)
+  $restoreBtn.Text = 'RIPRISTINA'; $restoreBtn.Location = New-Object System.Drawing.Point(224, 752); $restoreBtn.Size = New-Object System.Drawing.Size(140, 42)
   $restoreBtn.FlatStyle = 'Flat'; $restoreBtn.ForeColor = [System.Drawing.Color]::FromArgb(255,59,48)
   $restoreBtn.Add_Click({ GuiLog 'Ripristino dal backup...'; GuiLog ('  ' + (Invoke-Restore)); foreach ($t in $script:TWEAKS) { $script:CHECKS[$t.id].Text = ("{0}    [{1}]" -f $t.name, (& $t.state)) } })
   $form.Controls.Add($restoreBtn)
 
   if (-not $isAdmin) {
     $elevBtn = New-Object System.Windows.Forms.Button
-    $elevBtn.Text = 'Riavvia come Amministratore'
-    $elevBtn.Location = New-Object System.Drawing.Point(374, 664)
-    $elevBtn.Size = New-Object System.Drawing.Size(200, 40)
+    $elevBtn.Text = 'Riavvia come Amministratore'; $elevBtn.Location = New-Object System.Drawing.Point(374, 752); $elevBtn.Size = New-Object System.Drawing.Size(220, 42)
     $elevBtn.FlatStyle = 'Flat'; $elevBtn.ForeColor = [System.Drawing.Color]::White
     $elevBtn.Add_Click({
       $cmd = "irm '$BACKEND/api/agent/script?t=$TOKEN&mode=optimize' | iex"
@@ -486,8 +546,7 @@ if ($MODE -eq 'restore') { Say "`n[*] Ripristino dal backup..." 'Cyan'; Say ('  
 
 if ($MODE -eq 'benchmark') {
   Say "`n[*] Benchmark (CPU / RAM / Disco / Rete)..." 'Cyan'
-  $bench = Run-Benchmark
-  Show-Bench $bench 'BENCHMARK'
+  $bench = Run-Benchmark; Show-Bench $bench 'BENCHMARK'
   Send-Benchmark @{ after = $bench; ts = (Get-Date).ToString('o') }
   Say "`n[OK] Benchmark inviato! Vedi il confronto in BOOST PC -> Il mio PC." 'Green'
   return
@@ -497,10 +556,9 @@ if ($MODE -eq 'optimize') {
   Say "`n[*] Apro il pannello ottimizzazioni..." 'Cyan'
   $ok = Show-Gui
   if (-not $ok) {
-    Say '[!] Interfaccia grafica non disponibile in questa sessione. Applico il set completo...' 'Yellow'
-    if (-not (Test-Admin)) { Say '[!] Esegui come Amministratore per applicare tutto.' 'Yellow' }
+    Say '[!] Interfaccia grafica non disponibile. Applico i preset Completo...' 'Yellow'
     $before = Run-Benchmark; Show-Bench $before 'PRIMA'
-    foreach ($t in $script:TWEAKS) { Say ("   -> {0}" -f $t.name); & $t.apply }
+    foreach ($t in $script:TWEAKS) { if ($t.id -ne 'search_index') { Say ("   -> {0}" -f $t.name); & $t.apply } }
     Save-Backup
     $after = Run-Benchmark; Show-Bench $after 'DOPO'
     Send-Benchmark @{ before = $before; after = $after; ts = (Get-Date).ToString('o') }
@@ -512,11 +570,8 @@ if ($MODE -eq 'optimize') {
 # default: sync (safe)
 Say "`n[*] Rilevamento hardware, salute e avvio..." 'Cyan'
 $specs = Get-Specs
-Say ("   CPU: {0}" -f $specs.cpu)
-Say ("   GPU: {0}" -f $specs.gpu)
+Say ("   CPU: {0}" -f $specs.cpu); Say ("   GPU: {0}" -f $specs.gpu)
 Say ("   MB : {0}  ({1} {2})" -f $specs.motherboard, $specs.cpu_socket, $specs.chipset)
-$health  = Get-Health
-$startup = Get-StartupList
-Send-Data $specs $health $startup
+Send-Data $specs (Get-Health) (Get-StartupList)
 Say "`n[OK] Dati inviati! Apri BOOST PC -> Il mio PC per analisi e consigli." 'Green'
 '''
