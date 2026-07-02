@@ -1,10 +1,12 @@
 import os
 import json
 import re
+import asyncio
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 
 MODEL_PROVIDER = "anthropic"
 MODEL_NAME = "claude-sonnet-4-6"
+AI_TIMEOUT = 45
 
 ADVISOR_SYSTEM = (
     "Sei BOOST AI, un esperto assistente italiano di ottimizzazione PC per gamer e streamer. "
@@ -76,12 +78,10 @@ async def generate_build(budget: int, use_case: str, resolution: str, notes: str
         "Usa prezzi realistici del mercato europeo. Categorie in inglese, testi in italiano."
     )
     chat = build_chat(f"build-{budget}-{use_case}", BUILD_SYSTEM)
-    text = ""
-    async for event in chat.stream_message(UserMessage(text=prompt)):
-        if isinstance(event, TextDelta):
-            text += event.content
-        elif isinstance(event, StreamDone):
-            break
+    try:
+        text = await asyncio.wait_for(_collect(chat, prompt), timeout=AI_TIMEOUT)
+    except asyncio.TimeoutError:
+        raise ValueError("La generazione della build ha impiegato troppo tempo (timeout). Riprova.")
     return _parse_json(text)
 
 
@@ -101,14 +101,22 @@ def _parse_json(text: str) -> dict:
     raise ValueError("Impossibile generare la build, riprova.")
 
 
-async def _run_json(session_id: str, system: str, prompt: str) -> dict:
-    chat = build_chat(session_id, system)
+async def _collect(chat, prompt: str) -> str:
     text = ""
     async for event in chat.stream_message(UserMessage(text=prompt)):
         if isinstance(event, TextDelta):
             text += event.content
         elif isinstance(event, StreamDone):
             break
+    return text
+
+
+async def _run_json(session_id: str, system: str, prompt: str) -> dict:
+    chat = build_chat(session_id, system)
+    try:
+        text = await asyncio.wait_for(_collect(chat, prompt), timeout=AI_TIMEOUT)
+    except asyncio.TimeoutError:
+        raise ValueError("La richiesta AI ha impiegato troppo tempo (timeout). Riprova.")
     return _parse_json(text)
 
 

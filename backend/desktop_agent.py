@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import tempfile
 import ctypes
+import re
 import urllib.request
 
 BACKEND_URL = "__BACKEND_URL__"
@@ -154,6 +155,23 @@ def collect_specs():
         s["system_model"] = sys_model
     s["bios"] = _clean(ps("$bi=Get-CimInstance Win32_BIOS | Select-Object -First 1; "
                           "\"$($bi.Manufacturer) $($bi.SMBIOSBIOSVersion)\""))
+    # Socket + chipset (direct where possible, else derived from chipset family in board name)
+    socket = _clean(ps("(Get-CimInstance Win32_Processor | Select-Object -First 1).SocketDesignation"))
+    chip_m = re.search(r"\b([XZBHA]\d{3}E?)\b", s.get("motherboard", ""), re.IGNORECASE)
+    chipset = chip_m.group(1).upper() if chip_m else ""
+    s["chipset"] = chipset
+    # If socket looks generic (not AM*/LGA/sTR/sWRX), derive it from the chipset family
+    if not re.search(r"AM\d|LGA|sTR|sWRX|SP\d|FM\d|TR4", socket, re.IGNORECASE):
+        cs = chipset.upper()
+        if cs in ("X570", "B550", "A520", "X470", "B450", "X370", "B350", "A320"):
+            socket = "AM4"
+        elif cs in ("X670E", "X670", "B650E", "B650", "A620"):
+            socket = "AM5"
+        elif cs in ("Z790", "B760", "H770", "H610", "Z690", "B660", "H670"):
+            socket = "LGA1700"
+        elif cs in ("Z590", "B560", "H570", "H510", "Z490", "B460", "H470", "H410"):
+            socket = "LGA1200"
+    s["cpu_socket"] = socket
     # Storage: primary disk model + type (SSD/HDD/NVMe) + size
     try:
         disk_info = ps("$d=Get-PhysicalDisk -ErrorAction SilentlyContinue | Select-Object -First 1; "

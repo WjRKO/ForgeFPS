@@ -82,6 +82,13 @@ def specs_to_text(specs: dict) -> str:
         if d.get("bios"):
             mb += f" [BIOS: {d['bios']}]"
         lines.append(f"Scheda madre (da WMI, può essere un codice OEM es. MS-7C56=MSI B550): {mb}")
+    if d.get("chipset") or d.get("cpu_socket"):
+        sc = []
+        if d.get("cpu_socket"):
+            sc.append(f"socket {d['cpu_socket']}")
+        if d.get("chipset"):
+            sc.append(f"chipset {d['chipset']}")
+        lines.append("Piattaforma: " + ", ".join(sc))
     if d.get("system_model") and d["system_model"].lower() not in (d.get("motherboard", "").lower(), "system product name"):
         lines.append(f"Modello sistema: {d['system_model']}")
     if d.get("resolution"):

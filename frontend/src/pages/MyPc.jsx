@@ -30,6 +30,12 @@ function composeSpec(key, d) {
   }
   if (key === "os") return d.form_factor ? `${v} · ${d.form_factor}` : v;
   if (key === "resolution") return d.refresh_hz ? `${v} @ ${d.refresh_hz}Hz` : v;
+  if (key === "motherboard") {
+    const x = [];
+    if (d.cpu_socket) x.push(`socket ${d.cpu_socket}`);
+    if (d.chipset) x.push(`chipset ${d.chipset}`);
+    return x.length ? `${v} · ${x.join(" · ")}` : v;
+  }
   return v;
 }
 
