@@ -77,5 +77,5 @@ class ProfileInput(BaseModel):
 
 class AlertInput(BaseModel):
     enabled: bool = True
-    cpu_max: int = 90
-    gpu_max: int = 85
+    cpu_max: int = Field(default=90, ge=40, le=110)
+    gpu_max: int = Field(default=85, ge=40, le=110)
