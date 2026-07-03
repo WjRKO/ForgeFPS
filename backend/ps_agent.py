@@ -204,6 +204,55 @@ function Send-Telemetry($sample) {
   try { Invoke-RestMethod -Uri "$BACKEND/api/agent/telemetry" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
 }
 
+# ---------------- FPS via PresentMon (opzionale, richiede admin) ----------------
+$script:PM_EXE = Join-Path $env:TEMP 'PresentMon.exe'
+$script:PM_CSV = Join-Path $env:TEMP 'boostpc_fps.csv'
+$script:PM_ON  = $false
+$script:PM_ROWS = 1
+$script:PM_URL = 'https://github.com/GameTechDev/PresentMon/releases/download/v1.10.0/PresentMon-1.10.0-x64.exe'
+function Start-Fps {
+  if (-not (Test-Admin)) { Say '   [FPS] Richiede Amministratore: FPS non disponibili.' 'DarkYellow'; return }
+  if (-not (Test-Path $script:PM_EXE)) {
+    Say '   [FPS] Scarico PresentMon (una volta sola)...' 'DarkGray'
+    try { Invoke-WebRequest $script:PM_URL -OutFile $script:PM_EXE -UseBasicParsing } catch { Say '   [FPS] Download PresentMon fallito.' 'DarkYellow'; return }
+  }
+  Remove-Item $script:PM_CSV -ErrorAction SilentlyContinue
+  try {
+    Start-Process -FilePath $script:PM_EXE -ArgumentList '-output_file', "`"$($script:PM_CSV)`"", '-stop_existing_session', '-no_top' -WindowStyle Hidden
+    $script:PM_ON = $true
+    Say '   [FPS] Cattura FPS attiva (avvia un gioco).' 'DarkGray'
+    Start-Sleep -Milliseconds 600
+  } catch {}
+}
+function Stop-Fps { if ($script:PM_ON) { Stop-Process -Name PresentMon -Force -ErrorAction SilentlyContinue; $script:PM_ON = $false } }
+function Get-Fps {
+  if (-not (Test-Path $script:PM_CSV)) { return $null }
+  $lines = Get-Content $script:PM_CSV -ErrorAction SilentlyContinue
+  if (-not $lines -or $lines.Count -le $script:PM_ROWS) { return $null }
+  $hdr = $lines[0] -split ','
+  $iApp = [array]::IndexOf($hdr, 'Application')
+  $iMs = [array]::IndexOf($hdr, 'msBetweenPresents')
+  if ($iMs -lt 0) { $script:PM_ROWS = $lines.Count; return $null }
+  $new = $lines[$script:PM_ROWS..($lines.Count - 1)]
+  $script:PM_ROWS = $lines.Count
+  $byApp = @{}
+  $inv = [Globalization.CultureInfo]::InvariantCulture
+  foreach ($ln in $new) {
+    $c = $ln -split ','
+    if ($c.Count -le $iMs) { continue }
+    $app = if ($iApp -ge 0 -and $c.Count -gt $iApp) { $c[$iApp] } else { 'game' }
+    try { $ms = [double]::Parse($c[$iMs], $inv) } catch { continue }
+    if ($ms -le 0) { continue }
+    if (-not $byApp.ContainsKey($app)) { $byApp[$app] = @{ sum = 0.0; n = 0 } }
+    $byApp[$app].sum += $ms; $byApp[$app].n++
+  }
+  if ($byApp.Count -eq 0) { return $null }
+  $top = $byApp.GetEnumerator() | Sort-Object { $_.Value.n } -Descending | Select-Object -First 1
+  $avg = $top.Value.sum / $top.Value.n
+  if ($avg -le 0) { return $null }
+  return @{ fps = [int]([math]::Round(1000 / $avg)); game = ($top.Key -replace '\.exe$', '') }
+}
+
 # ---------------- Tweak actions ----------------
 function Do-Cleanup {
   Get-ChildItem $env:TEMP -Recurse -Force 2>$null | Remove-Item -Recurse -Force 2>$null
@@ -600,14 +649,20 @@ if ($MODE -eq 'optimize') {
 if ($MODE -eq 'monitor') {
   Say "`n[*] Monitoraggio live avviato. Lascia aperta questa finestra. Premi Ctrl+C per fermare." 'Cyan'
   Say '   Apri BOOST PC -> Live per i grafici in tempo reale.' 'DarkGray'
-  while ($true) {
-    $s = Get-TelemetrySample
-    Send-Telemetry $s
-    $g = if ($s.ContainsKey('gpu_util')) { ("GPU {0}% {1}C {2}MHz" -f $s.gpu_util, $s.gpu_temp, $s.gpu_clock) } else { 'GPU n/d' }
-    $ct = if ($s.ContainsKey('cpu_temp')) { ("{0}C" -f $s.cpu_temp) } else { '' }
-    Say ("   CPU {0}% {1} | RAM {2}% | {3}" -f $s.cpu_util, $ct, $s.ram_used_pct, $g)
-    Start-Sleep -Seconds 2
-  }
+  Start-Fps
+  try {
+    while ($true) {
+      $s = Get-TelemetrySample
+      $f = Get-Fps
+      if ($f) { $s.fps = $f.fps; $s.game = $f.game }
+      Send-Telemetry $s
+      $g = if ($s.ContainsKey('gpu_util')) { ("GPU {0}% {1}C {2}MHz" -f $s.gpu_util, $s.gpu_temp, $s.gpu_clock) } else { 'GPU n/d' }
+      $ct = if ($s.ContainsKey('cpu_temp')) { ("{0}C" -f $s.cpu_temp) } else { '' }
+      $fp = if ($s.ContainsKey('fps')) { (" | {0} FPS ({1})" -f $s.fps, $s.game) } else { '' }
+      Say ("   CPU {0}% {1} | RAM {2}% | {3}{4}" -f $s.cpu_util, $ct, $s.ram_used_pct, $g, $fp)
+      Start-Sleep -Seconds 2
+    }
+  } finally { Stop-Fps }
   return
 }
 

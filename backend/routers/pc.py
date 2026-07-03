@@ -1,15 +1,24 @@
 import os
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi.responses import PlainTextResponse
 
 import ai_engine
+import push
 from database import db, now_iso
 from helpers import specs_to_text, compute_health, get_or_create_agent_token
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
-from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput
+from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput
 from routers.profiles import resolve_tweak_ids
+
+
+def _iso_age(ts):
+    try:
+        return (datetime.now(timezone.utc) - datetime.fromisoformat(ts)).total_seconds()
+    except Exception:
+        return 1e9
 
 
 def build(get_current_user):
@@ -58,6 +67,7 @@ def build(get_current_user):
             {"$set": {"user_id": rec["user_id"], "updated_at": now_iso()},
              "$push": {"samples": {"$each": [sample], "$slice": -120}}},
             upsert=True)
+        await _check_temp_alerts(rec["user_id"], sample)
         return {"ok": True}
 
     @r.get("/pc-telemetry")
@@ -72,6 +82,39 @@ def build(get_current_user):
         except Exception:
             live = False
         return {"samples": doc.get("samples", [])[-60:], "updated_at": doc.get("updated_at"), "live": live}
+
+    async def _check_temp_alerts(uid, sample):
+        cfg = await db.alert_settings.find_one({"user_id": uid}) or {}
+        if not cfg.get("enabled", True):
+            return
+        cpu_max = cfg.get("cpu_max", 90)
+        gpu_max = cfg.get("gpu_max", 85)
+        to_send = []
+        ct, gt = sample.get("cpu_temp"), sample.get("gpu_temp")
+        if ct and ct >= cpu_max and _iso_age(cfg.get("last_cpu_alert", "")) > 300:
+            to_send.append(("cpu", f"CPU a {ct}°C (soglia {cpu_max}°C). Riduci il carico o controlla il raffreddamento."))
+        if gt and gt >= gpu_max and _iso_age(cfg.get("last_gpu_alert", "")) > 300:
+            to_send.append(("gpu", f"GPU a {gt}°C (soglia {gpu_max}°C). Riduci il carico o controlla il raffreddamento."))
+        for metric, body in to_send:
+            try:
+                await push.send_push_to_user(db, uid, {"title": "🔥 Temperatura critica!", "body": body, "url": "/app/live"})
+            except Exception:
+                pass
+            await db.alert_settings.update_one({"user_id": uid}, {"$set": {"user_id": uid, f"last_{metric}_alert": now_iso()}}, upsert=True)
+
+    @r.get("/alerts")
+    async def get_alerts(user: dict = Depends(get_current_user)):
+        cfg = await db.alert_settings.find_one({"user_id": str(user["_id"])}, {"_id": 0}) or {}
+        return {"enabled": cfg.get("enabled", True), "cpu_max": cfg.get("cpu_max", 90), "gpu_max": cfg.get("gpu_max", 85)}
+
+    @r.put("/alerts")
+    async def set_alerts(payload: AlertInput, user: dict = Depends(get_current_user)):
+        await db.alert_settings.update_one(
+            {"user_id": str(user["_id"])},
+            {"$set": {"user_id": str(user["_id"]), "enabled": payload.enabled,
+                      "cpu_max": payload.cpu_max, "gpu_max": payload.gpu_max}},
+            upsert=True)
+        return {"ok": True}
 
     @r.get("/pc-specs")
     async def get_specs(user: dict = Depends(get_current_user)):

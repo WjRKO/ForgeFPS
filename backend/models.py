@@ -73,3 +73,9 @@ class TelemetryInput(BaseModel):
 class ProfileInput(BaseModel):
     game_name: str
     tweak_ids: list = []
+
+
+class AlertInput(BaseModel):
+    enabled: bool = True
+    cpu_max: int = 90
+    gpu_max: int = 85

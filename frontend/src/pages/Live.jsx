@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Activity, Cpu, Gauge, Thermometer, MemoryStick, Zap, Copy, Check, Radio } from "lucide-react";
+import { Cpu, Gauge, Thermometer, MemoryStick, Zap, Copy, Check, Radio, Gamepad2, Bell } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -19,9 +19,13 @@ export default function Live() {
   const [data, setData] = useState({ samples: [], live: false });
   const [token, setToken] = useState("");
   const [copied, setCopied] = useState(false);
+  const [alerts, setAlerts] = useState({ enabled: true, cpu_max: 90, gpu_max: 85 });
   const timer = useRef(null);
 
-  useEffect(() => { api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {}); }, []);
+  useEffect(() => {
+    api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
+    api.get("/alerts").then(({ data }) => setAlerts(data)).catch(() => {});
+  }, []);
   useEffect(() => {
     const load = async () => { try { const { data } = await api.get("/pc-telemetry"); setData(data); } catch {} };
     load();
@@ -29,9 +33,13 @@ export default function Live() {
     return () => clearInterval(timer.current);
   }, []);
 
+  const saveAlerts = async () => {
+    try { await api.put("/alerts", alerts); toast.success("Impostazioni alert salvate!"); } catch { toast.error("Errore nel salvataggio"); }
+  };
+
   const last = data.samples[data.samples.length - 1] || {};
   const chart = data.samples.map((s, i) => ({
-    i, cpu: s.cpu_util ?? null, gpu: s.gpu_util ?? null, cpuT: s.cpu_temp ?? null, gpuT: s.gpu_temp ?? null,
+    i, cpu: s.cpu_util ?? null, gpu: s.gpu_util ?? null, cpuT: s.cpu_temp ?? null, gpuT: s.gpu_temp ?? null, fps: s.fps ?? null,
   }));
   const cmd = `irm "${BACKEND}/api/agent/script?t=${token || "IL_TUO_TOKEN"}&mode=monitor" | iex`;
   const copy = async () => {
@@ -65,14 +73,36 @@ export default function Live() {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <Stat icon={Gamepad2} label={last.game ? `FPS · ${last.game}` : "FPS"} value={last.fps} unit="" accent="text-[#00FF66]" testid="stat-fps" />
         <Stat icon={Cpu} label="CPU" value={last.cpu_util} unit="%" accent="text-[#E5FF00]" testid="stat-cpu" />
         <Stat icon={Gauge} label="GPU" value={last.gpu_util} unit="%" accent="text-[#00E0FF]" testid="stat-gpu" />
         <Stat icon={Thermometer} label="Temp CPU" value={last.cpu_temp} unit="°C" accent="text-[#FF6B00]" testid="stat-cpu-temp" />
         <Stat icon={Thermometer} label="Temp GPU" value={last.gpu_temp} unit="°C" accent="text-[#FF3B30]" testid="stat-gpu-temp" />
         <Stat icon={MemoryStick} label="RAM usata" value={last.ram_used_pct} unit="%" accent="text-[#00FF66]" testid="stat-ram" />
         <Stat icon={MemoryStick} label="VRAM usata" value={last.vram_used_pct} unit="%" accent="text-[#B388FF]" testid="stat-vram" />
-        <Stat icon={Activity} label="Clock GPU" value={last.gpu_clock} unit="MHz" accent="text-[#00E0FF]" testid="stat-gpu-clock" />
         <Stat icon={Zap} label="Potenza GPU" value={last.gpu_power} unit="W" accent="text-[#E5FF00]" testid="stat-gpu-power" />
+      </div>
+
+      <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 mb-6" data-testid="alert-settings">
+        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4"><Bell size={14} className="text-[#FF3B30]" /> Alert temperature critiche (push)</div>
+        <div className="flex flex-wrap items-end gap-5">
+          <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer" data-testid="alert-enabled">
+            <input type="checkbox" checked={alerts.enabled} onChange={(e) => setAlerts({ ...alerts, enabled: e.target.checked })} className="accent-[#E5FF00] w-4 h-4" />
+            Notifiche push attive
+          </label>
+          <div>
+            <div className="text-xs text-zinc-500 mb-1">Soglia CPU (°C)</div>
+            <input type="number" data-testid="alert-cpu-max" value={alerts.cpu_max} onChange={(e) => setAlerts({ ...alerts, cpu_max: parseInt(e.target.value) || 0 })}
+              className="w-24 bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none" />
+          </div>
+          <div>
+            <div className="text-xs text-zinc-500 mb-1">Soglia GPU (°C)</div>
+            <input type="number" data-testid="alert-gpu-max" value={alerts.gpu_max} onChange={(e) => setAlerts({ ...alerts, gpu_max: parseInt(e.target.value) || 0 })}
+              className="w-24 bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none" />
+          </div>
+          <button data-testid="save-alerts-btn" onClick={saveAlerts} className="bg-[#E5FF00] text-black font-bold px-4 py-2 text-sm hover:bg-[#c9e000] transition-colors">Salva</button>
+        </div>
+        <p className="text-xs text-zinc-600 mt-3">Ricevi una notifica quando CPU/GPU superano la soglia durante il monitoraggio (attiva le notifiche dalla campanella in alto). Cooldown 5 min.</p>
       </div>
 
       <div className="bg-[#0F0F12] border border-[#2A2A35] p-5">
@@ -88,6 +118,7 @@ export default function Live() {
               <Tooltip contentStyle={{ background: "#0A0A0C", border: "1px solid #2A2A35", fontSize: 12 }} />
               <Line type="monotone" dataKey="cpu" name="CPU %" stroke="#E5FF00" dot={false} strokeWidth={2} isAnimationActive={false} />
               <Line type="monotone" dataKey="gpu" name="GPU %" stroke="#00E0FF" dot={false} strokeWidth={2} isAnimationActive={false} />
+              <Line type="monotone" dataKey="fps" name="FPS" stroke="#00FF66" dot={false} strokeWidth={2} isAnimationActive={false} />
               <Line type="monotone" dataKey="cpuT" name="CPU °C" stroke="#FF6B00" dot={false} strokeWidth={1.5} isAnimationActive={false} />
               <Line type="monotone" dataKey="gpuT" name="GPU °C" stroke="#FF3B30" dot={false} strokeWidth={1.5} isAnimationActive={false} />
             </LineChart>
