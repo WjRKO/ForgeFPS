@@ -64,3 +64,12 @@ class FpsInput(BaseModel):
 
 class RoleInput(BaseModel):
     role: str
+
+
+class TelemetryInput(BaseModel):
+    sample: dict
+
+
+class ProfileInput(BaseModel):
+    game_name: str
+    tweak_ids: list = []

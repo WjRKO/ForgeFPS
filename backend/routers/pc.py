@@ -8,7 +8,8 @@ from database import db, now_iso
 from helpers import specs_to_text, compute_health, get_or_create_agent_token
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
-from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput
+from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput
+from routers.profiles import resolve_tweak_ids
 
 
 def build(get_current_user):
@@ -44,6 +45,33 @@ def build(get_current_user):
         doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "benchmark": 1})
         history = await db.benchmarks.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(10)
         return {"latest": (doc or {}).get("benchmark"), "history": history}
+
+    @r.post("/agent/telemetry")
+    async def agent_telemetry(payload: TelemetryInput, x_agent_token: str = Header(default="")):
+        rec = await db.agent_tokens.find_one({"token": x_agent_token})
+        if not rec:
+            raise HTTPException(status_code=401, detail="Token agent non valido")
+        sample = {**payload.sample}
+        sample.setdefault("ts", now_iso())
+        await db.pc_telemetry.update_one(
+            {"user_id": rec["user_id"]},
+            {"$set": {"user_id": rec["user_id"], "updated_at": now_iso()},
+             "$push": {"samples": {"$each": [sample], "$slice": -120}}},
+            upsert=True)
+        return {"ok": True}
+
+    @r.get("/pc-telemetry")
+    async def pc_telemetry(user: dict = Depends(get_current_user)):
+        doc = await db.pc_telemetry.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        if not doc:
+            return {"samples": [], "updated_at": None, "live": False}
+        live = False
+        try:
+            from datetime import datetime, timezone
+            live = (datetime.now(timezone.utc) - datetime.fromisoformat(doc["updated_at"])).total_seconds() < 12
+        except Exception:
+            live = False
+        return {"samples": doc.get("samples", [])[-60:], "updated_at": doc.get("updated_at"), "live": live}
 
     @r.get("/pc-specs")
     async def get_specs(user: dict = Depends(get_current_user)):
@@ -106,16 +134,19 @@ def build(get_current_user):
         return PlainTextResponse(script, headers={"Content-Disposition": "attachment; filename=boostpc_agent.py"})
 
     @r.get("/agent/script")
-    async def agent_script(t: str = "", mode: str = "sync"):
+    async def agent_script(t: str = "", mode: str = "sync", profile: str = ""):
         rec = await db.agent_tokens.find_one({"token": t})
         if not rec:
             return PlainTextResponse("Write-Host '[BOOST PC] Token non valido. Riapri la pagina Desktop Agent.' -ForegroundColor Red",
                                      media_type="text/plain")
-        if mode not in ("sync", "optimize", "restore", "benchmark"):
+        if mode not in ("sync", "optimize", "restore", "benchmark", "monitor"):
             mode = "sync"
         backend = os.environ.get("FRONTEND_URL", "http://localhost:8001")
+        ids = await resolve_tweak_ids(db, rec["user_id"], profile) if profile else []
+        profile_literal = ",".join("'" + i.replace("'", "") + "'" for i in ids)
         script = (PS_SCRIPT.replace("__BACKEND_URL__", backend)
-                  .replace("__AGENT_TOKEN__", t).replace("__MODE__", mode))
+                  .replace("__AGENT_TOKEN__", t).replace("__MODE__", mode)
+                  .replace("__PROFILE_IDS__", profile_literal))
         return PlainTextResponse(script, media_type="text/plain")
 
     return r

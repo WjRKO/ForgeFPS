@@ -13,6 +13,7 @@ $BACKEND = '__BACKEND_URL__'
 $TOKEN   = '__AGENT_TOKEN__'
 $MODE    = '__MODE__'
 $BACKUP  = Join-Path $env:TEMP 'boostpc_backup.json'
+$script:PROFILE = @(__PROFILE_IDS__)
 
 function Say($m, $c='Gray') { Write-Host $m -ForegroundColor $c }
 function ConvertTo-HashtableSafe { $h=@{}; foreach($p in $input.PSObject.Properties){ $h[$p.Name]=$p.Value }; return $h }
@@ -175,6 +176,32 @@ function Send-Data($specs, $health, $startup) {
 function Send-Benchmark($rec) {
   $body = @{ benchmark = $rec } | ConvertTo-Json -Depth 6 -Compress
   try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+}
+
+# ---------------- Live telemetry ----------------
+function Get-TelemetrySample {
+  $s = @{ ts = (Get-Date).ToString('o') }
+  $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
+  $s.cpu_util = [int]$cpu.LoadPercentage
+  $o = Get-CimInstance Win32_OperatingSystem
+  $s.ram_used_pct = [int]([math]::Round(($o.TotalVisibleMemorySize - $o.FreePhysicalMemory) / $o.TotalVisibleMemorySize * 100))
+  $tzt = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($tzt) { $s.cpu_temp = [int]([math]::Round(($tzt.CurrentTemperature - 2732) / 10)) }
+  $nv = & nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,clocks.gr,memory.used,memory.total,power.draw --format=csv,noheader,nounits 2>$null
+  if ($nv) {
+    $p = ($nv | Select-Object -First 1).Split(',')
+    $s.gpu_util = [int]($p[0].Trim())
+    $s.gpu_temp = [int]($p[1].Trim())
+    $s.gpu_clock = [int]($p[2].Trim())
+    $mu = [double]$p[3].Trim(); $mt = [double]$p[4].Trim()
+    if ($mt -gt 0) { $s.vram_used_pct = [int]([math]::Round($mu / $mt * 100)) }
+    $s.gpu_power = [int]([math]::Round([double]$p[5].Trim()))
+  }
+  return $s
+}
+function Send-Telemetry($sample) {
+  $body = @{ sample = $sample } | ConvertTo-Json -Depth 5 -Compress
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/telemetry" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
 }
 
 # ---------------- Tweak actions ----------------
@@ -470,7 +497,8 @@ function Show-Gui {
     foreach ($t in $script:TWEAKS) {
       if ($t.cat -ne $c.key) { continue }
       $cb = New-Object System.Windows.Forms.CheckBox
-      $cb.Checked = ($t.id -ne 'search_index')
+      if ($script:PROFILE.Count -gt 0) { $cb.Checked = ($script:PROFILE -contains $t.id) }
+      else { $cb.Checked = ($t.id -ne 'search_index') }
       $cb.ForeColor = [System.Drawing.Color]::White
       $cb.Font = New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
       $cb.Location = New-Object System.Drawing.Point(10, $y); $cb.AutoSize = $true
@@ -565,6 +593,20 @@ if ($MODE -eq 'optimize') {
     $after = Run-Benchmark; Show-Bench $after 'DOPO'
     Send-Benchmark @{ before = $before; after = $after; ts = (Get-Date).ToString('o') }
     Send-Data (Get-Specs) (Get-Health) (Get-StartupList)
+  }
+  return
+}
+
+if ($MODE -eq 'monitor') {
+  Say "`n[*] Monitoraggio live avviato. Lascia aperta questa finestra. Premi Ctrl+C per fermare." 'Cyan'
+  Say '   Apri BOOST PC -> Live per i grafici in tempo reale.' 'DarkGray'
+  while ($true) {
+    $s = Get-TelemetrySample
+    Send-Telemetry $s
+    $g = if ($s.ContainsKey('gpu_util')) { ("GPU {0}% {1}C {2}MHz" -f $s.gpu_util, $s.gpu_temp, $s.gpu_clock) } else { 'GPU n/d' }
+    $ct = if ($s.ContainsKey('cpu_temp')) { ("{0}C" -f $s.cpu_temp) } else { '' }
+    Say ("   CPU {0}% {1} | RAM {2}% | {3}" -f $s.cpu_util, $ct, $s.ram_used_pct, $g)
+    Start-Sleep -Seconds 2
   }
   return
 }

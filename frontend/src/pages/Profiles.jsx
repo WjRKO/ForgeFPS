@@ -1,0 +1,126 @@
+import { useEffect, useState } from "react";
+import { Gamepad2, Plus, Trash2, Copy, Check, Save, X, Zap } from "lucide-react";
+import { toast } from "sonner";
+import api from "@/lib/api";
+
+const BACKEND = process.env.REACT_APP_BACKEND_URL;
+const CAT_LABELS = { gaming: "🎮 Gaming & FPS", input: "⚡ Latenza & Input", network: "🌐 Rete & Streaming", system: "🧹 Sistema & Debloat" };
+
+function ProfileCard({ p, catalog, token, onDelete }) {
+  const [copied, setCopied] = useState(false);
+  const names = p.tweak_ids.map((id) => catalog.find((c) => c.id === id)?.name).filter(Boolean);
+  const cmd = `irm "${BACKEND}/api/agent/script?t=${token || "IL_TUO_TOKEN"}&mode=optimize&profile=${p.id}" | iex`;
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(cmd); } catch { const t = document.createElement("textarea"); t.value = cmd; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+    setCopied(true); toast.success("Comando copiato! Esegui PowerShell come Amministratore."); setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <div className="bg-[#0F0F12] border border-[#2A2A35] p-5" data-testid={`profile-${p.id}`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Gamepad2 size={18} className="text-[#E5FF00]" />
+          <h3 className="font-display font-bold text-base">{p.game_name}</h3>
+          {p.template && <span className="text-[10px] uppercase tracking-widest border border-[#2A2A35] px-1.5 py-0.5 text-zinc-500">Preset</span>}
+        </div>
+        {!p.template && (
+          <button data-testid={`delete-profile-${p.id}`} onClick={() => onDelete(p.id)} className="text-zinc-600 hover:text-[#FF3B30] transition-colors"><Trash2 size={16} /></button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        {names.slice(0, 8).map((n, i) => <span key={i} className="text-[11px] bg-black border border-[#1A1A24] px-2 py-0.5 text-zinc-400">{n}</span>)}
+        {names.length > 8 && <span className="text-[11px] text-zinc-600 px-1 py-0.5">+{names.length - 8}</span>}
+      </div>
+      <div className="flex items-stretch gap-2">
+        <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2 text-[11px] text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid={`profile-cmd-${p.id}`}>{cmd}</code>
+        <button data-testid={`profile-copy-${p.id}`} onClick={copy} className="shrink-0 flex items-center gap-1 border border-[#2A2A35] px-3 hover:border-[#E5FF00] transition-colors text-xs">
+          {copied ? <Check size={14} className="text-[#00FF66]" /> : <Copy size={14} />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function Profiles() {
+  const [templates, setTemplates] = useState([]);
+  const [catalog, setCatalog] = useState([]);
+  const [profiles, setProfiles] = useState([]);
+  const [token, setToken] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [selected, setSelected] = useState([]);
+
+  const load = async () => { try { const { data } = await api.get("/profiles"); setProfiles(data); } catch {} };
+  useEffect(() => {
+    api.get("/profiles/templates").then(({ data }) => { setTemplates(data.templates); setCatalog(data.catalog); }).catch(() => {});
+    api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
+    load();
+  }, []);
+
+  const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const save = async () => {
+    if (!name.trim()) { toast.error("Dai un nome al profilo (es. nome del gioco)"); return; }
+    if (selected.length === 0) { toast.error("Seleziona almeno un tweak"); return; }
+    try {
+      await api.post("/profiles", { game_name: name.trim(), tweak_ids: selected });
+      toast.success("Profilo creato!");
+      setCreating(false); setName(""); setSelected([]); load();
+    } catch { toast.error("Errore nella creazione del profilo"); }
+  };
+  const del = async (id) => { await api.delete(`/profiles/${id}`); toast.success("Profilo eliminato"); load(); };
+
+  const cats = ["gaming", "input", "network", "system"];
+
+  return (
+    <div className="max-w-5xl mx-auto fade-up" data-testid="profiles-page">
+      <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">// Profili per gioco</div>
+          <h1 className="font-display font-black text-3xl tracking-tighter">Profili tweak</h1>
+          <p className="text-zinc-500 text-sm mt-1">Scegli un profilo: il comando "Ottimizza" pre-seleziona automaticamente i tweak giusti nella finestra grafica.</p>
+        </div>
+        <button data-testid="new-profile-btn" onClick={() => setCreating((c) => !c)}
+          className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2.5 text-sm hover:bg-[#c9e000] transition-colors">
+          {creating ? <X size={16} /> : <Plus size={16} />} {creating ? "Annulla" : "Nuovo profilo"}
+        </button>
+      </div>
+
+      {creating && (
+        <div className="bg-[#0F0F12] border border-[#E5FF00]/40 p-5 mb-6" data-testid="create-profile-form">
+          <input data-testid="profile-name-input" value={name} onChange={(e) => setName(e.target.value)}
+            placeholder="Nome del gioco / profilo (es. Apex Legends)"
+            className="w-full bg-black border border-[#2A2A35] px-3 py-2.5 text-sm mb-4 focus:border-[#E5FF00] outline-none" />
+          {cats.map((cat) => (
+            <div key={cat} className="mb-4">
+              <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{CAT_LABELS[cat]}</div>
+              <div className="grid sm:grid-cols-2 gap-1.5">
+                {catalog.filter((c) => c.cat === cat).map((c) => (
+                  <label key={c.id} data-testid={`tweak-opt-${c.id}`} className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer border border-[#1A1A24] px-2 py-1.5 hover:border-[#2A2A35]">
+                    <input type="checkbox" checked={selected.includes(c.id)} onChange={() => toggle(c.id)} className="accent-[#E5FF00]" />
+                    {c.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+          <button data-testid="save-profile-btn" onClick={save} className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2.5 text-sm">
+            <Save size={16} /> Salva profilo ({selected.length})
+          </button>
+        </div>
+      )}
+
+      <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2"><Zap size={13} className="text-[#E5FF00]" /> Preset pronti</div>
+      <div className="grid md:grid-cols-2 gap-3 mb-8">
+        {templates.map((t) => <ProfileCard key={t.id} p={t} catalog={catalog} token={token} onDelete={del} />)}
+      </div>
+
+      {profiles.length > 0 && (
+        <>
+          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3">I tuoi profili</div>
+          <div className="grid md:grid-cols-2 gap-3">
+            {profiles.map((p) => <ProfileCard key={p.id} p={p} catalog={catalog} token={token} onDelete={del} />)}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

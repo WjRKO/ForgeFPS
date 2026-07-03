@@ -9,7 +9,7 @@ from database import db, client
 from auth import build_auth_router, seed_admin
 from helpers import refresh_product_price
 from settings import FRONTEND_URL
-from routers import advisor, builds, products, pc, push_routes, admin
+from routers import advisor, builds, products, pc, push_routes, admin, profiles
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("boostpc")
@@ -19,7 +19,7 @@ auth_router, get_current_user = build_auth_router(db)
 scheduler = AsyncIOScheduler()
 
 app.include_router(auth_router)
-for module in (advisor, builds, products, pc, push_routes, admin):
+for module in (advisor, builds, products, pc, push_routes, admin, profiles):
     app.include_router(module.build(get_current_user))
 
 
