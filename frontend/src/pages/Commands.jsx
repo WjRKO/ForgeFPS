@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Terminal, Copy, Check, ShieldAlert, MessageSquareCode, Trash2, Wrench, Wifi, Zap, Package, Search, MonitorPlay, Rocket, Power, HeartPulse, AlertTriangle, Undo2 } from "lucide-react";
+import { Terminal, Copy, Check, ShieldAlert, MessageSquareCode, Trash2, Wrench, Wifi, Zap, Package, Search, MonitorPlay, Rocket, Power, HeartPulse, AlertTriangle, Undo2, Download, CalendarClock, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 
@@ -109,6 +109,111 @@ function CopyBtn({ text, testid }) {
   );
 }
 
+const MAINT = [
+  { label: "Svuota la cache DNS", slabel: "Svuoto la cache DNS", cmd: "ipconfig /flushdns" },
+  { label: "Pulisci i file temporanei utente", slabel: "Pulisco i file temporanei utente", cmd: "Remove-Item \"$env:TEMP\\*\" -Recurse -Force -ErrorAction SilentlyContinue" },
+  { label: "Pulisci i temporanei di sistema", slabel: "Pulisco i temporanei di sistema", cmd: "Remove-Item \"$env:WINDIR\\Temp\\*\" -Recurse -Force -ErrorAction SilentlyContinue" },
+  { label: "Svuota il Cestino", slabel: "Svuoto il Cestino", cmd: "Clear-RecycleBin -Force -ErrorAction SilentlyContinue" },
+  { label: "Pulisci la cache di Windows Update", slabel: "Pulisco la cache di Windows Update", cmd: "Remove-Item \"$env:WINDIR\\SoftwareDistribution\\Download\\*\" -Recurse -Force -ErrorAction SilentlyContinue" },
+  { label: "Resetta la cache del Microsoft Store", slabel: "Resetto la cache dello Store", cmd: "Start-Process wsreset.exe -WindowStyle Hidden" },
+];
+
+const DAYS = [
+  { v: "Monday", l: "Lunedì" }, { v: "Tuesday", l: "Martedì" }, { v: "Wednesday", l: "Mercoledì" },
+  { v: "Thursday", l: "Giovedì" }, { v: "Friday", l: "Venerdì" }, { v: "Saturday", l: "Sabato" }, { v: "Sunday", l: "Domenica" },
+];
+const TIMES = ["09:00", "12:00", "15:00", "18:00", "21:00", "03:00"];
+
+function toB64Utf8(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  return btoa(bin);
+}
+
+function buildMaintScript(withBom) {
+  const lines = ["Write-Host '== BoostPC - Manutenzione settimanale ==' -ForegroundColor Cyan"];
+  MAINT.forEach((m, i) => {
+    lines.push(`Write-Host '[${i + 1}/${MAINT.length}] ${m.slabel}...' -ForegroundColor Yellow`);
+    lines.push(m.cmd);
+  });
+  lines.push("Write-Host 'Manutenzione completata!' -ForegroundColor Green");
+  return (withBom ? "\uFEFF" : "") + lines.join("\r\n");
+}
+
+function MaintenanceCard() {
+  const [day, setDay] = useState("Sunday");
+  const [time, setTime] = useState("12:00");
+
+  const oneLine = MAINT.map((m) => m.cmd).join("; ");
+  const scheduleCmd = (() => {
+    const b64 = toB64Utf8(buildMaintScript(true));
+    return [
+      `$b='${b64}'`,
+      `$p="$env:LOCALAPPDATA\\BoostPC"`,
+      `New-Item -ItemType Directory -Force -Path $p | Out-Null`,
+      `[IO.File]::WriteAllBytes("$p\\Manutenzione.ps1",[Convert]::FromBase64String($b))`,
+      `$arg='-WindowStyle Hidden -ExecutionPolicy Bypass -File "'+$p+'\\Manutenzione.ps1"'`,
+      `$a=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg`,
+      `$t=New-ScheduledTaskTrigger -Weekly -DaysOfWeek ${day} -At '${time}'`,
+      `Register-ScheduledTask -TaskName 'BoostPC-Manutenzione' -Action $a -Trigger $t -Description 'Manutenzione settimanale BoostPC' -Force`,
+    ].join("; ");
+  })();
+
+  const download = () => {
+    const blob = new Blob([buildMaintScript(true)], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "BoostPC-Manutenzione.ps1"; document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    toast.success("Script scaricato! Tasto destro → Esegui con PowerShell (come Admin).");
+  };
+
+  return (
+    <div className="bg-gradient-to-br from-[#E5FF00]/10 to-transparent border border-[#E5FF00]/40 p-5 mb-5" data-testid="maintenance-card">
+      <div className="flex items-center gap-2 text-sm font-bold mb-1 text-[#E5FF00]"><Sparkles size={16} /> Manutenzione 1-click</div>
+      <p className="text-xs text-zinc-400 mb-3 leading-relaxed">Esegue in sequenza tutte le pulizie sicure. Scaricalo, eseguilo subito o pianificalo automaticamente ogni settimana.</p>
+
+      <div className="grid sm:grid-cols-2 gap-2 mb-4">
+        {MAINT.map((m, i) => (
+          <div key={i} className="flex items-center gap-2 text-xs text-zinc-400"><Check size={12} className="text-[#00FF66] shrink-0" /> {m.label}</div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button onClick={download} data-testid="maint-download"
+          className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2 text-sm hover:bg-[#D4EC00] transition-colors">
+          <Download size={15} /> Scarica script .ps1
+        </button>
+        <CopyBtn text={oneLine} testid="maint-oneline-copy" />
+        <span className="inline-flex items-center text-xs text-zinc-500">Copia (esegui ora, PowerShell Admin)</span>
+      </div>
+
+      <div className="border-t border-[#2A2A35] pt-4">
+        <div className="flex items-center gap-2 text-xs font-bold text-zinc-200 mb-2"><CalendarClock size={14} className="text-[#00E0FF]" /> Pianifica settimanale</div>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <span className="text-xs text-zinc-500">Ogni</span>
+          <select value={day} onChange={(e) => setDay(e.target.value)} data-testid="maint-day"
+            className="bg-black border border-[#2A2A35] text-xs text-zinc-200 px-2 py-1.5 focus:border-[#E5FF00] outline-none">
+            {DAYS.map((d) => <option key={d.v} value={d.v}>{d.l}</option>)}
+          </select>
+          <span className="text-xs text-zinc-500">alle</span>
+          <select value={time} onChange={(e) => setTime(e.target.value)} data-testid="maint-time"
+            className="bg-black border border-[#2A2A35] text-xs text-zinc-200 px-2 py-1.5 focus:border-[#E5FF00] outline-none">
+            {TIMES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div className="text-xs text-zinc-500 mb-1">Copia e incolla in PowerShell (crea l'attività pianificata di Windows):</div>
+        <div className="flex items-stretch gap-2">
+          <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-[11px] text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="maint-schedule-cmd">{scheduleCmd}</code>
+          <CopyBtn text={scheduleCmd} testid="maint-schedule-copy" />
+        </div>
+        <p className="text-[11px] text-zinc-600 mt-2">Per rimuovere la pianificazione: <span className="text-zinc-400">Unregister-ScheduledTask -TaskName 'BoostPC-Manutenzione' -Confirm:$false</span></p>
+      </div>
+    </div>
+  );
+}
+
 function CmdRow({ item, onAsk }) {
   return (
     <div className="p-4 border-b border-[#1A1A24] last:border-0" data-testid={`cmd-${item.cmd.slice(0, 24)}`}>
@@ -195,6 +300,8 @@ export default function Commands() {
           Per i comandi con <span className="text-[#FF3B30] font-bold">Richiede Admin</span>: apri <span className="text-zinc-200">PowerShell come amministratore</span> (tasto destro su Start → "Terminale (Admin)"). I comandi <span className="text-[#E5FF00] font-bold">Avanzato</span> modificano parametri di sistema: usali con cautela e sfrutta il comando "Annulla".
         </p>
       </div>
+
+      <MaintenanceCard />
 
       <div className="space-y-4">
         {cats.map((cat) => (
