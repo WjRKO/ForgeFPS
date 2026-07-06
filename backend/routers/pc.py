@@ -53,6 +53,9 @@ def build(get_current_user):
             fields["startup"] = data.startup
         if data.games is not None:
             fields["games"] = data.games
+        if data.running_apps is not None:
+            fields["running_apps"] = data.running_apps
+            fields["running_at"] = now_iso()
         if data.benchmark is not None:
             record = {**data.benchmark, "user_id": uid, "created_at": now_iso()}
             fields["benchmark"] = record
@@ -147,9 +150,11 @@ def build(get_current_user):
     @r.get("/prematch")
     async def get_prematch(user: dict = Depends(get_current_user)):
         doc = await db.prematch_settings.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0, "running_apps": 1, "running_at": 1})
+        running = {"running_apps": (specs or {}).get("running_apps", []), "running_at": (specs or {}).get("running_at")}
         if not doc:
-            return {"close_apps": DEFAULT_PREMATCH_APPS, "set_power": True}
-        return {"close_apps": doc.get("close_apps", DEFAULT_PREMATCH_APPS), "set_power": doc.get("set_power", True)}
+            return {"close_apps": DEFAULT_PREMATCH_APPS, "set_power": True, **running}
+        return {"close_apps": doc.get("close_apps", DEFAULT_PREMATCH_APPS), "set_power": doc.get("set_power", True), **running}
 
     @r.put("/prematch")
     async def set_prematch(payload: PrematchInput, user: dict = Depends(get_current_user)):

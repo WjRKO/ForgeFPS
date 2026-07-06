@@ -46,6 +46,7 @@ class SpecsInput(BaseModel):
     startup: Optional[list] = None
     benchmark: Optional[dict] = None
     games: Optional[list] = None
+    running_apps: Optional[list] = None
 
 
 class GoalInput(BaseModel):

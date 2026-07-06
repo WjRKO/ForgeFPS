@@ -217,6 +217,20 @@ function Send-Games($games) {
   $body = '{"games":[' + $items + ']}'
   try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
 }
+function Get-RunningApps {
+  $cand = @('chrome', 'msedge', 'firefox', 'opera', 'brave', 'Discord', 'Slack', 'Teams', 'Telegram', 'WhatsApp',
+            'Skype', 'SkypeApp', 'Spotify', 'Music.UI', 'OneDrive', 'GoogleDriveFS', 'Dropbox', 'EpicGamesLauncher',
+            'CCleaner', 'Cortana', 'YourPhone', 'PhoneExperienceHost')
+  $run = New-Object System.Collections.Generic.List[string]
+  foreach ($a in $cand) { if (Get-Process -Name $a -ErrorAction SilentlyContinue) { $run.Add($a) } }
+  return @($run)
+}
+function Send-Running($apps) {
+  $arr = @($apps)
+  $items = ($arr | ForEach-Object { '"' + $_ + '"' }) -join ','
+  $body = '{"running_apps":[' + $items + ']}'
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+}
 
 # ---------------- Live telemetry ----------------
 function Get-TelemetrySample {
@@ -762,5 +776,8 @@ Say ("   MB : {0}  ({1} {2})" -f $specs.motherboard, $specs.cpu_socket, $specs.c
 Send-Data $specs (Get-Health) (Get-StartupList)
 $games = Get-Games
 if ($games.Count -gt 0) { Send-Games $games; Say ("   Giochi rilevati: {0}" -f $games.Count) 'DarkGray' }
+$running = Get-RunningApps
+Send-Running $running
+Say ("   App in background attive: {0}" -f $running.Count) 'DarkGray'
 Say "`n[OK] Dati inviati! Apri BOOST PC -> Il mio PC per analisi e consigli." 'Green'
 '''

@@ -33,6 +33,8 @@ export default function Games() {
   const [groups, setGroups] = useState(() => Object.fromEntries(APP_GROUPS.map((g) => [g.id, true])));
   const [setPower, setSetPower] = useState(true);
   const [savingCfg, setSavingCfg] = useState(false);
+  const [runningApps, setRunningApps] = useState([]);
+  const [runningAt, setRunningAt] = useState(null);
 
   const loadGames = async () => {
     try { const { data } = await api.get("/games"); setGames(data.games || []); } catch {}
@@ -43,6 +45,8 @@ export default function Games() {
       setSetPower(data.set_power !== false);
       const apps = data.close_apps || [];
       setGroups(Object.fromEntries(APP_GROUPS.map((g) => [g.id, g.procs.every((p) => apps.includes(p))])));
+      setRunningApps(data.running_apps || []);
+      setRunningAt(data.running_at || null);
     } catch {}
   };
   useEffect(() => {
@@ -109,16 +113,32 @@ export default function Games() {
 
         {showConfig && (
           <div className="mt-3 bg-black/50 border border-[#2A2A35] p-4" data-testid="prematch-config">
+            {runningApps.length > 0 ? (
+              <div className="text-xs text-[#00FF66] mb-3 flex items-center gap-1.5" data-testid="running-summary">
+                <span className="w-2 h-2 rounded-full bg-[#00FF66] animate-pulse" /> {runningApps.length} app in esecuzione rilevate sul PC{runningAt ? ` · ultimo sync ${new Date(runningAt).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}
+              </div>
+            ) : (
+              <div className="text-xs text-zinc-500 mb-3">Avvia il comando <span className="text-zinc-300">sync</span> del Desktop Agent per vedere quali app sono realmente in esecuzione ora.</div>
+            )}
             <div className="text-xs text-zinc-500 mb-2">Scegli quali app chiudere prima del match:</div>
             <div className="grid sm:grid-cols-2 gap-2 mb-3">
-              {APP_GROUPS.map((g) => (
-                <label key={g.id} data-testid={`prematch-group-${g.id}`}
-                  className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer select-none">
-                  <input type="checkbox" checked={!!groups[g.id]} onChange={(e) => setGroups((s) => ({ ...s, [g.id]: e.target.checked }))}
-                    className="accent-[#E5FF00] w-4 h-4" />
-                  {g.label}
-                </label>
-              ))}
+              {APP_GROUPS.map((g) => {
+                const run = g.procs.filter((p) => runningApps.includes(p));
+                return (
+                  <label key={g.id} data-testid={`prematch-group-${g.id}`}
+                    className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!groups[g.id]} onChange={(e) => setGroups((s) => ({ ...s, [g.id]: e.target.checked }))}
+                      className="accent-[#E5FF00] w-4 h-4" />
+                    <span>{g.label}</span>
+                    {run.length > 0 && (
+                      <span title={run.join(", ")} data-testid={`running-badge-${g.id}`}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-1.5 py-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66]" /> {run.length} attiva{run.length > 1 ? "e" : ""}
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
             </div>
             <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer select-none border-t border-[#2A2A35] pt-3" data-testid="prematch-power-toggle">
               <input type="checkbox" checked={setPower} onChange={(e) => setSetPower(e.target.checked)} className="accent-[#E5FF00] w-4 h-4" />
