@@ -42,19 +42,19 @@ const BIOS_CAUTION = [
 ];
 
 const RESTORE_SAFE = [
-  { s: "Crea un punto di ripristino", w: "Prima di ogni modifica importante: Cerca 'Crea un punto di ripristino' → Configura → Crea. Ti permette di tornare indietro senza perdere file." },
-  { s: "Ripristina i tweak BoostPC", w: "Annulla tutte le ottimizzazioni applicate (registro, servizi, DNS, power). Reversibile al 100% col comando qui sotto." },
-  { s: "DDU (Display Driver Uninstaller)", w: "Rimuove completamente i driver GPU prima di reinstallarli puliti: risolve stutter/artefatti da driver corrotti." },
-  { s: "SFC /scannow", w: "Ripara i file di sistema danneggiati. In PowerShell admin: sfc /scannow." },
-  { s: "DISM RestoreHealth", w: "Ripara l'immagine di Windows: DISM /Online /Cleanup-Image /RestoreHealth." },
+  { id: "sysrestore", s: "Crea un punto di ripristino", w: "Prima di ogni modifica importante: Cerca 'Crea un punto di ripristino' → Configura → Crea. Ti permette di tornare indietro senza perdere file." },
+  { id: "boostrestore", s: "Ripristina i tweak BoostPC", w: "Annulla tutte le ottimizzazioni applicate (registro, servizi, DNS, power). Reversibile al 100% col comando qui sotto." },
+  { id: "ddu", gpuDriver: true, s: "DDU (Display Driver Uninstaller)", w: "Rimuove completamente i driver GPU prima di reinstallarli puliti: risolve stutter/artefatti da driver corrotti." },
+  { id: "sfc", s: "SFC /scannow", w: "Ripara i file di sistema danneggiati. In PowerShell admin: sfc /scannow." },
+  { id: "dism", s: "DISM RestoreHealth", w: "Ripara l'immagine di Windows: DISM /Online /Cleanup-Image /RestoreHealth." },
 ];
 
 const RESTORE_CAUTION = [
-  { s: "Reimposta il PC (mantieni i file)", w: "Reinstalla Windows conservando i file personali ma RIMUOVE i programmi installati. Impostazioni → Sistema → Ripristino → Reimposta il PC." },
-  { s: "Reimposta il PC (rimuovi tutto)", w: "Cancella TUTTO (file + programmi). Usa solo dopo un backup completo. Ideale prima di vendere il PC." },
-  { s: "Ripristino a un punto precedente", w: "Torna a uno stato passato: perdi programmi/driver installati dopo quel punto (i file personali restano)." },
-  { s: "Clear CMOS (reset BIOS)", w: "Riporta il BIOS ai default (utile se il PC non parte dopo un tweak). Fatto via jumper/pulsante o togliendo la batteria: annulla anche XMP/ReBAR." },
-  { s: "Reinstallazione pulita di Windows", w: "Formattazione completa da USB. La soluzione più radicale: backup obbligatorio, richiede reinstallare tutto." },
+  { id: "resetkeep", s: "Reimposta il PC (mantieni i file)", w: "Reinstalla Windows conservando i file personali ma RIMUOVE i programmi installati. Impostazioni → Sistema → Ripristino → Reimposta il PC." },
+  { id: "resetall", s: "Reimposta il PC (rimuovi tutto)", w: "Cancella TUTTO (file + programmi). Usa solo dopo un backup completo. Ideale prima di vendere il PC." },
+  { id: "restorepoint", s: "Ripristino a un punto precedente", w: "Torna a uno stato passato: perdi programmi/driver installati dopo quel punto (i file personali restano)." },
+  { id: "cmos", cmos: true, s: "Clear CMOS (reset BIOS)", w: "Riporta il BIOS ai default (utile se il PC non parte dopo un tweak). Fatto via jumper/pulsante o togliendo la batteria: annulla anche XMP/ReBAR." },
+  { id: "cleaninstall", s: "Reinstallazione pulita di Windows", w: "Formattazione completa da USB. La soluzione più radicale: backup obbligatorio, richiede reinstallare tutto." },
 ];
 
 function detectHardware(data) {
@@ -94,6 +94,22 @@ function adaptTweak(t, hw) {
       s = "Resizable BAR (ReBAR)";
       w = "ON per la tua Intel Arc: fortemente consigliato, impatta molto le prestazioni. Richiede Above 4G Decoding: ON.";
     }
+  }
+  return { ...t, s, w };
+}
+
+function adaptRestore(t, hw, mbName) {
+  let { s, w } = t;
+  if (t.gpuDriver) {
+    if (hw.gpu === "nvidia") w = "Rimuove del tutto i driver, poi reinstalla i GeForce Game Ready dal sito NVIDIA: risolve stutter/artefatti da driver corrotti.";
+    else if (hw.gpu === "amd") w = "Rimuove del tutto i driver, poi reinstalla gli AMD Adrenalin dal sito AMD: risolve stutter/artefatti da driver corrotti.";
+    else if (hw.gpu === "intel") w = "Rimuove del tutto i driver, poi reinstalla gli Intel Arc dal sito Intel: risolve stutter/artefatti da driver corrotti.";
+  }
+  if (t.cmos) {
+    const ram = hw.cpu === "amd" ? (hw.ramType === "DDR5" ? "EXPO" : "DOCP/EXPO") : hw.cpu === "intel" ? "XMP" : "XMP/EXPO";
+    const bar = hw.gpu === "amd" ? "SAM" : "ReBAR";
+    const mb = mbName ? ` sulla tua ${mbName}` : "";
+    w = `Riporta il BIOS ai default${mb} (utile se il PC non parte dopo un tweak). Attenzione: annulla anche ${ram} e ${bar}, da riattivare dopo.`;
   }
   return { ...t, s, w };
 }
@@ -166,6 +182,15 @@ export default function BiosRestore() {
     const q = tone === "caution"
       ? `Spiegami in dettaglio l'impostazione BIOS "${item.s}"${mbStr}: come si attiva passo-passo, quali rischi comporta e quali valori sicuri usare.${hwStr ? ` Il mio hardware: ${hwStr}.` : ""}`
       : `Spiegami passo-passo come attivare "${item.s}" nel BIOS${mbStr}: in quale menu si trova e quali valori impostare.${hwStr ? ` Il mio hardware: ${hwStr}.` : ""}`;
+    navigate("/app/advisor", { state: { ask: q } });
+  };
+
+  const restoreSafe = useMemo(() => RESTORE_SAFE.map((t) => adaptRestore(t, hw, data.motherboard)), [hw, data.motherboard]);
+  const restoreCaution = useMemo(() => RESTORE_CAUTION.map((t) => adaptRestore(t, hw, data.motherboard)), [hw, data.motherboard]);
+
+  const askAIRestore = (item) => {
+    const hwStr = [data.cpu?.trim(), data.gpu, data.os].filter(Boolean).join(", ");
+    const q = `Guidami passo-passo nell'operazione di ripristino "${item.s}" su Windows: quando conviene usarla, quali sono i rischi e come farla in sicurezza.${hwStr ? ` Il mio sistema: ${hwStr}.` : ""}`;
     navigate("/app/advisor", { state: { ask: q } });
   };
 
@@ -254,9 +279,15 @@ export default function BiosRestore() {
         </div>
       ) : (
         <div className="space-y-4">
+          {hasHw && (
+            <div className="bg-[#0F0F12] border border-[#00E0FF]/30 p-4" data-testid="restore-hw">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-[#00E0FF] mb-2"><Cpu size={14} /> Adattato al tuo hardware</div>
+              <p className="text-xs text-zinc-500">DDU e Clear CMOS qui sotto sono personalizzati per {[hw.gpu && (HW_LABEL.gpu[hw.gpu]), hw.cpu && (HW_LABEL.cpu[hw.cpu])].filter(Boolean).join(" · ")}.</p>
+            </div>
+          )}
           <div className="bg-[#0F0F12] border border-[#00FF66]/30 p-5">
             <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#00FF66]"><ShieldCheck size={16} /> Ripristini SICURI (reversibili)</div>
-            <div className="border border-[#1A1A24]">{RESTORE_SAFE.map((it, i) => <Row key={i} item={it} tone="safe" i={i} section="restore" />)}</div>
+            <div className="border border-[#1A1A24]">{restoreSafe.map((it, i) => <Row key={it.id} item={it} tone="safe" i={i} section="restore" onAsk={askAIRestore} />)}</div>
             <div className="mt-4">
               <div className="text-xs text-zinc-500 mb-1">Comando per ripristinare i tweak applicati da BoostPC (esegui in PowerShell):</div>
               <div className="flex items-stretch gap-2">
@@ -270,7 +301,7 @@ export default function BiosRestore() {
 
           <div className="bg-[#0F0F12] border border-[#E5FF00]/30 p-5">
             <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#E5FF00]"><AlertTriangle size={16} /> Da usare CON CAUTELA</div>
-            <div className="border border-[#1A1A24]">{RESTORE_CAUTION.map((it, i) => <Row key={i} item={it} tone="caution" i={i} section="restore" />)}</div>
+            <div className="border border-[#1A1A24]">{restoreCaution.map((it, i) => <Row key={it.id} item={it} tone="caution" i={i} section="restore" onAsk={askAIRestore} />)}</div>
           </div>
 
           <div className="bg-black border border-[#2A2A35] p-4 flex gap-3 items-start">
