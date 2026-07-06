@@ -209,29 +209,47 @@ $script:PM_EXE = Join-Path $env:TEMP 'PresentMon.exe'
 $script:PM_CSV = Join-Path $env:TEMP 'boostpc_fps.csv'
 $script:PM_ON  = $false
 $script:PM_ROWS = 1
-$script:PM_URL = 'https://github.com/GameTechDev/PresentMon/releases/download/v1.10.0/PresentMon-1.10.0-x64.exe'
+$script:PM_URL = 'https://github.com/GameTechDev/PresentMon/releases/download/v2.4.1/PresentMon-2.4.1-x64.exe'
+function Read-Shared($path) {
+  try {
+    $fs = [System.IO.File]::Open($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+    $sr = New-Object System.IO.StreamReader($fs)
+    $t = $sr.ReadToEnd(); $sr.Close(); $fs.Close(); return $t
+  } catch { return '' }
+}
 function Start-Fps {
   if (-not (Test-Admin)) { Say '   [FPS] Richiede Amministratore: FPS non disponibili.' 'DarkYellow'; return }
   if (-not (Test-Path $script:PM_EXE)) {
     Say '   [FPS] Scarico PresentMon (una volta sola)...' 'DarkGray'
-    try { Invoke-WebRequest $script:PM_URL -OutFile $script:PM_EXE -UseBasicParsing } catch { Say '   [FPS] Download PresentMon fallito.' 'DarkYellow'; return }
+    try {
+      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+      Invoke-WebRequest $script:PM_URL -OutFile $script:PM_EXE -UseBasicParsing
+    } catch { Say '   [FPS] Download PresentMon fallito.' 'DarkYellow'; return }
   }
   Remove-Item $script:PM_CSV -ErrorAction SilentlyContinue
   try {
-    Start-Process -FilePath $script:PM_EXE -ArgumentList '-output_file', "`"$($script:PM_CSV)`"", '-stop_existing_session', '-no_top' -WindowStyle Hidden
+    Start-Process -FilePath $script:PM_EXE `
+      -ArgumentList '--output_file', "`"$($script:PM_CSV)`"", '--stop_existing_session', '--v1_metrics' `
+      -WindowStyle Hidden
     $script:PM_ON = $true
-    Say '   [FPS] Cattura FPS attiva (avvia un gioco).' 'DarkGray'
-    Start-Sleep -Milliseconds 600
-  } catch {}
+    Say '   [FPS] Cattura FPS attiva (avvia un gioco a schermo intero).' 'DarkGray'
+    Start-Sleep -Seconds 1
+  } catch { Say '   [FPS] Avvio PresentMon fallito.' 'DarkYellow' }
 }
 function Stop-Fps { if ($script:PM_ON) { Stop-Process -Name PresentMon -Force -ErrorAction SilentlyContinue; $script:PM_ON = $false } }
 function Get-Fps {
-  if (-not (Test-Path $script:PM_CSV)) { return $null }
-  $lines = Get-Content $script:PM_CSV -ErrorAction SilentlyContinue
+  if (-not $script:PM_ON) { return $null }
+  $raw = Read-Shared $script:PM_CSV
+  if (-not $raw) { return $null }
+  $lines = $raw -split "`r?`n" | Where-Object { $_ -ne '' }
   if (-not $lines -or $lines.Count -le $script:PM_ROWS) { return $null }
   $hdr = $lines[0] -split ','
-  $iApp = [array]::IndexOf($hdr, 'Application')
-  $iMs = [array]::IndexOf($hdr, 'msBetweenPresents')
+  $iApp = -1; $iMs = -1
+  for ($k = 0; $k -lt $hdr.Count; $k++) {
+    $h = $hdr[$k].Trim().ToLower()
+    if ($h -eq 'application') { $iApp = $k }
+    if ($h -like '*betweenpresents*') { $iMs = $k }
+  }
   if ($iMs -lt 0) { $script:PM_ROWS = $lines.Count; return $null }
   $new = $lines[$script:PM_ROWS..($lines.Count - 1)]
   $script:PM_ROWS = $lines.Count

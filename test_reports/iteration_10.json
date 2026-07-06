@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 10: verified PresentMon v2.4.1 FPS fix in monitor PS script + regression on telemetry/alerts/profiles/other modes. Created new pytest suite backend/tests/test_fps_presentmon_v241.py (17 tests, all PASS): monitor script contains 'v2.4.1/PresentMon-2.4.1-x64.exe', '--v1_metrics', 'function Read-Shared' + 'FileShare]::ReadWrite', case-insensitive column detect '*betweenpresents*' with '.ToLower()', Start-Fps/Get-Fps/Stop-Fps, monitor branch try/finally; script does NOT contain 'v1.10.0'/'PresentMon-1.10.0' nor single-dash ' -output_file'; POST /api/agent/telemetry with fps=240 game='cs2' persists and surfaces on GET /api/pc-telemetry last sample; sync/benchmark/restore/optimize all 200; optimize?profile=tpl_valorant injects $script:PROFILE with quoted ids; GET/PUT /api/alerts default+persist (enabled=true, cpu_max=90, gpu_max=85). Playwright E2E on public preview: admin login OK, /app/live loads with data-testid='live-page', stat-fps card shows '240' with game label 'CS2', alert-settings panel with alert-enabled/alert-cpu-max/alert-gpu-max/save-alerts-btn works — Salva click triggers success toast 'Impostazioni alert salvate!'; recharts wrapper rendered with CPU/GPU/RAM/FPS lines visible in screenshot; zero JS pageerrors. FPS capture itself is Windows+admin only and cannot be executed here (only the served script content was verified as instructed).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_fps_presentmon_v241.py",
+    "/app/test_reports/pytest/fps_v241.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ps_agent.py Start-Fps: --output_file uses backtick-escaped double quotes around a path with spaces — this is correct for PowerShell Start-Process argument arrays. Verified.",
+    "Read-Shared uses FileMode.Open + FileAccess.Read + FileShare.ReadWrite: correct for reading a CSV being written by PresentMon. Wrapped in try/catch returning ''.",
+    "Get-Fps column detection is case-insensitive via .ToLower() then -like '*betweenpresents*'. This handles both v1/v2 column naming variations (msBetweenPresents / MsBetweenPresents). Good.",
+    "monitor branch wraps Start-Fps/loop in try{}finally{Stop-Fps} — ensures PresentMon process is stopped on Ctrl+C. Good.",
+    "Note: telemetry endpoint is called from PowerShell without HTTPS cert validation control; if backend URL ever became http fallback, credentials could leak. Currently hardcoded https via BACKEND_URL substitution — fine.",
+    "Live.jsx: input data-testids are 'alert-cpu-max'/'alert-gpu-max' (previously reported as 'cpu-max'/'gpu-max' in iteration_9 — actual names are the alert- prefixed ones). No functional impact."
+  ],
+  "updated_files": ["/app/backend/tests/test_fps_presentmon_v241.py"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% (login + live-page + stat-fps=240/CS2 + alert-settings + save-alerts-btn + chart + no console errors)"},
+  "test_credentials": "admin@boostpc.io / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "alert_settings for admin ended at enabled=true cpu_max=90 gpu_max=85; telemetry samples appended with fps=240 game='cs2' and gpu_temp=95/96 (rotated by cap).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New regression suite is /app/backend/tests/test_fps_presentmon_v241.py. Run with `python -m pytest backend/tests/test_fps_presentmon_v241.py -o addopts=''` to avoid xdist parallel race on the shared admin alert_settings doc. Real FPS capture cannot be tested in the Linux preview environment (requires Windows+admin+PresentMon).",
+  "rca of the issue": "Original bug (FPS not working) had four root causes fixed by main agent: (1) invalid PresentMon URL v1.10.0 -> now v2.4.1 verified 200; (2) single-dash CLI flags -> double-dash + --v1_metrics required for MsBetweenPresents column; (3) case-sensitive column name -> now case-insensitive '*betweenpresents*' match; (4) CSV file lock -> Read-Shared uses FileShare.ReadWrite instead of Get-Content. All four markers are present in the served script and confirmed by automated tests."
+}
