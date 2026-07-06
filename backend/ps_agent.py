@@ -726,25 +726,30 @@ if ($MODE -eq 'monitor') {
 
 if ($MODE -eq 'prematch') {
   Say "`n== BoostPC - Modalita Prima del match ==" 'Cyan'
-  $out = powercfg /getactivescheme
-  $prevPlan = ([regex]::Match($out, '([0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})')).Value
-  if ($prevPlan) { Say ("   Piano energetico attuale salvato: {0}" -f $prevPlan) 'DarkGray' }
-  powercfg /setactive scheme_min 2>$null
-  Say "   [OK] Piano Prestazioni elevate attivato." 'Green'
-  $apps = @('chrome', 'msedge', 'firefox', 'opera', 'brave', 'Spotify', 'Discord', 'Slack', 'Teams', 'OneDrive',
-            'SkypeApp', 'Skype', 'Telegram', 'WhatsApp', 'GoogleDriveFS', 'Dropbox', 'CCleaner', 'Cortana',
-            'YourPhone', 'PhoneExperienceHost', 'EpicGamesLauncher', 'Music.UI')
+  $setPower = __PREMATCH_POWER__
+  $prevPlan = ''
+  if ($setPower) {
+    $out = powercfg /getactivescheme
+    $prevPlan = ([regex]::Match($out, '([0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})')).Value
+    if ($prevPlan) { Say ("   Piano energetico attuale salvato: {0}" -f $prevPlan) 'DarkGray' }
+    powercfg /setactive scheme_min 2>$null
+    Say "   [OK] Piano Prestazioni elevate attivato." 'Green'
+  } else {
+    Say "   [i] Piano energetico lasciato invariato (da impostazioni)." 'DarkGray'
+  }
+  $apps = @(__PREMATCH_APPS__)
   $closed = 0
   foreach ($a in $apps) {
     $p = Get-Process -Name $a -ErrorAction SilentlyContinue
     if ($p) { Stop-Process -InputObject $p -Force -ErrorAction SilentlyContinue; $closed++ }
   }
-  Say ("   [OK] App in background chiuse: {0}" -f $closed) 'Green'
-  try { Get-ScheduledTask -ErrorAction SilentlyContinue | Out-Null } catch {}
+  Say ("   [OK] App in background chiuse: {0} (su {1} selezionate)" -f $closed, $apps.Count) 'Green'
   Say "`n[BOOST ATTIVO] Avvia pure il tuo gioco. Buon match!" 'Yellow'
   Read-Host "`nPremi INVIO quando hai finito di giocare per ripristinare tutto"
-  if ($prevPlan) { powercfg /setactive $prevPlan 2>$null; Say "   [OK] Piano energetico originale ripristinato." 'Green' }
-  else { powercfg /setactive scheme_balanced 2>$null; Say "   [OK] Piano energetico bilanciato ripristinato." 'Green' }
+  if ($setPower) {
+    if ($prevPlan) { powercfg /setactive $prevPlan 2>$null; Say "   [OK] Piano energetico originale ripristinato." 'Green' }
+    else { powercfg /setactive scheme_balanced 2>$null; Say "   [OK] Piano energetico bilanciato ripristinato." 'Green' }
+  }
   Say "`n[FATTO] Le app chiuse puoi riaprirle normalmente. A presto!" 'Cyan'
   return
 }

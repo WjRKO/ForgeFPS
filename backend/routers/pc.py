@@ -10,8 +10,18 @@ from database import db, now_iso
 from helpers import specs_to_text, compute_health, get_or_create_agent_token
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
-from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput
+from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput
 from routers.profiles import resolve_tweak_ids
+
+# Default background processes closed by "Prima del match" (must stay in sync with frontend groups)
+DEFAULT_PREMATCH_APPS = [
+    "chrome", "msedge", "firefox", "opera", "brave",
+    "Discord", "Slack", "Teams", "Telegram", "WhatsApp", "Skype", "SkypeApp",
+    "Spotify", "Music.UI",
+    "OneDrive", "GoogleDriveFS", "Dropbox",
+    "EpicGamesLauncher",
+    "CCleaner", "Cortana", "YourPhone", "PhoneExperienceHost",
+]
 
 
 def _iso_age(ts):
@@ -134,6 +144,21 @@ def build(get_current_user):
             upsert=True)
         return await db.pc_specs.find_one({"user_id": uid}, {"_id": 0})
 
+    @r.get("/prematch")
+    async def get_prematch(user: dict = Depends(get_current_user)):
+        doc = await db.prematch_settings.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        if not doc:
+            return {"close_apps": DEFAULT_PREMATCH_APPS, "set_power": True}
+        return {"close_apps": doc.get("close_apps", DEFAULT_PREMATCH_APPS), "set_power": doc.get("set_power", True)}
+
+    @r.put("/prematch")
+    async def set_prematch(payload: PrematchInput, user: dict = Depends(get_current_user)):
+        await db.prematch_settings.update_one(
+            {"user_id": str(user["_id"])},
+            {"$set": {"user_id": str(user["_id"]), "close_apps": payload.close_apps, "set_power": payload.set_power}},
+            upsert=True)
+        return {"ok": True}
+
     @r.get("/games")
     async def get_games(user: dict = Depends(get_current_user)):
         doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0, "games": 1, "updated_at": 1})
@@ -194,9 +219,15 @@ def build(get_current_user):
         backend = os.environ.get("FRONTEND_URL", "http://localhost:8001")
         ids = await resolve_tweak_ids(db, rec["user_id"], profile) if profile else []
         profile_literal = ",".join("'" + i.replace("'", "") + "'" for i in ids)
+        pm = await db.prematch_settings.find_one({"user_id": rec["user_id"]}) or {}
+        pm_apps = pm.get("close_apps", DEFAULT_PREMATCH_APPS)
+        pm_apps_literal = ",".join("'" + a.replace("'", "") + "'" for a in pm_apps)
+        pm_power = "$true" if pm.get("set_power", True) else "$false"
         script = (PS_SCRIPT.replace("__BACKEND_URL__", backend)
                   .replace("__AGENT_TOKEN__", t).replace("__MODE__", mode)
-                  .replace("__PROFILE_IDS__", profile_literal))
+                  .replace("__PROFILE_IDS__", profile_literal)
+                  .replace("__PREMATCH_APPS__", pm_apps_literal)
+                  .replace("__PREMATCH_POWER__", pm_power))
         return PlainTextResponse(script, media_type="text/plain")
 
     return r

@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Gauge, Loader2, Swords, Copy, Check, Rocket, MonitorDown, Search, Sparkles, RefreshCw } from "lucide-react";
+import { Gauge, Loader2, Swords, Copy, Check, Rocket, MonitorDown, Search, Sparkles, RefreshCw, Settings2, Save } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const RES = ["1080p", "1440p", "4K"];
+
+const APP_GROUPS = [
+  { id: "browser", label: "Browser", procs: ["chrome", "msedge", "firefox", "opera", "brave"] },
+  { id: "chat", label: "Chat & Voce (Discord, Teams...)", procs: ["Discord", "Slack", "Teams", "Telegram", "WhatsApp", "Skype", "SkypeApp"] },
+  { id: "media", label: "Musica & Media (Spotify...)", procs: ["Spotify", "Music.UI"] },
+  { id: "cloud", label: "Sync cloud (OneDrive, Drive...)", procs: ["OneDrive", "GoogleDriveFS", "Dropbox"] },
+  { id: "launcher", label: "Launcher (Epic Games)", procs: ["EpicGamesLauncher"] },
+  { id: "other", label: "Utility (CCleaner, Cortana...)", procs: ["CCleaner", "Cortana", "YourPhone", "PhoneExperienceHost"] },
+];
 
 export default function Games() {
   const [games, setGames] = useState([]);
@@ -20,14 +29,36 @@ export default function Games() {
   const [err, setErr] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
+  const [showConfig, setShowConfig] = useState(false);
+  const [groups, setGroups] = useState(() => Object.fromEntries(APP_GROUPS.map((g) => [g.id, true])));
+  const [setPower, setSetPower] = useState(true);
+  const [savingCfg, setSavingCfg] = useState(false);
+
   const loadGames = async () => {
     try { const { data } = await api.get("/games"); setGames(data.games || []); } catch {}
   };
+  const loadPrematch = async () => {
+    try {
+      const { data } = await api.get("/prematch");
+      setSetPower(data.set_power !== false);
+      const apps = data.close_apps || [];
+      setGroups(Object.fromEntries(APP_GROUPS.map((g) => [g.id, g.procs.every((p) => apps.includes(p))])));
+    } catch {}
+  };
   useEffect(() => {
     loadGames();
+    loadPrematch();
     api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {});
     api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
   }, []);
+
+  const saveConfig = async () => {
+    setSavingCfg(true);
+    const close_apps = APP_GROUPS.filter((g) => groups[g.id]).flatMap((g) => g.procs);
+    try { await api.put("/prematch", { close_apps, set_power: setPower }); toast.success("Impostazioni salvate! Il comando è aggiornato."); }
+    catch { toast.error("Errore nel salvataggio"); }
+    finally { setSavingCfg(false); }
+  };
 
   const hasSpecs = !!specs?.data?.cpu;
   const prematchCmd = `irm "${BACKEND}/api/agent/script?t=${token || "IL_TUO_TOKEN"}&mode=prematch" | iex`;
@@ -70,6 +101,35 @@ export default function Games() {
             {copied ? <Check size={14} className="text-[#00FF66]" /> : <Copy size={14} />}
           </button>
         </div>
+
+        <button onClick={() => setShowConfig((v) => !v)} data-testid="prematch-config-toggle"
+          className="mt-3 inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-[#E5FF00] transition-colors">
+          <Settings2 size={13} /> {showConfig ? "Nascondi personalizzazione" : "Personalizza cosa chiudere"}
+        </button>
+
+        {showConfig && (
+          <div className="mt-3 bg-black/50 border border-[#2A2A35] p-4" data-testid="prematch-config">
+            <div className="text-xs text-zinc-500 mb-2">Scegli quali app chiudere prima del match:</div>
+            <div className="grid sm:grid-cols-2 gap-2 mb-3">
+              {APP_GROUPS.map((g) => (
+                <label key={g.id} data-testid={`prematch-group-${g.id}`}
+                  className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer select-none">
+                  <input type="checkbox" checked={!!groups[g.id]} onChange={(e) => setGroups((s) => ({ ...s, [g.id]: e.target.checked }))}
+                    className="accent-[#E5FF00] w-4 h-4" />
+                  {g.label}
+                </label>
+              ))}
+            </div>
+            <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer select-none border-t border-[#2A2A35] pt-3" data-testid="prematch-power-toggle">
+              <input type="checkbox" checked={setPower} onChange={(e) => setSetPower(e.target.checked)} className="accent-[#E5FF00] w-4 h-4" />
+              Attiva il piano "Prestazioni elevate" (ripristinato a fine partita)
+            </label>
+            <button onClick={saveConfig} disabled={savingCfg} data-testid="prematch-save"
+              className="mt-3 inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2 text-sm hover:bg-[#D4EC00] transition-colors disabled:opacity-60">
+              {savingCfg ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salva impostazioni
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid lg:grid-cols-[1fr_1.1fr] gap-4">

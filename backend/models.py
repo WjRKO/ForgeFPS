@@ -80,3 +80,8 @@ class AlertInput(BaseModel):
     enabled: bool = True
     cpu_max: int = Field(default=90, ge=40, le=110)
     gpu_max: int = Field(default=85, ge=40, le=110)
+
+
+class PrematchInput(BaseModel):
+    close_apps: list = []
+    set_power: bool = True
