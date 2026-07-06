@@ -177,6 +177,46 @@ function Send-Benchmark($rec) {
   $body = @{ benchmark = $rec } | ConvertTo-Json -Depth 6 -Compress
   try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
 }
+function Get-Games {
+  $games = New-Object System.Collections.Generic.List[string]
+  try {
+    $steam = (Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction SilentlyContinue).SteamPath
+    if (-not $steam) { $steam = 'C:\Program Files (x86)\Steam' }
+    $libs = @(Join-Path $steam 'steamapps')
+    $vdf = Join-Path $steam 'steamapps\libraryfolders.vdf'
+    if (Test-Path $vdf) {
+      foreach ($m in [regex]::Matches((Get-Content $vdf -Raw), '"path"\s+"([^"]+)"')) {
+        $libs += (Join-Path ($m.Groups[1].Value -replace '\\\\', '\') 'steamapps')
+      }
+    }
+    foreach ($lib in ($libs | Select-Object -Unique)) {
+      if (Test-Path $lib) {
+        foreach ($acf in (Get-ChildItem $lib -Filter 'appmanifest_*.acf' -ErrorAction SilentlyContinue)) {
+          $nm = [regex]::Match((Get-Content $acf.FullName -Raw), '"name"\s+"([^"]+)"').Groups[1].Value
+          if ($nm) { $games.Add($nm) }
+        }
+      }
+    }
+  } catch {}
+  try {
+    $ep = Join-Path $env:ProgramData 'Epic\EpicGamesLauncher\Data\Manifests'
+    if (Test-Path $ep) {
+      foreach ($it in (Get-ChildItem $ep -Filter '*.item' -ErrorAction SilentlyContinue)) {
+        $j = Get-Content $it.FullName -Raw | ConvertFrom-Json
+        if ($j.DisplayName) { $games.Add($j.DisplayName) }
+      }
+    }
+  } catch {}
+  $skip = @('Steamworks Common Redistributables', 'Steam Linux Runtime', 'Proton EasyAntiCheat Runtime')
+  return @($games | Where-Object { $skip -notcontains $_ -and $_ -notmatch 'Proton|Runtime|Redistributable' } | Select-Object -Unique | Select-Object -First 60)
+}
+function Send-Games($games) {
+  $arr = @($games)
+  if ($arr.Count -eq 0) { return }
+  $items = ($arr | ForEach-Object { '"' + ($_ -replace '\\', '\\' -replace '"', '\"') + '"' }) -join ','
+  $body = '{"games":[' + $items + ']}'
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+}
 
 # ---------------- Live telemetry ----------------
 function Get-TelemetrySample {
@@ -684,11 +724,38 @@ if ($MODE -eq 'monitor') {
   return
 }
 
+if ($MODE -eq 'prematch') {
+  Say "`n== BoostPC - Modalita Prima del match ==" 'Cyan'
+  $out = powercfg /getactivescheme
+  $prevPlan = ([regex]::Match($out, '([0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})')).Value
+  if ($prevPlan) { Say ("   Piano energetico attuale salvato: {0}" -f $prevPlan) 'DarkGray' }
+  powercfg /setactive scheme_min 2>$null
+  Say "   [OK] Piano Prestazioni elevate attivato." 'Green'
+  $apps = @('chrome', 'msedge', 'firefox', 'opera', 'brave', 'Spotify', 'Discord', 'Slack', 'Teams', 'OneDrive',
+            'SkypeApp', 'Skype', 'Telegram', 'WhatsApp', 'GoogleDriveFS', 'Dropbox', 'CCleaner', 'Cortana',
+            'YourPhone', 'PhoneExperienceHost', 'EpicGamesLauncher', 'Music.UI')
+  $closed = 0
+  foreach ($a in $apps) {
+    $p = Get-Process -Name $a -ErrorAction SilentlyContinue
+    if ($p) { Stop-Process -InputObject $p -Force -ErrorAction SilentlyContinue; $closed++ }
+  }
+  Say ("   [OK] App in background chiuse: {0}" -f $closed) 'Green'
+  try { Get-ScheduledTask -ErrorAction SilentlyContinue | Out-Null } catch {}
+  Say "`n[BOOST ATTIVO] Avvia pure il tuo gioco. Buon match!" 'Yellow'
+  Read-Host "`nPremi INVIO quando hai finito di giocare per ripristinare tutto"
+  if ($prevPlan) { powercfg /setactive $prevPlan 2>$null; Say "   [OK] Piano energetico originale ripristinato." 'Green' }
+  else { powercfg /setactive scheme_balanced 2>$null; Say "   [OK] Piano energetico bilanciato ripristinato." 'Green' }
+  Say "`n[FATTO] Le app chiuse puoi riaprirle normalmente. A presto!" 'Cyan'
+  return
+}
+
 # default: sync (safe)
 Say "`n[*] Rilevamento hardware, salute e avvio..." 'Cyan'
 $specs = Get-Specs
 Say ("   CPU: {0}" -f $specs.cpu); Say ("   GPU: {0}" -f $specs.gpu)
 Say ("   MB : {0}  ({1} {2})" -f $specs.motherboard, $specs.cpu_socket, $specs.chipset)
 Send-Data $specs (Get-Health) (Get-StartupList)
+$games = Get-Games
+if ($games.Count -gt 0) { Send-Games $games; Say ("   Giochi rilevati: {0}" -f $games.Count) 'DarkGray' }
 Say "`n[OK] Dati inviati! Apri BOOST PC -> Il mio PC per analisi e consigli." 'Green'
 '''

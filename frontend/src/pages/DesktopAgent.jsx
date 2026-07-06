@@ -143,6 +143,7 @@ export default function DesktopAgent() {
         <CmdRow label="2 · Benchmark (misura CPU/RAM/disco/rete — nessun cambiamento)" cmd={cmd("benchmark")} testid="ps-benchmark" accent="text-[#00E0FF]" />
         <CmdRow label="3 · Ottimizza — apre una finestra grafica per scegliere i tweak (esegui come Amministratore)" cmd={cmd("optimize")} testid="ps-optimize" accent="text-[#E5FF00]" />
         <CmdRow label="4 · Monitoraggio live — invia CPU/GPU/temp in tempo reale (vedi pagina Monitoraggio Live)" cmd={cmd("monitor")} testid="ps-monitor" accent="text-[#FF6B00]" />
+        <CmdRow label='5 · Prima del match — boost gaming reversibile: chiude le app in background e attiva le prestazioni massime' cmd={cmd("prematch")} testid="ps-prematch" accent="text-[#E5FF00]" />
 
         <div className="flex items-center gap-2 text-xs text-zinc-500 mt-2">
           <RotateCcw size={13} /> Ripristino tweak:

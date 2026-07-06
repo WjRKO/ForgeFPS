@@ -41,6 +41,8 @@ def build(get_current_user):
             fields["health"] = data.health
         if data.startup is not None:
             fields["startup"] = data.startup
+        if data.games is not None:
+            fields["games"] = data.games
         if data.benchmark is not None:
             record = {**data.benchmark, "user_id": uid, "created_at": now_iso()}
             fields["benchmark"] = record
@@ -132,6 +134,11 @@ def build(get_current_user):
             upsert=True)
         return await db.pc_specs.find_one({"user_id": uid}, {"_id": 0})
 
+    @r.get("/games")
+    async def get_games(user: dict = Depends(get_current_user)):
+        doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0, "games": 1, "updated_at": 1})
+        return {"games": (doc or {}).get("games", []), "updated_at": (doc or {}).get("updated_at")}
+
     @r.get("/pc-health")
     async def pc_health(user: dict = Depends(get_current_user)):
         doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
@@ -182,7 +189,7 @@ def build(get_current_user):
         if not rec:
             return PlainTextResponse("Write-Host '[BOOST PC] Token non valido. Riapri la pagina Desktop Agent.' -ForegroundColor Red",
                                      media_type="text/plain")
-        if mode not in ("sync", "optimize", "restore", "benchmark", "monitor"):
+        if mode not in ("sync", "optimize", "restore", "benchmark", "monitor", "prematch"):
             mode = "sync"
         backend = os.environ.get("FRONTEND_URL", "http://localhost:8001")
         ids = await resolve_tweak_ids(db, rec["user_id"], profile) if profile else []
