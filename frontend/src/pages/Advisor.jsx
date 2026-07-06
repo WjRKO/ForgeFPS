@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Send, Plus, Trash2, Loader2, MessageSquareCode, Terminal, Cpu, Copy, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -63,6 +64,9 @@ export default function Advisor() {
   const [specs, setSpecs] = useState(null);
   const [suggestions, setSuggestions] = useState(DEFAULT_SUGGESTIONS);
   const endRef = useRef(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const autoSent = useRef(false);
 
   const loadSessions = async () => {
     try { const { data } = await api.get("/advisor/sessions"); setSessions(data); } catch {}
@@ -128,6 +132,16 @@ export default function Advisor() {
       });
     } finally { setStreaming(false); }
   };
+
+  useEffect(() => {
+    const ask = location.state?.ask;
+    if (ask && !autoSent.current) {
+      autoSent.current = true;
+      navigate(location.pathname, { replace: true, state: {} });
+      send(ask);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   return (
     <div className="max-w-6xl mx-auto fade-up">

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Cpu, RotateCcw, CheckCircle2, AlertTriangle, ShieldCheck, Copy, Check, KeyRound, Info, Star, MemoryStick, MonitorPlay } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Cpu, RotateCcw, CheckCircle2, AlertTriangle, ShieldCheck, Copy, Check, KeyRound, Info, Star, MemoryStick, MonitorPlay, MessageSquareCode } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 
@@ -106,16 +107,22 @@ function filterForHardware(list, hw) {
     .map((t) => adaptTweak(t, hw));
 }
 
-function Row({ item, tone, i, section }) {
+function Row({ item, tone, i, section, onAsk }) {
   const Icon = tone === "safe" ? CheckCircle2 : AlertTriangle;
   const color = tone === "safe" ? "text-[#00FF66]" : "text-[#E5FF00]";
   return (
-    <div className="flex gap-3 p-3 border-b border-[#1A1A24] last:border-0" data-testid={`${section}-${tone}-${item.id || i}`}>
+    <div className="flex gap-3 p-3 border-b border-[#1A1A24] last:border-0 items-start" data-testid={`${section}-${tone}-${item.id || i}`}>
       <Icon size={16} className={`${color} shrink-0 mt-0.5`} />
-      <div>
+      <div className="flex-1 min-w-0">
         <div className="text-sm text-zinc-100 font-semibold">{item.s}</div>
         <div className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{item.w}</div>
       </div>
+      {onAsk && (
+        <button onClick={() => onAsk(item, tone)} data-testid={`ask-ai-${section}-${item.id || i}`}
+          className="shrink-0 self-center inline-flex items-center gap-1 border border-[#2A2A35] px-2 py-1.5 text-[11px] text-zinc-400 hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors whitespace-nowrap">
+          <MessageSquareCode size={12} /> Chiedi all'AI
+        </button>
+      )}
     </div>
   );
 }
@@ -130,6 +137,7 @@ export default function BiosRestore() {
   const [specs, setSpecs] = useState(null);
   const [token, setToken] = useState("");
   const [copied, setCopied] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {});
@@ -151,6 +159,15 @@ export default function BiosRestore() {
   let vendor = null;
   for (const v of Object.keys(BIOS_KEYS)) { if (mb.includes(v.toUpperCase())) { vendor = v; break; } }
   const key = vendor ? BIOS_KEYS[vendor] : "Canc (Del) o F2 (varia per marca)";
+
+  const askAI = (item, tone) => {
+    const hwStr = [data.cpu?.trim(), data.gpu, hw.ramType && `RAM ${hw.ramType}`].filter(Boolean).join(", ");
+    const mbStr = data.motherboard ? ` sulla mia scheda madre ${data.motherboard}` : "";
+    const q = tone === "caution"
+      ? `Spiegami in dettaglio l'impostazione BIOS "${item.s}"${mbStr}: come si attiva passo-passo, quali rischi comporta e quali valori sicuri usare.${hwStr ? ` Il mio hardware: ${hwStr}.` : ""}`
+      : `Spiegami passo-passo come attivare "${item.s}" nel BIOS${mbStr}: in quale menu si trova e quali valori impostare.${hwStr ? ` Il mio hardware: ${hwStr}.` : ""}`;
+    navigate("/app/advisor", { state: { ask: q } });
+  };
 
   const restoreCmd = `irm "${BACKEND}/api/agent/script?t=${token || "IL_TUO_TOKEN"}&mode=restore" | iex`;
   const copy = async () => {
@@ -201,9 +218,13 @@ export default function BiosRestore() {
               <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#E5FF00]"><Star size={16} /> Consigliati per il tuo PC</div>
               <div className="grid sm:grid-cols-3 gap-3">
                 {topPicks.map((t, i) => (
-                  <div key={t.id} className="bg-black/60 border border-[#2A2A35] p-3" data-testid={`top-pick-${t.id}`}>
+                  <div key={t.id} className="bg-black/60 border border-[#2A2A35] p-3 flex flex-col" data-testid={`top-pick-${t.id}`}>
                     <div className="text-xs font-bold text-zinc-100">{t.s}</div>
-                    <div className="text-[11px] text-zinc-500 mt-1 leading-relaxed line-clamp-4">{t.w}</div>
+                    <div className="text-[11px] text-zinc-500 mt-1 leading-relaxed line-clamp-3 flex-1">{t.w}</div>
+                    <button onClick={() => askAI(t, t.impact && caution.some((c) => c.id === t.id) ? "caution" : "safe")} data-testid={`ask-ai-top-${t.id}`}
+                      className="mt-2 inline-flex items-center justify-center gap-1 border border-[#E5FF00]/40 text-[#E5FF00] px-2 py-1.5 text-[11px] font-bold hover:bg-[#E5FF00] hover:text-black transition-colors">
+                      <MessageSquareCode size={12} /> Chiedi all'AI
+                    </button>
                   </div>
                 ))}
               </div>
@@ -218,12 +239,12 @@ export default function BiosRestore() {
 
           <div className="bg-[#0F0F12] border border-[#00FF66]/30 p-5">
             <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#00FF66]"><ShieldCheck size={16} /> Impostazioni SICURE (consigliate)</div>
-            <div className="border border-[#1A1A24]">{safe.map((it, i) => <Row key={it.id} item={it} tone="safe" i={i} section="bios" />)}</div>
+            <div className="border border-[#1A1A24]">{safe.map((it, i) => <Row key={it.id} item={it} tone="safe" i={i} section="bios" onAsk={askAI} />)}</div>
           </div>
 
           <div className="bg-[#0F0F12] border border-[#E5FF00]/30 p-5">
             <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#E5FF00]"><AlertTriangle size={16} /> Da usare CON CAUTELA</div>
-            <div className="border border-[#1A1A24]">{caution.map((it, i) => <Row key={it.id} item={it} tone="caution" i={i} section="bios" />)}</div>
+            <div className="border border-[#1A1A24]">{caution.map((it, i) => <Row key={it.id} item={it} tone="caution" i={i} section="bios" onAsk={askAI} />)}</div>
           </div>
 
           <div className="bg-black border border-[#2A2A35] p-4 flex gap-3 items-start">
