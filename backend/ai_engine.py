@@ -27,8 +27,11 @@ def build_chat(session_id: str, system: str = ADVISOR_SYSTEM) -> LlmChat:
                    system_message=system).with_model(MODEL_PROVIDER, MODEL_NAME)
 
 
-async def stream_advisor(session_id: str, history: list, message: str, specs_text: str = ""):
+async def stream_advisor(session_id: str, history: list, message: str, specs_text: str = "", lang: str = "it"):
     system = ADVISOR_SYSTEM
+    if (lang or "it").startswith("en"):
+        system += ("\n\nIMPORTANT: The user selected ENGLISH. Reply ENTIRELY in English "
+                   "(keep the same Markdown formatting and PowerShell code blocks).")
     if specs_text:
         system += ("\n\n[CONTESTO PC DELL'UTENTE - usa questi dati REALI per consigli su misura. "
                    "Fai riferimento PROATTIVO a Health Score, problemi rilevati, temperature, benchmark e "

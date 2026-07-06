@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Gauge, Loader2, Swords, Copy, Check, Rocket, MonitorDown, Search, Sparkles, RefreshCw, Settings2, Save } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
@@ -8,15 +9,16 @@ const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const RES = ["1080p", "1440p", "4K"];
 
 const APP_GROUPS = [
-  { id: "browser", label: "Browser", procs: ["chrome", "msedge", "firefox", "opera", "brave"] },
-  { id: "chat", label: "Chat & Voce (Discord, Teams...)", procs: ["Discord", "Slack", "Teams", "Telegram", "WhatsApp", "Skype", "SkypeApp"] },
-  { id: "media", label: "Musica & Media (Spotify...)", procs: ["Spotify", "Music.UI"] },
-  { id: "cloud", label: "Sync cloud (OneDrive, Drive...)", procs: ["OneDrive", "GoogleDriveFS", "Dropbox"] },
-  { id: "launcher", label: "Launcher (Epic Games)", procs: ["EpicGamesLauncher"] },
-  { id: "other", label: "Utility (CCleaner, Cortana...)", procs: ["CCleaner", "Cortana", "YourPhone", "PhoneExperienceHost"] },
+  { id: "browser", procs: ["chrome", "msedge", "firefox", "opera", "brave"] },
+  { id: "chat", procs: ["Discord", "Slack", "Teams", "Telegram", "WhatsApp", "Skype", "SkypeApp"] },
+  { id: "media", procs: ["Spotify", "Music.UI"] },
+  { id: "cloud", procs: ["OneDrive", "GoogleDriveFS", "Dropbox"] },
+  { id: "launcher", procs: ["EpicGamesLauncher"] },
+  { id: "other", procs: ["CCleaner", "Cortana", "YourPhone", "PhoneExperienceHost"] },
 ];
 
 export default function Games() {
+  const { t } = useTranslation();
   const [games, setGames] = useState([]);
   const [specs, setSpecs] = useState(null);
   const [token, setToken] = useState("");
@@ -89,15 +91,15 @@ export default function Games() {
   return (
     <div className="max-w-5xl mx-auto fade-up" data-testid="games-page">
       <div className="mb-6">
-        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">// Giochi</div>
-        <h1 className="font-display font-black text-3xl tracking-tighter">I miei giochi</h1>
-        <p className="text-zinc-500 text-sm mt-1">FPS attesi e impostazioni consigliate per i tuoi giochi, in base al tuo hardware.</p>
+        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("games.eyebrow")}</div>
+        <h1 className="font-display font-black text-3xl tracking-tighter">{t("games.title")}</h1>
+        <p className="text-zinc-500 text-sm mt-1">{t("games.subtitle")}</p>
       </div>
 
       {/* Prima del match */}
       <div className="bg-gradient-to-br from-[#E5FF00]/10 to-transparent border border-[#E5FF00]/40 p-5 mb-5" data-testid="prematch-card">
-        <div className="flex items-center gap-2 text-sm font-bold mb-1 text-[#E5FF00]"><Rocket size={16} /> Modalità "Prima del match"</div>
-        <p className="text-xs text-zinc-400 mb-3 leading-relaxed">Boost 1-click reversibile: attiva il piano prestazioni elevate e chiude le app in background (browser, Discord, Spotify...). A fine partita premi INVIO e ripristini tutto. Esegui in PowerShell.</p>
+        <div className="flex items-center gap-2 text-sm font-bold mb-1 text-[#E5FF00]"><Rocket size={16} /> {t("games.prematch_title")}</div>
+        <p className="text-xs text-zinc-400 mb-3 leading-relaxed">{t("games.prematch_desc")}</p>
         <div className="flex items-stretch gap-2">
           <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-xs text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="prematch-cmd">{prematchCmd}</code>
           <button onClick={() => copyCmd(prematchCmd)} data-testid="prematch-copy"
@@ -108,19 +110,19 @@ export default function Games() {
 
         <button onClick={() => setShowConfig((v) => !v)} data-testid="prematch-config-toggle"
           className="mt-3 inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-[#E5FF00] transition-colors">
-          <Settings2 size={13} /> {showConfig ? "Nascondi personalizzazione" : "Personalizza cosa chiudere"}
+          <Settings2 size={13} /> {showConfig ? t("games.hide_customize") : t("games.customize")}
         </button>
 
         {showConfig && (
           <div className="mt-3 bg-black/50 border border-[#2A2A35] p-4" data-testid="prematch-config">
             {runningApps.length > 0 ? (
               <div className="text-xs text-[#00FF66] mb-3 flex items-center gap-1.5" data-testid="running-summary">
-                <span className="w-2 h-2 rounded-full bg-[#00FF66] animate-pulse" /> {runningApps.length} app in esecuzione rilevate sul PC{runningAt ? ` · ultimo sync ${new Date(runningAt).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}
+                <span className="w-2 h-2 rounded-full bg-[#00FF66] animate-pulse" /> {t("games.running_summary", { count: runningApps.length })}{runningAt ? ` · ${t("games.last_sync")} ${new Date(runningAt).toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}
               </div>
             ) : (
-              <div className="text-xs text-zinc-500 mb-3">Avvia il comando <span className="text-zinc-300">sync</span> del Desktop Agent per vedere quali app sono realmente in esecuzione ora.</div>
+              <div className="text-xs text-zinc-500 mb-3">{t("games.run_hint")}</div>
             )}
-            <div className="text-xs text-zinc-500 mb-2">Scegli quali app chiudere prima del match:</div>
+            <div className="text-xs text-zinc-500 mb-2">{t("games.choose_close")}</div>
             <div className="grid sm:grid-cols-2 gap-2 mb-3">
               {APP_GROUPS.map((g) => {
                 const run = g.procs.filter((p) => runningApps.includes(p));
@@ -129,11 +131,11 @@ export default function Games() {
                     className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer select-none">
                     <input type="checkbox" checked={!!groups[g.id]} onChange={(e) => setGroups((s) => ({ ...s, [g.id]: e.target.checked }))}
                       className="accent-[#E5FF00] w-4 h-4" />
-                    <span>{g.label}</span>
+                    <span>{t(`grp.${g.id}`)}</span>
                     {run.length > 0 && (
                       <span title={run.join(", ")} data-testid={`running-badge-${g.id}`}
                         className="inline-flex items-center gap-1 text-[10px] font-bold text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-1.5 py-0.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66]" /> {run.length} attiva{run.length > 1 ? "e" : ""}
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66]" /> {run.length} {t("games.active")}
                       </span>
                     )}
                   </label>
@@ -142,11 +144,11 @@ export default function Games() {
             </div>
             <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer select-none border-t border-[#2A2A35] pt-3" data-testid="prematch-power-toggle">
               <input type="checkbox" checked={setPower} onChange={(e) => setSetPower(e.target.checked)} className="accent-[#E5FF00] w-4 h-4" />
-              Attiva il piano "Prestazioni elevate" (ripristinato a fine partita)
+              {t("games.power_toggle")}
             </label>
             <button onClick={saveConfig} disabled={savingCfg} data-testid="prematch-save"
               className="mt-3 inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2 text-sm hover:bg-[#D4EC00] transition-colors disabled:opacity-60">
-              {savingCfg ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Salva impostazioni
+              {savingCfg ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {t("games.save_settings")}
             </button>
           </div>
         )}
@@ -156,14 +158,14 @@ export default function Games() {
         {/* Detected games */}
         <div className="bg-[#0F0F12] border border-[#2A2A35] p-5">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-xs uppercase tracking-widest text-zinc-500 flex items-center gap-2"><Swords size={14} className="text-[#E5FF00]" /> Giochi rilevati ({games.length})</div>
+            <div className="text-xs uppercase tracking-widest text-zinc-500 flex items-center gap-2"><Swords size={14} className="text-[#E5FF00]" /> {t("games.detected")} ({games.length})</div>
             <button onClick={refresh} data-testid="games-refresh" className="text-zinc-500 hover:text-[#E5FF00] transition-colors"><RefreshCw size={14} className={refreshing ? "animate-spin" : ""} /></button>
           </div>
 
           {games.length === 0 ? (
             <div className="text-sm text-zinc-400 leading-relaxed">
-              <div className="flex items-center gap-2 text-zinc-300 mb-2"><MonitorDown size={16} className="text-[#E5FF00]" /> Nessun gioco rilevato.</div>
-              <p className="text-xs text-zinc-500 mb-3">Avvia il Desktop Agent (comando "sync") per rilevare automaticamente i giochi installati su Steam ed Epic.</p>
+              <div className="flex items-center gap-2 text-zinc-300 mb-2"><MonitorDown size={16} className="text-[#E5FF00]" /> {t("games.no_games")}</div>
+              <p className="text-xs text-zinc-500 mb-3">{t("games.no_games_hint")}</p>
               <div className="flex items-stretch gap-2">
                 <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-[11px] text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="games-sync-cmd">{syncCmd}</code>
                 <button onClick={() => copyCmd(syncCmd)} className="shrink-0 flex items-center justify-center border border-[#2A2A35] px-3 hover:border-[#E5FF00] transition-colors"><Copy size={14} /></button>
@@ -181,9 +183,9 @@ export default function Games() {
           )}
 
           <div className="mt-4 pt-4 border-t border-[#2A2A35]">
-            <label className="text-xs uppercase tracking-widest text-zinc-500">Analizza un gioco</label>
+            <label className="text-xs uppercase tracking-widest text-zinc-500">{t("games.analyze_title")}</label>
             <div className="flex gap-2 mt-1">
-              <input data-testid="game-input" value={game} onChange={(e) => setGame(e.target.value)} placeholder="es. Cyberpunk 2077..."
+              <input data-testid="game-input" value={game} onChange={(e) => setGame(e.target.value)} placeholder={t("games.analyze_ph")}
                 onKeyDown={(e) => e.key === "Enter" && estimate()}
                 className="flex-1 bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 text-sm" />
               <button data-testid="game-search-btn" onClick={() => estimate()} disabled={loading}
@@ -197,24 +199,24 @@ export default function Games() {
                   className={`flex-1 py-1.5 text-xs border transition-colors ${res === r ? "bg-[#E5FF00] text-black border-[#E5FF00] font-bold" : "border-[#2A2A35] text-zinc-400 hover:border-[#E5FF00]"}`}>{r}</button>
               ))}
             </div>
-            {!hasSpecs && <p className="text-[11px] text-zinc-500 mt-2">Senza hardware rilevato la stima è generica. Aggiungi le specifiche in <Link to="/app/pc" className="text-[#E5FF00] hover:underline">Il mio PC</Link>.</p>}
+            {!hasSpecs && <p className="text-[11px] text-zinc-500 mt-2">{t("games.no_specs_hint")} <Link to="/app/pc" className="text-[#E5FF00] hover:underline">{t("nav.pc")}</Link>.</p>}
           </div>
         </div>
 
         {/* FPS result */}
         <div className="bg-[#0F0F12] border border-[#2A2A35] p-5">
-          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2"><Gauge size={14} className="text-[#E5FF00]" /> Analisi</div>
+          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2"><Gauge size={14} className="text-[#E5FF00]" /> {t("games.analysis")}</div>
           {err && <div className="text-xs text-[#FF3B30]">{err}</div>}
           {!fps && !loading && !err && (
             <div className="h-56 flex flex-col items-center justify-center text-center text-zinc-600">
               <Sparkles size={28} className="text-[#E5FF00] mb-3" />
-              <p className="text-sm text-zinc-500 max-w-xs">Seleziona un gioco rilevato o scrivi un titolo per vedere gli FPS attesi e le impostazioni consigliate.</p>
+              <p className="text-sm text-zinc-500 max-w-xs">{t("games.empty_hint")}</p>
             </div>
           )}
           {loading && <div className="h-56 flex items-center justify-center"><Loader2 size={24} className="animate-spin text-[#E5FF00]" /></div>}
           {fps && !loading && (
             <div className="fade-up" data-testid="fps-result">
-              <div className="text-sm text-zinc-300 mb-3">{fps.game} · {fps.resolution} <span className="text-xs text-zinc-500">(affidabilità {fps.confidence})</span></div>
+              <div className="text-sm text-zinc-300 mb-3">{fps.game} · {fps.resolution} <span className="text-xs text-zinc-500">({t("common.reliability")} {fps.confidence})</span></div>
               <div className="space-y-2">
                 {fps.estimates.map((e, i) => (
                   <div key={i} data-testid={`fps-bar-${i}`}>
@@ -225,7 +227,7 @@ export default function Games() {
                   </div>
                 ))}
               </div>
-              <div className="mt-4 text-sm"><span className="text-zinc-500">Preset consigliato: </span><span className="text-[#E5FF00] font-bold">{fps.recommended_preset}</span></div>
+              <div className="mt-4 text-sm"><span className="text-zinc-500">{t("games.recommended_preset")} </span><span className="text-[#E5FF00] font-bold">{fps.recommended_preset}</span></div>
               <p className="text-xs text-zinc-500 mt-2 leading-relaxed">{fps.notes}</p>
             </div>
           )}

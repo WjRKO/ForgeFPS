@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import { Send, Plus, Trash2, Loader2, MessageSquareCode, Terminal, Cpu, Copy, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -56,6 +58,7 @@ const MD = {
 };
 
 export default function Advisor() {
+  const { t } = useTranslation();
   const [sessions, setSessions] = useState([]);
   const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -74,7 +77,8 @@ export default function Advisor() {
   useEffect(() => {
     loadSessions();
     api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {});
-    api.get("/advisor/suggestions").then(({ data }) => { if (data?.suggestions?.length) setSuggestions(data.suggestions); }).catch(() => {});
+    const lng = (i18n.resolvedLanguage || "it").slice(0, 2);
+    api.get(`/advisor/suggestions?lang=${lng}`).then(({ data }) => { if (data?.suggestions?.length) setSuggestions(data.suggestions); }).catch(() => {});
   }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -103,7 +107,7 @@ export default function Advisor() {
       const res = await fetch(`${API}/advisor/chat`, {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg, session_id: sessionId }),
+        body: JSON.stringify({ message: msg, session_id: sessionId, lang: (i18n.resolvedLanguage || "it").slice(0, 2) }),
       });
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -146,11 +150,11 @@ export default function Advisor() {
   return (
     <div className="max-w-6xl mx-auto fade-up">
       <div className="mb-6">
-        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">// AI Advisor</div>
-        <h1 className="font-display font-black text-3xl tracking-tighter">Ottimizzazione PC</h1>
+        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("advisor.eyebrow")}</div>
+        <h1 className="font-display font-black text-3xl tracking-tighter">{t("advisor.subtitle")}</h1>
         {specs?.data?.cpu && (
           <div data-testid="specs-badge" className="inline-flex items-center gap-2 mt-3 text-xs text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-3 py-1.5">
-            <Cpu size={13} /> Consigli personalizzati per: {specs.data.cpu}{specs.data.gpu ? ` · ${specs.data.gpu}` : ""}
+            <Cpu size={13} /> {t("advisor.personalized")}: {specs.data.cpu}{specs.data.gpu ? ` · ${specs.data.gpu}` : ""}
           </div>
         )}
       </div>
@@ -159,7 +163,7 @@ export default function Advisor() {
         <div className="bg-[#0F0F12] border border-[#2A2A35] flex flex-col h-[70vh]">
           <button data-testid="new-chat-btn" onClick={newChat}
             className="m-3 flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold py-2 hover:bg-[#D4EC00] transition-colors">
-            <Plus size={16} /> Nuova chat
+            <Plus size={16} /> {t("common.new_chat")}
           </button>
           <div className="flex-1 overflow-auto px-2 pb-2">
             {sessions.map((s) => (
@@ -180,8 +184,8 @@ export default function Advisor() {
             {messages.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center text-center">
                 <Terminal size={40} className="text-[#E5FF00] mb-4" />
-                <h3 className="font-display font-semibold text-lg mb-2">BOOST AI Terminal</h3>
-                <p className="text-zinc-500 text-sm mb-6 max-w-sm">Chiedi qualsiasi cosa su ottimizzazione, gaming e streaming.</p>
+                <h3 className="font-display font-semibold text-lg mb-2">{t("advisor.empty_title")}</h3>
+                <p className="text-zinc-500 text-sm mb-6 max-w-sm">{t("advisor.suggestions")}</p>
                 <div className="grid sm:grid-cols-2 gap-2 w-full max-w-lg">
                   {suggestions.map((s, i) => (
                     <button key={i} data-testid={`suggestion-${i}`} onClick={() => send(s)}
@@ -209,7 +213,7 @@ export default function Advisor() {
 
           <div className="border-t border-[#2A2A35] p-3 flex gap-2">
             <input data-testid="chat-input" value={input} onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Scrivi un messaggio..."
+              onKeyDown={(e) => e.key === "Enter" && send()} placeholder={t("advisor.placeholder")}
               className="flex-1 bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 text-sm transition-colors" />
             <button data-testid="chat-send-btn" onClick={() => send()} disabled={streaming}
               className="bg-[#E5FF00] text-black px-4 hover:bg-[#D4EC00] transition-colors disabled:opacity-60">

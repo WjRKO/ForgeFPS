@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Plus, Search, Loader2, RefreshCw, Trash2, Zap, TrendingDown, TrendingUp, ExternalLink, AlertTriangle, Pencil, Check, X } from "lucide-react";
 import api, { formatApiErrorDetail } from "@/lib/api";
 
@@ -20,6 +21,7 @@ function PriceTag({ p }) {
 }
 
 export default function Tracker() {
+  const { t } = useTranslation();
   const [products, setProducts] = useState([]);
   const [url, setUrl] = useState("");
   const [adding, setAdding] = useState(false);
@@ -34,8 +36,7 @@ export default function Tracker() {
   const load = async () => { try { const { data } = await api.get("/products"); setProducts(data); } catch {} };
   useEffect(() => { load(); }, []);
 
-  const startEdit = (p) => { setEditing(p.id); setEditTitle(p.title === "Prodotto senza titolo" ? "" : p.title); };
-  const saveTitle = async (id) => {
+  const startEdit = (p) => { setEditing(p.id); setEditTitle(p.title === "Prodotto senza titolo" ? "" : p.title); };  const saveTitle = async (id) => {
     if (!editTitle.trim()) { setEditing(null); return; }
     try { await api.put(`/products/${id}/title`, { title: editTitle.trim() }); setEditing(null); await load(); } catch {}
   };
@@ -69,16 +70,16 @@ export default function Tracker() {
   return (
     <div className="max-w-6xl mx-auto fade-up">
       <div className="mb-6">
-        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">// Price Tracker</div>
-        <h1 className="font-display font-black text-3xl tracking-tighter">Monitoraggio prezzi</h1>
+        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("tracker.eyebrow")}</div>
+        <h1 className="font-display font-black text-3xl tracking-tighter">{t("tracker.title")}</h1>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4 mb-8">
         <div className="bg-[#0F0F12] border border-[#2A2A35] p-5">
-          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3">Traccia da URL</div>
+          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3">{t("tracker.add_url_title")}</div>
           <div className="flex gap-2">
             <input data-testid="track-url-input" value={url} onChange={(e) => setUrl(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && track()} placeholder="Incolla link Amazon o altro store..."
+              onKeyDown={(e) => e.key === "Enter" && track()} placeholder={t("tracker.url_ph")}
               className="flex-1 bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 text-sm" />
             <button data-testid="track-btn" onClick={() => track()} disabled={adding}
               className="bg-[#E5FF00] text-black px-4 font-bold hover:bg-[#D4EC00] transition-colors disabled:opacity-60 flex items-center gap-1">
@@ -86,14 +87,14 @@ export default function Tracker() {
             </button>
           </div>
           {error && <div data-testid="track-error" className="mt-2 text-xs text-[#FF3B30]">{error}</div>}
-          <div className="mt-2 text-[11px] text-zinc-600">Store supportati: Amazon, eBay, MediaWorld, Unieuro, Euronics, Newegg e la maggior parte degli e-commerce (via link diretto).</div>
+          <div className="mt-2 text-[11px] text-zinc-600">{t("tracker.stores_hint")}</div>
         </div>
 
         <div className="bg-[#0F0F12] border border-[#2A2A35] p-5">
-          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3">Cerca (Amazon + eBay)</div>
+          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3">{t("tracker.search_title")}</div>
           <div className="flex gap-2">
             <input data-testid="search-input" value={query} onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && search()} placeholder="es. RTX 4070, Elgato..."
+              onKeyDown={(e) => e.key === "Enter" && search()} placeholder={t("tracker.search_ph")}
               className="flex-1 bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 text-sm" />
             <button data-testid="search-btn" onClick={search} disabled={searching}
               className="bg-[#E5FF00] text-black px-4 font-bold hover:bg-[#D4EC00] transition-colors disabled:opacity-60 flex items-center gap-1">
@@ -120,7 +121,7 @@ export default function Tracker() {
                   <div className="text-xs text-zinc-200 line-clamp-2 flex-1">{r.title}</div>
                   <div className="flex items-center justify-between mt-3">
                     <span className="font-bold text-sm">{r.price != null ? `${r.price} €` : "n/d"}</span>
-                    <button data-testid={`add-result-${i}`} onClick={() => track(r.url)} className="text-xs bg-[#E5FF00] text-black font-bold px-2 py-1 hover:bg-[#D4EC00]">Traccia</button>
+                    <button data-testid={`add-result-${i}`} onClick={() => track(r.url)} className="text-xs bg-[#E5FF00] text-black font-bold px-2 py-1 hover:bg-[#D4EC00]">{t("tracker.track_btn")}</button>
                   </div>
                 </div>
               ))}
@@ -131,7 +132,7 @@ export default function Tracker() {
 
       <div className="bg-[#0F0F12] border border-[#2A2A35]">
         <div className="p-5 border-b border-[#2A2A35] text-xs uppercase tracking-[0.2em] text-zinc-500">
-          I tuoi prodotti ({products.length})
+          {t("tracker.tracked_title")} ({products.length})
         </div>
         {(() => {
           const groups = {};
@@ -150,7 +151,7 @@ export default function Tracker() {
           );
         })()}
         {products.length === 0 ? (
-          <div className="p-10 text-center text-zinc-500 text-sm">Nessun prodotto tracciato. Aggiungi un link o cerca un prodotto.</div>
+          <div className="p-10 text-center text-zinc-500 text-sm">{t("tracker.empty")}</div>
         ) : (
           products.map((p) => (
             <div key={p.id} data-testid={`product-row-${p.id}`} className="flex items-center gap-4 p-4 border-b border-[#1A1A24] hover:bg-[#141419] transition-colors">
@@ -161,7 +162,7 @@ export default function Tracker() {
                 <div className="flex-1 min-w-0 flex items-center gap-2">
                   <input autoFocus data-testid={`edit-title-input-${p.id}`} value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") saveTitle(p.id); if (e.key === "Escape") setEditing(null); }}
-                    placeholder="Nome del prodotto..."
+                    placeholder={t("tracker.name_ph")}
                     className="flex-1 bg-black border border-[#E5FF00] outline-none px-2 py-1.5 text-sm" />
                   <button data-testid={`save-title-${p.id}`} onClick={() => saveTitle(p.id)} className="p-1.5 text-[#00FF66] hover:bg-[#141419]"><Check size={15} /></button>
                   <button onClick={() => setEditing(null)} className="p-1.5 text-zinc-500 hover:bg-[#141419]"><X size={15} /></button>
@@ -169,13 +170,13 @@ export default function Tracker() {
               ) : (
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <Link to={`/app/tracker/${p.id}`} className={`text-sm truncate hover:text-[#E5FF00] transition-colors ${p.title === "Prodotto senza titolo" ? "text-zinc-500 italic" : ""}`}>{p.title}</Link>
-                    <button data-testid={`edit-title-${p.id}`} onClick={() => startEdit(p)} className="text-zinc-600 hover:text-[#E5FF00] shrink-0" title="Modifica nome"><Pencil size={12} /></button>
+                    <Link to={`/app/tracker/${p.id}`} className={`text-sm truncate hover:text-[#E5FF00] transition-colors ${p.title === "Prodotto senza titolo" ? "text-zinc-500 italic" : ""}`}>{p.title === "Prodotto senza titolo" ? t("tracker.no_title") : p.title}</Link>
+                    <button data-testid={`edit-title-${p.id}`} onClick={() => startEdit(p)} className="text-zinc-600 hover:text-[#E5FF00] shrink-0" title={t("tracker.edit_name")}><Pencil size={12} /></button>
                   </div>
                   <div className="text-xs text-zinc-500 flex items-center gap-2">
                     {p.store || p.platform}
-                    {p.status && !["ok", "no_title"].includes(p.status) && <span className="text-[#FF3B30] flex items-center gap-1"><AlertTriangle size={11} /> prezzo manuale</span>}
-                    {p.target_price != null && <span className="text-[#00FF66]">· target {p.target_price}€</span>}
+                    {p.status && !["ok", "no_title"].includes(p.status) && <span className="text-[#FF3B30] flex items-center gap-1"><AlertTriangle size={11} /> {t("tracker.manual_price")}</span>}
+                    {p.target_price != null && <span className="text-[#00FF66]">· {t("tracker.target")} {p.target_price}€</span>}
                   </div>
                 </div>
               )}

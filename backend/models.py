@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 class ChatMessageInput(BaseModel):
     message: str
     session_id: Optional[str] = None
+    lang: Optional[str] = "it"
 
 
 class BuildInput(BaseModel):

@@ -17,7 +17,7 @@ def build(get_current_user):
         return await db.chat_sessions.find({"user_id": str(user["_id"])}, {"_id": 0}).sort("updated_at", -1).to_list(100)
 
     @r.get("/suggestions")
-    async def suggestions(user: dict = Depends(get_current_user)):
+    async def suggestions(lang: str = "it", user: dict = Depends(get_current_user)):
         specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
         d = (specs or {}).get("data", {})
         health = (specs or {}).get("health")
@@ -57,7 +57,28 @@ def build(get_current_user):
                 break
             if q not in out:
                 out.append(q)
-        return {"suggestions": out[:4], "personalized": bool(health)}
+        out = out[:4]
+        if (lang or "it").startswith("en"):
+            en_map = {
+                "La mia GPU scalda troppo: come abbasso le temperature?": "My GPU runs too hot: how do I lower the temperatures?",
+                "La mia CPU raggiunge temperature alte: come la raffreddo meglio?": "My CPU gets too hot: how do I cool it better?",
+                "Come attivo il piano energetico ad alte prestazioni per più FPS?": "How do I enable the high-performance power plan for more FPS?",
+                "I miei driver GPU sono vecchi: come li aggiorno in sicurezza?": "My GPU drivers are old: how do I update them safely?",
+                "Quali programmi all'avvio posso disabilitare per un boot più veloce?": "Which startup programs can I disable for a faster boot?",
+                "Come attivo Game Mode e GPU Scheduling su Windows?": "How do I enable Game Mode and GPU Scheduling on Windows?",
+                "Come abilito l'Hardware-Accelerated GPU Scheduling?": "How do I enable Hardware-Accelerated GPU Scheduling?",
+                "Come libero spazio sul disco C: in sicurezza?": "How do I free up space on drive C: safely?",
+                "La mia RAM è molto utilizzata: come la ottimizzo per il gaming?": "My RAM usage is high: how do I optimize it for gaming?",
+                "Come pulisco i file temporanei e la cache di Windows?": "How do I clean temporary files and the Windows cache?",
+                "Migliori impostazioni del pannello NVIDIA per il gaming competitivo": "Best NVIDIA Control Panel settings for competitive gaming",
+                "Migliori impostazioni di AMD Adrenalin per il gaming competitivo": "Best AMD Adrenalin settings for competitive gaming",
+                "Come riduco l'input lag per il gaming competitivo?": "How do I reduce input lag for competitive gaming?",
+                "Migliori impostazioni OBS per streaming a 1080p60": "Best OBS settings for 1080p60 streaming",
+                "Come ottimizzo Windows 11 per FPS massimi?": "How do I optimize Windows 11 for maximum FPS?",
+                "Tweak per abbassare le temperature della GPU": "Tweaks to lower GPU temperatures",
+            }
+            out = [en_map.get(q, q) for q in out]
+        return {"suggestions": out, "personalized": bool(health)}
 
 
     @r.get("/sessions/{session_id}")
@@ -90,7 +111,7 @@ def build(get_current_user):
             yield f"__SESSION__{session_id}__\n"
             full = ""
             try:
-                async for chunk in ai_engine.stream_advisor(session_id, history, data.message, specs_text):
+                async for chunk in ai_engine.stream_advisor(session_id, history, data.message, specs_text, data.lang or "it"):
                     full += chunk
                     yield chunk
             except Exception as e:

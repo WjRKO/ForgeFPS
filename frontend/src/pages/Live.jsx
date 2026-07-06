@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Cpu, Gauge, Thermometer, MemoryStick, Zap, Copy, Check, Radio, Gamepad2, Bell } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
@@ -16,6 +17,7 @@ function Stat({ icon: Icon, label, value, unit, accent, testid }) {
 }
 
 export default function Live() {
+  const { t } = useTranslation();
   const [data, setData] = useState({ samples: [], live: false });
   const [token, setToken] = useState("");
   const [copied, setCopied] = useState(false);
@@ -34,7 +36,7 @@ export default function Live() {
   }, []);
 
   const saveAlerts = async () => {
-    try { await api.put("/alerts", alerts); toast.success("Impostazioni alert salvate!"); } catch { toast.error("Errore nel salvataggio"); }
+    try { await api.put("/alerts", alerts); toast.success(t("live.alerts_saved")); } catch { toast.error(t("live.save_err")); }
   };
 
   const last = data.samples[data.samples.length - 1] || {};
@@ -51,18 +53,18 @@ export default function Live() {
     <div className="max-w-5xl mx-auto fade-up" data-testid="live-page">
       <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
         <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">// Monitoraggio Live</div>
-          <h1 className="font-display font-black text-3xl tracking-tighter">Telemetria in tempo reale</h1>
+          <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("live.eyebrow")}</div>
+          <h1 className="font-display font-black text-3xl tracking-tighter">{t("live.title")}</h1>
         </div>
         <div className={`flex items-center gap-2 px-3 py-1.5 border text-xs font-bold ${data.live ? "border-[#00FF66]/50 text-[#00FF66]" : "border-[#2A2A35] text-zinc-500"}`} data-testid="live-status">
-          <Radio size={14} className={data.live ? "animate-pulse" : ""} /> {data.live ? "LIVE" : "Agent non attivo"}
+          <Radio size={14} className={data.live ? "animate-pulse" : ""} /> {data.live ? t("live.live") : t("live.agent_off")}
         </div>
       </div>
 
       {!data.live && (
         <div className="bg-[#0F0F12] border border-[#E5FF00]/40 p-5 mb-6">
-          <p className="text-sm text-zinc-300 mb-1 font-semibold">Avvia il monitoraggio dal tuo PC</p>
-          <p className="text-xs text-zinc-500 mb-3">Apri PowerShell, incolla il comando e lascia la finestra aperta. I dati appariranno qui in tempo reale (aggiornamento ogni 2s).</p>
+          <p className="text-sm text-zinc-300 mb-1 font-semibold">{t("live.start_title")}</p>
+          <p className="text-xs text-zinc-500 mb-3">{t("live.start_desc")}</p>
           <div className="flex items-stretch gap-2">
             <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-xs text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="monitor-cmd">{cmd}</code>
             <button data-testid="monitor-copy" onClick={copy} className="shrink-0 flex items-center gap-1 border border-[#2A2A35] px-3 hover:border-[#E5FF00] transition-colors text-xs">
@@ -76,39 +78,39 @@ export default function Live() {
         <Stat icon={Gamepad2} label={last.game ? `FPS · ${last.game}` : "FPS"} value={last.fps} unit="" accent="text-[#00FF66]" testid="stat-fps" />
         <Stat icon={Cpu} label="CPU" value={last.cpu_util} unit="%" accent="text-[#E5FF00]" testid="stat-cpu" />
         <Stat icon={Gauge} label="GPU" value={last.gpu_util} unit="%" accent="text-[#00E0FF]" testid="stat-gpu" />
-        <Stat icon={Thermometer} label="Temp CPU" value={last.cpu_temp} unit="°C" accent="text-[#FF6B00]" testid="stat-cpu-temp" />
-        <Stat icon={Thermometer} label="Temp GPU" value={last.gpu_temp} unit="°C" accent="text-[#FF3B30]" testid="stat-gpu-temp" />
-        <Stat icon={MemoryStick} label="RAM usata" value={last.ram_used_pct} unit="%" accent="text-[#00FF66]" testid="stat-ram" />
-        <Stat icon={MemoryStick} label="VRAM usata" value={last.vram_used_pct} unit="%" accent="text-[#B388FF]" testid="stat-vram" />
-        <Stat icon={Zap} label="Potenza GPU" value={last.gpu_power} unit="W" accent="text-[#E5FF00]" testid="stat-gpu-power" />
+        <Stat icon={Thermometer} label={t("live.st_cpu_temp")} value={last.cpu_temp} unit="°C" accent="text-[#FF6B00]" testid="stat-cpu-temp" />
+        <Stat icon={Thermometer} label={t("live.st_gpu_temp")} value={last.gpu_temp} unit="°C" accent="text-[#FF3B30]" testid="stat-gpu-temp" />
+        <Stat icon={MemoryStick} label={t("live.st_ram")} value={last.ram_used_pct} unit="%" accent="text-[#00FF66]" testid="stat-ram" />
+        <Stat icon={MemoryStick} label={t("live.st_vram")} value={last.vram_used_pct} unit="%" accent="text-[#B388FF]" testid="stat-vram" />
+        <Stat icon={Zap} label={t("live.st_gpu_power")} value={last.gpu_power} unit="W" accent="text-[#E5FF00]" testid="stat-gpu-power" />
       </div>
 
       <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 mb-6" data-testid="alert-settings">
-        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4"><Bell size={14} className="text-[#FF3B30]" /> Alert temperature critiche (push)</div>
+        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4"><Bell size={14} className="text-[#FF3B30]" /> {t("live.alert_title")}</div>
         <div className="flex flex-wrap items-end gap-5">
           <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer" data-testid="alert-enabled">
             <input type="checkbox" checked={alerts.enabled} onChange={(e) => setAlerts({ ...alerts, enabled: e.target.checked })} className="accent-[#E5FF00] w-4 h-4" />
-            Notifiche push attive
+            {t("live.push_active")}
           </label>
           <div>
-            <div className="text-xs text-zinc-500 mb-1">Soglia CPU (°C)</div>
+            <div className="text-xs text-zinc-500 mb-1">{t("live.cpu_threshold")}</div>
             <input type="number" data-testid="alert-cpu-max" value={alerts.cpu_max} onChange={(e) => setAlerts({ ...alerts, cpu_max: parseInt(e.target.value) || 0 })}
               className="w-24 bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none" />
           </div>
           <div>
-            <div className="text-xs text-zinc-500 mb-1">Soglia GPU (°C)</div>
+            <div className="text-xs text-zinc-500 mb-1">{t("live.gpu_threshold")}</div>
             <input type="number" data-testid="alert-gpu-max" value={alerts.gpu_max} onChange={(e) => setAlerts({ ...alerts, gpu_max: parseInt(e.target.value) || 0 })}
               className="w-24 bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none" />
           </div>
-          <button data-testid="save-alerts-btn" onClick={saveAlerts} className="bg-[#E5FF00] text-black font-bold px-4 py-2 text-sm hover:bg-[#c9e000] transition-colors">Salva</button>
+          <button data-testid="save-alerts-btn" onClick={saveAlerts} className="bg-[#E5FF00] text-black font-bold px-4 py-2 text-sm hover:bg-[#c9e000] transition-colors">{t("common.save")}</button>
         </div>
-        <p className="text-xs text-zinc-600 mt-3">Ricevi una notifica quando CPU/GPU superano la soglia durante il monitoraggio (attiva le notifiche dalla campanella in alto). Cooldown 5 min.</p>
+        <p className="text-xs text-zinc-600 mt-3">{t("live.alert_hint")}</p>
       </div>
 
       <div className="bg-[#0F0F12] border border-[#2A2A35] p-5">
-        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4">Utilizzo & temperature (ultimi campioni)</div>
+        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4">{t("live.chart_title")}</div>
         {chart.length === 0 ? (
-          <div className="h-64 flex items-center justify-center text-zinc-600 text-sm">In attesa di dati dall'agent…</div>
+          <div className="h-64 flex items-center justify-center text-zinc-600 text-sm">{t("live.waiting")}</div>
         ) : (
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={chart}>
