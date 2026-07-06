@@ -1,32 +1,34 @@
 import { NavLink, useNavigate, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal, TerminalSquare, Swords } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import api from "@/lib/api";
 import { pushSupported, getPushState, enablePush, disablePush } from "@/lib/push";
 
 const NAV_GROUPS = [
   { section: null, items: [
-    { to: "/app", label: "Dashboard", icon: LayoutDashboard, end: true, id: "dashboard" },
+    { to: "/app", label: "nav.dashboard", icon: LayoutDashboard, end: true, id: "dashboard" },
   ]},
-  { section: "Ottimizza il PC", items: [
-    { to: "/app/pc", label: "Il mio PC", icon: Activity, id: "pc" },
-    { to: "/app/advisor", label: "AI Advisor", icon: MessageSquareCode, id: "advisor" },
-    { to: "/app/commands", label: "Comandi Utili", icon: TerminalSquare, id: "commands" },
-    { to: "/app/bios", label: "BIOS & Ripristino", icon: SlidersHorizontal, id: "bios" },
-    { to: "/app/desktop", label: "Collega il PC", icon: MonitorDown, id: "desktop" },
-  ]},
-  { section: null, items: [
-    { to: "/app/gaming", label: "Gaming", icon: Gamepad2, id: "gaming" },
-  ]},
-  { section: "Acquisti", items: [
-    { to: "/app/builds", label: "Consiglia Build", icon: Cpu, id: "builds" },
-    { to: "/app/upgrade", label: "Upgrade & FPS", icon: Rocket, id: "upgrade" },
-    { to: "/app/tracker", label: "Prezzi", icon: LineChart, id: "tracker" },
+  { section: "section.optimize", items: [
+    { to: "/app/pc", label: "nav.pc", icon: Activity, id: "pc" },
+    { to: "/app/advisor", label: "nav.advisor", icon: MessageSquareCode, id: "advisor" },
+    { to: "/app/commands", label: "nav.commands", icon: TerminalSquare, id: "commands" },
+    { to: "/app/bios", label: "nav.bios", icon: SlidersHorizontal, id: "bios" },
+    { to: "/app/desktop", label: "nav.desktop", icon: MonitorDown, id: "desktop" },
   ]},
   { section: null, items: [
-    { to: "/app/admin", label: "Admin", icon: Shield, id: "admin", adminOnly: true },
+    { to: "/app/gaming", label: "nav.gaming", icon: Gamepad2, id: "gaming" },
+  ]},
+  { section: "section.buy", items: [
+    { to: "/app/builds", label: "nav.builds", icon: Cpu, id: "builds" },
+    { to: "/app/upgrade", label: "nav.upgrade", icon: Rocket, id: "upgrade" },
+    { to: "/app/tracker", label: "nav.tracker", icon: LineChart, id: "tracker" },
+  ]},
+  { section: null, items: [
+    { to: "/app/admin", label: "nav.admin", icon: Shield, id: "admin", adminOnly: true },
   ]},
 ];
 
@@ -109,6 +111,7 @@ function Notifications() {
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -128,7 +131,7 @@ export default function Layout() {
             return (
               <div key={gi} className={group.section ? "pt-3" : ""}>
                 {group.section && (
-                  <div className="px-3 pb-1.5 text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-bold">{group.section}</div>
+                  <div className="px-3 pb-1.5 text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-bold">{t(group.section)}</div>
                 )}
                 {items.map((n) => (
                   <NavLink key={n.to} to={n.to} end={n.end} data-testid={`nav-${n.id}`}
@@ -136,7 +139,7 @@ export default function Layout() {
                       `flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
                         isActive ? "bg-[#E5FF00] text-black font-bold" : "text-zinc-400 hover:text-white hover:bg-[#141419]"
                       }`}>
-                    <n.icon size={17} /> {n.label}
+                    <n.icon size={17} /> {t(n.label)}
                   </NavLink>
                 ))}
               </div>
@@ -147,7 +150,7 @@ export default function Layout() {
           <div className="px-3 py-2 text-xs text-zinc-500 truncate">{user?.email}</div>
           <button onClick={doLogout} data-testid="logout-btn"
             className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-zinc-400 hover:text-[#FF3B30] transition-colors">
-            <LogOut size={17} /> Esci
+            <LogOut size={17} /> {t("common.logout")}
           </button>
         </div>
       </aside>
@@ -155,9 +158,12 @@ export default function Layout() {
       <div className="flex-1 ml-60 flex flex-col">
         <header className="h-16 border-b border-[#2A2A35] bg-black/60 backdrop-blur-xl sticky top-0 z-40 flex items-center justify-between px-6">
           <div className="text-xs uppercase tracking-[0.2em] text-zinc-500" data-testid="page-title">
-            {NAV.find((n) => (n.end ? location.pathname === n.to : location.pathname.startsWith(n.to)))?.label || "Console"}
+            {(() => { const n = NAV.find((x) => (x.end ? location.pathname === x.to : location.pathname.startsWith(x.to))); return n ? t(n.label) : t("common.console"); })()}
           </div>
-          <Notifications />
+          <div className="flex items-center gap-4">
+            <LanguageSwitcher />
+            <Notifications />
+          </div>
         </header>
         <main className="flex-1 p-6 grid-bg">
           <Outlet />
