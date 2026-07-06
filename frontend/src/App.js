@@ -16,6 +16,7 @@ import Upgrade from "@/pages/Upgrade";
 import Live from "@/pages/Live";
 import Profiles from "@/pages/Profiles";
 import BiosRestore from "@/pages/BiosRestore";
+import Commands from "@/pages/Commands";
 import Admin from "@/pages/Admin";
 import { Loader2 } from "lucide-react";
 
@@ -62,6 +63,7 @@ function App() {
               <Route path="live" element={<Live />} />
               <Route path="profiles" element={<Profiles />} />
               <Route path="bios" element={<BiosRestore />} />
+              <Route path="commands" element={<Commands />} />
               <Route path="desktop" element={<DesktopAgent />} />
               <Route path="admin" element={<AdminOnly><Admin /></AdminOnly>} />
             </Route>

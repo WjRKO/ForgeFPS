@@ -1,6 +1,6 @@
 import { NavLink, useNavigate, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal } from "lucide-react";
+import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal, TerminalSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
@@ -16,6 +16,7 @@ const NAV = [
   { to: "/app/live", label: "Monitoraggio Live", icon: Radio, id: "live" },
   { to: "/app/profiles", label: "Profili Gioco", icon: Gamepad2, id: "profiles" },
   { to: "/app/bios", label: "BIOS & Ripristino", icon: SlidersHorizontal, id: "bios" },
+  { to: "/app/commands", label: "Comandi Utili", icon: TerminalSquare, id: "commands" },
   { to: "/app/desktop", label: "Desktop Agent", icon: MonitorDown, id: "desktop" },
   { to: "/app/admin", label: "Admin", icon: Shield, id: "admin", adminOnly: true },
 ];
