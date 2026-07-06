@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Cpu, RotateCcw, CheckCircle2, AlertTriangle, ShieldCheck, Copy, Check, KeyRound, Info } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Cpu, RotateCcw, CheckCircle2, AlertTriangle, ShieldCheck, Copy, Check, KeyRound, Info, Star, MemoryStick, MonitorPlay } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 
@@ -17,25 +17,27 @@ const BIOS_KEYS = {
   Biostar: "Canc (Del)",
 };
 
+// tag: cpu ("amd"|"intel"), gpu ("nvidia"|"amd"), impact (mostrato tra i consigliati),
+// ramProfile / rebar => titolo e descrizione adattati all'hardware.
 const BIOS_SAFE = [
-  { s: "XMP / EXPO / DOCP", w: "Attiva il profilo RAM: senza, la memoria gira a frequenza base e perdi FPS reali. È il tweak BIOS con più impatto." },
-  { s: "Resizable BAR (ReBAR / SAM)", w: "ON. Guadagno prestazioni GPU gratuito. Richiede anche Above 4G Decoding: ON." },
-  { s: "fTPM / PTT + Secure Boot", w: "ON. Obbligatori per Windows 11 e anti-cheat come Valorant/Vanguard, Faceit." },
-  { s: "Fan curve personalizzata", w: "Imposta una curva più aggressiva per CPU/case: temperature più basse durante il gaming." },
-  { s: "Modalità UEFI (CSM off) + Fast Boot", w: "Boot più veloce e moderno. Necessario per Secure Boot." },
-  { s: "PCIe Gen4 per GPU/SSD NVMe", w: "Assicura la massima banda per scheda video e SSD." },
-  { s: "SATA mode: AHCI", w: "Corretto per gli SSD. NON cambiarlo se Windows è già installato (rischio boot)." },
-  { s: "Power Supply Idle Control: Typical", w: "Su Ryzen previene i riavvii improvvisi in idle. Impostazione sicura." },
+  { id: "ram", ramProfile: true, impact: true, s: "XMP / EXPO / DOCP", w: "Attiva il profilo RAM: senza, la memoria gira a frequenza base e perdi FPS reali. È il tweak BIOS con più impatto." },
+  { id: "rebar", rebar: true, impact: true, s: "Resizable BAR (ReBAR / SAM)", w: "ON. Guadagno prestazioni GPU gratuito. Richiede anche Above 4G Decoding: ON." },
+  { id: "ftpm", s: "fTPM / PTT + Secure Boot", w: "ON. Obbligatori per Windows 11 e anti-cheat come Valorant/Vanguard, Faceit." },
+  { id: "fan", s: "Fan curve personalizzata", w: "Imposta una curva più aggressiva per CPU/case: temperature più basse durante il gaming." },
+  { id: "uefi", s: "Modalità UEFI (CSM off) + Fast Boot", w: "Boot più veloce e moderno. Necessario per Secure Boot." },
+  { id: "pcie", s: "PCIe Gen4 per GPU/SSD NVMe", w: "Assicura la massima banda per scheda video e SSD." },
+  { id: "ahci", s: "SATA mode: AHCI", w: "Corretto per gli SSD. NON cambiarlo se Windows è già installato (rischio boot)." },
+  { id: "psi", cpu: "amd", s: "Power Supply Idle Control: Typical", w: "Su Ryzen previene i riavvii improvvisi in idle. Impostazione sicura." },
 ];
 
 const BIOS_CAUTION = [
-  { s: "Curve Optimizer / PBO (Ryzen)", w: "Undervolt/boost: ottimo per temp e prestazioni, ma può causare instabilità/crash. Testa con offset piccoli (es. -15) e prova la stabilità." },
-  { s: "Overclock CPU / RAM manuale", w: "Frequenze/timing manuali possono impedire il boot. Solo se sai cosa fai; annota i valori di default." },
-  { s: "Aggiornamento BIOS", w: "Utile per stabilità/compatibilità, ma se interrotto (blackout) può brickare la scheda madre. Usa la funzione integrata (BIOS Flashback) e non spegnere durante l'update." },
-  { s: "Voltaggi (vCore, SoC, DRAM)", w: "Voltaggi errati possono danneggiare o degradare i componenti. Zona a rischio: non toccare senza esperienza." },
-  { s: "Disattivare Global C-States", w: "Riduce micro-latenze ma aumenta temperature e consumi in idle. Solo per competitive estremo." },
-  { s: "Load Line Calibration (LLC)", w: "Stabilizza il voltaggio sotto carico ma può alzare temperature/voltaggi reali. Impostazione avanzata." },
-  { s: "Disabilitare dispositivi integrati", w: "Audio/LAN/USB off può far risparmiare risorse ma rischi di perdere funzionalità o periferiche." },
+  { id: "co", cpu: "amd", impact: true, s: "Curve Optimizer / PBO (Ryzen)", w: "Undervolt/boost: ottimo per temp e prestazioni, ma può causare instabilità/crash. Testa con offset piccoli (es. -15) e prova la stabilità." },
+  { id: "oc", s: "Overclock CPU / RAM manuale", w: "Frequenze/timing manuali possono impedire il boot. Solo se sai cosa fai; annota i valori di default." },
+  { id: "bupd", s: "Aggiornamento BIOS", w: "Utile per stabilità/compatibilità, ma se interrotto (blackout) può brickare la scheda madre. Usa la funzione integrata (BIOS Flashback) e non spegnere durante l'update." },
+  { id: "volt", s: "Voltaggi (vCore, SoC, DRAM)", w: "Voltaggi errati possono danneggiare o degradare i componenti. Zona a rischio: non toccare senza esperienza." },
+  { id: "cstate", cpu: "amd", s: "Disattivare Global C-States", w: "Riduce micro-latenze ma aumenta temperature e consumi in idle. Solo per competitive estremo." },
+  { id: "llc", s: "Load Line Calibration (LLC)", w: "Stabilizza il voltaggio sotto carico ma può alzare temperature/voltaggi reali. Impostazione avanzata." },
+  { id: "disable", s: "Disabilitare dispositivi integrati", w: "Audio/LAN/USB off può far risparmiare risorse ma rischi di perdere funzionalità o periferiche." },
 ];
 
 const RESTORE_SAFE = [
@@ -54,11 +56,61 @@ const RESTORE_CAUTION = [
   { s: "Reinstallazione pulita di Windows", w: "Formattazione completa da USB. La soluzione più radicale: backup obbligatorio, richiede reinstallare tutto." },
 ];
 
+function detectHardware(data) {
+  const cpuStr = (data?.cpu || "").toLowerCase();
+  const gpuStr = (data?.gpu || "").toLowerCase();
+  let cpu = null;
+  if (/ryzen|threadripper|athlon|\bamd\b/.test(cpuStr)) cpu = "amd";
+  else if (/intel|core i|core ultra|pentium|celeron|xeon/.test(cpuStr)) cpu = "intel";
+  let gpu = null;
+  if (/nvidia|geforce|rtx|gtx|quadro/.test(gpuStr)) gpu = "nvidia";
+  else if (/radeon|\brx ?\d|vega/.test(gpuStr)) gpu = "amd";
+  else if (/\barc\b|intel/.test(gpuStr)) gpu = "intel";
+  const ramType = (data?.ram_type || "").toUpperCase().includes("DDR5") ? "DDR5"
+    : (data?.ram_type || "").toUpperCase().includes("DDR4") ? "DDR4" : null;
+  return { cpu, gpu, ramType };
+}
+
+function adaptTweak(t, hw) {
+  let { s, w } = t;
+  if (t.ramProfile) {
+    if (hw.cpu === "amd") {
+      s = hw.ramType === "DDR5" ? "EXPO — profilo RAM AMD (DDR5)" : "DOCP / EXPO — profilo RAM AMD";
+      w = "Attiva EXPO/DOCP nel BIOS: senza, la RAM gira lenta e perdi FPS. Sul tuo Ryzen è il tweak con più impatto reale.";
+    } else if (hw.cpu === "intel") {
+      s = hw.ramType === "DDR5" ? "XMP — profilo RAM Intel (DDR5)" : "XMP — profilo RAM Intel";
+      w = "Attiva XMP nel BIOS: senza, la RAM resta alla frequenza base e limiti la CPU Intel. È il tweak BIOS con più impatto.";
+    }
+  }
+  if (t.rebar) {
+    if (hw.gpu === "nvidia") {
+      s = "Resizable BAR (ReBAR)";
+      w = "ON per la tua GeForce: prestazioni gratis in molti giochi. Richiede anche Above 4G Decoding: ON.";
+    } else if (hw.gpu === "amd") {
+      s = "Smart Access Memory (SAM / ReBAR)";
+      w = "ON per la tua Radeon: SAM sfrutta la banda extra CPU↔GPU. Richiede Above 4G Decoding: ON.";
+    } else if (hw.gpu === "intel") {
+      s = "Resizable BAR (ReBAR)";
+      w = "ON per la tua Intel Arc: fortemente consigliato, impatta molto le prestazioni. Richiede Above 4G Decoding: ON.";
+    }
+  }
+  return { ...t, s, w };
+}
+
+function filterForHardware(list, hw) {
+  return list
+    .filter((t) => {
+      if (t.cpu && hw.cpu && t.cpu !== hw.cpu) return false;
+      return true;
+    })
+    .map((t) => adaptTweak(t, hw));
+}
+
 function Row({ item, tone, i, section }) {
   const Icon = tone === "safe" ? CheckCircle2 : AlertTriangle;
   const color = tone === "safe" ? "text-[#00FF66]" : "text-[#E5FF00]";
   return (
-    <div className="flex gap-3 p-3 border-b border-[#1A1A24] last:border-0" data-testid={`${section}-${tone}-${i}`}>
+    <div className="flex gap-3 p-3 border-b border-[#1A1A24] last:border-0" data-testid={`${section}-${tone}-${item.id || i}`}>
       <Icon size={16} className={`${color} shrink-0 mt-0.5`} />
       <div>
         <div className="text-sm text-zinc-100 font-semibold">{item.s}</div>
@@ -67,6 +119,11 @@ function Row({ item, tone, i, section }) {
     </div>
   );
 }
+
+const HW_LABEL = {
+  cpu: { amd: "CPU AMD Ryzen", intel: "CPU Intel" },
+  gpu: { nvidia: "GPU NVIDIA", amd: "GPU AMD Radeon", intel: "GPU Intel Arc" },
+};
 
 export default function BiosRestore() {
   const [tab, setTab] = useState("bios");
@@ -79,7 +136,18 @@ export default function BiosRestore() {
     api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
   }, []);
 
-  const mb = ((specs?.data?.motherboard || "") + " " + (specs?.data?.system_model || "")).toUpperCase();
+  const data = specs?.data || {};
+  const hw = useMemo(() => detectHardware(data), [specs]);
+  const hasHw = hw.cpu || hw.gpu;
+
+  const safe = useMemo(() => filterForHardware(BIOS_SAFE, hw), [hw]);
+  const caution = useMemo(() => filterForHardware(BIOS_CAUTION, hw), [hw]);
+  const topPicks = useMemo(
+    () => [...safe, ...caution].filter((t) => t.impact).slice(0, 3),
+    [safe, caution]
+  );
+
+  const mb = ((data.motherboard || "") + " " + (data.system_model || "")).toUpperCase();
   let vendor = null;
   for (const v of Object.keys(BIOS_KEYS)) { if (mb.includes(v.toUpperCase())) { vendor = v; break; } }
   const key = vendor ? BIOS_KEYS[vendor] : "Canc (Del) o F2 (varia per marca)";
@@ -95,7 +163,7 @@ export default function BiosRestore() {
       <div className="mb-6">
         <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">// Guida avanzata</div>
         <h1 className="font-display font-black text-3xl tracking-tighter">BIOS & Ripristino</h1>
-        <p className="text-zinc-500 text-sm mt-1">Impostazioni BIOS consigliate e opzioni di ripristino, divise tra sicure e da usare con cautela.</p>
+        <p className="text-zinc-500 text-sm mt-1">Impostazioni BIOS consigliate e opzioni di ripristino, adattate al tuo hardware.</p>
       </div>
 
       <div className="flex gap-2 mb-6">
@@ -111,6 +179,37 @@ export default function BiosRestore() {
 
       {tab === "bios" ? (
         <div className="space-y-4">
+          {/* Hardware rilevato */}
+          <div className="bg-[#0F0F12] border border-[#00E0FF]/30 p-4" data-testid="bios-hw">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-[#00E0FF] mb-2">
+              <Cpu size={14} /> Hardware rilevato
+            </div>
+            {hasHw ? (
+              <div className="flex flex-wrap gap-2">
+                {hw.cpu && <span className="inline-flex items-center gap-1.5 text-xs bg-black border border-[#2A2A35] px-2.5 py-1 text-zinc-200" data-testid="hw-cpu"><Cpu size={12} className="text-[#E5FF00]" /> {data.cpu || HW_LABEL.cpu[hw.cpu]}</span>}
+                {hw.gpu && <span className="inline-flex items-center gap-1.5 text-xs bg-black border border-[#2A2A35] px-2.5 py-1 text-zinc-200" data-testid="hw-gpu"><MonitorPlay size={12} className="text-[#00FF66]" /> {data.gpu || HW_LABEL.gpu[hw.gpu]}</span>}
+                {hw.ramType && <span className="inline-flex items-center gap-1.5 text-xs bg-black border border-[#2A2A35] px-2.5 py-1 text-zinc-200" data-testid="hw-ram"><MemoryStick size={12} className="text-[#00E0FF]" /> RAM {hw.ramType}</span>}
+              </div>
+            ) : (
+              <p className="text-xs text-zinc-500">Nessun hardware rilevato. Vai su <span className="text-zinc-300">Il mio PC</span> e avvia il Desktop Agent per una guida su misura. Sotto trovi la guida generica.</p>
+            )}
+          </div>
+
+          {/* Consigliati per il tuo PC */}
+          {hasHw && topPicks.length > 0 && (
+            <div className="bg-gradient-to-br from-[#E5FF00]/10 to-transparent border border-[#E5FF00]/40 p-5" data-testid="bios-top-picks">
+              <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#E5FF00]"><Star size={16} /> Consigliati per il tuo PC</div>
+              <div className="grid sm:grid-cols-3 gap-3">
+                {topPicks.map((t, i) => (
+                  <div key={t.id} className="bg-black/60 border border-[#2A2A35] p-3" data-testid={`top-pick-${t.id}`}>
+                    <div className="text-xs font-bold text-zinc-100">{t.s}</div>
+                    <div className="text-[11px] text-zinc-500 mt-1 leading-relaxed line-clamp-4">{t.w}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="bg-[#0F0F12] border border-[#2A2A35] p-5" data-testid="bios-access">
             <div className="flex items-center gap-2 text-sm font-bold mb-2"><KeyRound size={16} className="text-[#00E0FF]" /> Come entrare nel BIOS</div>
             <p className="text-sm text-zinc-300">Riavvia e premi ripetutamente: <span className="text-[#E5FF00] font-bold">{key}</span>{vendor && <span className="text-zinc-500"> (rilevata scheda {vendor})</span>}.</p>
@@ -119,12 +218,12 @@ export default function BiosRestore() {
 
           <div className="bg-[#0F0F12] border border-[#00FF66]/30 p-5">
             <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#00FF66]"><ShieldCheck size={16} /> Impostazioni SICURE (consigliate)</div>
-            <div className="border border-[#1A1A24]">{BIOS_SAFE.map((it, i) => <Row key={i} item={it} tone="safe" i={i} section="bios" />)}</div>
+            <div className="border border-[#1A1A24]">{safe.map((it, i) => <Row key={it.id} item={it} tone="safe" i={i} section="bios" />)}</div>
           </div>
 
           <div className="bg-[#0F0F12] border border-[#E5FF00]/30 p-5">
             <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#E5FF00]"><AlertTriangle size={16} /> Da usare CON CAUTELA</div>
-            <div className="border border-[#1A1A24]">{BIOS_CAUTION.map((it, i) => <Row key={i} item={it} tone="caution" i={i} section="bios" />)}</div>
+            <div className="border border-[#1A1A24]">{caution.map((it, i) => <Row key={it.id} item={it} tone="caution" i={i} section="bios" />)}</div>
           </div>
 
           <div className="bg-black border border-[#2A2A35] p-4 flex gap-3 items-start">

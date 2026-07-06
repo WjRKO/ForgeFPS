@@ -159,3 +159,16 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - Verificato via curl: token agent, POST benchmark before/after, GET pc-benchmark, generazione script (benchmark mode). Screenshot MyPc: card renderizza (420→510 +21%)
 - NOTA: l'ESECUZIONE reale dei tweak è testabile solo su host Windows (ambiente qui è Linux). Verificati: generazione script, endpoint backend, UI, import Python agent
 - Credenziali admin invariate: admin@boostpc.io / admin123
+
+## Aggiornamento 2026-07-06 — Pagina "BIOS & Ripristino" (adattiva)
+- Pagina BiosRestore.jsx collegata all'app: rotta `/app/bios` in App.js + voce menu laterale "BIOS & Ripristino" (icona SlidersHorizontal) in Layout.jsx
+- Due tab: BIOS (tweak sicuri/da usare con cautela + tasto d'accesso BIOS per marca scheda madre) e Ripristino PC (opzioni reversibili/cautela + comando restore BoostPC col token utente)
+- GUIDA BIOS ORA ADATTIVA all'hardware rilevato (da /api/pc-specs):
+  - detectHardware(): CPU amd/intel, GPU nvidia/amd/intel, RAM DDR4/DDR5 via regex su cpu/gpu/ram_type
+  - Card "Hardware rilevato" (chip CPU/GPU/RAM)
+  - Sezione "Consigliati per il tuo PC": top 3 tweak ad alto impatto filtrati per hardware
+  - Titoli/descrizioni adattati: XMP (Intel) vs EXPO/DOCP (AMD, in base a DDR4/DDR5); Resizable BAR (NVIDIA/Intel) vs Smart Access Memory/SAM (AMD)
+  - Tweak CPU-specifici (PBO/Curve Optimizer, Power Supply Idle, Global C-States) mostrati solo se CPU=AMD
+  - Fallback generico + invito ad avviare Desktop Agent se nessun hardware rilevato
+- Verificato via screenshot con account admin (AMD Ryzen 7 5800X3D + RTX 3070 Ti + DDR4): adattamento corretto
+- Credenziali admin invariate: admin@boostpc.io / admin123
