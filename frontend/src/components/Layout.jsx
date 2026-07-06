@@ -17,7 +17,7 @@ const NAV_GROUPS = [
     { to: "/app/bios", label: "BIOS & Ripristino", icon: SlidersHorizontal, id: "bios" },
     { to: "/app/desktop", label: "Collega il PC", icon: MonitorDown, id: "desktop" },
   ]},
-  { section: "Gaming", items: [
+  { section: null, items: [
     { to: "/app/gaming", label: "Gaming", icon: Gamepad2, id: "gaming" },
   ]},
   { section: "Acquisti", items: [
