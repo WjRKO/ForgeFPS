@@ -224,6 +224,8 @@ async def refresh_product_price(product: dict) -> dict:
     update = {"updated_at": now_iso(), "status": scraped.get("status"), "last_error": scraped.get("error")}
     if scraped.get("title") and product.get("title") == "Prodotto senza titolo":
         update["title"] = scraped["title"]
+    if scraped.get("store") and not product.get("store"):
+        update["store"] = scraped["store"]
     if scraped.get("image") and not product.get("image"):
         update["image"] = scraped["image"]
     notified = False

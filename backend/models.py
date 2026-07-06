@@ -28,6 +28,10 @@ class ManualPriceInput(BaseModel):
     price: float
 
 
+class TitleInput(BaseModel):
+    title: str
+
+
 class TargetInput(BaseModel):
     target_price: float
 

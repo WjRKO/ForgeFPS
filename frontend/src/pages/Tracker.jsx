@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Search, Loader2, RefreshCw, Trash2, Zap, TrendingDown, TrendingUp, ExternalLink, AlertTriangle } from "lucide-react";
+import { Plus, Search, Loader2, RefreshCw, Trash2, Zap, TrendingDown, TrendingUp, ExternalLink, AlertTriangle, Pencil, Check, X } from "lucide-react";
 import api, { formatApiErrorDetail } from "@/lib/api";
 
 function PriceTag({ p }) {
@@ -28,9 +28,17 @@ export default function Tracker() {
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState(null);
   const [refreshing, setRefreshing] = useState({});
+  const [editing, setEditing] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
 
   const load = async () => { try { const { data } = await api.get("/products"); setProducts(data); } catch {} };
   useEffect(() => { load(); }, []);
+
+  const startEdit = (p) => { setEditing(p.id); setEditTitle(p.title === "Prodotto senza titolo" ? "" : p.title); };
+  const saveTitle = async (id) => {
+    if (!editTitle.trim()) { setEditing(null); return; }
+    try { await api.put(`/products/${id}/title`, { title: editTitle.trim() }); setEditing(null); await load(); } catch {}
+  };
 
   const track = async (u) => {
     const target = u ?? url;
@@ -78,10 +86,11 @@ export default function Tracker() {
             </button>
           </div>
           {error && <div data-testid="track-error" className="mt-2 text-xs text-[#FF3B30]">{error}</div>}
+          <div className="mt-2 text-[11px] text-zinc-600">Store supportati: Amazon, eBay, MediaWorld, Unieuro, Euronics, Newegg e la maggior parte degli e-commerce (via link diretto).</div>
         </div>
 
         <div className="bg-[#0F0F12] border border-[#2A2A35] p-5">
-          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3">Cerca su Amazon</div>
+          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3">Cerca (Amazon + eBay)</div>
           <div className="flex gap-2">
             <input data-testid="search-input" value={query} onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && search()} placeholder="es. RTX 4070, Elgato..."
@@ -148,14 +157,28 @@ export default function Tracker() {
               <Link to={`/app/tracker/${p.id}`} className="w-12 h-12 bg-black border border-[#2A2A35] flex items-center justify-center overflow-hidden shrink-0">
                 {p.image ? <img src={p.image} alt="" className="w-full h-full object-contain" /> : <Zap size={16} className="text-zinc-600" />}
               </Link>
-              <Link to={`/app/tracker/${p.id}`} className="flex-1 min-w-0">
-                <div className="text-sm truncate hover:text-[#E5FF00] transition-colors">{p.title}</div>
-                <div className="text-xs text-zinc-500 flex items-center gap-2">
-                  {p.platform}
-                  {p.status && p.status !== "ok" && <span className="text-[#FF3B30] flex items-center gap-1"><AlertTriangle size={11} /> prezzo manuale</span>}
-                  {p.target_price != null && <span className="text-[#00FF66]">· target {p.target_price}€</span>}
+              {editing === p.id ? (
+                <div className="flex-1 min-w-0 flex items-center gap-2">
+                  <input autoFocus data-testid={`edit-title-input-${p.id}`} value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") saveTitle(p.id); if (e.key === "Escape") setEditing(null); }}
+                    placeholder="Nome del prodotto..."
+                    className="flex-1 bg-black border border-[#E5FF00] outline-none px-2 py-1.5 text-sm" />
+                  <button data-testid={`save-title-${p.id}`} onClick={() => saveTitle(p.id)} className="p-1.5 text-[#00FF66] hover:bg-[#141419]"><Check size={15} /></button>
+                  <button onClick={() => setEditing(null)} className="p-1.5 text-zinc-500 hover:bg-[#141419]"><X size={15} /></button>
                 </div>
-              </Link>
+              ) : (
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Link to={`/app/tracker/${p.id}`} className={`text-sm truncate hover:text-[#E5FF00] transition-colors ${p.title === "Prodotto senza titolo" ? "text-zinc-500 italic" : ""}`}>{p.title}</Link>
+                    <button data-testid={`edit-title-${p.id}`} onClick={() => startEdit(p)} className="text-zinc-600 hover:text-[#E5FF00] shrink-0" title="Modifica nome"><Pencil size={12} /></button>
+                  </div>
+                  <div className="text-xs text-zinc-500 flex items-center gap-2">
+                    {p.store || p.platform}
+                    {p.status && !["ok", "no_title"].includes(p.status) && <span className="text-[#FF3B30] flex items-center gap-1"><AlertTriangle size={11} /> prezzo manuale</span>}
+                    {p.target_price != null && <span className="text-[#00FF66]">· target {p.target_price}€</span>}
+                  </div>
+                </div>
+              )}
               <PriceTag p={p} />
               <div className="flex gap-1 shrink-0">
                 <a href={p.url} target="_blank" rel="noreferrer" className="p-2 text-zinc-500 hover:text-[#E5FF00]"><ExternalLink size={15} /></a>

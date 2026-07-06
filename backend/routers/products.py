@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from database import db, now_iso
 from helpers import record_history, refresh_product_price, create_notification
 from scraper import scrape_product, search_products
-from models import TrackInput, ManualPriceInput, TargetInput, SearchInput
+from models import TrackInput, ManualPriceInput, TargetInput, SearchInput, TitleInput
 
 
 def build(get_current_user):
@@ -23,7 +23,8 @@ def build(get_current_user):
         price = scraped.get("price")
         doc = {"id": pid, "user_id": str(user["_id"]), "url": data.url,
                "title": scraped.get("title") or "Prodotto senza titolo",
-               "platform": scraped.get("platform"), "image": scraped.get("image"),
+               "platform": scraped.get("platform"), "store": scraped.get("store"),
+               "image": scraped.get("image"),
                "currency": scraped.get("currency", "EUR"),
                "current_price": price, "initial_price": price, "lowest_price": price,
                "target_price": data.target_price, "status": scraped.get("status"),
@@ -72,6 +73,17 @@ def build(get_current_user):
         hit_target = target is not None and data.price <= target
         if dropped or hit_target:
             await create_notification(str(user["_id"]), {**p, "id": product_id}, old, data.price, hit_target)
+        return await db.products.find_one({"id": product_id}, {"_id": 0})
+
+    @r.put("/products/{product_id}/title")
+    async def set_manual_title(product_id: str, data: TitleInput, user: dict = Depends(get_current_user)):
+        title = data.title.strip()[:200]
+        if not title:
+            raise HTTPException(status_code=400, detail="Il nome non può essere vuoto")
+        res = await db.products.update_one({"id": product_id, "user_id": str(user["_id"])},
+                                           {"$set": {"title": title, "updated_at": now_iso()}})
+        if res.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Prodotto non trovato")
         return await db.products.find_one({"id": product_id}, {"_id": 0})
 
     @r.put("/products/{product_id}/target")
