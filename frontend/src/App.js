@@ -11,13 +11,11 @@ import BuildGenerator from "@/pages/BuildGenerator";
 import Tracker from "@/pages/Tracker";
 import ProductDetail from "@/pages/ProductDetail";
 import DesktopAgent from "@/pages/DesktopAgent";
-import MyPc from "@/pages/MyPc";
+import MyPcHub from "@/pages/MyPcHub";
 import Upgrade from "@/pages/Upgrade";
-import Live from "@/pages/Live";
-import Profiles from "@/pages/Profiles";
-import Games from "@/pages/Games";
-import BiosRestore from "@/pages/BiosRestore";
+import Gaming from "@/pages/Gaming";
 import Commands from "@/pages/Commands";
+import BiosRestore from "@/pages/BiosRestore";
 import Admin from "@/pages/Admin";
 import { Loader2 } from "lucide-react";
 
@@ -60,10 +58,11 @@ function App() {
               <Route path="upgrade" element={<Upgrade />} />
               <Route path="tracker" element={<Tracker />} />
               <Route path="tracker/:id" element={<ProductDetail />} />
-              <Route path="pc" element={<MyPc />} />
-              <Route path="live" element={<Live />} />
-              <Route path="profiles" element={<Profiles />} />
-              <Route path="games" element={<Games />} />
+              <Route path="pc" element={<MyPcHub initialTab="overview" />} />
+              <Route path="live" element={<MyPcHub initialTab="live" />} />
+              <Route path="gaming" element={<Gaming initialTab="games" />} />
+              <Route path="profiles" element={<Gaming initialTab="profiles" />} />
+              <Route path="games" element={<Gaming initialTab="games" />} />
               <Route path="bios" element={<BiosRestore />} />
               <Route path="commands" element={<Commands />} />
               <Route path="desktop" element={<DesktopAgent />} />

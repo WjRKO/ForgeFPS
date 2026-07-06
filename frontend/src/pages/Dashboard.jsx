@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { LineChart, Cpu, MessageSquareCode, PiggyBank, Bell, ArrowRight, Zap } from "lucide-react";
+import { LineChart, Cpu, MessageSquareCode, PiggyBank, Bell, ArrowRight, Zap, MonitorDown } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -31,6 +31,27 @@ export default function Dashboard() {
       <div className="mb-8">
         <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">// Command Center</div>
         <h1 className="font-display font-black text-3xl sm:text-4xl tracking-tighter">Ciao, {user?.name || "Gamer"}</h1>
+      </div>
+
+      <div className="mb-8 bg-gradient-to-br from-[#E5FF00]/10 to-transparent border border-[#E5FF00]/30 p-5" data-testid="onboarding-box">
+        <div className="text-sm font-bold text-[#E5FF00] mb-3">Inizia in 3 passi</div>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <Link to="/app/desktop" data-testid="step-connect" className="group bg-black/40 border border-[#2A2A35] p-4 hover:border-[#E5FF00] transition-colors">
+            <div className="flex items-center gap-2 mb-1"><span className="w-6 h-6 bg-[#E5FF00] text-black text-xs font-black flex items-center justify-center">1</span><MonitorDown size={16} className="text-[#E5FF00]" /></div>
+            <div className="text-sm font-semibold mt-1">Collega il PC</div>
+            <div className="text-xs text-zinc-500">Un comando da copiare: rileva il tuo hardware. Nessun download.</div>
+          </Link>
+          <Link to="/app/advisor" data-testid="step-optimize" className="group bg-black/40 border border-[#2A2A35] p-4 hover:border-[#E5FF00] transition-colors">
+            <div className="flex items-center gap-2 mb-1"><span className="w-6 h-6 bg-[#E5FF00] text-black text-xs font-black flex items-center justify-center">2</span><MessageSquareCode size={16} className="text-[#E5FF00]" /></div>
+            <div className="text-sm font-semibold mt-1">Ottimizza</div>
+            <div className="text-xs text-zinc-500">L'AI ti guida a velocizzare il PC e guadagnare FPS.</div>
+          </Link>
+          <Link to="/app/tracker" data-testid="step-track" className="group bg-black/40 border border-[#2A2A35] p-4 hover:border-[#E5FF00] transition-colors">
+            <div className="flex items-center gap-2 mb-1"><span className="w-6 h-6 bg-[#E5FF00] text-black text-xs font-black flex items-center justify-center">3</span><LineChart size={16} className="text-[#E5FF00]" /></div>
+            <div className="text-sm font-semibold mt-1">Traccia i prezzi</div>
+            <div className="text-xs text-zinc-500">Segui i tuoi prodotti e ricevi avvisi quando calano.</div>
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

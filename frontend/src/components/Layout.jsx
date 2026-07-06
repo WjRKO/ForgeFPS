@@ -6,21 +6,31 @@ import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
 import { pushSupported, getPushState, enablePush, disablePush } from "@/lib/push";
 
-const NAV = [
-  { to: "/app", label: "Dashboard", icon: LayoutDashboard, end: true, id: "dashboard" },
-  { to: "/app/advisor", label: "AI Advisor", icon: MessageSquareCode, id: "advisor" },
-  { to: "/app/builds", label: "Build Generator", icon: Cpu, id: "builds" },
-  { to: "/app/upgrade", label: "Upgrade & FPS", icon: Rocket, id: "upgrade" },
-  { to: "/app/tracker", label: "Price Tracker", icon: LineChart, id: "tracker" },
-  { to: "/app/pc", label: "Il mio PC", icon: Activity, id: "pc" },
-  { to: "/app/live", label: "Monitoraggio Live", icon: Radio, id: "live" },
-  { to: "/app/profiles", label: "Profili Gioco", icon: Gamepad2, id: "profiles" },
-  { to: "/app/games", label: "I miei giochi", icon: Swords, id: "games" },
-  { to: "/app/bios", label: "BIOS & Ripristino", icon: SlidersHorizontal, id: "bios" },
-  { to: "/app/commands", label: "Comandi Utili", icon: TerminalSquare, id: "commands" },
-  { to: "/app/desktop", label: "Desktop Agent", icon: MonitorDown, id: "desktop" },
-  { to: "/app/admin", label: "Admin", icon: Shield, id: "admin", adminOnly: true },
+const NAV_GROUPS = [
+  { section: null, items: [
+    { to: "/app", label: "Dashboard", icon: LayoutDashboard, end: true, id: "dashboard" },
+  ]},
+  { section: "Ottimizza il PC", items: [
+    { to: "/app/pc", label: "Il mio PC", icon: Activity, id: "pc" },
+    { to: "/app/advisor", label: "AI Advisor", icon: MessageSquareCode, id: "advisor" },
+    { to: "/app/commands", label: "Comandi Utili", icon: TerminalSquare, id: "commands" },
+    { to: "/app/bios", label: "BIOS & Ripristino", icon: SlidersHorizontal, id: "bios" },
+    { to: "/app/desktop", label: "Collega il PC", icon: MonitorDown, id: "desktop" },
+  ]},
+  { section: "Gaming", items: [
+    { to: "/app/gaming", label: "Gaming", icon: Gamepad2, id: "gaming" },
+  ]},
+  { section: "Acquisti", items: [
+    { to: "/app/builds", label: "Consiglia Build", icon: Cpu, id: "builds" },
+    { to: "/app/upgrade", label: "Upgrade & FPS", icon: Rocket, id: "upgrade" },
+    { to: "/app/tracker", label: "Prezzi", icon: LineChart, id: "tracker" },
+  ]},
+  { section: null, items: [
+    { to: "/app/admin", label: "Admin", icon: Shield, id: "admin", adminOnly: true },
+  ]},
 ];
+
+const NAV = NAV_GROUPS.flatMap((g) => g.items);
 
 function Notifications() {
   const [open, setOpen] = useState(false);
@@ -111,16 +121,27 @@ export default function Layout() {
           <div className="w-8 h-8 bg-[#E5FF00] flex items-center justify-center"><Zap size={18} className="text-black" /></div>
           <span className="font-display font-black tracking-tighter text-lg">BOOST<span className="text-[#E5FF00]">PC</span></span>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
-          {NAV.filter((n) => !n.adminOnly || user?.role === "admin").map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.end} data-testid={`nav-${n.id}`}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
-                  isActive ? "bg-[#E5FF00] text-black font-bold" : "text-zinc-400 hover:text-white hover:bg-[#141419]"
-                }`}>
-              <n.icon size={17} /> {n.label}
-            </NavLink>
-          ))}
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+          {NAV_GROUPS.map((group, gi) => {
+            const items = group.items.filter((n) => !n.adminOnly || user?.role === "admin");
+            if (items.length === 0) return null;
+            return (
+              <div key={gi} className={group.section ? "pt-3" : ""}>
+                {group.section && (
+                  <div className="px-3 pb-1.5 text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-bold">{group.section}</div>
+                )}
+                {items.map((n) => (
+                  <NavLink key={n.to} to={n.to} end={n.end} data-testid={`nav-${n.id}`}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
+                        isActive ? "bg-[#E5FF00] text-black font-bold" : "text-zinc-400 hover:text-white hover:bg-[#141419]"
+                      }`}>
+                    <n.icon size={17} /> {n.label}
+                  </NavLink>
+                ))}
+              </div>
+            );
+          })}
         </nav>
         <div className="p-3 border-t border-[#2A2A35]">
           <div className="px-3 py-2 text-xs text-zinc-500 truncate">{user?.email}</div>
