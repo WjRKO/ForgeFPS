@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Zap, Cpu, LineChart, MonitorDown, MessageSquareCode, ArrowRight, Gauge } from "lucide-react";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 const FEATURES = [
   { icon: MessageSquareCode, title: "AI Advisor", desc: "Consigli passo-passo per ottimizzare Windows, GPU, OBS e ridurre la latenza. Chatta con la tua AI esperta." },
@@ -19,6 +20,7 @@ export default function Landing() {
             <span className="font-display font-black tracking-tighter text-lg">BOOST<span className="text-[#E5FF00]">PC</span></span>
           </div>
           <div className="flex items-center gap-3">
+            <LanguageSwitcher />
             <Link to="/login" data-testid="nav-login-link" className="text-sm text-zinc-400 hover:text-white transition-colors px-3 py-2">Accedi</Link>
             <Link to="/register" data-testid="nav-register-link" className="text-sm bg-[#E5FF00] text-black font-bold px-4 py-2 hover:bg-[#D4EC00] transition-colors">Inizia ora</Link>
           </div>

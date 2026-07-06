@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Zap, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/context/AuthContext";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 export default function Auth({ mode }) {
   const { t } = useTranslation();
@@ -29,6 +30,7 @@ export default function Auth({ mode }) {
 
   return (
     <div className="min-h-screen bg-[#050505] grid-bg flex items-center justify-center px-6 text-zinc-100">
+      <div className="absolute top-4 right-4"><LanguageSwitcher /></div>
       <div className="w-full max-w-md">
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
           <div className="w-9 h-9 bg-[#E5FF00] flex items-center justify-center"><Zap size={20} className="text-black" /></div>
