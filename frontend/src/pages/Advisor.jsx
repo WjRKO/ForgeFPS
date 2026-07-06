@@ -7,13 +7,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import api, { API } from "@/lib/api";
 
-const DEFAULT_SUGGESTIONS = [
-  "Come riduco l'input lag per il gaming competitivo?",
-  "Migliori impostazioni OBS per streaming a 1080p60",
-  "Come ottimizzo Windows 11 per FPS massimi?",
-  "Tweak per abbassare le temperature della GPU",
-];
-
 function CodeBlock({ children }) {
   const [copied, setCopied] = useState(false);
   const text = String(children).replace(/\n$/, "");
@@ -25,7 +18,7 @@ function CodeBlock({ children }) {
     <div className="relative my-2 group/code" data-testid="ai-code-block">
       <button onClick={copy} data-testid="ai-code-copy"
         className="absolute top-2 right-2 flex items-center gap-1 border border-[#2A2A35] bg-[#0F0F12] px-2 py-1 text-[10px] text-zinc-400 hover:border-[#E5FF00] hover:text-white transition-colors">
-        {copied ? <Check size={12} className="text-[#00FF66]" /> : <Copy size={12} />} {copied ? "Copiato" : "Copia"}
+        {copied ? <Check size={12} className="text-[#00FF66]" /> : <Copy size={12} />} {copied ? i18n.t("advisor.copied") : i18n.t("advisor.copy_code")}
       </button>
       <pre className="bg-black border border-[#2A2A35] p-3 pr-16 overflow-x-auto text-xs text-[#00FF66] leading-relaxed">
         <code>{text}</code>
@@ -65,7 +58,7 @@ export default function Advisor() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [specs, setSpecs] = useState(null);
-  const [suggestions, setSuggestions] = useState(DEFAULT_SUGGESTIONS);
+  const [suggestions, setSuggestions] = useState(() => i18n.t("advisor.default_suggestions", { returnObjects: true }));
   const endRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -131,7 +124,7 @@ export default function Advisor() {
     } catch (e) {
       setMessages((prev) => {
         const copy = [...prev];
-        copy[copy.length - 1] = { role: "assistant", content: "[Errore di connessione all'AI]" };
+        copy[copy.length - 1] = { role: "assistant", content: t("advisor.error_conn") };
         return copy;
       });
     } finally { setStreaming(false); }

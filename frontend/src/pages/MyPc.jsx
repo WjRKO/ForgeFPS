@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket, Pencil, Gauge, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import SpecsForm from "@/components/SpecsForm";
 
-const SPEC_LABELS = { os: "Sistema operativo", cpu: "CPU", gpu: "GPU", ram: "RAM", disk: "Storage", motherboard: "Scheda madre", resolution: "Risoluzione" };
+const SPEC_KEYS = ["os", "cpu", "gpu", "ram", "disk", "motherboard", "resolution"];
+const specLabel = (t, k) => ({ os: t("mypcpage.sl_os"), cpu: "CPU", gpu: "GPU", ram: "RAM", disk: t("mypcpage.sl_disk"), motherboard: t("mypcpage.sl_mb"), resolution: t("mypcpage.sl_res") }[k]);
 
 function composeSpec(key, d) {
   const v = d[key];
@@ -26,7 +29,7 @@ function composeSpec(key, d) {
     const x = [];
     if (d.ram_type) x.push(d.ram_type);
     if (d.ram_speed_mhz) x.push(`${d.ram_speed_mhz}MHz`);
-    if (d.ram_modules) x.push(`${d.ram_modules} moduli`);
+    if (d.ram_modules) x.push(`${d.ram_modules}×`);
     return x.length ? `${v} · ${x.join(" · ")}` : v;
   }
   if (key === "os") return d.form_factor ? `${v} · ${d.form_factor}` : v;
@@ -43,16 +46,17 @@ function composeSpec(key, d) {
 const STATUS_ICON = { ok: <CheckCircle2 size={16} className="text-[#00FF66]" />, warn: <AlertTriangle size={16} className="text-[#E5FF00]" />, bad: <XCircle size={16} className="text-[#FF3B30]" />, unknown: <HelpCircle size={16} className="text-zinc-600" /> };
 
 const BENCH_METRICS = [
-  { key: "overall", label: "Punteggio totale", unit: "", higherBetter: true },
-  { key: "cpu_score", label: "CPU", unit: "", higherBetter: true },
-  { key: "ram_mbps", label: "RAM", unit: "MB/s", higherBetter: true },
-  { key: "disk_write_mbps", label: "Disco (scrittura)", unit: "MB/s", higherBetter: true },
-  { key: "disk_read_mbps", label: "Disco (lettura)", unit: "MB/s", higherBetter: true },
-  { key: "ping_ms", label: "Ping (1.1.1.1)", unit: "ms", higherBetter: false },
-  { key: "free_ram_pct", label: "RAM libera", unit: "%", higherBetter: true },
+  { key: "overall", lk: "m_overall", unit: "", higherBetter: true },
+  { key: "cpu_score", lk: "m_cpu", unit: "", higherBetter: true },
+  { key: "ram_mbps", lk: "m_ram", unit: "MB/s", higherBetter: true },
+  { key: "disk_write_mbps", lk: "m_disk_w", unit: "MB/s", higherBetter: true },
+  { key: "disk_read_mbps", lk: "m_disk_r", unit: "MB/s", higherBetter: true },
+  { key: "ping_ms", lk: "m_ping", unit: "ms", higherBetter: false },
+  { key: "free_ram_pct", lk: "m_free_ram", unit: "%", higherBetter: true },
 ];
 
 function BenchmarkCard({ bench }) {
+  const { t } = useTranslation();
   const latest = bench?.latest;
   if (!latest) return null;
   const before = latest.before;
@@ -62,11 +66,11 @@ function BenchmarkCard({ bench }) {
   return (
     <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-4" data-testid="benchmark-card">
       <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4 flex items-center gap-2">
-        <Gauge size={14} className="text-[#00E0FF]" /> Benchmark {hasCompare ? "· Prima / Dopo ottimizzazione" : "· Ultima misurazione"}
+        <Gauge size={14} className="text-[#00E0FF]" /> {t("mypcpage.bench")} {hasCompare ? t("mypcpage.bench_compare") : t("mypcpage.bench_last")}
       </div>
       {!hasCompare && (
         <p className="text-xs text-zinc-500 mb-4">
-          Esegui l'ottimizzazione dal Desktop Agent (modalità <span className="text-[#E5FF00]">optimize</span>) per vedere il confronto prima/dopo.
+          {t("mypcpage.bench_hint")}
         </p>
       )}
       <div className="grid sm:grid-cols-2 gap-2">
@@ -82,7 +86,7 @@ function BenchmarkCard({ bench }) {
           return (
             <div key={m.key} className={`bg-black border border-[#1A1A24] p-3 ${m.key === "overall" ? "sm:col-span-2 border-[#00E0FF]/40" : ""}`} data-testid={`bench-${m.key}`}>
               <div className="flex items-center justify-between">
-                <div className="text-xs uppercase tracking-widest text-zinc-500">{m.label}</div>
+                <div className="text-xs uppercase tracking-widest text-zinc-500">{t(`mypcpage.${m.lk}`)}</div>
                 {delta != null && (
                   <div className={`flex items-center gap-1 text-xs font-bold ${improved ? "text-[#00FF66]" : "text-[#FF3B30]"}`}>
                     {delta > 0 ? <TrendingUp size={13} /> : delta < 0 ? <TrendingDown size={13} /> : <Minus size={13} />}
@@ -98,7 +102,7 @@ function BenchmarkCard({ bench }) {
           );
         })}
       </div>
-      {latest.ts && <div className="mt-3 text-xs text-zinc-600 border-t border-[#1A1A24] pt-3">Ultima esecuzione: {new Date(latest.ts).toLocaleString("it-IT")}</div>}
+      {latest.ts && <div className="mt-3 text-xs text-zinc-600 border-t border-[#1A1A24] pt-3">{t("mypcpage.last_run")} {(() => { try { return new Date(latest.ts).toLocaleString((i18n.resolvedLanguage || i18n.language || "en").slice(0, 2)); } catch { return new Date(latest.ts).toLocaleString(); } })()}</div>}
     </div>
   );
 }
@@ -124,6 +128,7 @@ function ScoreRing({ score, grade }) {
 }
 
 export default function MyPc() {
+  const { t } = useTranslation();
   const [specs, setSpecs] = useState(null);
   const [health, setHealth] = useState(null);
   const [startup, setStartup] = useState(null);
@@ -151,18 +156,18 @@ export default function MyPc() {
   if (!hasSpecs || editing) {
     return (
       <div className="max-w-3xl mx-auto fade-up">
-        <div className="mb-6"><div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">// Il mio PC</div>
-          <h1 className="font-display font-black text-3xl tracking-tighter">Analisi del PC</h1></div>
+        <div className="mb-6"><div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("mypcpage.eyebrow")}</div>
+          <h1 className="font-display font-black text-3xl tracking-tighter">{t("mypcpage.title")}</h1></div>
         <div className="mb-4 bg-[#0F0F12] border border-[#2A2A35] p-5 text-sm text-zinc-400">
-          Inserisci le tue specifiche per usare subito Advisor, Upgrade e stima FPS — <span className="text-[#E5FF00]">senza scaricare nulla</span>.
-          Usa "Rileva dal browser" per compilare in automatico, oppure inserisci a mano.
+          {t("mypcpage.intro")} <span className="text-[#E5FF00]">{t("mypcpage.intro_hl")}</span>.
+          {" "}{t("mypcpage.intro2")}
         </div>
         <SpecsForm initial={specs?.data || {}}
           onSaved={(d) => { setSpecs(d); setEditing(false); load(); }}
           onCancel={hasSpecs ? () => setEditing(false) : undefined} />
         <div className="mt-4 text-center">
           <Link to="/app/desktop" data-testid="go-desktop-btn" className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-[#E5FF00] transition-colors">
-            <MonitorDown size={16} /> Vuoi Health Score, temperature e ottimizzazioni reali? Usa il Desktop Agent
+            <MonitorDown size={16} /> {t("mypcpage.want_more")}
           </Link>
         </div>
       </div>
@@ -172,12 +177,12 @@ export default function MyPc() {
   return (
     <div className="max-w-6xl mx-auto fade-up">
       <div className="mb-6 flex items-end justify-between">
-        <div><div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">// Il mio PC</div>
-          <h1 className="font-display font-black text-3xl tracking-tighter">Analisi del PC</h1></div>
+        <div><div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("mypcpage.eyebrow")}</div>
+          <h1 className="font-display font-black text-3xl tracking-tighter">{t("mypcpage.title")}</h1></div>
         <div className="flex gap-2">
-          <button data-testid="edit-specs-btn" onClick={() => setEditing(true)} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] transition-colors"><Pencil size={15} /> Modifica</button>
-          <Link to="/app/upgrade" data-testid="to-upgrade-btn" className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] transition-colors"><Rocket size={15} /> Upgrade</Link>
-          <button data-testid="refresh-pc-btn" onClick={load} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] transition-colors"><RefreshCw size={15} /> Aggiorna</button>
+          <button data-testid="edit-specs-btn" onClick={() => setEditing(true)} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] transition-colors"><Pencil size={15} /> {t("mypcpage.edit")}</button>
+          <Link to="/app/upgrade" data-testid="to-upgrade-btn" className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] transition-colors"><Rocket size={15} /> {t("mypcpage.upgrade")}</Link>
+          <button data-testid="refresh-pc-btn" onClick={load} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] transition-colors"><RefreshCw size={15} /> {t("mypcpage.refresh")}</button>
         </div>
       </div>
 
@@ -217,8 +222,8 @@ export default function MyPc() {
           )}
           {health.driver_version && (
             <div className="mt-4 text-xs text-zinc-500 flex items-center gap-2 border-t border-[#1A1A24] pt-3">
-              Driver GPU: <span className="text-zinc-300">{health.driver_version}</span>
-              <a href="https://www.nvidia.com/Download/index.aspx" target="_blank" rel="noreferrer" className="text-[#E5FF00] hover:underline ml-2">Controlla aggiornamenti →</a>
+              {t("mypcpage.driver_gpu")} <span className="text-zinc-300">{health.driver_version}</span>
+              <a href="https://www.nvidia.com/Download/index.aspx" target="_blank" rel="noreferrer" className="text-[#E5FF00] hover:underline ml-2">{t("mypcpage.check_updates")}</a>
             </div>
           )}
         </div>
@@ -227,11 +232,11 @@ export default function MyPc() {
       {bench && <BenchmarkCard bench={bench} />}
 
       <div className="bg-[#0F0F12] border border-[#2A2A35] mb-4">
-        <div className="p-5 border-b border-[#2A2A35] text-xs uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2"><Cpu size={14} className="text-[#E5FF00]" /> Hardware</div>
+        <div className="p-5 border-b border-[#2A2A35] text-xs uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2"><Cpu size={14} className="text-[#E5FF00]" /> {t("mypcpage.hardware")}</div>
         <div className="grid sm:grid-cols-2 gap-px bg-[#1A1A24]">
-          {Object.entries(SPEC_LABELS).filter(([k]) => specs.data[k]).map(([k, label]) => (
+          {SPEC_KEYS.filter((k) => specs.data[k]).map((k) => (
             <div key={k} className="bg-[#0F0F12] p-4" data-testid={`spec-${k}`}>
-              <div className="text-xs uppercase tracking-widest text-zinc-500">{label}</div>
+              <div className="text-xs uppercase tracking-widest text-zinc-500">{specLabel(t, k)}</div>
               <div className="text-sm text-zinc-100 mt-1">{composeSpec(k, specs.data)}</div>
             </div>
           ))}
@@ -240,14 +245,14 @@ export default function MyPc() {
 
       <div className="bg-[#0F0F12] border border-[#2A2A35]" style={{ display: (specs.startup || []).length ? "block" : "none" }}>
         <div className="p-5 border-b border-[#2A2A35] flex items-center justify-between">
-          <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">Programmi all'avvio</span>
+          <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">{t("mypcpage.startup")}</span>
           <button data-testid="analyze-startup-btn" onClick={analyzeStartup} disabled={analyzing}
-            className="flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-3 py-1.5 text-xs hover:bg-[#D4EC00] transition-colors disabled:opacity-60">
-            {analyzing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Analizza con AI
+            className="flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-3 py-1.5 text-xs hover:bg-[#D4EC00] transition-colors disabled:opacity-60 btn-volt">
+            {analyzing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} {t("mypcpage.analyze_ai")}
           </button>
         </div>
         {err && <div className="p-3 text-xs text-[#FF3B30]">{err}</div>}
-        {!startup && !err && <div className="p-6 text-sm text-zinc-500">{(specs.startup || []).length} programmi rilevati. Clicca "Analizza con AI" per sapere cosa disabilitare.</div>}
+        {!startup && !err && <div className="p-6 text-sm text-zinc-500">{t("mypcpage.startup_count", { count: (specs.startup || []).length })}</div>}
         {startup && (
           <div>
             <div className="p-4 text-sm text-zinc-300 border-b border-[#1A1A24] bg-black">{startup.summary}</div>

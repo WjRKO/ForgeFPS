@@ -61,8 +61,8 @@ export default function Games() {
   const saveConfig = async () => {
     setSavingCfg(true);
     const close_apps = APP_GROUPS.filter((g) => groups[g.id]).flatMap((g) => g.procs);
-    try { await api.put("/prematch", { close_apps, set_power: setPower }); toast.success("Impostazioni salvate! Il comando è aggiornato."); }
-    catch { toast.error("Errore nel salvataggio"); }
+    try { await api.put("/prematch", { close_apps, set_power: setPower }); toast.success(t("games.save_ok")); }
+    catch { toast.error(t("games.save_err")); }
     finally { setSavingCfg(false); }
   };
 
@@ -72,7 +72,7 @@ export default function Games() {
 
   const copyCmd = async (text) => {
     try { await navigator.clipboard.writeText(text); } catch { const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
-    setCopied(true); toast.success("Comando copiato!"); setTimeout(() => setCopied(false), 2000);
+    setCopied(true); toast.success(t("games.cmd_copied")); setTimeout(() => setCopied(false), 2000);
   };
 
   const estimate = async (g) => {
@@ -84,7 +84,7 @@ export default function Games() {
     finally { setLoading(false); }
   };
 
-  const refresh = async () => { setRefreshing(true); await loadGames(); setRefreshing(false); toast.success("Elenco aggiornato"); };
+  const refresh = async () => { setRefreshing(true); await loadGames(); setRefreshing(false); toast.success(t("games.list_updated")); };
 
   const maxFps = useMemo(() => (fps ? Math.max(...fps.estimates.map((e) => e.fps), 1) : 1), [fps]);
 

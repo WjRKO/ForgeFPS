@@ -35,6 +35,7 @@ const NAV_GROUPS = [
 const NAV = NAV_GROUPS.flatMap((g) => g.items);
 
 function Notifications() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [pushState, setPushState] = useState("default");
@@ -55,15 +56,15 @@ function Notifications() {
       if (pushState === "subscribed") {
         await disablePush();
         setPushState("default");
-        toast.success("Notifiche push disattivate");
+        toast.success(t("notif.push_disabled"));
       } else {
         await enablePush();
         setPushState("subscribed");
-        toast.success("Notifiche push attivate! Ti avviseremo sui cali di prezzo.");
+        toast.success(t("notif.push_enabled"));
         await api.post("/push/test").catch(() => {});
       }
     } catch (e) {
-      toast.error(e.message || "Errore notifiche push");
+      toast.error(e.message || t("notif.push_err"));
     } finally { setPushBusy(false); }
   };
 
@@ -81,9 +82,9 @@ function Notifications() {
       {open && (
         <div className="absolute right-0 mt-2 w-80 bg-[#0F0F12] border border-[#2A2A35] z-50 max-h-[28rem] overflow-auto">
           <div className="flex items-center justify-between p-3 border-b border-[#2A2A35]">
-            <span className="text-xs uppercase tracking-widest text-zinc-500">Notifiche</span>
+            <span className="text-xs uppercase tracking-widest text-zinc-500">{t("notif.title")}</span>
             <div className="flex gap-2">
-              <button onClick={markAll} className="text-xs text-[#E5FF00] hover:underline" data-testid="mark-all-read-btn">Segna lette</button>
+              <button onClick={markAll} className="text-xs text-[#E5FF00] hover:underline" data-testid="mark-all-read-btn">{t("notif.mark_read")}</button>
               <button onClick={() => setOpen(false)}><X size={14} /></button>
             </div>
           </div>
@@ -91,14 +92,14 @@ function Notifications() {
             <button data-testid="toggle-push-btn" onClick={togglePush} disabled={pushBusy || pushState === "denied"}
               className="w-full flex items-center gap-2 px-3 py-2.5 text-xs border-b border-[#1A1A24] hover:bg-[#141419] transition-colors disabled:opacity-50">
               {pushState === "subscribed" ? <BellOff size={14} className="text-[#FF3B30]" /> : <BellRing size={14} className="text-[#00FF66]" />}
-              {pushState === "denied" ? "Push bloccate dal browser"
-                : pushState === "subscribed" ? "Disattiva notifiche push" : "Attiva notifiche push sul dispositivo"}
+              {pushState === "denied" ? t("notif.push_blocked")
+                : pushState === "subscribed" ? t("notif.push_off") : t("notif.push_on")}
             </button>
           )}
-          {items.length === 0 && <div className="p-4 text-sm text-zinc-500">Nessuna notifica</div>}
+          {items.length === 0 && <div className="p-4 text-sm text-zinc-500">{t("notif.empty")}</div>}
           {items.map((n) => (
             <div key={n.id} className={`p-3 border-b border-[#1A1A24] text-sm ${n.read ? "opacity-60" : ""}`}>
-              <div className="text-[#00FF66] text-xs font-bold uppercase mb-1">{n.type === "target" ? "Target!" : "Calo prezzo"}</div>
+              <div className="text-[#00FF66] text-xs font-bold uppercase mb-1">{n.type === "target" ? t("notif.target") : t("notif.price_drop")}</div>
               <div className="text-zinc-200 truncate">{n.title}</div>
               <div className="text-zinc-400 text-xs mt-1">{n.message} {n.currency}</div>
             </div>

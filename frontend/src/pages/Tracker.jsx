@@ -106,10 +106,10 @@ export default function Tracker() {
 
       {results && (
         <div className="mb-8">
-          <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-3">Risultati ricerca</div>
+          <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-3">{t("tracker.search_results")}</div>
           {results.length === 0 ? (
             <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 text-sm text-zinc-500 flex items-center gap-2">
-              <AlertTriangle size={16} className="text-[#FF3B30]" /> Nessun risultato (lo store potrebbe aver bloccato la richiesta). Prova a incollare il link diretto.
+              <AlertTriangle size={16} className="text-[#FF3B30]" /> {t("tracker.no_results")}
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -144,7 +144,7 @@ export default function Tracker() {
               {entries.map(([name, g]) => (
                 <div key={name} className="bg-black border border-[#2A2A35] px-3 py-2">
                   <div className="text-xs text-zinc-500 truncate max-w-[180px]">{name}</div>
-                  <div className="text-sm font-bold">{g.count} pezzi · <span className="text-[#E5FF00]">€{g.total.toFixed(2)}</span></div>
+                  <div className="text-sm font-bold">{g.count} {t("tracker.parts")} · <span className="text-[#E5FF00]">€{g.total.toFixed(2)}</span></div>
                 </div>
               ))}
             </div>
