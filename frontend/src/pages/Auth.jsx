@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Zap, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/context/AuthContext";
 
 export default function Auth({ mode }) {
+  const { t } = useTranslation();
   const isLogin = mode === "login";
   const { login, register, formatApiErrorDetail } = useAuth();
   const navigate = useNavigate();
@@ -33,41 +35,41 @@ export default function Auth({ mode }) {
           <span className="font-display font-black tracking-tighter text-xl">BOOST<span className="text-[#E5FF00]">PC</span></span>
         </Link>
         <div className="bg-[#0F0F12] border border-[#2A2A35] p-8">
-          <h1 className="font-display font-bold text-2xl tracking-tight mb-1">{isLogin ? "Accedi" : "Crea account"}</h1>
-          <p className="text-zinc-500 text-sm mb-6">{isLogin ? "Bentornato al comando." : "Attiva la tua console tattica."}</p>
+          <h1 className="font-display font-bold text-2xl tracking-tight mb-1">{isLogin ? t("auth.login_title") : t("auth.register_title")}</h1>
+          <p className="text-zinc-500 text-sm mb-6">{isLogin ? t("auth.login_sub") : t("auth.register_sub")}</p>
 
           {error && <div data-testid="auth-error" className="mb-4 text-sm text-[#FF3B30] border border-[#FF3B30]/40 bg-[#FF3B30]/10 px-3 py-2">{error}</div>}
 
           <form onSubmit={submit} className="space-y-4">
             {!isLogin && (
               <div>
-                <label className="text-xs uppercase tracking-widest text-zinc-500">Nome</label>
+                <label className="text-xs uppercase tracking-widest text-zinc-500">{t("auth.name")}</label>
                 <input data-testid="name-input" value={name} onChange={(e) => setName(e.target.value)} required
                   className="w-full bg-black border-b border-[#2A2A35] focus:border-[#E5FF00] outline-none py-2 mt-1 text-sm transition-colors" />
               </div>
             )}
             <div>
-              <label className="text-xs uppercase tracking-widest text-zinc-500">Email</label>
+              <label className="text-xs uppercase tracking-widest text-zinc-500">{t("auth.email")}</label>
               <input data-testid="email-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
                 className="w-full bg-black border-b border-[#2A2A35] focus:border-[#E5FF00] outline-none py-2 mt-1 text-sm transition-colors" />
             </div>
             <div>
-              <label className="text-xs uppercase tracking-widest text-zinc-500">Password</label>
+              <label className="text-xs uppercase tracking-widest text-zinc-500">{t("auth.password")}</label>
               <input data-testid="password-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
                 className="w-full bg-black border-b border-[#2A2A35] focus:border-[#E5FF00] outline-none py-2 mt-1 text-sm transition-colors" />
             </div>
             <button type="submit" data-testid="auth-submit-btn" disabled={loading}
-              className="w-full bg-[#E5FF00] text-black font-bold py-3 hover:bg-[#D4EC00] transition-colors flex items-center justify-center gap-2 disabled:opacity-60">
+              className="w-full bg-[#E5FF00] text-black font-bold py-3 hover:bg-[#D4EC00] transition-colors flex items-center justify-center gap-2 disabled:opacity-60 btn-volt">
               {loading && <Loader2 size={16} className="animate-spin" />}
-              {isLogin ? "Accedi" : "Registrati"}
+              {isLogin ? t("auth.login_btn") : t("auth.register_btn")}
             </button>
           </form>
 
           <div className="mt-6 text-sm text-zinc-500 text-center">
             {isLogin ? (
-              <>Non hai un account? <Link to="/register" data-testid="go-register" className="text-[#E5FF00] hover:underline">Registrati</Link></>
+              <>{t("auth.no_account")} <Link to="/register" data-testid="go-register" className="text-[#E5FF00] hover:underline">{t("auth.go_register")}</Link></>
             ) : (
-              <>Hai già un account? <Link to="/login" data-testid="go-login" className="text-[#E5FF00] hover:underline">Accedi</Link></>
+              <>{t("auth.have_account")} <Link to="/login" data-testid="go-login" className="text-[#E5FF00] hover:underline">{t("auth.go_login")}</Link></>
             )}
           </div>
         </div>

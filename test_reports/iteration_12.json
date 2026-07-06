@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only i18n regression for Blocco 4 pages (Auth, Builds, Upgrade, Commands, BIOS, Desktop, Admin) + hover animation smoke test. All PASS in both IT and EN. No raw i18n keys, no runtime errors, PowerShell command strings preserved untranslated.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_results": {
+    "login_admin": "PASS (admin@boostpc.io / admin123 -> /app)",
+    "auth_landing_it": "PASS (Boosta il tuo PC / Domina lo stream, Avvia BOOST PC, Ho gia un account)",
+    "auth_login_form_it": "PASS (Accedi, Bentornato al comando., EMAIL/PASSWORD labels, Non hai un account? Registrati)",
+    "language_switcher": "PASS (data-testid=language-switcher present in navbar with lang-it and lang-en options; clicking updates localStorage['boostpc_lang'] to it/en and text re-renders)",
+    "builds_it": "PASS (Consiglia Build / Genera build, usecase dropdown, budget slider, 1080p/1440p/4K buttons)",
+    "builds_en": "PASS (Build Advisor / Generate build / Generate your build / Use case / Resolution)",
+    "upgrade_it_en": "PASS (both languages render, no raw keys)",
+    "commands_it": "PASS (Comandi Utili, Manutenzione 1-click, Pianifica settimanale, Domenica dropdown; PowerShell strings kept: sfc /scannow, chkdsk, powercfg, Unregister-ScheduledTask, DISM)",
+    "commands_en": "PASS (Useful Commands / Maintenance; PS commands preserved)",
+    "bios_it_en": "PASS (BIOS & Ripristino / BIOS & Restore, 2 tabs found)",
+    "desktop_it_en": "PASS (Collega il PC / Connect PC; PowerShell code preserved)",
+    "admin_it_en": "PASS (Amministratore / Administrator panel, stat cards Users/Admins/Products/Builds translated, actions column translated)",
+    "hover_animations": "PASS (4 hover classes present on admin: panel-hover on stat cards + row-hover; no layout breakage observed on hover)"
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "None blocking. Initial localStorage value observed as 'en-US@posix' before any user interaction (leftover from browser locale seeding). i18n falls back to EN which is correct, so this is harmless, but consider normalizing the value in the LanguageSwitcher init to a clean 'en'/'it' to keep the key value clean.",
+    "The public URL emits repeated 401s on a background health-check resource pre-login; harmless but noisy in the browser console."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "admin@boostpc.io / admin123",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Auth landing lives at '/' and '/auth'; login form is at '/login' (click 'Accedi' or 'Ho gia un account' from landing). LanguageSwitcher exposes data-testid='language-switcher' with nested data-testid='lang-it' and 'lang-en'. localStorage key 'boostpc_lang' persists selection. All 7 Blocco 4 pages verified in both languages without raw i18n keys leaking."
+}
