@@ -190,7 +190,7 @@ export default function Advisor() {
             {messages.map((m, i) => (
               <div key={i} className={`flex items-end gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 {m.role === "assistant" && (
-                  <div className="w-7 h-7 bg-[#00E0FF]/15 border border-[#00E0FF]/40 flex items-center justify-center shrink-0 text-[#00E0FF]"><MessageSquareCode size={14} /></div>
+                  <div data-testid="ai-avatar" className="w-7 h-7 bg-[#00E0FF]/15 border border-[#00E0FF]/40 flex items-center justify-center shrink-0 text-[#00E0FF]"><MessageSquareCode size={14} /></div>
                 )}
                 <div className={`max-w-[80%] px-4 py-3 text-sm leading-relaxed ${
                   m.role === "user" ? "bg-[#E5FF00] text-black whitespace-pre-wrap" : "bg-black border border-[#2A2A35] text-zinc-200"}`}>
