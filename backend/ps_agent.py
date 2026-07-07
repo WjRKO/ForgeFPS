@@ -89,6 +89,8 @@ function Get-LhmComputer {
     $c.IsCpuEnabled = $true
     $c.IsGpuEnabled = $true
     $c.Open()
+    foreach ($hw in $c.Hardware) { $hw.Update() }
+    Start-Sleep -Milliseconds 300
     $script:LHM_COMP = $c
     return $c
   } catch { Say '   [Sensori] LibreHardwareMonitor non disponibile.' 'DarkYellow'; return $null }
@@ -962,10 +964,13 @@ if ($MODE -eq 'prematch') {
 
 # default: sync (safe)
 Say "`n[*] Rilevamento hardware, salute e avvio..." 'Cyan'
+if (-not (Test-Admin)) { Say '   [i] Suggerimento: esegui in PowerShell (Amministratore) per temperature CPU/GPU reali e analisi piu precisa.' 'DarkYellow' }
 $specs = Get-Specs
 Say ("   CPU: {0}" -f $specs.cpu); Say ("   GPU: {0}" -f $specs.gpu)
 Say ("   MB : {0}  ({1} {2})" -f $specs.motherboard, $specs.cpu_socket, $specs.chipset)
-Send-Data $specs (Get-Health) (Get-StartupList)
+$health = Get-Health
+if ($health.ContainsKey('cpu_temp')) { Say ("   Temp CPU: {0}C  |  Temp GPU: {1}C" -f $health.cpu_temp, $(if($health.ContainsKey('gpu_temp')){$health.gpu_temp}else{'n/d'})) 'DarkGray' }
+Send-Data $specs $health (Get-StartupList)
 $games = Get-Games
 if ($games.Count -gt 0) { Send-Games $games; Say ("   Giochi rilevati: {0}" -f $games.Count) 'DarkGray' }
 $running = Get-RunningApps
