@@ -270,6 +270,12 @@ const resources = {
         hardware: "Hardware", startup: "Programmi all'avvio", analyze_ai: "Analizza con AI",
         startup_count: "{{count}} programmi rilevati. Clicca \"Analizza con AI\" per sapere cosa disabilitare.",
         sl_os: "Sistema operativo", sl_disk: "Storage", sl_mb: "Scheda madre", sl_res: "Risoluzione",
+        health: {
+          label: { temp: "File temporanei", startup: "Programmi all'avvio", power: "Piano energetico", game_mode: "Game Mode", hags: "GPU Scheduling (HAGS)", ram: "Uso RAM", disk: "Spazio disco (C:)", driver: "Driver GPU", gpu_temp: "Temperatura GPU", cpu_temp: "Temperatura CPU" },
+          msg: { na: "Dato non disponibile", mb: "{{v}} MB", programs: "{{v}} programmi", power_hp: "Alte prestazioni", power_bad: "Non ottimale", on: "Attivo", off: "Disattivato", ram_pct: "{{v}}% in uso", disk_pct: "{{v}}% libero", driver_days: "aggiornato {{v}} giorni fa", temp_c: "{{v}}°C" },
+          fix: { temp: "Esegui la pulizia file temporanei (Desktop Agent opz. 1)", startup: "Disabilita gli avvii non essenziali (pagina 'Il mio PC')", power: "Attiva 'Alte prestazioni' (Desktop Agent opz. 3)", game_mode: "Attiva Game Mode (Desktop Agent opz. 5)", hags: "Abilita HAGS (Desktop Agent opz. 5)", ram: "Chiudi app in background o aggiungi RAM", disk: "Libera spazio: pulizia disco (Desktop Agent opz. 6)", driver: "Aggiorna i driver della GPU", gpu_temp: "Migliora airflow/curva ventole: rischio throttling", cpu_temp: "Verifica dissipatore/pasta termica: rischio throttling" },
+          grade: { ottimo: "Ottimo", buono: "Buono", migliorare: "Da migliorare", critico: "Critico" },
+        },
       },
       notif: {
         title: "Notifiche", mark_read: "Segna lette", empty: "Nessuna notifica",
@@ -547,6 +553,12 @@ const resources = {
         hardware: "Hardware", startup: "Startup programs", analyze_ai: "Analyze with AI",
         startup_count: "{{count}} programs detected. Click \"Analyze with AI\" to find out what to disable.",
         sl_os: "Operating system", sl_disk: "Storage", sl_mb: "Motherboard", sl_res: "Resolution",
+        health: {
+          label: { temp: "Temporary files", startup: "Startup programs", power: "Power plan", game_mode: "Game Mode", hags: "GPU Scheduling (HAGS)", ram: "RAM usage", disk: "Disk space (C:)", driver: "GPU driver", gpu_temp: "GPU temperature", cpu_temp: "CPU temperature" },
+          msg: { na: "Data not available", mb: "{{v}} MB", programs: "{{v}} programs", power_hp: "High performance", power_bad: "Not optimal", on: "Enabled", off: "Disabled", ram_pct: "{{v}}% in use", disk_pct: "{{v}}% free", driver_days: "updated {{v}} days ago", temp_c: "{{v}}°C" },
+          fix: { temp: "Run temporary files cleanup (Desktop Agent opt. 1)", startup: "Disable non-essential startup items ('My PC' page)", power: "Enable 'High performance' (Desktop Agent opt. 3)", game_mode: "Enable Game Mode (Desktop Agent opt. 5)", hags: "Enable HAGS (Desktop Agent opt. 5)", ram: "Close background apps or add RAM", disk: "Free up space: disk cleanup (Desktop Agent opt. 6)", driver: "Update your GPU drivers", gpu_temp: "Improve airflow/fan curve: throttling risk", cpu_temp: "Check cooler/thermal paste: throttling risk" },
+          grade: { ottimo: "Excellent", buono: "Good", migliorare: "Needs work", critico: "Critical" },
+        },
       },
       notif: {
         title: "Notifications", mark_read: "Mark read", empty: "No notifications",

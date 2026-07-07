@@ -78,11 +78,12 @@ def compute_health(health: dict) -> dict:
     total_weight = 0
     lost = 0.0
 
-    def check(cid, label, weight, value, thresholds, fmt, fix, higher_bad=True, present=True):
+    def check(cid, label, weight, value, thresholds, fmt, fix, mkey, higher_bad=True, present=True):
         nonlocal total_weight, lost
         if not present or value is None:
             checks.append({"id": cid, "label": label, "status": "unknown",
-                           "message": "Dato non disponibile", "fix": None})
+                           "message": "Dato non disponibile", "fix": None,
+                           "mkey": "na", "mval": None})
             return
         ok_t, warn_t = thresholds
         if higher_bad:
@@ -95,7 +96,8 @@ def compute_health(health: dict) -> dict:
         elif status == "warn":
             lost += weight * 0.5
         checks.append({"id": cid, "label": label, "status": status,
-                       "message": fmt(value), "fix": None if status == "ok" else fix})
+                       "message": fmt(value), "fix": None if status == "ok" else fix,
+                       "mkey": mkey, "mval": int(value)})
 
     def toggle_check(cid, label, key, weight, fix):
         nonlocal total_weight, lost
@@ -108,14 +110,15 @@ def compute_health(health: dict) -> dict:
         checks.append({"id": cid, "label": label,
                        "status": ("ok" if val else "bad") if present else "unknown",
                        "message": ("Attivo" if val else "Disattivato") if present else "Dato non disponibile",
-                       "fix": None if (val or not present) else fix})
+                       "fix": None if (val or not present) else fix,
+                       "mkey": ("on" if val else "off") if present else "na", "mval": None})
 
     check("temp", "File temporanei", 8, health.get("temp_mb"), (1500, 5000),
           lambda v: f"{int(v)} MB", "Esegui la pulizia file temporanei (Desktop Agent opz. 1)",
-          present="temp_mb" in health)
+          "mb", present="temp_mb" in health)
     check("startup", "Programmi all'avvio", 10, health.get("startup_count"), (8, 15),
           lambda v: f"{int(v)} programmi", "Disabilita gli avvii non essenziali (pagina 'Il mio PC')",
-          present="startup_count" in health)
+          "programs", present="startup_count" in health)
 
     power = (health.get("power_plan") or "").lower()
     hp = any(x in power for x in ("high", "prestazioni elevate", "ultimate"))
@@ -125,33 +128,35 @@ def compute_health(health: dict) -> dict:
     checks.append({"id": "power", "label": "Piano energetico",
                    "status": "ok" if hp else "bad",
                    "message": "Alte prestazioni" if hp else "Non ottimale",
-                   "fix": None if hp else "Attiva 'Alte prestazioni' (Desktop Agent opz. 3)"})
+                   "fix": None if hp else "Attiva 'Alte prestazioni' (Desktop Agent opz. 3)",
+                   "mkey": "power_hp" if hp else "power_bad", "mval": None})
 
     toggle_check("game_mode", "Game Mode", "game_mode", 8, "Attiva Game Mode (Desktop Agent opz. 5)")
     toggle_check("hags", "GPU Scheduling (HAGS)", "gpu_scheduling", 6, "Abilita HAGS (Desktop Agent opz. 5)")
 
     check("ram", "Uso RAM", 10, health.get("ram_used_pct"), (80, 90),
           lambda v: f"{int(v)}% in uso", "Chiudi app in background o aggiungi RAM",
-          present="ram_used_pct" in health)
+          "ram_pct", present="ram_used_pct" in health)
     check("disk", "Spazio disco (C:)", 12, health.get("disk_free_pct"), (12, 6),
           lambda v: f"{int(v)}% libero", "Libera spazio: pulizia disco (Desktop Agent opz. 6)",
-          higher_bad=False, present="disk_free_pct" in health)
+          "disk_pct", higher_bad=False, present="disk_free_pct" in health)
 
     days = days_since(health["gpu_driver_date"]) if health.get("gpu_driver_date") else None
     check("driver", "Driver GPU", 12, days, (180, 365),
           lambda v: f"aggiornato {int(v)} giorni fa", "Aggiorna i driver della GPU",
-          present=days is not None)
+          "driver_days", present=days is not None)
     check("gpu_temp", "Temperatura GPU", 12, health.get("gpu_temp"), (75, 84),
           lambda v: f"{int(v)}°C", "Migliora airflow/curva ventole: rischio throttling",
-          present="gpu_temp" in health)
+          "temp_c", present="gpu_temp" in health)
     check("cpu_temp", "Temperatura CPU", 10, health.get("cpu_temp"), (80, 89),
           lambda v: f"{int(v)}°C", "Verifica dissipatore/pasta termica: rischio throttling",
-          present="cpu_temp" in health)
+          "temp_c", present="cpu_temp" in health)
 
     score = round(100 * (1 - (lost / total_weight))) if total_weight else 100
     score = max(0, min(100, score))
-    grade = "Ottimo" if score >= 85 else "Buono" if score >= 70 else "Da migliorare" if score >= 50 else "Critico"
-    return {"score": score, "grade": grade, "checks": checks,
+    grade_key = "ottimo" if score >= 85 else "buono" if score >= 70 else "migliorare" if score >= 50 else "critico"
+    grade = {"ottimo": "Ottimo", "buono": "Buono", "migliorare": "Da migliorare", "critico": "Critico"}[grade_key]
+    return {"score": score, "grade": grade, "grade_key": grade_key, "checks": checks,
             "driver_version": health.get("gpu_driver_version"),
             "gpu_temp": health.get("gpu_temp"), "cpu_temp": health.get("cpu_temp"),
             "gpu": health.get("gpu"), "updated_at": now_iso()}

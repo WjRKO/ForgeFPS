@@ -188,15 +188,15 @@ export default function MyPc() {
         <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick p-6 mb-4">
           <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4 flex items-center gap-2"><Activity size={14} className="text-[#E5FF00]" /> Health Score</div>
           <div className="flex flex-col md:flex-row gap-8 items-center">
-            <ScoreRing score={health.score} grade={health.grade} />
+            <ScoreRing score={health.score} grade={t(`mypcpage.health.grade.${health.grade_key}`, health.grade)} />
             <div className="flex-1 w-full grid sm:grid-cols-2 gap-2">
               {health.checks.map((c, i) => (
                 <div key={i} data-testid={`check-${i}`} className="flex items-start gap-2 bg-black border border-[#1A1A24] p-3">
                   {STATUS_ICON[c.status]}
                   <div className="min-w-0">
-                    <div className="text-sm text-zinc-200">{c.label}</div>
-                    <div className="text-xs text-zinc-500">{c.message}</div>
-                    {c.fix && <div className="text-xs text-[#E5FF00] mt-1">→ {c.fix}</div>}
+                    <div className="text-sm text-zinc-200">{t(`mypcpage.health.label.${c.id}`, c.label)}</div>
+                    <div className="text-xs text-zinc-500">{t(`mypcpage.health.msg.${c.mkey}`, { v: c.mval, defaultValue: c.message })}</div>
+                    {c.fix && <div className="text-xs text-[#E5FF00] mt-1">→ {t(`mypcpage.health.fix.${c.id}`, c.fix)}</div>}
                   </div>
                 </div>
               ))}
