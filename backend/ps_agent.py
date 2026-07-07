@@ -61,6 +61,7 @@ $script:LHM_DIR = Join-Path $env:TEMP 'boostpc_lhm'
 $script:LHM_ZIP_URL = 'https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.4/LibreHardwareMonitor-net472.zip'
 $script:LHM_COMP = $null
 $script:LHM_TRIED = $false
+$script:LHM_LAST = ''
 
 function Get-LhmComputer {
   if ($script:LHM_COMP) { return $script:LHM_COMP }
@@ -89,37 +90,49 @@ function Get-LhmComputer {
     $c = New-Object LibreHardwareMonitor.Hardware.Computer
     $c.IsCpuEnabled = $true
     $c.IsGpuEnabled = $true
+    $c.IsMotherboardEnabled = $true
+    $c.IsControllerEnabled = $true
     $c.Open()
-    foreach ($hw in $c.Hardware) { $hw.Update() }
-    Start-Sleep -Milliseconds 300
+    foreach ($hw in $c.Hardware) { $hw.Update(); foreach ($sh in $hw.SubHardware) { $sh.Update() } }
+    Start-Sleep -Milliseconds 400
     $script:LHM_COMP = $c
     return $c
-  } catch { Say '   [Sensori] LibreHardwareMonitor non disponibile.' 'DarkYellow'; return $null }
+  } catch { Say ('   [Sensori] Errore LibreHardwareMonitor: ' + $_.Exception.Message) 'DarkYellow'; return $null }
 }
 
 function Get-LhmTemps {
-  # Real CPU/GPU temperatures from hardware sensors. Requires admin.
+  # Real CPU/GPU temperatures from hardware sensors (incl. motherboard SuperIO). Requires admin.
   $r = @{}
   $c = Get-LhmComputer
   if (-not $c) { return $r }
   try {
-    $cpuTemps = @{}; $gpuTemps = @{}
-    foreach ($hw in $c.Hardware) {
+    $cpuTemps = @{}; $gpuTemps = @{}; $mbTemps = @{}
+    $found = New-Object 'System.Collections.Generic.List[string]'
+    $all = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($hw in $c.Hardware) { [void]$all.Add($hw); foreach ($sh in $hw.SubHardware) { [void]$all.Add($sh) } }
+    foreach ($hw in $all) {
       $hw.Update()
       $ht = "$($hw.HardwareType)"
       foreach ($sensor in $hw.Sensors) {
         if ("$($sensor.SensorType)" -ne 'Temperature' -or $null -eq $sensor.Value) { continue }
         $tv = [double]$sensor.Value
+        $found.Add(("{0}/{1}={2}" -f $ht, $sensor.Name, [int][math]::Round($tv)))
         if ($tv -le 0 -or $tv -gt 150) { continue }
         if ($ht -eq 'Cpu') { $cpuTemps["$($sensor.Name)"] = $tv }
         elseif ($ht -like 'Gpu*') { $gpuTemps["$($sensor.Name)"] = $tv }
+        else { $mbTemps["$($sensor.Name)"] = $tv }
       }
     }
+    $script:LHM_LAST = ($found -join ', ')
     $cpuVal = $null
     foreach ($k in @('CPU Package', 'Core (Tctl/Tdie)', 'Core (Tctl)', 'Core (Tdie)', 'Core Average', 'Core Max')) {
       if ($cpuTemps.ContainsKey($k)) { $cpuVal = $cpuTemps[$k]; break }
     }
     if ($null -eq $cpuVal -and $cpuTemps.Count -gt 0) { $cpuVal = ($cpuTemps.Values | Measure-Object -Maximum).Maximum }
+    if ($null -eq $cpuVal) {
+      # Motherboard SuperIO fallback: a sensor explicitly named like CPU.
+      foreach ($k in $mbTemps.Keys) { if ($k -match 'CPU') { $cpuVal = $mbTemps[$k]; break } }
+    }
     if ($null -ne $cpuVal -and $cpuVal -gt 0) { $r.cpu_temp = [int][math]::Round($cpuVal) }
     $gpuVal = $null
     foreach ($k in @('GPU Core', 'GPU Hot Spot', 'GPU')) { if ($gpuTemps.ContainsKey($k)) { $gpuVal = $gpuTemps[$k]; break } }
@@ -979,6 +992,12 @@ Say ("   CPU: {0}" -f $specs.cpu); Say ("   GPU: {0}" -f $specs.gpu)
 Say ("   MB : {0}  ({1} {2})" -f $specs.motherboard, $specs.cpu_socket, $specs.chipset)
 $health = Get-Health
 if ($health.ContainsKey('cpu_temp')) { Say ("   Temp CPU: {0}C  |  Temp GPU: {1}C" -f $health.cpu_temp, $(if($health.ContainsKey('gpu_temp')){$health.gpu_temp}else{'n/d'})) 'DarkGray' }
+elseif (Test-Admin) {
+  Say '   [diag] Temp CPU non risolta. Sensori temperatura rilevati da LibreHardwareMonitor:' 'DarkYellow'
+  if ($script:LHM_LAST) { Say ("         " + $script:LHM_LAST) 'DarkGray' }
+  else { Say '         (nessuno - il driver dei sensori potrebbe essere bloccato da Core Isolation/antivirus)' 'DarkGray' }
+  Say '   [diag] Incolla queste righe nella chat: mi servono per aggiungere il tuo sensore CPU.' 'DarkYellow'
+}
 Send-Data $specs $health (Get-StartupList)
 $games = Get-Games
 if ($games.Count -gt 0) { Send-Games $games; Say ("   Giochi rilevati: {0}" -f $games.Count) 'DarkGray' }
