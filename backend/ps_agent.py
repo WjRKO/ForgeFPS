@@ -1,6 +1,9 @@
 """PowerShell agent, served at GET /api/agent/script and run via `irm ... | iex`.
 Modes:
   sync      -> safe: detect hardware/health/startup and report (no changes)
+               High-precision detection: real CPU/GPU temps via LibreHardwareMonitor (admin),
+               64-bit VRAM, locale-independent power plan (by GUID), accurate startup count,
+               broad cleanable-space scan, 3-sample averaged RAM usage, configured RAM speed.
   benchmark -> quick CPU/RAM/disk/network benchmark and report it
   optimize  -> graphical window (WinForms) with tweaks grouped in TABS + presets,
                shows each tweak's current state, before/after benchmark
@@ -53,6 +56,182 @@ function Get-GpuVendor {
   return 'n/d'
 }
 
+# ---------------- Precision helpers (LibreHardwareMonitor, VRAM, power, startup) ----------------
+$script:LHM_DIR = Join-Path $env:TEMP 'boostpc_lhm'
+$script:LHM_ZIP_URL = 'https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.4/LibreHardwareMonitor-net472.zip'
+$script:LHM_COMP = $null
+$script:LHM_TRIED = $false
+
+function Get-LhmComputer {
+  if ($script:LHM_COMP) { return $script:LHM_COMP }
+  if ($script:LHM_TRIED) { return $null }
+  $script:LHM_TRIED = $true
+  if (-not (Test-Admin)) { return $null }
+  try {
+    $dll = Join-Path $script:LHM_DIR 'LibreHardwareMonitorLib.dll'
+    if (-not (Test-Path $dll)) {
+      Say '   [Sensori] Scarico LibreHardwareMonitor (una volta sola)...' 'DarkGray'
+      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+      $zip = Join-Path $env:TEMP 'boostpc_lhm.zip'
+      Invoke-WebRequest $script:LHM_ZIP_URL -OutFile $zip -UseBasicParsing
+      if (Test-Path $script:LHM_DIR) { Remove-Item $script:LHM_DIR -Recurse -Force -ErrorAction SilentlyContinue }
+      Expand-Archive -Path $zip -DestinationPath $script:LHM_DIR -Force
+      Remove-Item $zip -ErrorAction SilentlyContinue
+    }
+    if (-not (Test-Path $dll)) {
+      $found = Get-ChildItem $script:LHM_DIR -Recurse -Filter 'LibreHardwareMonitorLib.dll' -ErrorAction SilentlyContinue | Select-Object -First 1
+      if ($found) { $dll = $found.FullName } else { return $null }
+    }
+    $hid = Get-ChildItem (Split-Path $dll) -Filter 'HidSharp.dll' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($hid) { Add-Type -Path $hid.FullName -ErrorAction SilentlyContinue }
+    Add-Type -Path $dll
+    $c = New-Object LibreHardwareMonitor.Hardware.Computer
+    $c.IsCpuEnabled = $true
+    $c.IsGpuEnabled = $true
+    $c.Open()
+    $script:LHM_COMP = $c
+    return $c
+  } catch { Say '   [Sensori] LibreHardwareMonitor non disponibile.' 'DarkYellow'; return $null }
+}
+
+function Get-LhmTemps {
+  # Real CPU/GPU temperatures from hardware sensors. Requires admin.
+  $r = @{}
+  $c = Get-LhmComputer
+  if (-not $c) { return $r }
+  try {
+    $cpuTemps = @{}; $gpuTemps = @{}
+    foreach ($hw in $c.Hardware) {
+      $hw.Update()
+      $ht = "$($hw.HardwareType)"
+      foreach ($sensor in $hw.Sensors) {
+        if ("$($sensor.SensorType)" -ne 'Temperature' -or $null -eq $sensor.Value) { continue }
+        if ($ht -eq 'Cpu') { $cpuTemps["$($sensor.Name)"] = [double]$sensor.Value }
+        elseif ($ht -like 'Gpu*') { $gpuTemps["$($sensor.Name)"] = [double]$sensor.Value }
+      }
+    }
+    $cpuVal = $null
+    foreach ($k in @('CPU Package', 'Core (Tctl/Tdie)', 'Core (Tctl)', 'Core (Tdie)', 'Core Average', 'Core Max')) {
+      if ($cpuTemps.ContainsKey($k)) { $cpuVal = $cpuTemps[$k]; break }
+    }
+    if ($null -eq $cpuVal -and $cpuTemps.Count -gt 0) { $cpuVal = ($cpuTemps.Values | Measure-Object -Maximum).Maximum }
+    if ($null -ne $cpuVal) { $r.cpu_temp = [int][math]::Round($cpuVal) }
+    $gpuVal = $null
+    foreach ($k in @('GPU Core', 'GPU Hot Spot', 'GPU')) { if ($gpuTemps.ContainsKey($k)) { $gpuVal = $gpuTemps[$k]; break } }
+    if ($null -eq $gpuVal -and $gpuTemps.Count -gt 0) { $gpuVal = ($gpuTemps.Values | Measure-Object -Maximum).Maximum }
+    if ($null -ne $gpuVal) { $r.gpu_temp = [int][math]::Round($gpuVal) }
+  } catch {}
+  return $r
+}
+
+function Get-GpuVramGb {
+  # 64-bit VRAM from registry (WMI AdapterRAM is capped at 4GB and unreliable).
+  try {
+    $best = 0.0
+    $keys = Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue
+    foreach ($k in $keys) {
+      $qw = (Get-ItemProperty $k.PSPath -Name 'HardwareInformation.qwMemorySize' -ErrorAction SilentlyContinue).'HardwareInformation.qwMemorySize'
+      if ($qw -and [double]$qw -gt $best) { $best = [double]$qw }
+    }
+    if ($best -gt 0) { return [int][math]::Round($best / 1GB) }
+  } catch {}
+  return $null
+}
+
+function Get-PowerPlanNormalized {
+  # Locale-independent: classify by scheme GUID, fallback to localized name.
+  $out = "$(powercfg /getactivescheme 2>$null)"
+  $guid = ([regex]::Match($out, '([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})')).Value.ToLower()
+  switch ($guid) {
+    '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c' { return 'High performance' }
+    'e9a42b02-d5df-448d-aa00-03f14749eb61' { return 'Ultimate Performance' }
+    '381b4222-f694-41f0-9685-ff5bb260df2e' { return 'Balanced' }
+    'a1841308-3541-4fab-bc81-f71556f20b4a' { return 'Power saver' }
+    default { return $out }
+  }
+}
+
+function Get-StartupCount {
+  # Accurate: enabled Run entries (excludes disabled via StartupApproved) + startup folders + third-party logon tasks.
+  $names = New-Object 'System.Collections.Generic.HashSet[string]'
+  $disabled = New-Object 'System.Collections.Generic.HashSet[string]'
+  foreach ($sa in @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
+                    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
+                    'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
+                    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder')) {
+    $p = Get-ItemProperty $sa -ErrorAction SilentlyContinue
+    if ($p) {
+      foreach ($prop in $p.PSObject.Properties) {
+        if ($prop.Name -like 'PS*') { continue }
+        $b = $prop.Value
+        if ($b -is [byte[]] -and $b.Length -gt 0 -and ($b[0] -band 1)) { [void]$disabled.Add($prop.Name.ToLower()) }
+      }
+    }
+  }
+  foreach ($rk in @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Run',
+                    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run',
+                    'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run')) {
+    $p = Get-ItemProperty $rk -ErrorAction SilentlyContinue
+    if ($p) {
+      foreach ($prop in $p.PSObject.Properties) {
+        if ($prop.Name -like 'PS*') { continue }
+        if (-not $disabled.Contains($prop.Name.ToLower())) { [void]$names.Add($prop.Name.ToLower()) }
+      }
+    }
+  }
+  foreach ($sf in @([Environment]::GetFolderPath('Startup'), [Environment]::GetFolderPath('CommonStartup'))) {
+    if ($sf -and (Test-Path $sf)) {
+      foreach ($f in (Get-ChildItem $sf -File -ErrorAction SilentlyContinue)) {
+        if ($f.Name -notlike 'desktop.ini' -and -not $disabled.Contains($f.Name.ToLower())) { [void]$names.Add($f.Name.ToLower()) }
+      }
+    }
+  }
+  try {
+    $tasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
+      $_.State -ne 'Disabled' -and $_.TaskPath -notlike '\Microsoft\*' -and
+      ($_.Triggers | Where-Object { "$($_.CimClass.CimClassName)" -eq 'MSFT_TaskLogonTrigger' })
+    }
+    foreach ($t in $tasks) { [void]$names.Add(('task:' + $t.TaskName).ToLower()) }
+  } catch {}
+  return $names.Count
+}
+
+function Get-CleanableMb {
+  # Broader cleanable footprint: user + system temp, Windows Update cache, prefetch, thumbnails, Recycle Bin.
+  $paths = @($env:TEMP, "$env:LOCALAPPDATA\Temp", "$env:SystemRoot\Temp",
+             "$env:SystemRoot\SoftwareDistribution\Download", "$env:SystemRoot\Prefetch",
+             "$env:LOCALAPPDATA\Microsoft\Windows\Explorer",
+             "$env:LOCALAPPDATA\Microsoft\Windows\INetCache") | Select-Object -Unique
+  $total = 0.0
+  foreach ($p in $paths) {
+    if ($p -and (Test-Path $p)) {
+      try {
+        $sum = (Get-ChildItem $p -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+        if ($sum) { $total += [double]$sum }
+      } catch {}
+    }
+  }
+  try {
+    $sh = New-Object -ComObject Shell.Application
+    $rb = $sh.NameSpace(0xA)
+    if ($rb) { foreach ($it in $rb.Items()) { try { $total += [double]$it.Size } catch {} } }
+  } catch {}
+  return [math]::Round($total / 1MB, 1)
+}
+
+function Get-AvgRamPct {
+  # Average over 3 samples to avoid a single-instant spike skewing the value.
+  $vals = @()
+  for ($i = 0; $i -lt 3; $i++) {
+    $o = Get-CimInstance Win32_OperatingSystem
+    if ($o.TotalVisibleMemorySize -gt 0) { $vals += (($o.TotalVisibleMemorySize - $o.FreePhysicalMemory) / $o.TotalVisibleMemorySize * 100) }
+    if ($i -lt 2) { Start-Sleep -Milliseconds 500 }
+  }
+  if ($vals.Count -eq 0) { return $null }
+  return [math]::Round(($vals | Measure-Object -Average).Average)
+}
+
+
 # ---------------- Hardware / health detection ----------------
 function Get-Specs {
   $s = @{}
@@ -72,15 +251,18 @@ function Get-Specs {
     $g = Get-CimInstance Win32_VideoController | Where-Object { $_.Name -notmatch 'Basic|Virtual|Remote|Meta|Parsec|Citrix' } | Select-Object -First 1
     if (-not $g) { $g = Get-CimInstance Win32_VideoController | Select-Object -First 1 }
     $s.gpu = $g.Name; $s.gpu_driver_version = $g.DriverVersion
-    if ($g.AdapterRAM -gt 0) { $s.gpu_vram_gb = "$([math]::Round($g.AdapterRAM/1GB))" }
+    $vram = Get-GpuVramGb
+    if ($vram) { $s.gpu_vram_gb = "$vram" }
+    elseif ($g.AdapterRAM -gt 0) { $s.gpu_vram_gb = "$([math]::Round($g.AdapterRAM/1GB))" }
   }
   $s.refresh_hz = "$((Get-CimInstance Win32_VideoController | Where-Object {$_.CurrentRefreshRate -gt 0} | Sort-Object CurrentRefreshRate -Descending | Select-Object -First 1).CurrentRefreshRate)"
   $ram = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB)
   $s.ram = "$ram GB"
   $pm = Get-CimInstance Win32_PhysicalMemory
-  $s.ram_speed_mhz = "$(($pm | Select-Object -First 1).Speed)"
+  $pm1 = $pm | Select-Object -First 1
+  $s.ram_speed_mhz = "$(if ($pm1.ConfiguredClockSpeed -and $pm1.ConfiguredClockSpeed -gt 0) { $pm1.ConfiguredClockSpeed } else { $pm1.Speed })"
   $s.ram_modules = "$(($pm | Measure-Object).Count)"
-  $s.ram_type = @{ '20'='DDR'; '21'='DDR2'; '24'='DDR3'; '26'='DDR4'; '34'='DDR5' }["$(($pm | Select-Object -First 1).SMBIOSMemoryType)"]
+  $s.ram_type = @{ '20'='DDR'; '21'='DDR2'; '24'='DDR3'; '26'='DDR4'; '34'='DDR5' }["$($pm1.SMBIOSMemoryType)"]
   $b = Get-CimInstance Win32_BaseBoard | Where-Object { $_.Product -and $_.Product -notmatch 'Base Board|Default string|To be filled|None' } | Select-Object -First 1
   if (-not $b) { $b = Get-CimInstance Win32_BaseBoard | Select-Object -First 1 }
   $mfg = "$($b.Manufacturer)"
@@ -107,26 +289,31 @@ function Get-Specs {
 
 function Get-Health {
   $h = @{}
-  $tempMb = 0
-  Get-ChildItem $env:TEMP, "$env:LOCALAPPDATA\Temp" -Recurse -File -Force 2>$null | ForEach-Object { $tempMb += $_.Length }
-  $h.temp_mb = [math]::Round($tempMb/1MB, 1)
-  $h.startup_count = (Get-CimInstance Win32_StartupCommand | Measure-Object).Count
-  $h.power_plan = (powercfg /getactivescheme)
+  $h.temp_mb = Get-CleanableMb
+  $h.startup_count = Get-StartupCount
+  $h.power_plan = Get-PowerPlanNormalized
   $gm = (Get-ItemProperty 'HKCU:\Software\Microsoft\GameBar' -Name AllowAutoGameMode).AllowAutoGameMode
   $h.game_mode = ($gm -eq 1)
   $hags = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' -Name HwSchMode).HwSchMode
   $h.gpu_scheduling = ($hags -eq 2)
-  $o = Get-CimInstance Win32_OperatingSystem
-  $h.ram_used_pct = [math]::Round(($o.TotalVisibleMemorySize - $o.FreePhysicalMemory) / $o.TotalVisibleMemorySize * 100)
+  $ram = Get-AvgRamPct
+  if ($null -ne $ram) { $h.ram_used_pct = $ram }
   $d = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
   if ($d) { $h.disk_free_pct = [math]::Round($d.FreeSpace / $d.Size * 100) }
   $vc = Get-CimInstance Win32_VideoController | Select-Object -First 1
   $h.gpu = $vc.Name; $h.gpu_driver_version = $vc.DriverVersion
   if ($vc.DriverDate) { $h.gpu_driver_date = $vc.DriverDate.ToString('yyyy-MM-dd') }
+  # Real sensor temps (admin): LibreHardwareMonitor covers CPU package + AMD/Intel GPU.
+  $lhm = Get-LhmTemps
   $gt = & nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>$null
   if ($gt) { $h.gpu_temp = [int]($gt | Select-Object -First 1).Trim() }
-  $tzt = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature | Select-Object -First 1
-  if ($tzt) { $h.cpu_temp = [math]::Round(($tzt.CurrentTemperature - 2732)/10) }
+  elseif ($lhm.ContainsKey('gpu_temp')) { $h.gpu_temp = $lhm.gpu_temp }
+  if ($lhm.ContainsKey('cpu_temp')) {
+    $h.cpu_temp = $lhm.cpu_temp
+  } else {
+    $tzt = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature | Select-Object -First 1
+    if ($tzt -and $tzt.CurrentTemperature -gt 2732) { $h.cpu_temp = [math]::Round(($tzt.CurrentTemperature - 2732)/10) }
+  }
   return $h
 }
 
@@ -239,8 +426,12 @@ function Get-TelemetrySample {
   $s.cpu_util = [int]$cpu.LoadPercentage
   $o = Get-CimInstance Win32_OperatingSystem
   $s.ram_used_pct = [int]([math]::Round(($o.TotalVisibleMemorySize - $o.FreePhysicalMemory) / $o.TotalVisibleMemorySize * 100))
-  $tzt = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($tzt) { $s.cpu_temp = [int]([math]::Round(($tzt.CurrentTemperature - 2732) / 10)) }
+  $lhm = Get-LhmTemps
+  if ($lhm.ContainsKey('cpu_temp')) { $s.cpu_temp = $lhm.cpu_temp }
+  else {
+    $tzt = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($tzt -and $tzt.CurrentTemperature -gt 2732) { $s.cpu_temp = [int]([math]::Round(($tzt.CurrentTemperature - 2732) / 10)) }
+  }
   $nv = & nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,clocks.gr,memory.used,memory.total,power.draw --format=csv,noheader,nounits 2>$null
   if ($nv) {
     $p = ($nv | Select-Object -First 1).Split(',')
@@ -251,6 +442,7 @@ function Get-TelemetrySample {
     if ($mt -gt 0) { $s.vram_used_pct = [int]([math]::Round($mu / $mt * 100)) }
     $s.gpu_power = [int]([math]::Round([double]$p[5].Trim()))
   }
+  elseif ($lhm.ContainsKey('gpu_temp')) { $s.gpu_temp = $lhm.gpu_temp }
   return $s
 }
 function Send-Telemetry($sample) {
