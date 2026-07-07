@@ -1,96 +1,154 @@
 {
-  "theme": "dark",
-  "archetype": "7 (Electric & Neon) paired with Tactical Precision",
-  "brand_identity": {
-    "vibe": "Elite, Stealthy, High-Performance, Cybernetic",
-    "description": "An AI PC Optimization Advisor and Build Generator tailored for PC Gamers, Streamers, and hardware enthusiasts. Uses a high-tech performance aesthetic heavily grounded in deep void blacks with sharp, aggressive accents of Cyber Yellow (Volt) and Matrix Green. The interface feels like a premium command center or tactical HUD."
-  },
-  "typography": {
-    "heading_font": "Unbounded",
-    "body_font": "JetBrains Mono",
-    "scale": {
-      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-black",
-      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold",
-      "h3": "text-xl sm:text-2xl tracking-tight font-semibold",
-      "h4": "text-lg sm:text-xl font-medium",
-      "body": "text-sm sm:text-base leading-relaxed",
-      "overline": "text-xs tracking-[0.2em] uppercase font-bold text-zinc-500"
-    },
-    "notes": "Do not exceed text-6xl for H1. Always use Unbounded for headings with tight tracking to give a solid, premium tech feel. JetBrains Mono is strictly for all body text, prices, hardware specs, and data tables to evoke a terminal/diagnostic aesthetic."
-  },
+  "project_name": "BoostPC Landing Page Redesign",
+  "theme_archetype": "Archetype 2: The Performance Pro (Tactical/Gaming Variant) - Pure Dark Theme",
+  "instructions_to_main_agent": [
+    "Strictly use valid i18n translation keys via react-i18next (e.g., t('hero.title')) for ALL text.",
+    "Do not alter existing app routes or authenticated views.",
+    "Apply data-testid attributes (kebab-case, role-based) to all interactive and key elements.",
+    "Use ONLY lucide-react for icons.",
+    "Use framer-motion for all scroll, entrance, and complex hover animations.",
+    "Do NOT use placeholder image services like via.placeholder.com.",
+    "Rely entirely on pure HTML/Tailwind CSS and Recharts to build the dashboard mockups (NO raster stock photos for the UI)."
+  ],
   "colors": {
     "background": {
       "base": "#050505",
-      "surface": "#0F0F12",
-      "panel": "#141419",
-      "glass": "bg-black/60 backdrop-blur-xl"
+      "panel": "#0F0F12",
+      "overlay": "rgba(5, 5, 5, 0.7)"
     },
     "border": {
-      "default": "#2A2A35",
-      "subtle": "#1A1A24",
-      "active": "#E5FF00"
-    },
-    "text": {
-      "primary": "#FAFAFA",
-      "secondary": "#A1A1AA",
-      "muted": "#52525B"
+      "default": "#1A1A24",
+      "highlight": "#2A2A35"
     },
     "accents": {
-      "primary_cta": "#E5FF00",
-      "primary_cta_hover": "#D4EC00",
-      "success_tracking": "#00FF66",
-      "alert_spike": "#FF3B30"
-    },
-    "notes": "Use the Tinted Grey rule: no pure gray. All surfaces are tinted slightly towards Indigo/Obsidian. Primary CTA (Cyber Yellow) is used sparingly—only for main actions like 'Optimize PC' or 'Save Build'. Use Laser Green specifically for Price Drops/Healthy metrics, and Alert Red for Price Spikes."
-  },
-  "spacing_and_layout": {
-    "strategy": "The 'Control Room' Grid for dashboard (dense, gap-6). Bento layout for Build Generators.",
-    "containers": "Generous padding inside cards (p-6 to p-8). Mobile-first responsive grids.",
-    "alignment": "Left-align dense text and tables. Only center-align empty states or main hero CTA.",
-    "border_radius": "Sharp edges or minimal rounding (rounded-sm max). No pill-shaped buttons unless explicitly required by a switch component."
-  },
-  "surfaces_and_effects": {
-    "headers_and_nav": "Crystal Glassmorphism (bg-black/60 backdrop-blur-xl border-b border-white/10). Sticky top.",
-    "cards": "Flat background (#0F0F12), 1px subtle border (#2A2A35). On hover: border glows slightly and subtle Y-translation.",
-    "ai_chat": "Retro-Futurism/Terminal Look. Mono-font responses.",
-    "price_tracker": "Grid Borders styling. Expose the skeleton with right and bottom borders for grid items."
-  },
-  "components": {
-    "buttons": "Sharp corners. Cyber Yellow background with Deep Black text for primary. Subtle hover states.",
-    "inputs": "Shadcn highly customized. Flat black background, visible bottom border, focus state highlights with Cyber Yellow.",
-    "charts": "Use Recharts customized with Matrix Green (#00FF66) for price drops and Alert Red (#FF3B30) for price increases. Dark grid lines (#2A2A35).",
-    "tables": "Dense, monospace font for all numbers/prices. Left-aligned product names, right-aligned prices.",
-    "icons": "Use lucide-react or @phosphor-icons/react."
-  },
-  "animations": {
-    "hover_states": "Interactive elements must shift border color and slight text color shift. Avoid heavy background color shifts.",
-    "transitions": "Use 'transition: transform 0.2s ease, border-color 0.2s ease'.",
-    "ai_typing": "Terminal-style rapid typing reveal for AI advice."
-  },
-  "media": {
-    "hero_build": {
-      "url": "https://images.pexels.com/photos/16062772/pexels-photo-16062772.jpeg",
-      "description": "Vibrant RGB lighting on modern computer hardware. Use as the Hero background with a heavy black overlay (bg-black/70) or gradient mask to ensure text contrast.",
-      "category": "hero"
-    },
-    "ai_pattern": {
-      "url": "https://images.pexels.com/photos/10653941/pexels-photo-10653941.jpeg",
-      "description": "Dynamic abstract photograph of blue light patterns. Use inside the AI Chat window or as a subtle structural background under the Build Generator.",
-      "category": "background"
+      "volt": "#E5FF00",
+      "green": "#00FF66",
+      "cyan": "#00E0FF",
+      "danger": "#FF3B30",
+      "white": "#FFFFFF",
+      "muted": "#888893"
     }
   },
-  "testing": {
-    "attributes": "All interactive elements (buttons, inputs, links, tabs) MUST include data-testid attributes (e.g., data-testid='optimize-pc-btn', data-testid='price-tracker-input')."
+  "typography": {
+    "fonts": {
+      "headings": "Outfit, sans-serif",
+      "body": "IBM Plex Sans, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "scales": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tighter uppercase",
+      "h2": "text-base md:text-lg font-bold tracking-wide uppercase text-white",
+      "h3": "text-base font-semibold tracking-normal text-white",
+      "micro_label": "text-xs font-mono tracking-[0.2em] uppercase text-muted",
+      "body": "text-base text-muted",
+      "small": "text-sm text-muted"
+    }
   },
-  "instructions_to_main_agent": [
-    "Build with React/Next.js and Tailwind CSS.",
-    "Integrate Shadcn UI but aggressively override the default light-theme aesthetic to match the dark Obsidian/Cyber Yellow palette.",
-    "Ensure 'JetBrains Mono' is loaded and applied correctly to numeric data (prices, specs, tracking URLs).",
-    "Ensure 'Unbounded' is used for headings with tight tracking.",
-    "Use the media URLs provided; DO NOT use placeholders.",
-    "Include data-testid attributes on all interactive elements.",
-    "Build the AI PC Optimization Advisor as a chat-like interface.",
-    "Build the Product Tracker with clear visual indicators (Green/Red) for price changes.",
-    "Create a comprehensive Dashboard layout using the 'Control Room' grid."
-  ]
+  "spacing_and_layout": {
+    "philosophy": "Sharp edges (rounded-none). Tactical HUD aesthetic. High density in product mockups, generous breathing room (p-12 to p-24) between major marketing sections.",
+    "borders": "Always 1px solid, rarely shadowed. Use inner glows or left-border accents for emphasis.",
+    "grid_strategy": {
+      "marketing_sections": "Tetris Grid / Asymmetrical blocks for visual tension.",
+      "product_mockups": "Control Room Grid, highly dense, no gaps (gap-0) or strict 1px grid borders."
+    }
+  },
+  "motion_specs": {
+    "framer_defaults": {
+      "initial": { "opacity": 0, "y": 20 },
+      "whileInView": { "opacity": 1, "y": 0 },
+      "viewport": { "once": true, "margin": "-100px" },
+      "transition": { "duration": 0.5, "ease": [0.16, 1, 0.3, 1] }
+    },
+    "stagger": {
+      "delayChildren": 0.1,
+      "staggerChildren": 0.1
+    },
+    "hover_states": {
+      "card": "translate-y-[-4px] border-[#2A2A35] bg-[#141418] transition-all duration-300",
+      "btn_volt": "shadow-[0_0_20px_rgba(229,255,0,0.3)] bg-[#F0FF4D] text-black"
+    }
+  },
+  "css_utilities": {
+    "btn-volt": "inline-flex items-center justify-center bg-[#E5FF00] text-black font-bold uppercase tracking-wide px-8 py-4 rounded-none transition-all hover:bg-[#F0FF4D] hover:shadow-[0_0_20px_rgba(229,255,0,0.3)]",
+    "btn-outline": "inline-flex items-center justify-center border border-[#2A2A35] bg-transparent text-white font-bold uppercase tracking-wide px-8 py-4 rounded-none transition-all hover:bg-[#1A1A24] hover:border-white",
+    "panel-hud": "bg-[#0F0F12] border border-[#1A1A24] rounded-none relative overflow-hidden",
+    "grid-bg": "bg-[linear-gradient(to_right,#1A1A24_1px,transparent_1px),linear-gradient(to_bottom,#1A1A24_1px,transparent_1px)] bg-[size:40px_40px]",
+    "micro-label": "text-xs font-mono tracking-[0.2em] uppercase text-[#888893]"
+  },
+  "product_mockup_build_guides": {
+    "health_score": "Use an SVG <circle> with strokeDasharray and strokeDashoffset. Animate offset from 0 to target (e.g., 98). Use #00FF66 for the stroke color. Place large font-mono text '98' in the center.",
+    "fps_chart": "Use Recharts <AreaChart>. Data should simulate a jump from 120 FPS to 180 FPS. Use a glowing #00FF66 stroke and a <linearGradient> for the fill. Hide axes for a clean HUD look.",
+    "ai_advisor_chat": "Pure HTML/Tailwind. Stacked DIVs. Left aligned grey text for user, right aligned cyan text for AI. Use framer-motion to stagger their appearance. Add a 'typing...' indicator.",
+    "price_tracker": "Mini Recharts <LineChart> with a descending line. Stroke color #00E0FF. Add a dashed reference line for 'Target Price'.",
+    "desktop_agent_terminal": "A black DIV with a top bar (red, yellow, green pure CSS dots). Content: font-mono text in green #00FF66 simulating typing: '> Invoke-WebRequest -Uri \"https://boostpc.app/run\" -UseBasicParsing | Invoke-Expression'."
+  },
+  "sections": [
+    {
+      "name": "Navigation",
+      "layout": "Fixed top, backdrop-blur-md bg-[#050505]/80, border-b border-[#1A1A24].",
+      "content": "Logo (left), Language Switcher 🇮🇹/🇬🇧 + Sign In + Get Started 'btn-volt' (right)."
+    },
+    {
+      "name": "Hero",
+      "layout": "Grid cols-1 lg:grid-cols-2 gap-12 items-center min-h-[90vh] p-8 md:p-12 relative overflow-hidden. Use 'grid-bg' class on absolute background container with low opacity.",
+      "content_left": "Micro-label: '// AI PERFORMANCE COMMAND CENTER'. H1: 'BOOST YOUR PC. OWN THE STREAM.' Body: Explain the core value. CTAs: Primary 'btn-volt', Secondary 'btn-outline'.",
+      "content_right": "The 'Actual Product Preview'. A composite HUD built with 'panel-hud' containers overlapping. Must include the animated Health Score SVG, real-time looking telemetry numbers (CPU 45°C), and the rising FPS Recharts graph. Wrap in framer-motion floating animation."
+    },
+    {
+      "name": "Trust Strip",
+      "layout": "Grid cols-2 md:grid-cols-4 border-y border-[#1A1A24] bg-[#050505]. Every item has border-r border-[#1A1A24] except the last.",
+      "content": "Animated counters (framer-motion or pure react hooks). Stats: +15 FPS avg, 26 tweaks, 5 stores tracked, 100% reversible. Font: mono."
+    },
+    {
+      "name": "How It Works",
+      "layout": "py-24 px-8. Header centered: '// DEPLOYMENT PROTOCOL'. Grid cols-1 md:grid-cols-3 gap-8.",
+      "content": "3 steps. 1: Connect PC (icon: Plug). 2: AI Analyzes (icon: Cpu). 3: Apply Boosts (icon: Zap). Hover state: Add a left-border that highlights in #E5FF00."
+    },
+    {
+      "name": "Features Showcase (5 Rows)",
+      "layout": "py-24. 5 distinct rows. Alternate layout: Row 1 (Text Left / Mockup Right), Row 2 (Mockup Left / Text Right), etc.",
+      "features": [
+        {
+          "title": "AI Advisor",
+          "accent": "cyan",
+          "mockup_guide": "ai_advisor_chat"
+        },
+        {
+          "title": "Health Score & Telemetry",
+          "accent": "green",
+          "mockup_guide": "health_score and fps_chart"
+        },
+        {
+          "title": "Build Generator",
+          "accent": "volt",
+          "mockup_guide": "Sleek list of components (CPU, GPU, RAM) with lucide icons and checkmarks simulating an AI selection process."
+        },
+        {
+          "title": "Price Tracker",
+          "accent": "white",
+          "mockup_guide": "price_tracker"
+        },
+        {
+          "title": "Desktop Agent",
+          "accent": "danger",
+          "mockup_guide": "desktop_agent_terminal"
+        }
+      ]
+    },
+    {
+      "name": "Closing CTA",
+      "layout": "py-32 px-8 text-center relative border-y border-[#2A2A35] bg-[#0F0F12].",
+      "content": "H2: 'READY TO OWN THE STREAM?'. Subtitle. Big 'btn-volt' CTA. Decorative corner brackets [ ] in absolute positioning."
+    },
+    {
+      "name": "Footer",
+      "layout": "py-16 px-8 grid cols-1 md:grid-cols-4 gap-12 bg-[#050505].",
+      "content": "Col 1: Logo + short bio. Col 2/3: Links (Product, Legal). Col 4: Language Switcher and status indicator (All systems operational in green)."
+    }
+  ],
+  "seo_and_meta": {
+    "title": "BoostPC - AI Performance Command Center",
+    "description": "Optimize your PC for gaming and streaming with AI. Real-time telemetry, auto-tweaks, and hardware price tracking.",
+    "open_graph_advice": "Ensure the OG image is a snapshot of the dark tactical HUD (Hero mockup). Set theme-color meta tag to #050505."
+  }
 }
