@@ -498,8 +498,12 @@ function Send-Telemetry($sample) {
 # ---------------- FPS via PresentMon (opzionale, richiede admin) ----------------
 $script:PM_EXE = Join-Path $env:TEMP 'PresentMon.exe'
 $script:PM_CSV = Join-Path $env:TEMP 'boostpc_fps.csv'
+$script:PM_OUT = Join-Path $env:TEMP 'boostpc_pm_out.log'
+$script:PM_ERR = Join-Path $env:TEMP 'boostpc_pm_err.log'
 $script:PM_ON  = $false
 $script:PM_ROWS = 1
+$script:PM_PROC = $null
+$script:PM_DIAG_DONE = $false
 $script:PM_URL = 'https://github.com/GameTechDev/PresentMon/releases/download/v2.4.1/PresentMon-2.4.1-x64.exe'
 function Read-Shared($path) {
   try {
@@ -509,25 +513,55 @@ function Read-Shared($path) {
   } catch { return '' }
 }
 function Start-Fps {
-  if (-not (Test-Admin)) { Say '   [FPS] Richiede Amministratore: FPS non disponibili.' 'DarkYellow'; return }
+  if (-not (Test-Admin)) { Say '   [FPS] Richiede Amministratore: avvia PowerShell come Admin per gli FPS.' 'DarkYellow'; return }
   if (-not (Test-Path $script:PM_EXE)) {
     Say '   [FPS] Scarico PresentMon (una volta sola)...' 'DarkGray'
     try {
       [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
       Invoke-WebRequest $script:PM_URL -OutFile $script:PM_EXE -UseBasicParsing
-    } catch { Say '   [FPS] Download PresentMon fallito.' 'DarkYellow'; return }
+    } catch { Say ('   [FPS] Download PresentMon fallito: ' + $_.Exception.Message) 'DarkYellow'; return }
   }
-  Remove-Item $script:PM_CSV -ErrorAction SilentlyContinue
+  Remove-Item $script:PM_CSV, $script:PM_OUT, $script:PM_ERR -ErrorAction SilentlyContinue
   try {
-    Start-Process -FilePath $script:PM_EXE `
-      -ArgumentList '--output_file', "`"$($script:PM_CSV)`"", '--stop_existing_session', '--v1_metrics' `
-      -WindowStyle Hidden
+    $script:PM_PROC = Start-Process -FilePath $script:PM_EXE `
+      -ArgumentList '--output_file', "`"$($script:PM_CSV)`"", '--stop_existing_session', '--v1_metrics', '--no_console_stats' `
+      -WindowStyle Hidden -PassThru -RedirectStandardOutput $script:PM_OUT -RedirectStandardError $script:PM_ERR
     $script:PM_ON = $true
-    Say '   [FPS] Cattura FPS attiva (avvia un gioco a schermo intero).' 'DarkGray'
-    Start-Sleep -Seconds 1
-  } catch { Say '   [FPS] Avvio PresentMon fallito.' 'DarkYellow' }
+    Start-Sleep -Milliseconds 1500
+    if ($script:PM_PROC -and $script:PM_PROC.HasExited) {
+      $script:PM_ON = $false
+      $err = ''
+      foreach ($lf in @($script:PM_ERR, $script:PM_OUT)) { if (Test-Path $lf) { $err += (Get-Content $lf -Raw -ErrorAction SilentlyContinue) } }
+      Say ('   [FPS] PresentMon si e chiuso subito (exit ' + $script:PM_PROC.ExitCode + '). Dettaglio: ' + ($err.Trim() -replace "`r?`n", ' | ')) 'DarkYellow'
+    } else {
+      Say '   [FPS] Cattura FPS attiva. Avvia un gioco (o uno screensaver 3D) a schermo intero.' 'DarkGray'
+    }
+  } catch { Say ('   [FPS] Avvio PresentMon fallito: ' + $_.Exception.Message) 'DarkYellow' }
 }
 function Stop-Fps { if ($script:PM_ON) { Stop-Process -Name PresentMon -Force -ErrorAction SilentlyContinue; $script:PM_ON = $false } }
+function Show-FpsDiag {
+  if ($script:PM_DIAG_DONE) { return }
+  $script:PM_DIAG_DONE = $true
+  Say '   [diag FPS] Nessun FPS ancora rilevato. Controllo stato:' 'DarkYellow'
+  $alive = ($script:PM_PROC -and -not $script:PM_PROC.HasExited)
+  Say ("             PresentMon attivo: {0}" -f $(if($alive){'si'}else{'NO'})) 'DarkGray'
+  if (Test-Path $script:PM_CSV) {
+    $sz = (Get-Item $script:PM_CSV).Length
+    Say ("             CSV presente: si ({0} byte)" -f $sz) 'DarkGray'
+    $raw = Read-Shared $script:PM_CSV
+    $ln = $raw -split "`r?`n" | Where-Object { $_ -ne '' }
+    Say ("             Righe CSV: {0}" -f $ln.Count) 'DarkGray'
+    if ($ln.Count -ge 1) { Say ("             Intestazione: " + ($ln[0].Substring(0,[math]::Min(120,$ln[0].Length)))) 'DarkGray' }
+  } else {
+    Say '             CSV presente: NO (PresentMon non sta scrivendo dati)' 'DarkGray'
+  }
+  if (-not $alive) {
+    $err = ''
+    foreach ($lf in @($script:PM_ERR, $script:PM_OUT)) { if (Test-Path $lf) { $err += (Get-Content $lf -Raw -ErrorAction SilentlyContinue) } }
+    if ($err.Trim()) { Say ('             Errore PresentMon: ' + ($err.Trim() -replace "`r?`n", ' | ')) 'DarkGray' }
+  }
+  Say '   [diag FPS] Se serve, incolla queste righe in chat. Ricorda: gli FPS compaiono SOLO mentre un app renderizza a schermo (uno screensaver si chiude al primo movimento del mouse).' 'DarkYellow'
+}
 function Get-Fps {
   if (-not $script:PM_ON) { return $null }
   $raw = Read-Shared $script:PM_CSV
@@ -959,11 +993,13 @@ if ($MODE -eq 'monitor') {
   Say "`n[*] Monitoraggio live avviato. Lascia aperta questa finestra. Premi Ctrl+C per fermare." 'Cyan'
   Say '   Apri BOOST PC -> Live per i grafici in tempo reale.' 'DarkGray'
   Start-Fps
+  $noFpsCount = 0
   try {
     while ($true) {
       $s = Get-TelemetrySample
       $f = Get-Fps
-      if ($f) { $s.fps = $f.fps; $s.game = $f.game }
+      if ($f) { $s.fps = $f.fps; $s.game = $f.game; $noFpsCount = 0 }
+      elseif ($script:PM_ON) { $noFpsCount++; if ($noFpsCount -eq 6) { Show-FpsDiag } }
       Send-Telemetry $s
       $g = if ($s.ContainsKey('gpu_util')) { ("GPU {0}% {1}C {2}MHz" -f $s.gpu_util, $s.gpu_temp, $s.gpu_clock) } else { 'GPU n/d' }
       $ct = if ($s.ContainsKey('cpu_temp')) { ("{0}C" -f $s.cpu_temp) } else { '' }
