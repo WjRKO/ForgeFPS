@@ -140,3 +140,39 @@ h1, h2, h3, h4, h5, .font-display {
 .stagger > *:nth-child(7) { animation-delay: 0.33s; }
 .stagger > *:nth-child(8) { animation-delay: 0.38s; }
 
+
+/* ===== HUD uplift utilities (app pages) ===== */
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+.skeleton {
+  background-color: #14141b;
+  position: relative;
+  overflow: hidden;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+  animation: shimmer 1.6s infinite;
+}
+.text-glow-volt { text-shadow: 0 0 12px rgba(229,255,0,0.45); }
+
+/* HUD corner tick (top-left) for tactical panels */
+.hud-tick { position: relative; }
+.hud-tick::before,
+.hud-tick::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0;
+  background-color: #E5FF00;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.hud-tick::before { width: 10px; height: 2px; }
+.hud-tick::after { width: 2px; height: 10px; }
+.hud-tick:hover::before, .hud-tick:hover::after { opacity: 1; }
+
+/* typing dots */
+@keyframes typingDot { 0%, 60%, 100% { opacity: 0.2; } 30% { opacity: 1; } }
+.typing-dot { animation: typingDot 1.2s infinite; }

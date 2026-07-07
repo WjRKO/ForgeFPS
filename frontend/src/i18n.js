@@ -57,6 +57,7 @@ const resources = {
         name_ph: "Nome del prodotto...", tracked_title: "Prodotti tracciati", empty: "Nessun prodotto tracciato ancora.",
         edit_name: "Modifica nome", refresh: "Aggiorna prezzo",
         search_results: "Risultati ricerca", no_results: "Nessun risultato (lo store potrebbe aver bloccato la richiesta). Prova a incollare il link diretto.", parts: "pezzi",
+        status_drop: "In calo", status_target: "Target raggiunto", status_up: "In aumento", to_target: "al target", empty_title: "Nessun prodotto tracciato",
       },
       profiles: {
         eyebrow: "// Profili per gioco", title: "Profili tweak",
@@ -333,6 +334,7 @@ const resources = {
         name_ph: "Product name...", tracked_title: "Tracked products", empty: "No products tracked yet.",
         edit_name: "Edit name", refresh: "Refresh price",
         search_results: "Search results", no_results: "No results (the store may have blocked the request). Try pasting the direct link.", parts: "parts",
+        status_drop: "Dropping", status_target: "Target reached", status_up: "Rising", to_target: "to target", empty_title: "No tracked products",
       },
       profiles: {
         eyebrow: "// Per-game profiles", title: "Tweak profiles",
