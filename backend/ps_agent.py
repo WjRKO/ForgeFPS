@@ -65,7 +65,21 @@ $script:LHM_LAST = ''
 
 function Test-MemoryIntegrity {
   try {
+    $ssr = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard' -Name SecurityServicesRunning -ErrorAction SilentlyContinue).SecurityServicesRunning
+    if ($ssr -and ($ssr -contains 2)) { return $true }
     $v = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity' -Name Enabled -ErrorAction SilentlyContinue).Enabled
+    return ($v -eq 1)
+  } catch { return $false }
+}
+
+function Test-VulnerableDriverBlocklist {
+  try {
+    $v = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Config' -Name VulnerableDriverBlocklistEnable -ErrorAction SilentlyContinue).VulnerableDriverBlocklistEnable
+    # On Windows 11 the blocklist is ON by default even when the value is absent.
+    if ($null -eq $v) {
+      $build = [int]([regex]::Match("$((Get-CimInstance Win32_OperatingSystem).BuildNumber)", '\d+').Value)
+      return ($build -ge 22000)
+    }
     return ($v -eq 1)
   } catch { return $false }
 }
@@ -1003,11 +1017,21 @@ elseif (Test-Admin) {
   Say '   [diag] Temp CPU non leggibile. Sensori temperatura rilevati:' 'DarkYellow'
   if ($script:LHM_LAST) { Say ("         " + $script:LHM_LAST) 'DarkGray' }
   else { Say '         (nessuno)' 'DarkGray' }
-  if (Test-MemoryIntegrity) {
-    Say '   [!] CAUSA: Core Isolation "Integrita della memoria" e ATTIVA e blocca il driver dei sensori CPU.' 'Yellow'
-    Say '       Per leggere la temperatura CPU: Impostazioni > Privacy e sicurezza > Sicurezza di Windows >' 'Gray'
-    Say '       Sicurezza dispositivo > Isolamento core > DISATTIVA "Integrita della memoria" e riavvia il PC.' 'Gray'
-    Say '       (La temperatura GPU funziona gia e non richiede questa modifica.)' 'DarkGray'
+  $mi = Test-MemoryIntegrity
+  $bl = Test-VulnerableDriverBlocklist
+  Say ("   [diag] Integrita memoria: {0}  |  Blocklist driver vulnerabili: {1}" -f $(if($mi){'ATTIVA'}else{'disattivata'}), $(if($bl){'ATTIVA'}else{'disattivata'})) 'DarkGray'
+  if ($mi -or $bl) {
+    Say '   [!] CAUSA: Windows sta bloccando il driver dei sensori CPU (protezione di sicurezza).' 'Yellow'
+    Say '       La temperatura CPU sulle AMD Ryzen richiede questo driver di basso livello.' 'Gray'
+    if ($mi) {
+      Say '       -> Disattiva "Integrita della memoria": Impostazioni > Privacy e sicurezza >' 'Gray'
+      Say '          Sicurezza di Windows > Sicurezza dispositivo > Isolamento core > OFF, poi riavvia.' 'Gray'
+    }
+    if ($bl) {
+      Say '       -> La "Blocklist driver vulnerabili" e attiva (default su Windows 11) e blocca questo driver.' 'Gray'
+      Say '          E una protezione di sicurezza: si consiglia di lasciarla attiva.' 'Gray'
+    }
+    Say '       (La temperatura GPU funziona gia e non richiede alcuna modifica.)' 'DarkGray'
   } else {
     Say '   [i] Il driver sensori CPU non ha risposto (possibile blocco antivirus). La temp GPU funziona comunque.' 'DarkGray'
   }
