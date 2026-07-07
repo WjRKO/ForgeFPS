@@ -77,6 +77,7 @@ function Get-LhmComputer {
       if (Test-Path $script:LHM_DIR) { Remove-Item $script:LHM_DIR -Recurse -Force -ErrorAction SilentlyContinue }
       Expand-Archive -Path $zip -DestinationPath $script:LHM_DIR -Force
       Remove-Item $zip -ErrorAction SilentlyContinue
+      Get-ChildItem $script:LHM_DIR -Recurse -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue
     }
     if (-not (Test-Path $dll)) {
       $found = Get-ChildItem $script:LHM_DIR -Recurse -Filter 'LibreHardwareMonitorLib.dll' -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -108,8 +109,10 @@ function Get-LhmTemps {
       $ht = "$($hw.HardwareType)"
       foreach ($sensor in $hw.Sensors) {
         if ("$($sensor.SensorType)" -ne 'Temperature' -or $null -eq $sensor.Value) { continue }
-        if ($ht -eq 'Cpu') { $cpuTemps["$($sensor.Name)"] = [double]$sensor.Value }
-        elseif ($ht -like 'Gpu*') { $gpuTemps["$($sensor.Name)"] = [double]$sensor.Value }
+        $tv = [double]$sensor.Value
+        if ($tv -le 0 -or $tv -gt 150) { continue }
+        if ($ht -eq 'Cpu') { $cpuTemps["$($sensor.Name)"] = $tv }
+        elseif ($ht -like 'Gpu*') { $gpuTemps["$($sensor.Name)"] = $tv }
       }
     }
     $cpuVal = $null
@@ -117,11 +120,11 @@ function Get-LhmTemps {
       if ($cpuTemps.ContainsKey($k)) { $cpuVal = $cpuTemps[$k]; break }
     }
     if ($null -eq $cpuVal -and $cpuTemps.Count -gt 0) { $cpuVal = ($cpuTemps.Values | Measure-Object -Maximum).Maximum }
-    if ($null -ne $cpuVal) { $r.cpu_temp = [int][math]::Round($cpuVal) }
+    if ($null -ne $cpuVal -and $cpuVal -gt 0) { $r.cpu_temp = [int][math]::Round($cpuVal) }
     $gpuVal = $null
     foreach ($k in @('GPU Core', 'GPU Hot Spot', 'GPU')) { if ($gpuTemps.ContainsKey($k)) { $gpuVal = $gpuTemps[$k]; break } }
     if ($null -eq $gpuVal -and $gpuTemps.Count -gt 0) { $gpuVal = ($gpuTemps.Values | Measure-Object -Maximum).Maximum }
-    if ($null -ne $gpuVal) { $r.gpu_temp = [int][math]::Round($gpuVal) }
+    if ($null -ne $gpuVal -and $gpuVal -gt 0) { $r.gpu_temp = [int][math]::Round($gpuVal) }
   } catch {}
   return $r
 }
@@ -314,7 +317,10 @@ function Get-Health {
     $h.cpu_temp = $lhm.cpu_temp
   } else {
     $tzt = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature | Select-Object -First 1
-    if ($tzt -and $tzt.CurrentTemperature -gt 2732) { $h.cpu_temp = [math]::Round(($tzt.CurrentTemperature - 2732)/10) }
+    if ($tzt -and $tzt.CurrentTemperature -gt 2732) {
+      $ct = [math]::Round(($tzt.CurrentTemperature - 2732)/10)
+      if ($ct -gt 0) { $h.cpu_temp = $ct }
+    }
   }
   return $h
 }
@@ -432,7 +438,10 @@ function Get-TelemetrySample {
   if ($lhm.ContainsKey('cpu_temp')) { $s.cpu_temp = $lhm.cpu_temp }
   else {
     $tzt = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($tzt -and $tzt.CurrentTemperature -gt 2732) { $s.cpu_temp = [int]([math]::Round(($tzt.CurrentTemperature - 2732) / 10)) }
+    if ($tzt -and $tzt.CurrentTemperature -gt 2732) {
+      $ct = [int]([math]::Round(($tzt.CurrentTemperature - 2732) / 10))
+      if ($ct -gt 0) { $s.cpu_temp = $ct }
+    }
   }
   $nv = & nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,clocks.gr,memory.used,memory.total,power.draw --format=csv,noheader,nounits 2>$null
   if ($nv) {

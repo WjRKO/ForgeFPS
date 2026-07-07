@@ -145,12 +145,16 @@ def compute_health(health: dict) -> dict:
     check("driver", "Driver GPU", 12, days, (180, 365),
           lambda v: f"aggiornato {int(v)} giorni fa", "Aggiorna i driver della GPU",
           "driver_days", present=days is not None)
-    check("gpu_temp", "Temperatura GPU", 12, health.get("gpu_temp"), (75, 84),
+    _gpu_t = health.get("gpu_temp")
+    _gpu_t = _gpu_t if (_gpu_t is not None and _gpu_t > 0) else None
+    _cpu_t = health.get("cpu_temp")
+    _cpu_t = _cpu_t if (_cpu_t is not None and _cpu_t > 0) else None
+    check("gpu_temp", "Temperatura GPU", 12, _gpu_t, (75, 84),
           lambda v: f"{int(v)}°C", "Migliora airflow/curva ventole: rischio throttling",
-          "temp_c", present="gpu_temp" in health)
-    check("cpu_temp", "Temperatura CPU", 10, health.get("cpu_temp"), (80, 89),
+          "temp_c", present=_gpu_t is not None)
+    check("cpu_temp", "Temperatura CPU", 10, _cpu_t, (80, 89),
           lambda v: f"{int(v)}°C", "Verifica dissipatore/pasta termica: rischio throttling",
-          "temp_c", present="cpu_temp" in health)
+          "temp_c", present=_cpu_t is not None)
 
     score = round(100 * (1 - (lost / total_weight))) if total_weight else 100
     score = max(0, min(100, score))
@@ -158,7 +162,7 @@ def compute_health(health: dict) -> dict:
     grade = {"ottimo": "Ottimo", "buono": "Buono", "migliorare": "Da migliorare", "critico": "Critico"}[grade_key]
     return {"score": score, "grade": grade, "grade_key": grade_key, "checks": checks,
             "driver_version": health.get("gpu_driver_version"),
-            "gpu_temp": health.get("gpu_temp"), "cpu_temp": health.get("cpu_temp"),
+            "gpu_temp": _gpu_t, "cpu_temp": _cpu_t,
             "gpu": health.get("gpu"), "updated_at": now_iso()}
 
 
