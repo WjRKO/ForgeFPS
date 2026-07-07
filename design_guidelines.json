@@ -1,154 +1,211 @@
 {
-  "project_name": "BoostPC Landing Page Redesign",
-  "theme_archetype": "Archetype 2: The Performance Pro (Tactical/Gaming Variant) - Pure Dark Theme",
-  "instructions_to_main_agent": [
-    "Strictly use valid i18n translation keys via react-i18next (e.g., t('hero.title')) for ALL text.",
-    "Do not alter existing app routes or authenticated views.",
-    "Apply data-testid attributes (kebab-case, role-based) to all interactive and key elements.",
-    "Use ONLY lucide-react for icons.",
-    "Use framer-motion for all scroll, entrance, and complex hover animations.",
-    "Do NOT use placeholder image services like via.placeholder.com.",
-    "Rely entirely on pure HTML/Tailwind CSS and Recharts to build the dashboard mockups (NO raster stock photos for the UI)."
-  ],
-  "colors": {
-    "background": {
-      "base": "#050505",
-      "panel": "#0F0F12",
-      "overlay": "rgba(5, 5, 5, 0.7)"
+  "project_meta": {
+    "app_type": "Authenticated SaaS Dashboard",
+    "theme_archetype": "Tactical/HUD Performance",
+    "aesthetic": "Pure dark, sharp edges, high-contrast, technical precision",
+    "file_extension": ".js"
+  },
+  "global_design_tokens": {
+    "colors": {
+      "background": {
+        "page": "#050505",
+        "panel": "#0F0F12",
+        "glass": "rgba(15, 15, 18, 0.8)"
+      },
+      "border": {
+        "subtle": "#1A1A24",
+        "strong": "#2A2A35",
+        "focus": "#E5FF00"
+      },
+      "accent": {
+        "primary_volt": "#E5FF00",
+        "success_green": "#00FF66",
+        "info_cyan": "#00E0FF",
+        "warning_orange": "#FF6B00",
+        "danger_red": "#FF3B30"
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#A0A0AB",
+        "muted": "#70707B"
+      }
     },
-    "border": {
-      "default": "#1A1A24",
-      "highlight": "#2A2A35"
+    "typography": {
+      "headings": {
+        "fontFamily": "Outfit, 'JetBrains Mono', sans-serif",
+        "h1": "text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter text-white",
+        "h2": "text-2xl md:text-3xl font-bold tracking-tight text-white",
+        "h3": "text-xl md:text-2xl font-semibold tracking-tight text-white",
+        "h4": "text-lg font-medium tracking-tight text-white"
+      },
+      "body": {
+        "fontFamily": "Inter, sans-serif",
+        "base": "text-base text-gray-300 leading-relaxed",
+        "sm": "text-sm text-gray-400"
+      },
+      "micro": {
+        "fontFamily": "'JetBrains Mono', monospace",
+        "eyebrow": "text-xs md:text-sm text-primary_volt uppercase tracking-[0.2em] font-mono",
+        "label": "text-xs text-gray-500 uppercase tracking-wider font-mono",
+        "code": "font-mono text-sm bg-[#1A1A24] px-1 py-0.5"
+      }
     },
-    "accents": {
-      "volt": "#E5FF00",
-      "green": "#00FF66",
-      "cyan": "#00E0FF",
-      "danger": "#FF3B30",
-      "white": "#FFFFFF",
-      "muted": "#888893"
+    "spacing": {
+      "panel_padding": "p-6 md:p-8",
+      "section_gap": "gap-8 md:gap-12",
+      "grid_gap": "gap-4 md:gap-6"
+    },
+    "borders": {
+      "radius": "rounded-none",
+      "width": "border border-t-2"
     }
   },
-  "typography": {
-    "fonts": {
-      "headings": "Outfit, sans-serif",
-      "body": "IBM Plex Sans, sans-serif",
-      "mono": "JetBrains Mono, monospace"
+  "css_utilities_to_add": {
+    "file": "/app/frontend/src/index.css",
+    "utilities": [
+      "@keyframes shimmer { 100% { transform: translateX(100%); } }",
+      ".animate-shimmer { animation: shimmer 2s infinite; }",
+      ".text-glow-volt { text-shadow: 0 0 10px rgba(229, 255, 0, 0.5); }",
+      ".border-glow-volt { box-shadow: inset 0 0 0 1px #E5FF00, 0 0 15px rgba(229, 255, 0, 0.2); }",
+      ".hud-panel { background-color: #0F0F12; border: 1px solid #1A1A24; position: relative; }",
+      ".hud-panel::before { content: ''; position: absolute; top: 0; left: 0; width: 8px; height: 1px; background-color: #E5FF00; }",
+      ".hud-panel::after { content: ''; position: absolute; top: 0; left: 0; width: 1px; height: 8px; background-color: #E5FF00; }"
+    ]
+  },
+  "component_system": {
+    "PageHeader": {
+      "structure": "Container > Eyebrow > Title > Optional Action Slot",
+      "classes": "flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8 md:mb-12 pb-6 border-b border-[#1A1A24]",
+      "eyebrow_classes": "text-[#E5FF00] uppercase tracking-[0.2em] font-mono text-xs md:text-sm mb-2 block",
+      "title_classes": "text-3xl md:text-4xl lg:text-5xl font-black text-white tracking-tighter uppercase",
+      "usage": "Top of every main page."
     },
-    "scales": {
-      "h1": "text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tighter uppercase",
-      "h2": "text-base md:text-lg font-bold tracking-wide uppercase text-white",
-      "h3": "text-base font-semibold tracking-normal text-white",
-      "micro_label": "text-xs font-mono tracking-[0.2em] uppercase text-muted",
-      "body": "text-base text-muted",
-      "small": "text-sm text-muted"
+    "StatCard": {
+      "classes": "hud-panel rounded-none p-6 flex flex-col gap-2 hover:border-[#2A2A35] transition-colors group",
+      "label_classes": "text-[#70707B] uppercase tracking-wider font-mono text-xs",
+      "value_classes": "text-3xl font-black text-white group-hover:text-glow-volt transition-all",
+      "trend_up": "text-[#00FF66] font-mono text-sm flex items-center gap-1",
+      "trend_down": "text-[#FF3B30] font-mono text-sm flex items-center gap-1"
+    },
+    "SectionCard": {
+      "classes": "bg-[#0F0F12] border border-[#1A1A24] p-6 md:p-8 rounded-none flex flex-col gap-6"
+    },
+    "Badge": {
+      "base": "px-2 py-1 font-mono text-xs uppercase border rounded-none tracking-widest",
+      "variants": {
+        "volt": "bg-[#E5FF00]/10 text-[#E5FF00] border-[#E5FF00]/30",
+        "green": "bg-[#00FF66]/10 text-[#00FF66] border-[#00FF66]/30",
+        "cyan": "bg-[#00E0FF]/10 text-[#00E0FF] border-[#00E0FF]/30",
+        "red": "bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/30",
+        "neutral": "bg-[#1A1A24] text-[#A0A0AB] border-[#2A2A35]"
+      }
+    },
+    "EmptyState": {
+      "container": "flex flex-col items-center justify-center p-12 md:p-24 border border-dashed border-[#2A2A35] bg-[#0F0F12]/50 text-center gap-4",
+      "icon_wrapper": "p-4 bg-[#1A1A24] border border-[#2A2A35] mb-2 text-[#70707B]",
+      "title": "text-xl font-bold text-white uppercase",
+      "description": "text-[#A0A0AB] text-sm max-w-md font-mono",
+      "cta": "mt-4 btn-ghost border border-[#E5FF00] text-[#E5FF00] hover:bg-[#E5FF00] hover:text-black rounded-none px-6 py-2 uppercase font-mono text-sm tracking-widest transition-all"
+    },
+    "Skeleton": {
+      "base": "bg-[#1A1A24] relative overflow-hidden rounded-none",
+      "shimmer_layer": "before:absolute before:inset-0 before:-translate-x-full before:animate-shimmer before:bg-gradient-to-r before:from-transparent before:via-white/5 before:to-transparent",
+      "variants": {
+        "card": "h-32 w-full",
+        "row": "h-12 w-full",
+        "title": "h-8 w-1/3 mb-4"
+      }
+    },
+    "ChatBubble": {
+      "ai": "bg-[#0F0F12] border border-[#2A2A35] border-l-[#E5FF00] border-l-2 p-6 rounded-none shadow-lg text-gray-300 font-mono text-sm max-w-[85%]",
+      "user": "bg-[#1A1A24] border border-[#2A2A35] p-4 rounded-none text-white max-w-[75%] ml-auto text-sm",
+      "typing_indicator": "flex gap-1 items-center h-6 px-2 text-[#E5FF00]"
+    },
+    "SuggestionChip": {
+      "classes": "border border-[#2A2A35] bg-transparent hover:bg-[#1A1A24] hover:border-[#E5FF00] text-[#A0A0AB] hover:text-[#E5FF00] px-4 py-2 rounded-none text-xs font-mono uppercase tracking-widest transition-all cursor-pointer text-left"
+    },
+    "Table": {
+      "container": "w-full overflow-auto border border-[#1A1A24]",
+      "header": "bg-[#1A1A24] text-[#A0A0AB] font-mono text-xs uppercase tracking-widest text-left",
+      "th": "px-6 py-4 font-normal",
+      "row": "border-b border-[#1A1A24] hover:bg-[#1A1A24]/50 transition-colors bg-[#0F0F12]",
+      "td": "px-6 py-4 text-sm text-gray-300 whitespace-nowrap"
     }
   },
-  "spacing_and_layout": {
-    "philosophy": "Sharp edges (rounded-none). Tactical HUD aesthetic. High density in product mockups, generous breathing room (p-12 to p-24) between major marketing sections.",
-    "borders": "Always 1px solid, rarely shadowed. Use inner glows or left-border accents for emphasis.",
-    "grid_strategy": {
-      "marketing_sections": "Tetris Grid / Asymmetrical blocks for visual tension.",
-      "product_mockups": "Control Room Grid, highly dense, no gaps (gap-0) or strict 1px grid borders."
+  "data_viz_recharts": {
+    "grid": {
+      "strokeDasharray": "3 3",
+      "stroke": "#1A1A24",
+      "vertical": false
+    },
+    "axis": {
+      "stroke": "#2A2A35",
+      "tick": { "fill": "#70707B", "fontSize": 12, "fontFamily": "monospace" }
+    },
+    "tooltip": {
+      "contentStyle": {
+        "backgroundColor": "#0F0F12",
+        "borderColor": "#E5FF00",
+        "borderRadius": 0,
+        "fontFamily": "monospace",
+        "color": "#FFF"
+      },
+      "itemStyle": { "color": "#E5FF00" }
+    },
+    "lines": {
+      "primary": "#E5FF00",
+      "secondary": "#00E0FF",
+      "strokeWidth": 2,
+      "activeDot": { "r": 6, "fill": "#E5FF00", "stroke": "#050505", "strokeWidth": 2 }
     }
   },
-  "motion_specs": {
-    "framer_defaults": {
-      "initial": { "opacity": 0, "y": 20 },
-      "whileInView": { "opacity": 1, "y": 0 },
-      "viewport": { "once": true, "margin": "-100px" },
-      "transition": { "duration": 0.5, "ease": [0.16, 1, 0.3, 1] }
+  "page_layouts": {
+    "Navbar": {
+      "layout": "Sticky top, backdrop-blur-md bg-[#0F0F12]/90 border-b border-[#2A2A35]",
+      "nav_links": "font-mono uppercase text-sm tracking-widest text-[#A0A0AB] hover:text-white transition-colors relative px-2 py-4",
+      "nav_active": "text-[#E5FF00] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-[#E5FF00]"
     },
-    "stagger": {
-      "delayChildren": 0.1,
-      "staggerChildren": 0.1
-    },
-    "hover_states": {
-      "card": "translate-y-[-4px] border-[#2A2A35] bg-[#141418] transition-all duration-300",
-      "btn_volt": "shadow-[0_0_20px_rgba(229,255,0,0.3)] bg-[#F0FF4D] text-black"
-    }
-  },
-  "css_utilities": {
-    "btn-volt": "inline-flex items-center justify-center bg-[#E5FF00] text-black font-bold uppercase tracking-wide px-8 py-4 rounded-none transition-all hover:bg-[#F0FF4D] hover:shadow-[0_0_20px_rgba(229,255,0,0.3)]",
-    "btn-outline": "inline-flex items-center justify-center border border-[#2A2A35] bg-transparent text-white font-bold uppercase tracking-wide px-8 py-4 rounded-none transition-all hover:bg-[#1A1A24] hover:border-white",
-    "panel-hud": "bg-[#0F0F12] border border-[#1A1A24] rounded-none relative overflow-hidden",
-    "grid-bg": "bg-[linear-gradient(to_right,#1A1A24_1px,transparent_1px),linear-gradient(to_bottom,#1A1A24_1px,transparent_1px)] bg-[size:40px_40px]",
-    "micro-label": "text-xs font-mono tracking-[0.2em] uppercase text-[#888893]"
-  },
-  "product_mockup_build_guides": {
-    "health_score": "Use an SVG <circle> with strokeDasharray and strokeDashoffset. Animate offset from 0 to target (e.g., 98). Use #00FF66 for the stroke color. Place large font-mono text '98' in the center.",
-    "fps_chart": "Use Recharts <AreaChart>. Data should simulate a jump from 120 FPS to 180 FPS. Use a glowing #00FF66 stroke and a <linearGradient> for the fill. Hide axes for a clean HUD look.",
-    "ai_advisor_chat": "Pure HTML/Tailwind. Stacked DIVs. Left aligned grey text for user, right aligned cyan text for AI. Use framer-motion to stagger their appearance. Add a 'typing...' indicator.",
-    "price_tracker": "Mini Recharts <LineChart> with a descending line. Stroke color #00E0FF. Add a dashed reference line for 'Target Price'.",
-    "desktop_agent_terminal": "A black DIV with a top bar (red, yellow, green pure CSS dots). Content: font-mono text in green #00FF66 simulating typing: '> Invoke-WebRequest -Uri \"https://boostpc.app/run\" -UseBasicParsing | Invoke-Expression'."
-  },
-  "sections": [
-    {
-      "name": "Navigation",
-      "layout": "Fixed top, backdrop-blur-md bg-[#050505]/80, border-b border-[#1A1A24].",
-      "content": "Logo (left), Language Switcher 🇮🇹/🇬🇧 + Sign In + Get Started 'btn-volt' (right)."
-    },
-    {
-      "name": "Hero",
-      "layout": "Grid cols-1 lg:grid-cols-2 gap-12 items-center min-h-[90vh] p-8 md:p-12 relative overflow-hidden. Use 'grid-bg' class on absolute background container with low opacity.",
-      "content_left": "Micro-label: '// AI PERFORMANCE COMMAND CENTER'. H1: 'BOOST YOUR PC. OWN THE STREAM.' Body: Explain the core value. CTAs: Primary 'btn-volt', Secondary 'btn-outline'.",
-      "content_right": "The 'Actual Product Preview'. A composite HUD built with 'panel-hud' containers overlapping. Must include the animated Health Score SVG, real-time looking telemetry numbers (CPU 45°C), and the rising FPS Recharts graph. Wrap in framer-motion floating animation."
-    },
-    {
-      "name": "Trust Strip",
-      "layout": "Grid cols-2 md:grid-cols-4 border-y border-[#1A1A24] bg-[#050505]. Every item has border-r border-[#1A1A24] except the last.",
-      "content": "Animated counters (framer-motion or pure react hooks). Stats: +15 FPS avg, 26 tweaks, 5 stores tracked, 100% reversible. Font: mono."
-    },
-    {
-      "name": "How It Works",
-      "layout": "py-24 px-8. Header centered: '// DEPLOYMENT PROTOCOL'. Grid cols-1 md:grid-cols-3 gap-8.",
-      "content": "3 steps. 1: Connect PC (icon: Plug). 2: AI Analyzes (icon: Cpu). 3: Apply Boosts (icon: Zap). Hover state: Add a left-border that highlights in #E5FF00."
-    },
-    {
-      "name": "Features Showcase (5 Rows)",
-      "layout": "py-24. 5 distinct rows. Alternate layout: Row 1 (Text Left / Mockup Right), Row 2 (Mockup Left / Text Right), etc.",
-      "features": [
-        {
-          "title": "AI Advisor",
-          "accent": "cyan",
-          "mockup_guide": "ai_advisor_chat"
-        },
-        {
-          "title": "Health Score & Telemetry",
-          "accent": "green",
-          "mockup_guide": "health_score and fps_chart"
-        },
-        {
-          "title": "Build Generator",
-          "accent": "volt",
-          "mockup_guide": "Sleek list of components (CPU, GPU, RAM) with lucide icons and checkmarks simulating an AI selection process."
-        },
-        {
-          "title": "Price Tracker",
-          "accent": "white",
-          "mockup_guide": "price_tracker"
-        },
-        {
-          "title": "Desktop Agent",
-          "accent": "danger",
-          "mockup_guide": "desktop_agent_terminal"
-        }
+    "Dashboard": {
+      "layout": "Bento Grid: Base grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-6",
+      "blocks": [
+        "Health Score (col-span-full md:col-span-2 row-span-2) - Features large circular SVG Gauge with #00FF66 or #E5FF00 stroke.",
+        "Quick Actions (col-span-1) - Square tiles using tile-hover.",
+        "Summary Stats (col-span-2) - Row of StatCards.",
+        "Recent Activity (col-span-full) - Wide section using Table component."
       ]
     },
-    {
-      "name": "Closing CTA",
-      "layout": "py-32 px-8 text-center relative border-y border-[#2A2A35] bg-[#0F0F12].",
-      "content": "H2: 'READY TO OWN THE STREAM?'. Subtitle. Big 'btn-volt' CTA. Decorative corner brackets [ ] in absolute positioning."
+    "MyPC": {
+      "layout": "Tabs top navigation (border-b border-[#2A2A35], tab active is border-b-2 border-[#E5FF00]). Below tabs, grid layout for telemetry.",
+      "telemetry": "Cards displaying live data. Use colored gauges or status bars. CPU/GPU cards use #00E0FF or #FF3B30 based on temps."
     },
-    {
-      "name": "Footer",
-      "layout": "py-16 px-8 grid cols-1 md:grid-cols-4 gap-12 bg-[#050505].",
-      "content": "Col 1: Logo + short bio. Col 2/3: Links (Product, Legal). Col 4: Language Switcher and status indicator (All systems operational in green)."
+    "Tracker": {
+      "layout": "Grid of SectionCards. grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6.",
+      "card_content": "Header (Product name + Status Badge), Body (Large Current Price + Sparkline chart), Footer (Target progress bar using #E5FF00)."
+    },
+    "AI_Advisor": {
+      "layout": "Terminal-style chat interface. Max-width container (max-w-4xl). Main scrollable area for ChatBubbles. Sticky bottom input area.",
+      "input_area": "bg-[#0F0F12] border-t border-[#2A2A35] p-4. Input field: bg-[#1A1A24] border border-[#2A2A35] focus:border-[#E5FF00] rounded-none text-white font-mono p-4 w-full outline-none."
     }
-  ],
-  "seo_and_meta": {
-    "title": "BoostPC - AI Performance Command Center",
-    "description": "Optimize your PC for gaming and streaming with AI. Real-time telemetry, auto-tweaks, and hardware price tracking.",
-    "open_graph_advice": "Ensure the OG image is a snapshot of the dark tactical HUD (Hero mockup). Set theme-color meta tag to #050505."
-  }
+  },
+  "motion_guidelines": {
+    "entrance": "framer-motion stagger children. container variants with staggerChildren: 0.1. Item variants: hidden { opacity: 0, y: 10 } visible { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 100 } }.",
+    "hover": "Scale transforms are FORBIDDEN (no bouncing). Use border color changes, text glows, and background shifts. e.g., hover:border-[#E5FF00].",
+    "prefers_reduced_motion": "Ensure framer-motion respects reduced motion natively or via useReducedMotion hook."
+  },
+  "accessibility": {
+    "focus": "All focusable elements must have focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5FF00] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]",
+    "contrast": "Text must meet APCA or WCAG AA. Use #A0A0AB for muted text against #0F0F12 (meets 4.5:1).",
+    "aria": "Include aria-live=\"polite\" for telemetry updates and AI chat responses."
+  },
+  "instructions_to_main_agent": [
+    "CRITICAL: Do NOT change any functionality, routing, or existing data-testids.",
+    "CRITICAL: Use .js extensions for React files. Do NOT create .tsx files.",
+    "CRITICAL: ALL text must use the react-i18next `t()` function. No hardcoded English or Italian text.",
+    "Add the new utilities defined in `css_utilities_to_add` to `/app/frontend/src/index.css`.",
+    "Ensure all new interactive elements have `data-testid` attributes in kebab-case (e.g., `data-testid=\"ai-chat-input\"`).",
+    "For icons, import exclusively from `lucide-react`.",
+    "Apply generous spacing. Panels should pad content with at least p-6 or p-8.",
+    "Maintain the strict 'Tactical HUD' aesthetic: NO rounded corners anywhere (`rounded-none`).",
+    "Do NOT touch the landing page route/components."
+  ]
 }
