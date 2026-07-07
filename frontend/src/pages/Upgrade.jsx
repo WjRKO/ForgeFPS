@@ -4,6 +4,7 @@ import { Rocket, Loader2, TrendingUp, Gauge, Cpu, LineChart as LineIcon, CheckCi
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import api, { formatApiErrorDetail } from "@/lib/api";
+import { PageHeader } from "@/components/hud";
 
 const RES = ["1080p", "1440p", "4K"];
 const PRIO = { alta: "bg-[#FF3B30]/20 text-[#FF3B30]", media: "bg-[#E5FF00]/20 text-[#E5FF00]", bassa: "bg-[#00FF66]/20 text-[#00FF66]" };
@@ -54,8 +55,7 @@ export default function Upgrade() {
 
   return (
     <div className="max-w-6xl mx-auto fade-up">
-      <div className="mb-6"><div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("upgrade.eyebrow")}</div>
-        <h1 className="font-display font-black text-3xl tracking-tighter">{t("upgrade.title")}</h1></div>
+      <PageHeader eyebrow={t("upgrade.eyebrow")} title={t("upgrade.title")} />
 
       {hasSpecs === false && (
         <div className="bg-[#0F0F12] border border-[#E5FF00]/40 p-4 mb-4 text-sm text-zinc-300 flex items-center gap-3">

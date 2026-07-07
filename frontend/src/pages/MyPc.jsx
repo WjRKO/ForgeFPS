@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import SpecsForm from "@/components/SpecsForm";
+import { PageHeader } from "@/components/hud";
 
 const SPEC_KEYS = ["os", "cpu", "gpu", "ram", "disk", "motherboard", "resolution"];
 const specLabel = (t, k) => ({ os: t("mypcpage.sl_os"), cpu: "CPU", gpu: "GPU", ram: "RAM", disk: t("mypcpage.sl_disk"), motherboard: t("mypcpage.sl_mb"), resolution: t("mypcpage.sl_res") }[k]);
@@ -64,7 +65,7 @@ function BenchmarkCard({ bench }) {
   const hasCompare = !!before;
 
   return (
-    <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-4" data-testid="benchmark-card">
+    <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick p-6 mb-4" data-testid="benchmark-card">
       <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4 flex items-center gap-2">
         <Gauge size={14} className="text-[#00E0FF]" /> {t("mypcpage.bench")} {hasCompare ? t("mypcpage.bench_compare") : t("mypcpage.bench_last")}
       </div>
@@ -176,18 +177,15 @@ export default function MyPc() {
 
   return (
     <div className="max-w-6xl mx-auto fade-up">
-      <div className="mb-6 flex items-end justify-between">
-        <div><div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("mypcpage.eyebrow")}</div>
-          <h1 className="font-display font-black text-3xl tracking-tighter">{t("mypcpage.title")}</h1></div>
-        <div className="flex gap-2">
-          <button data-testid="edit-specs-btn" onClick={() => setEditing(true)} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] transition-colors"><Pencil size={15} /> {t("mypcpage.edit")}</button>
-          <Link to="/app/upgrade" data-testid="to-upgrade-btn" className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] transition-colors"><Rocket size={15} /> {t("mypcpage.upgrade")}</Link>
-          <button data-testid="refresh-pc-btn" onClick={load} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] transition-colors"><RefreshCw size={15} /> {t("mypcpage.refresh")}</button>
-        </div>
-      </div>
+      <PageHeader eyebrow={t("mypcpage.eyebrow")} title={t("mypcpage.title")}
+        actions={<>
+          <button data-testid="edit-specs-btn" onClick={() => setEditing(true)} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><Pencil size={15} /> {t("mypcpage.edit")}</button>
+          <Link to="/app/upgrade" data-testid="to-upgrade-btn" className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><Rocket size={15} /> {t("mypcpage.upgrade")}</Link>
+          <button data-testid="refresh-pc-btn" onClick={load} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><RefreshCw size={15} /> {t("mypcpage.refresh")}</button>
+        </>} />
 
       {health && (
-        <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-4">
+        <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick p-6 mb-4">
           <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4 flex items-center gap-2"><Activity size={14} className="text-[#E5FF00]" /> Health Score</div>
           <div className="flex flex-col md:flex-row gap-8 items-center">
             <ScoreRing score={health.score} grade={health.grade} />
@@ -231,7 +229,7 @@ export default function MyPc() {
 
       {bench && <BenchmarkCard bench={bench} />}
 
-      <div className="bg-[#0F0F12] border border-[#2A2A35] mb-4">
+      <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick mb-4">
         <div className="p-5 border-b border-[#2A2A35] text-xs uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2"><Cpu size={14} className="text-[#E5FF00]" /> {t("mypcpage.hardware")}</div>
         <div className="grid sm:grid-cols-2 gap-px bg-[#1A1A24]">
           {SPEC_KEYS.filter((k) => specs.data[k]).map((k) => (

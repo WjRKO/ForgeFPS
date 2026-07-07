@@ -5,6 +5,7 @@ import i18n from "@/i18n";
 import { Terminal, Copy, Check, ShieldAlert, MessageSquareCode, Trash2, Wrench, Wifi, Zap, Package, Search, MonitorPlay, Rocket, Power, HeartPulse, AlertTriangle, Undo2, Download, CalendarClock, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
+import { PageHeader } from "@/components/hud";
 
 const isEn = () => i18n.language?.startsWith("en");
 
@@ -292,11 +293,7 @@ export default function Commands() {
 
   return (
     <div className="max-w-4xl mx-auto fade-up" data-testid="commands-page">
-      <div className="mb-6">
-        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("commands.eyebrow")}</div>
-        <h1 className="font-display font-black text-3xl tracking-tighter">{t("commands.title")}</h1>
-        <p className="text-zinc-500 text-sm mt-1">{t("commands.subtitle")}</p>
-      </div>
+      <PageHeader eyebrow={t("commands.eyebrow")} title={t("commands.title")} subtitle={t("commands.subtitle")} />
 
       <div className="bg-black border border-[#2A2A35] p-4 flex gap-3 items-start mb-5">
         <Terminal size={16} className="text-[#00E0FF] shrink-0 mt-0.5" />

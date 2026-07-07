@@ -3,6 +3,7 @@ import { Cpu, Loader2, Save, Trash2, Zap, Sparkles, LineChart as LineIcon } from
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import api, { formatApiErrorDetail } from "@/lib/api";
+import { PageHeader } from "@/components/hud";
 
 const RESOLUTIONS = ["1080p", "1440p", "4K"];
 
@@ -94,10 +95,7 @@ export default function BuildGenerator() {
 
   return (
     <div className="max-w-6xl mx-auto fade-up">
-      <div className="mb-6">
-        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("build.eyebrow")}</div>
-        <h1 className="font-display font-black text-3xl tracking-tighter">{t("build.title")}</h1>
-      </div>
+      <PageHeader eyebrow={t("build.eyebrow")} title={t("build.title")} />
 
       <div className="grid lg:grid-cols-[340px_1fr] gap-4">
         <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 h-fit">

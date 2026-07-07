@@ -6,6 +6,7 @@ import { Send, Plus, Trash2, Loader2, MessageSquareCode, Terminal, Cpu, Copy, Ch
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import api, { API } from "@/lib/api";
+import { PageHeader } from "@/components/hud";
 
 function CodeBlock({ children }) {
   const [copied, setCopied] = useState(false);
@@ -142,20 +143,17 @@ export default function Advisor() {
 
   return (
     <div className="max-w-6xl mx-auto fade-up">
-      <div className="mb-6">
-        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("advisor.eyebrow")}</div>
-        <h1 className="font-display font-black text-3xl tracking-tighter">{t("advisor.subtitle")}</h1>
-        {specs?.data?.cpu && (
-          <div data-testid="specs-badge" className="inline-flex items-center gap-2 mt-3 text-xs text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-3 py-1.5">
+      <PageHeader eyebrow={t("advisor.eyebrow")} title={t("advisor.subtitle")}
+        actions={specs?.data?.cpu && (
+          <div data-testid="specs-badge" className="inline-flex items-center gap-2 text-xs text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-3 py-1.5">
             <Cpu size={13} /> {t("advisor.personalized")}: {specs.data.cpu}{specs.data.gpu ? ` · ${specs.data.gpu}` : ""}
           </div>
-        )}
-      </div>
+        )} />
 
       <div className="grid lg:grid-cols-[240px_1fr] gap-4">
         <div className="bg-[#0F0F12] border border-[#2A2A35] flex flex-col h-[70vh]">
           <button data-testid="new-chat-btn" onClick={newChat}
-            className="m-3 flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold py-2 hover:bg-[#D4EC00] transition-colors">
+            className="m-3 flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold py-2 hover:bg-[#D4EC00] transition-colors btn-volt">
             <Plus size={16} /> {t("common.new_chat")}
           </button>
           <div className="flex-1 overflow-auto px-2 pb-2">
@@ -182,22 +180,31 @@ export default function Advisor() {
                 <div className="grid sm:grid-cols-2 gap-2 w-full max-w-lg">
                   {suggestions.map((s, i) => (
                     <button key={i} data-testid={`suggestion-${i}`} onClick={() => send(s)}
-                      className="text-left text-xs text-zinc-400 border border-[#2A2A35] p-3 hover:border-[#E5FF00] hover:text-white transition-colors">
-                      {s}
+                      className="group flex items-start gap-2 text-left text-xs text-zinc-400 border border-[#2A2A35] p-3 hover:border-[#E5FF00] hover:text-white hover:-translate-y-0.5 transition-all">
+                      <MessageSquareCode size={13} className="text-[#E5FF00] shrink-0 mt-0.5 icon-pop" /> {s}
                     </button>
                   ))}
                 </div>
               </div>
             )}
             {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div key={i} className={`flex items-end gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                {m.role === "assistant" && (
+                  <div className="w-7 h-7 bg-[#00E0FF]/15 border border-[#00E0FF]/40 flex items-center justify-center shrink-0 text-[#00E0FF]"><MessageSquareCode size={14} /></div>
+                )}
                 <div className={`max-w-[80%] px-4 py-3 text-sm leading-relaxed ${
                   m.role === "user" ? "bg-[#E5FF00] text-black whitespace-pre-wrap" : "bg-black border border-[#2A2A35] text-zinc-200"}`}>
                   {m.role === "user"
                     ? m.content
                     : (m.content
                         ? <div className="ai-md"><ReactMarkdown remarkPlugins={[remarkGfm]} components={MD}>{m.content}</ReactMarkdown></div>
-                        : (streaming && i === messages.length - 1 ? <span className="cursor-blink">▋</span> : ""))}
+                        : (streaming && i === messages.length - 1
+                            ? <span className="flex items-center gap-1 py-0.5">
+                                <span className="w-1.5 h-1.5 bg-[#00E0FF] rounded-full typing-dot" />
+                                <span className="w-1.5 h-1.5 bg-[#00E0FF] rounded-full typing-dot" style={{ animationDelay: "0.2s" }} />
+                                <span className="w-1.5 h-1.5 bg-[#00E0FF] rounded-full typing-dot" style={{ animationDelay: "0.4s" }} />
+                              </span>
+                            : ""))}
                 </div>
               </div>
             ))}

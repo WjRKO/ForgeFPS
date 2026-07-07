@@ -13,12 +13,13 @@ export const item = {
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
 };
 
-export function PageHeader({ eyebrow, title, actions }) {
+export function PageHeader({ eyebrow, title, subtitle, actions }) {
   return (
     <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 pb-5 border-b border-[#1A1A24]">
       <div>
         {eyebrow && <div className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500 mb-2">{eyebrow}</div>}
         <h1 className="font-display font-black text-3xl sm:text-4xl tracking-tighter">{title}</h1>
+        {subtitle && <p className="text-zinc-500 text-sm mt-2 max-w-2xl">{subtitle}</p>}
       </div>
       {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
     </div>

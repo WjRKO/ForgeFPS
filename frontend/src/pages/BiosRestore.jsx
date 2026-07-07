@@ -5,6 +5,7 @@ import i18n from "@/i18n";
 import { Cpu, RotateCcw, CheckCircle2, AlertTriangle, ShieldCheck, Copy, Check, KeyRound, Info, Star, MemoryStick, MonitorPlay, MessageSquareCode } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
+import { PageHeader } from "@/components/hud";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const isEn = () => i18n.language?.startsWith("en");
@@ -236,11 +237,7 @@ export default function BiosRestore() {
 
   return (
     <div className="max-w-4xl mx-auto fade-up" data-testid="bios-restore-page">
-      <div className="mb-6">
-        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("bios.eyebrow")}</div>
-        <h1 className="font-display font-black text-3xl tracking-tighter">{t("bios.title")}</h1>
-        <p className="text-zinc-500 text-sm mt-1">{t("bios.subtitle")}</p>
-      </div>
+      <PageHeader eyebrow={t("bios.eyebrow")} title={t("bios.title")} subtitle={t("bios.subtitle")} />
 
       <div className="flex gap-2 mb-6">
         <button data-testid="tab-bios" onClick={() => setTab("bios")}

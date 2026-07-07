@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { PageHeader } from "@/components/hud";
 
 function Stat({ icon: Icon, label, value }) {
   return (
@@ -48,10 +49,7 @@ export default function Admin() {
 
   return (
     <div className="max-w-6xl mx-auto fade-up">
-      <div className="mb-6">
-        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2 flex items-center gap-2"><Shield size={13} className="text-[#E5FF00]" /> {t("admin.eyebrow")}</div>
-        <h1 className="font-display font-black text-3xl tracking-tighter">{t("admin.title")}</h1>
-      </div>
+      <PageHeader eyebrow={<span className="inline-flex items-center gap-2"><Shield size={13} className="text-[#E5FF00]" /> {t("admin.eyebrow")}</span>} title={t("admin.title")} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 stagger">
         <Stat icon={Users} label={t("admin.stat_users")} value={stats?.total_users ?? "—"} />
