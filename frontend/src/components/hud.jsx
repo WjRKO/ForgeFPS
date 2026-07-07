@@ -1,6 +1,6 @@
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
-import { LineChart, Line, ResponsiveContainer } from "recharts";
+import { LineChart, Line } from "recharts";
 
 const EASE = [0.16, 1, 0.3, 1];
 
@@ -80,17 +80,13 @@ export function SkeletonRow() {
   );
 }
 
-export function Sparkline({ data, color = "#00FF66", height = 36 }) {
+export function Sparkline({ data, color = "#00FF66", height = 36, width = 96 }) {
   const d = (data || []).map((v, i) => ({ i, v }));
-  if (d.length < 2) return <div style={{ height }} />;
+  if (d.length < 2) return <div style={{ height, width }} />;
   return (
-    <div style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={d} margin={{ top: 4, right: 2, bottom: 2, left: 2 }}>
-          <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.8} dot={false} isAnimationActive />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
+    <LineChart width={width} height={height} data={d} margin={{ top: 4, right: 2, bottom: 2, left: 2 }}>
+      <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.8} dot={false} isAnimationActive />
+    </LineChart>
   );
 }
 

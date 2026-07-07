@@ -30,11 +30,14 @@ export default function Dashboard() {
     api.get("/products").then(({ data }) => setProducts(data.slice(0, 5))).catch(() => setProducts([]));
   }, []);
 
+  const showOnboarding = !stats || !(stats.tracked_products > 0 && stats.builds > 0);
+
   return (
     <div className="max-w-6xl mx-auto">
       <PageHeader eyebrow={t("dashboard.eyebrow")} title={t("dashboard.greeting", { name: user?.name || "Gamer" })} />
 
       {/* onboarding */}
+      {showOnboarding && (
       <div className="mb-8 bg-gradient-to-br from-[#E5FF00]/10 to-transparent border border-[#E5FF00]/30 p-5" data-testid="onboarding-box">
         <div className="text-sm font-bold text-[#E5FF00] mb-3 flex items-center gap-2"><Zap size={15} /> {t("dashboard.start3")}</div>
         <motion.div variants={stagger} initial="hidden" animate="show" className="grid sm:grid-cols-3 gap-3">
@@ -52,6 +55,7 @@ export default function Dashboard() {
           ))}
         </motion.div>
       </div>
+      )}
 
       {/* stats */}
       {!stats ? (

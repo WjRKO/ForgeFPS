@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import { Plus, Search, Loader2, RefreshCw, Trash2, Zap, TrendingDown, TrendingUp, ExternalLink, AlertTriangle, Pencil, Check, X, Target } from "lucide-react";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { PageHeader, EmptyState, Badge, Sparkline, SkeletonCard, stagger, item } from "@/components/hud";
@@ -141,7 +142,10 @@ export default function Tracker() {
     try { await api.post(`/products/${id}/refresh`); await load(); } finally { setRefreshing((r) => ({ ...r, [id]: false })); }
   };
 
-  const remove = async (id) => { await api.delete(`/products/${id}`); load(); };
+  const remove = async (id) => {
+    try { await api.delete(`/products/${id}`); await load(); }
+    catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail) || t("admin.error")); }
+  };
 
   const groups = {};
   (products || []).forEach((p) => { if (p.group) { groups[p.group] = groups[p.group] || { count: 0, total: 0 }; groups[p.group].count++; groups[p.group].total += p.current_price || 0; } });
