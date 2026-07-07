@@ -63,6 +63,13 @@ $script:LHM_COMP = $null
 $script:LHM_TRIED = $false
 $script:LHM_LAST = ''
 
+function Test-MemoryIntegrity {
+  try {
+    $v = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity' -Name Enabled -ErrorAction SilentlyContinue).Enabled
+    return ($v -eq 1)
+  } catch { return $false }
+}
+
 function Get-LhmComputer {
   if ($script:LHM_COMP) { return $script:LHM_COMP }
   if ($script:LHM_TRIED) { return $null }
@@ -993,10 +1000,17 @@ Say ("   MB : {0}  ({1} {2})" -f $specs.motherboard, $specs.cpu_socket, $specs.c
 $health = Get-Health
 if ($health.ContainsKey('cpu_temp')) { Say ("   Temp CPU: {0}C  |  Temp GPU: {1}C" -f $health.cpu_temp, $(if($health.ContainsKey('gpu_temp')){$health.gpu_temp}else{'n/d'})) 'DarkGray' }
 elseif (Test-Admin) {
-  Say '   [diag] Temp CPU non risolta. Sensori temperatura rilevati da LibreHardwareMonitor:' 'DarkYellow'
+  Say '   [diag] Temp CPU non leggibile. Sensori temperatura rilevati:' 'DarkYellow'
   if ($script:LHM_LAST) { Say ("         " + $script:LHM_LAST) 'DarkGray' }
-  else { Say '         (nessuno - il driver dei sensori potrebbe essere bloccato da Core Isolation/antivirus)' 'DarkGray' }
-  Say '   [diag] Incolla queste righe nella chat: mi servono per aggiungere il tuo sensore CPU.' 'DarkYellow'
+  else { Say '         (nessuno)' 'DarkGray' }
+  if (Test-MemoryIntegrity) {
+    Say '   [!] CAUSA: Core Isolation "Integrita della memoria" e ATTIVA e blocca il driver dei sensori CPU.' 'Yellow'
+    Say '       Per leggere la temperatura CPU: Impostazioni > Privacy e sicurezza > Sicurezza di Windows >' 'Gray'
+    Say '       Sicurezza dispositivo > Isolamento core > DISATTIVA "Integrita della memoria" e riavvia il PC.' 'Gray'
+    Say '       (La temperatura GPU funziona gia e non richiede questa modifica.)' 'DarkGray'
+  } else {
+    Say '   [i] Il driver sensori CPU non ha risposto (possibile blocco antivirus). La temp GPU funziona comunque.' 'DarkGray'
+  }
 }
 Send-Data $specs $health (Get-StartupList)
 $games = Get-Games
