@@ -109,6 +109,7 @@ const resources = {
         analysis: "Analisi", empty_hint: "Seleziona un gioco rilevato o scrivi un titolo per vedere gli FPS attesi e le impostazioni consigliate.",
         recommended_preset: "Preset consigliato:",
         save_ok: "Impostazioni salvate! Il comando è aggiornato.", save_err: "Errore nel salvataggio", cmd_copied: "Comando copiato!", list_updated: "Elenco aggiornato",
+        rec_title: "Preset consigliato", rec_for: "Consigliato per", rec_copied: "Comando copiato! Esegui PowerShell come Amministratore.", rec_hint: "Applica queste ottimizzazioni con un clic: esegui PowerShell come Amministratore.",
       },
       auth: {
         login_title: "Accedi", register_title: "Crea account",
@@ -397,6 +398,7 @@ const resources = {
         analysis: "Analysis", empty_hint: "Pick a detected game or type a title to see expected FPS and recommended settings.",
         recommended_preset: "Recommended preset:",
         save_ok: "Settings saved! The command is updated.", save_err: "Error while saving", cmd_copied: "Command copied!", list_updated: "List updated",
+        rec_title: "Recommended preset", rec_for: "Recommended for", rec_copied: "Command copied! Run PowerShell as Administrator.", rec_hint: "Apply these optimizations in one click: run PowerShell as Administrator.",
       },
       auth: {
         login_title: "Sign in", register_title: "Create account",

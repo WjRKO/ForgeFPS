@@ -436,8 +436,32 @@ function Get-Games {
       }
     }
   } catch {}
+  try {
+    foreach ($k in (Get-ChildItem 'HKLM:\SOFTWARE\WOW6432Node\GOG.com\Games' -ErrorAction SilentlyContinue)) {
+      $nm = (Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue).gameName
+      if ($nm) { $games.Add($nm) }
+    }
+  } catch {}
+  try {
+    $pubs = 'Electronic Arts|Ubisoft|Blizzard|Riot Games|Rockstar|Bethesda|Activision|CD PROJEKT|BANDAI|SQUARE ENIX|CAPCOM|2K|Xbox Game Studios|SEGA|Paradox|FromSoftware|Larian'
+    $bad = 'Launcher|Redistributable|Runtime|Framework|Driver|DirectX|Visual C\+\+|Anti-?Cheat|EasyAntiCheat|BattlEye|\bSDK\b|Service|EA app|Origin|Uplay|Ubisoft Connect|Battle\.net|Overwolf|\.NET|Social Club|Rockstar Games Launcher|DisplayName'
+    foreach ($rk in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+                      'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+                      'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*')) {
+      foreach ($e in (Get-ItemProperty $rk -ErrorAction SilentlyContinue)) {
+        $dn = "$($e.DisplayName)"; $pb = "$($e.Publisher)"
+        if ($dn -and $pb -match $pubs -and $dn -notmatch $bad) { $games.Add($dn) }
+      }
+    }
+  } catch {}
+  try {
+    foreach ($d in @('C:', 'D:', 'E:', 'F:')) {
+      $xg = "$d\XboxGames"
+      if (Test-Path $xg) { foreach ($g in (Get-ChildItem $xg -Directory -ErrorAction SilentlyContinue)) { $games.Add($g.Name) } }
+    }
+  } catch {}
   $skip = @('Steamworks Common Redistributables', 'Steam Linux Runtime', 'Proton EasyAntiCheat Runtime')
-  return @($games | Where-Object { $skip -notcontains $_ -and $_ -notmatch 'Proton|Runtime|Redistributable' } | Select-Object -Unique | Select-Object -First 60)
+  return @($games | Where-Object { $skip -notcontains $_ -and $_ -notmatch 'Proton|Runtime|Redistributable|Anti-?Cheat|Launcher|Redist|DirectX|Visual C\+\+' } | Select-Object -Unique | Select-Object -First 80)
 }
 function Send-Games($games) {
   $arr = @($games)

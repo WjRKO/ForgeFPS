@@ -35,20 +35,34 @@ TWEAK_CATALOG = [
     {"id": "search_index", "name": "Windows Search indexing OFF", "cat": "system"},
 ]
 
-_FPS_CORE = ["power", "gaming", "priority", "mpo", "gpu_msi", "mouse", "timer", "usb", "network", "qos", "bgapps"]
+_FPS_COMP = ["power", "gaming", "priority", "mpo", "gpu_msi", "amd_ulps", "nvidia_tel", "hibernate",
+             "mouse", "timer", "usb", "stickykeys", "network", "qos", "bgapps", "gamebar_rec"]
+_AAA = ["power", "gaming", "priority", "mpo", "gpu_msi", "nvidia_tel", "hibernate", "visual", "clean", "bgapps", "search_index"]
+_MOBA = ["power", "gaming", "priority", "mouse", "timer", "network", "dns", "qos", "bgapps"]
+_STREAM = ["power", "gaming", "priority", "mpo", "gpu_msi", "network", "dns", "qos",
+           "deliveryopt", "obs_priority", "telemetry", "bgapps", "gamebar_rec"]
+_BALANCED = ["power", "gaming", "priority", "mpo", "gpu_msi", "clean", "bgapps"]
 
 TEMPLATES = [
-    {"id": "tpl_valorant", "game_name": "Valorant", "template": True,
-     "tweak_ids": _FPS_CORE + ["stickykeys"]},
-    {"id": "tpl_cs2", "game_name": "CS2", "template": True,
-     "tweak_ids": _FPS_CORE + ["stickykeys"]},
-    {"id": "tpl_warzone", "game_name": "Warzone / Apex", "template": True,
-     "tweak_ids": _FPS_CORE + ["visual"]},
-    {"id": "tpl_fortnite", "game_name": "Fortnite", "template": True,
-     "tweak_ids": _FPS_CORE},
-    {"id": "tpl_streaming", "game_name": "OBS / Streaming", "template": True,
-     "tweak_ids": ["power", "gaming", "priority", "mpo", "gpu_msi", "network", "dns", "qos",
-                   "deliveryopt", "obs_priority", "telemetry", "bgapps"]},
+    {"id": "tpl_comp", "game_name": "Competitive FPS", "template": True, "preset_label": "Esports",
+     "tweak_ids": _FPS_COMP,
+     "match": ["valorant", "counter-strike", "cs2", "cs:go", "cs 2", "apex", "overwatch", "rainbow six",
+               "siege", "call of duty", "warzone", "modern warfare", "the finals", "fortnite", "pubg",
+               "playerunknown", "splitgate", "quake", "xdefiant", "battlefield", "delta force"]},
+    {"id": "tpl_aaa", "game_name": "AAA / Single-player", "template": True, "preset_label": "Quality",
+     "tweak_ids": _AAA,
+     "match": ["cyberpunk", "elden ring", "red dead", "grand theft", "gta", "witcher", "hogwarts", "starfield",
+               "baldur", "assassin", "god of war", "horizon", "spider-man", "resident evil", "far cry", "control",
+               "alan wake", "hellblade", "ghost of", "black myth", "wukong", "jedi", "metro", "dying light",
+               "forza", "flight simulator", "cities", "silent hill", "diablo", "path of exile", "monster hunter"]},
+    {"id": "tpl_moba", "game_name": "MOBA", "template": True, "preset_label": "MOBA",
+     "tweak_ids": _MOBA,
+     "match": ["league of legends", "dota", "smite", "heroes of the storm", "deadlock"]},
+    {"id": "tpl_streaming", "game_name": "Streaming / OBS", "template": True, "preset_label": "Streaming",
+     "tweak_ids": _STREAM,
+     "match": ["obs", "streamlabs", "xsplit"]},
+    {"id": "tpl_balanced", "game_name": "Balanced", "template": True, "preset_label": "General",
+     "tweak_ids": _BALANCED, "match": []},
 ]
 
 _VALID_IDS = {t["id"] for t in TWEAK_CATALOG}

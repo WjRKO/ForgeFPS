@@ -37,6 +37,9 @@ export default function Games() {
   const [savingCfg, setSavingCfg] = useState(false);
   const [runningApps, setRunningApps] = useState([]);
   const [runningAt, setRunningAt] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [catalog, setCatalog] = useState([]);
+  const [recCopied, setRecCopied] = useState(false);
 
   const loadGames = async () => {
     try { const { data } = await api.get("/games"); setGames(data.games || []); } catch {}
@@ -56,7 +59,20 @@ export default function Games() {
     loadPrematch();
     api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {});
     api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
+    api.get("/profiles/templates").then(({ data }) => { setTemplates(data.templates || []); setCatalog(data.catalog || []); }).catch(() => {});
   }, []);
+
+  const recTpl = useMemo(() => {
+    const g = game.trim().toLowerCase();
+    if (!g || !templates.length) return null;
+    return templates.find((t) => (t.match || []).some((m) => g.includes(m)))
+      || templates.find((t) => t.id === "tpl_balanced") || null;
+  }, [game, templates]);
+  const recCmd = recTpl ? `irm "${BACKEND}/api/agent/script?t=${token || "IL_TUO_TOKEN"}&mode=optimize&profile=${recTpl.id}" | iex` : "";
+  const copyRec = async () => {
+    try { await navigator.clipboard.writeText(recCmd); } catch { const el = document.createElement("textarea"); el.value = recCmd; document.body.appendChild(el); el.select(); document.execCommand("copy"); el.remove(); }
+    setRecCopied(true); toast.success(t("games.rec_copied")); setTimeout(() => setRecCopied(false), 2000);
+  };
 
   const saveConfig = async () => {
     setSavingCfg(true);
@@ -233,6 +249,31 @@ export default function Games() {
           )}
         </div>
       </div>
+
+      {recTpl && (
+        <div className="mt-4 bg-gradient-to-br from-[#00E0FF]/10 to-transparent border border-[#00E0FF]/40 p-5" data-testid="rec-preset-card">
+          <div className="flex items-center gap-2 text-sm font-bold mb-1 text-[#00E0FF]">
+            <Settings2 size={16} /> {t("games.rec_title")}
+          </div>
+          <p className="text-xs text-zinc-400 mb-3">
+            {t("games.rec_for")} <span className="text-zinc-200 font-semibold">{game}</span>: <span className="text-[#00E0FF] font-bold">{recTpl.game_name}</span>
+            <span className="text-zinc-500"> · {recTpl.preset_label}</span>
+          </p>
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {recTpl.tweak_ids.map((id) => catalog.find((c) => c.id === id)?.name).filter(Boolean).slice(0, 8).map((n, i) => (
+              <span key={i} className="text-[11px] bg-black border border-[#1A1A24] px-2 py-0.5 text-zinc-400">{n}</span>
+            ))}
+            {recTpl.tweak_ids.length > 8 && <span className="text-[11px] text-zinc-600 px-1">+{recTpl.tweak_ids.length - 8}</span>}
+          </div>
+          <div className="flex items-stretch gap-2">
+            <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-[11px] text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="rec-preset-cmd">{recCmd}</code>
+            <button onClick={copyRec} data-testid="rec-preset-copy" className="shrink-0 flex items-center justify-center border border-[#2A2A35] px-3 hover:border-[#00E0FF] transition-colors">
+              {recCopied ? <Check size={14} className="text-[#00FF66]" /> : <Copy size={14} />}
+            </button>
+          </div>
+          <p className="text-[11px] text-zinc-500 mt-2">{t("games.rec_hint")}</p>
+        </div>
+      )}
     </div>
   );
 }
