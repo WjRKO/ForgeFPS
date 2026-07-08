@@ -4,8 +4,29 @@ import { Cpu, Gauge, Thermometer, MemoryStick, Zap, Copy, Check, Radio, Gamepad2
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import api from "@/lib/api";
+import { SessionSummary } from "./SessionSummary";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
+
+const freshAcc = () => ({ startTs: null, lastTs: null, fps: [], cpuTempMax: 0, gpuTempMax: 0, cpuSum: 0, cpuN: 0, gpuSum: 0, gpuN: 0, games: {}, samples: 0 });
+
+const buildSummary = (a) => {
+  if (a.samples === 0) return null;
+  const dur = a.startTs && a.lastTs ? (new Date(a.lastTs) - new Date(a.startTs)) / 1000 : 0;
+  let game = null, best = 0;
+  for (const [g, n] of Object.entries(a.games)) { if (n > best) { best = n; game = g; } }
+  const fps = [...a.fps].sort((x, y) => x - y);
+  const pct = (p) => (fps.length ? fps[Math.min(fps.length - 1, Math.floor(p * fps.length))] : null);
+  const avg = fps.length ? Math.round(fps.reduce((s, v) => s + v, 0) / fps.length) : null;
+  return {
+    durationSec: dur, game, samples: a.samples,
+    fpsAvg: avg, fpsMin: fps.length ? fps[0] : null, fpsMax: fps.length ? fps[fps.length - 1] : null,
+    fps1low: pct(0.01),
+    cpuTempMax: a.cpuTempMax, gpuTempMax: a.gpuTempMax,
+    cpuUtilAvg: a.cpuN ? Math.round(a.cpuSum / a.cpuN) : null,
+    gpuUtilAvg: a.gpuN ? Math.round(a.gpuSum / a.gpuN) : null,
+  };
+};
 
 function Stat({ icon: Icon, label, value, unit, accent, testid }) {
   return (
@@ -22,6 +43,9 @@ export default function Live() {
   const [token, setToken] = useState("");
   const [copied, setCopied] = useState(false);
   const [alerts, setAlerts] = useState({ enabled: true, cpu_max: 90, gpu_max: 85 });
+  const [summary, setSummary] = useState(null);
+  const acc = useRef(freshAcc());
+  const seenRef = useRef(new Set());
   const timer = useRef(null);
 
   useEffect(() => {
@@ -29,11 +53,34 @@ export default function Live() {
     api.get("/alerts").then(({ data }) => setAlerts(data)).catch(() => {});
   }, []);
   useEffect(() => {
-    const load = async () => { try { const { data } = await api.get("/pc-telemetry"); setData(data); } catch {} };
+    const load = async () => {
+      try {
+        const { data } = await api.get("/pc-telemetry");
+        setData(data);
+        for (const s of (data.samples || [])) {
+          if (!s.ts || seenRef.current.has(s.ts)) continue;
+          seenRef.current.add(s.ts);
+          // New session if a gap > 30s between samples (agent restarted / older data).
+          if (acc.current.lastTs && (new Date(s.ts) - new Date(acc.current.lastTs)) > 30000) acc.current = freshAcc();
+          const b = acc.current;
+          if (!b.startTs) b.startTs = s.ts;
+          b.lastTs = s.ts;
+          b.samples++;
+          if (s.cpu_util != null) { b.cpuSum += s.cpu_util; b.cpuN++; }
+          if (s.gpu_util != null) { b.gpuSum += s.gpu_util; b.gpuN++; }
+          if (s.cpu_temp != null && s.cpu_temp > b.cpuTempMax) b.cpuTempMax = s.cpu_temp;
+          if (s.gpu_temp != null && s.gpu_temp > b.gpuTempMax) b.gpuTempMax = s.gpu_temp;
+          if (s.fps != null && s.fps > 0) { b.fps.push(s.fps); if (s.game) b.games[s.game] = (b.games[s.game] || 0) + 1; }
+        }
+        setSummary(buildSummary(acc.current));
+      } catch {}
+    };
     load();
-    timer.current = setInterval(load, 2000);
+    timer.current = setInterval(load, 1000);
     return () => clearInterval(timer.current);
   }, []);
+
+  const resetSession = () => { acc.current = freshAcc(); setSummary(null); toast.success(t("live.session_reset_done")); };
 
   const saveAlerts = async () => {
     try { await api.put("/alerts", alerts); toast.success(t("live.alerts_saved")); } catch { toast.error(t("live.save_err")); }
@@ -84,6 +131,8 @@ export default function Live() {
         <Stat icon={MemoryStick} label={t("live.st_vram")} value={last.vram_used_pct} unit="%" accent="text-[#B388FF]" testid="stat-vram" />
         <Stat icon={Zap} label={t("live.st_gpu_power")} value={last.gpu_power} unit="W" accent="text-[#E5FF00]" testid="stat-gpu-power" />
       </div>
+
+      {summary && <SessionSummary summary={summary} onReset={resetSession} />}
 
       <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 mb-6" data-testid="alert-settings">
         <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4"><Bell size={14} className="text-[#FF3B30]" /> {t("live.alert_title")}</div>

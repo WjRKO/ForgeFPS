@@ -999,13 +999,13 @@ if ($MODE -eq 'monitor') {
       $s = Get-TelemetrySample
       $f = Get-Fps
       if ($f) { $s.fps = $f.fps; $s.game = $f.game; $noFpsCount = 0 }
-      elseif ($script:PM_ON) { $noFpsCount++; if ($noFpsCount -eq 6) { Show-FpsDiag } }
+      elseif ($script:PM_ON) { $noFpsCount++; if ($noFpsCount -eq 10) { Show-FpsDiag } }
       Send-Telemetry $s
       $g = if ($s.ContainsKey('gpu_util')) { ("GPU {0}% {1}C {2}MHz" -f $s.gpu_util, $s.gpu_temp, $s.gpu_clock) } else { 'GPU n/d' }
       $ct = if ($s.ContainsKey('cpu_temp')) { ("{0}C" -f $s.cpu_temp) } else { '' }
       $fp = if ($s.ContainsKey('fps')) { (" | {0} FPS ({1})" -f $s.fps, $s.game) } else { '' }
       Say ("   CPU {0}% {1} | RAM {2}% | {3}{4}" -f $s.cpu_util, $ct, $s.ram_used_pct, $g, $fp)
-      Start-Sleep -Seconds 2
+      Start-Sleep -Milliseconds 1000
     }
   } finally { Stop-Fps }
   return
