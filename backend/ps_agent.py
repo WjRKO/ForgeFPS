@@ -1013,21 +1013,30 @@ if ($MODE -eq 'optimize') {
   return
 }
 
-function Measure-Ping($target, $count, $timeout) {
+function Measure-Ping($target, $count, $interval, $timeout) {
   $p = New-Object System.Net.NetworkInformation.Ping
   $rtts = New-Object 'System.Collections.Generic.List[double]'
   $sent = 0; $lost = 0
+  $sw = New-Object System.Diagnostics.Stopwatch
   for ($i = 0; $i -lt $count; $i++) {
     $sent++
     try {
+      $sw.Restart()
       $reply = $p.Send($target, $timeout)
-      if ($reply.Status -eq 'Success') { $rtts.Add([double]$reply.RoundtripTime) } else { $lost++ }
+      $sw.Stop()
+      if ($reply.Status -eq 'Success') { $rtts.Add([math]::Round($sw.Elapsed.TotalMilliseconds, 2)) } else { $lost++ }
     } catch { $lost++ }
-    Start-Sleep -Milliseconds 80
+    Start-Sleep -Milliseconds $interval
   }
   return @{ rtts = $rtts; sent = $sent; lost = $lost }
 }
-function Avg($list) { if ($list.Count -eq 0) { return $null }; return [math]::Round(($list | Measure-Object -Average).Average, 1) }
+function Percentile($list, $q) {
+  if ($list.Count -eq 0) { return $null }
+  $sorted = @($list | Sort-Object)
+  $idx = [int][math]::Floor($q * ($sorted.Count - 1))
+  if ($idx -lt 0) { $idx = 0 }
+  return [math]::Round($sorted[$idx], 1)
+}
 function Jitter($list) {
   if ($list.Count -lt 2) { return $null }
   $m = ($list | Measure-Object -Average).Average
@@ -1042,49 +1051,79 @@ function Send-NetResult($res) {
   $body = '{"result":{' + $items + '}}'
   try { Invoke-RestMethod -Uri "$BACKEND/api/agent/netresult" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
 }
+$script:DL_BLOCK = {
+  param($u)
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    [Net.ServicePointManager]::DefaultConnectionLimit = 16
+    while ($true) {
+      $req = [System.Net.HttpWebRequest]::Create($u); $req.Timeout = 30000
+      $resp = $req.GetResponse(); $s = $resp.GetResponseStream()
+      $buf = New-Object byte[] 131072
+      while ($s.Read($buf, 0, $buf.Length) -gt 0) {}
+      $s.Close(); $resp.Close()
+    }
+  } catch {}
+}
+$script:UP_BLOCK = {
+  param($u)
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $chunk = New-Object byte[] 262144
+    while ($true) {
+      $req = [System.Net.HttpWebRequest]::Create($u); $req.Method = 'POST'; $req.Timeout = 30000
+      $req.SendChunked = $true; $req.AllowWriteStreamBuffering = $false
+      $rs = $req.GetRequestStream()
+      for ($k = 0; $k -lt 400; $k++) { $rs.Write($chunk, 0, $chunk.Length) }
+      $rs.Close(); $resp = $req.GetResponse(); $resp.Close()
+    }
+  } catch {}
+}
 function Run-Bufferbloat {
   $target = '1.1.1.1'
-  $downUrl = 'https://speed.cloudflare.com/__down?bytes=157286400'
+  $downUrl = 'https://speed.cloudflare.com/__down?bytes=1073741824'
   $upUrl = 'https://speed.cloudflare.com/__up'
-  Say '   [1/3] Latenza a riposo...' 'DarkGray'
-  $idle = Measure-Ping $target 20 1000
-  $idleAvg = Avg $idle.rtts
-  Say ("        idle: {0} ms (jitter {1} ms)" -f $idleAvg, (Jitter $idle.rtts)) 'DarkGray'
 
-  Say '   [2/3] Latenza sotto carico (download)...' 'DarkGray'
-  $dljobs = @()
-  for ($i = 0; $i -lt 4; $i++) {
-    $dljobs += Start-Job -ScriptBlock { param($u) try { $wc = New-Object System.Net.WebClient; $wc.DownloadData($u) | Out-Null } catch {} } -ArgumentList $downUrl
-  }
-  Start-Sleep -Milliseconds 1200
-  $down = Measure-Ping $target 25 2000
-  $downAvg = Avg $down.rtts
+  Say '   [1/3] Latenza a riposo (baseline, 50 campioni)...' 'DarkGray'
+  $idle = Measure-Ping $target 50 40 1000
+  $idleP50 = Percentile $idle.rtts 0.5
+  $idleMin = Percentile $idle.rtts 0.0
+  Say ("        idle p50: {0} ms | min: {1} ms | jitter: {2} ms" -f $idleP50, $idleMin, (Jitter $idle.rtts)) 'DarkGray'
+
+  Say '   [2/3] Sotto carico DOWNLOAD (8 stream, warm-up 2.5s)...' 'DarkGray'
+  $dljobs = @(); for ($i = 0; $i -lt 8; $i++) { $dljobs += Start-Job -ScriptBlock $script:DL_BLOCK -ArgumentList $downUrl }
+  Start-Sleep -Milliseconds 2500
+  $down = Measure-Ping $target 80 40 2000
   $dljobs | Stop-Job -ErrorAction SilentlyContinue; $dljobs | Remove-Job -Force -ErrorAction SilentlyContinue
-  Say ("        download: {0} ms" -f $downAvg) 'DarkGray'
+  $downP50 = Percentile $down.rtts 0.5; $downP95 = Percentile $down.rtts 0.95
+  Say ("        download p50: {0} ms | p95: {1} ms" -f $downP50, $downP95) 'DarkGray'
+  Start-Sleep -Milliseconds 1000
 
-  Say '   [3/3] Latenza sotto carico (upload)...' 'DarkGray'
-  $upAvg = $null
+  Say '   [3/3] Sotto carico UPLOAD (4 stream, warm-up 2.5s)...' 'DarkGray'
+  $upP50 = $null; $upP95 = $null; $upLost = 0; $upSent = 0
   try {
-    $upjobs = @()
-    for ($i = 0; $i -lt 3; $i++) {
-      $upjobs += Start-Job -ScriptBlock { param($u) try { $wc = New-Object System.Net.WebClient; $d = New-Object byte[] (26214400); $wc.UploadData($u, $d) | Out-Null } catch {} } -ArgumentList $upUrl
-    }
-    Start-Sleep -Milliseconds 1200
-    $up = Measure-Ping $target 20 2000
-    $upAvg = Avg $up.rtts
+    $upjobs = @(); for ($i = 0; $i -lt 4; $i++) { $upjobs += Start-Job -ScriptBlock $script:UP_BLOCK -ArgumentList $upUrl }
+    Start-Sleep -Milliseconds 2500
+    $up = Measure-Ping $target 60 40 2000
     $upjobs | Stop-Job -ErrorAction SilentlyContinue; $upjobs | Remove-Job -Force -ErrorAction SilentlyContinue
-    Say ("        upload: {0} ms" -f $upAvg) 'DarkGray'
+    $upP50 = Percentile $up.rtts 0.5; $upP95 = Percentile $up.rtts 0.95
+    $upLost = $up.lost; $upSent = $up.sent
+    Say ("        upload p50: {0} ms | p95: {1} ms" -f $upP50, $upP95) 'DarkGray'
   } catch {}
 
-  $totalSent = $idle.sent + $down.sent
-  $totalLost = $idle.lost + $down.lost
+  $totalSent = $down.sent + $upSent
+  $totalLost = $down.lost + $upLost
   $loss = if ($totalSent -gt 0) { [math]::Round(100.0 * $totalLost / $totalSent, 1) } else { 0 }
   $res = [ordered]@{
-    idle_ms   = $idleAvg
-    down_ms   = $downAvg
-    up_ms     = $upAvg
+    idle_ms   = $idleP50
+    idle_min  = $idleMin
+    down_ms   = $downP50
+    down_p95  = $downP95
+    up_ms     = $upP50
+    up_p95    = $upP95
     jitter_ms = (Jitter $idle.rtts)
     loss_pct  = $loss
+    samples   = ($idle.rtts.Count + $down.rtts.Count)
   }
   Send-NetResult $res
   Say "`n[OK] Test rete completato. Apri BOOST PC -> Rete per il voto (A-F) e i consigli." 'Green'

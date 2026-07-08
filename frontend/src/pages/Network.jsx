@@ -100,9 +100,9 @@ export default function Network() {
 
           {/* Metrics */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            <Metric icon={Activity} label={t("network.idle")} value={res.idle_ms} unit="ms" sub={t(`network.q_${res.base_quality}`)} accent="text-[#00FF66]" testid="net-idle" />
-            <Metric icon={ArrowDownToLine} label={t("network.down_loaded")} value={res.down_ms} unit="ms" sub={res.down_grade ? `${t("network.grade")} ${res.down_grade}` : ""} accent="text-[#00E0FF]" testid="net-down" />
-            <Metric icon={ArrowUpToLine} label={t("network.up_loaded")} value={res.up_ms} unit="ms" sub={res.up_grade ? `${t("network.grade")} ${res.up_grade}` : ""} accent="text-[#E5FF00]" testid="net-up" />
+            <Metric icon={Activity} label={t("network.idle")} value={res.idle_ms} unit="ms" sub={`${t(`network.q_${res.base_quality}`)}${res.idle_min != null ? ` · min ${res.idle_min}ms` : ""}`} accent="text-[#00FF66]" testid="net-idle" />
+            <Metric icon={ArrowDownToLine} label={t("network.down_loaded")} value={res.down_ms} unit="ms" sub={`${res.down_grade ? `${t("network.grade")} ${res.down_grade}` : ""}${res.down_p95 != null ? ` · p95 ${res.down_p95}ms` : ""}`} accent="text-[#00E0FF]" testid="net-down" />
+            <Metric icon={ArrowUpToLine} label={t("network.up_loaded")} value={res.up_ms} unit="ms" sub={`${res.up_grade ? `${t("network.grade")} ${res.up_grade}` : ""}${res.up_p95 != null ? ` · p95 ${res.up_p95}ms` : ""}`} accent="text-[#E5FF00]" testid="net-up" />
             <Metric icon={Wifi} label={t("network.jitter")} value={res.jitter_ms} unit="ms" sub={`${t("network.loss")}: ${res.loss_pct ?? 0}%`} accent="text-[#B388FF]" testid="net-jitter" />
           </div>
 
