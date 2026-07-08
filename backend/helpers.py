@@ -166,6 +166,43 @@ def compute_health(health: dict) -> dict:
             "gpu": health.get("gpu"), "updated_at": now_iso()}
 
 
+def grade_bufferbloat(result: dict) -> dict:
+    """Compute bufferbloat grade (A+..F) from idle vs loaded latency (Waveform-style)."""
+    idle = result.get("idle_ms")
+    down = result.get("down_ms")
+    up = result.get("up_ms")
+    incs = [x - idle for x in (down, up) if x is not None and idle is not None]
+    inc = max(incs) if incs else None
+
+    def grade_for(v):
+        if v is None:
+            return None
+        if v <= 5: return "A+"
+        if v <= 30: return "A"
+        if v <= 60: return "B"
+        if v <= 200: return "C"
+        if v <= 400: return "D"
+        return "F"
+
+    bloat_grade = grade_for(inc)
+    down_grade = grade_for(down - idle) if (down is not None and idle is not None) else None
+    up_grade = grade_for(up - idle) if (up is not None and idle is not None) else None
+
+    # Base latency quality (idle RTT to reference host)
+    base = "great" if (idle is not None and idle <= 20) else "good" if (idle is not None and idle <= 50) else "fair" if (idle is not None and idle <= 100) else "poor"
+    loss = result.get("loss_pct")
+    return {
+        **result,
+        "bufferbloat_ms": round(inc) if inc is not None else None,
+        "grade": bloat_grade,
+        "down_grade": down_grade,
+        "up_grade": up_grade,
+        "base_quality": base,
+        "loss_pct": loss,
+    }
+
+
+
 def pc_context_text(specs: dict) -> str:
     """Rich PC context for the AI Advisor: hardware + health + temps + benchmark + startup."""
     if not specs:

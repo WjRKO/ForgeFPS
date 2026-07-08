@@ -346,3 +346,13 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 ### Consiglio contestuale (Games.jsx)
 - Al click/selezione di un gioco rilevato, mostra card "Preset consigliato" con il template abbinato via `match` (fallback tpl_balanced), chip dei tweak e comando `...&mode=optimize&profile=<tpl_id>` copiabile. Nuove chiavi i18n games.rec_* (it+en).
 - Verificato: /profiles/templates ritorna i 5 template con match; UI testata (Cyberpunk 2077 → tpl_aaa "AAA / Single-player · Quality"); PS PARSE OK; frontend compiled. NB: i nomi dei tweak nella catalog restano IT anche in EN (comportamento preesistente, fuori scope).
+
+## Aggiornamento 2026-07-08 (22) — Test Bufferbloat & Latenza di rete (grade A-F) [P0 servizio boost]
+### Backend
+- ps_agent.py: nuova modalità `bufferbloat`. Run-Bufferbloat misura latenza idle (System.Net.NetworkInformation.Ping, version-independent) vs sotto carico download (4 job WebClient su speed.cloudflare.com/__down 150MB) e upload (3 job __up 25MB), + jitter (stdev) + packet loss. Invia raw a /api/agent/netresult. Nessun admin richiesto.
+- helpers.grade_bufferbloat: calcola grade A+..F sull'aumento max di latenza sotto carico (Waveform-style: <=5 A+, <=30 A, <=60 B, <=200 C, <=400 D, else F), + down_grade/up_grade, base_quality (idle RTT), loss.
+- pc.py: POST /agent/netresult (agent token, salva graded in net_results upsert), GET /net-result (utente). Mode 'bufferbloat' aggiunto alla whitelist agent_script. models.NetResultInput.
+### Frontend
+- Nuova pagina `Network.jsx` (rotta /app/network) + voce menu "Rete & Bufferbloat" (Layout, icona Gauge). Mostra comando da eseguire, poll /net-result ogni 5s, badge Voto A-F colorato, bufferbloat +ms, metriche idle/down/up/jitter/loss con grade per fase, e consigli dinamici (SQM/fq_codel, Ethernet, upload bg, QoS BoostPC, server vicini, loss). i18n network.* + nav.network (it+en).
+- Verificato E2E: POST netresult {idle19,down78,up45} -> grade B, bloat +59ms; pagina render OK (idle Excellent, down Grade B, up Grade A). PS PARSE OK, frontend compiled, grade fn testata. Dati test rimossi.
+### Prossimo (raccomandazione secca, resto): #3 Report Before/After cliente (bufferbloat+FPS+health prima/dopo, export immagine/PDF brandizzato) e #2 input lag reale (PresentMon latency + tweak Reflex/cap FPS).

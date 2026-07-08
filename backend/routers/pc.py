@@ -7,10 +7,10 @@ from fastapi.responses import PlainTextResponse
 import ai_engine
 import push
 from database import db, now_iso
-from helpers import specs_to_text, compute_health, get_or_create_agent_token
+from helpers import specs_to_text, compute_health, get_or_create_agent_token, grade_bufferbloat
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
-from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput
+from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput
 from routers.profiles import resolve_tweak_ids
 
 # Default background processes closed by "Prima del match" (must stay in sync with frontend groups)
@@ -62,6 +62,25 @@ def build(get_current_user):
             await db.benchmarks.insert_one({**record})
         await db.pc_specs.update_one({"user_id": uid}, {"$set": fields}, upsert=True)
         return {"ok": True}
+
+    @r.post("/agent/netresult")
+    async def agent_netresult(payload: NetResultInput, x_agent_token: str = Header(default="")):
+        rec = await db.agent_tokens.find_one({"token": x_agent_token})
+        if not rec:
+            raise HTTPException(status_code=401, detail="Token agent non valido")
+        graded = grade_bufferbloat(payload.result)
+        await db.net_results.update_one(
+            {"user_id": rec["user_id"]},
+            {"$set": {"user_id": rec["user_id"], "result": graded, "updated_at": now_iso()}},
+            upsert=True)
+        return {"ok": True, "grade": graded.get("grade")}
+
+    @r.get("/net-result")
+    async def net_result(user: dict = Depends(get_current_user)):
+        doc = await db.net_results.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        if not doc:
+            return {"available": False}
+        return {"available": True, **doc}
 
     @r.get("/pc-benchmark")
     async def pc_benchmark(user: dict = Depends(get_current_user)):
@@ -219,7 +238,7 @@ def build(get_current_user):
         if not rec:
             return PlainTextResponse("Write-Host '[BOOST PC] Token non valido. Riapri la pagina Desktop Agent.' -ForegroundColor Red",
                                      media_type="text/plain")
-        if mode not in ("sync", "optimize", "restore", "benchmark", "monitor", "prematch"):
+        if mode not in ("sync", "optimize", "restore", "benchmark", "monitor", "prematch", "bufferbloat"):
             mode = "sync"
         backend = os.environ.get("FRONTEND_URL", "http://localhost:8001")
         ids = await resolve_tweak_ids(db, rec["user_id"], profile) if profile else []

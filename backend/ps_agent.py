@@ -1013,6 +1013,91 @@ if ($MODE -eq 'optimize') {
   return
 }
 
+function Measure-Ping($target, $count, $timeout) {
+  $p = New-Object System.Net.NetworkInformation.Ping
+  $rtts = New-Object 'System.Collections.Generic.List[double]'
+  $sent = 0; $lost = 0
+  for ($i = 0; $i -lt $count; $i++) {
+    $sent++
+    try {
+      $reply = $p.Send($target, $timeout)
+      if ($reply.Status -eq 'Success') { $rtts.Add([double]$reply.RoundtripTime) } else { $lost++ }
+    } catch { $lost++ }
+    Start-Sleep -Milliseconds 80
+  }
+  return @{ rtts = $rtts; sent = $sent; lost = $lost }
+}
+function Avg($list) { if ($list.Count -eq 0) { return $null }; return [math]::Round(($list | Measure-Object -Average).Average, 1) }
+function Jitter($list) {
+  if ($list.Count -lt 2) { return $null }
+  $m = ($list | Measure-Object -Average).Average
+  $v = ($list | ForEach-Object { ($_ - $m) * ($_ - $m) } | Measure-Object -Average).Average
+  return [math]::Round([math]::Sqrt($v), 1)
+}
+function Send-NetResult($res) {
+  $items = ($res.GetEnumerator() | ForEach-Object {
+      $v = if ($null -eq $_.Value) { 'null' } else { $_.Value }
+      '"' + $_.Key + '":' + $v
+    }) -join ','
+  $body = '{"result":{' + $items + '}}'
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/netresult" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+}
+function Run-Bufferbloat {
+  $target = '1.1.1.1'
+  $downUrl = 'https://speed.cloudflare.com/__down?bytes=157286400'
+  $upUrl = 'https://speed.cloudflare.com/__up'
+  Say '   [1/3] Latenza a riposo...' 'DarkGray'
+  $idle = Measure-Ping $target 20 1000
+  $idleAvg = Avg $idle.rtts
+  Say ("        idle: {0} ms (jitter {1} ms)" -f $idleAvg, (Jitter $idle.rtts)) 'DarkGray'
+
+  Say '   [2/3] Latenza sotto carico (download)...' 'DarkGray'
+  $dljobs = @()
+  for ($i = 0; $i -lt 4; $i++) {
+    $dljobs += Start-Job -ScriptBlock { param($u) try { $wc = New-Object System.Net.WebClient; $wc.DownloadData($u) | Out-Null } catch {} } -ArgumentList $downUrl
+  }
+  Start-Sleep -Milliseconds 1200
+  $down = Measure-Ping $target 25 2000
+  $downAvg = Avg $down.rtts
+  $dljobs | Stop-Job -ErrorAction SilentlyContinue; $dljobs | Remove-Job -Force -ErrorAction SilentlyContinue
+  Say ("        download: {0} ms" -f $downAvg) 'DarkGray'
+
+  Say '   [3/3] Latenza sotto carico (upload)...' 'DarkGray'
+  $upAvg = $null
+  try {
+    $upjobs = @()
+    for ($i = 0; $i -lt 3; $i++) {
+      $upjobs += Start-Job -ScriptBlock { param($u) try { $wc = New-Object System.Net.WebClient; $d = New-Object byte[] (26214400); $wc.UploadData($u, $d) | Out-Null } catch {} } -ArgumentList $upUrl
+    }
+    Start-Sleep -Milliseconds 1200
+    $up = Measure-Ping $target 20 2000
+    $upAvg = Avg $up.rtts
+    $upjobs | Stop-Job -ErrorAction SilentlyContinue; $upjobs | Remove-Job -Force -ErrorAction SilentlyContinue
+    Say ("        upload: {0} ms" -f $upAvg) 'DarkGray'
+  } catch {}
+
+  $totalSent = $idle.sent + $down.sent
+  $totalLost = $idle.lost + $down.lost
+  $loss = if ($totalSent -gt 0) { [math]::Round(100.0 * $totalLost / $totalSent, 1) } else { 0 }
+  $res = [ordered]@{
+    idle_ms   = $idleAvg
+    down_ms   = $downAvg
+    up_ms     = $upAvg
+    jitter_ms = (Jitter $idle.rtts)
+    loss_pct  = $loss
+  }
+  Send-NetResult $res
+  Say "`n[OK] Test rete completato. Apri BOOST PC -> Rete per il voto (A-F) e i consigli." 'Green'
+}
+
+if ($MODE -eq 'bufferbloat') {
+  Say "`n== BoostPC - Test rete / Bufferbloat ==" 'Cyan'
+  Say '   Non usare internet durante il test (~15s). Misuro latenza a riposo e sotto carico.' 'DarkGray'
+  Run-Bufferbloat
+  return
+}
+
+
 if ($MODE -eq 'monitor') {
   Say "`n[*] Monitoraggio live avviato. Lascia aperta questa finestra. Premi Ctrl+C per fermare." 'Cyan'
   Say '   Apri BOOST PC -> Live per i grafici in tempo reale.' 'DarkGray'

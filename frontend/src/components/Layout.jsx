@@ -1,7 +1,7 @@
 import { NavLink, useNavigate, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal, TerminalSquare, Swords } from "lucide-react";
+import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal, TerminalSquare, Swords, Gauge } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -16,6 +16,7 @@ const NAV_GROUPS = [
     { to: "/app/pc", label: "nav.pc", icon: Activity, id: "pc" },
     { to: "/app/advisor", label: "nav.advisor", icon: MessageSquareCode, id: "advisor" },
     { to: "/app/commands", label: "nav.commands", icon: TerminalSquare, id: "commands" },
+    { to: "/app/network", label: "nav.network", icon: Gauge, id: "network" },
     { to: "/app/bios", label: "nav.bios", icon: SlidersHorizontal, id: "bios" },
     { to: "/app/desktop", label: "nav.desktop", icon: MonitorDown, id: "desktop" },
   ]},

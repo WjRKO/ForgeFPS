@@ -77,6 +77,10 @@ class TelemetryInput(BaseModel):
     sample: dict
 
 
+class NetResultInput(BaseModel):
+    result: dict
+
+
 class ProfileInput(BaseModel):
     game_name: str
     tweak_ids: list = []

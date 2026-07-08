@@ -15,6 +15,7 @@ import MyPcHub from "@/pages/MyPcHub";
 import Upgrade from "@/pages/Upgrade";
 import Gaming from "@/pages/Gaming";
 import Commands from "@/pages/Commands";
+import Network from "@/pages/Network";
 import BiosRestore from "@/pages/BiosRestore";
 import Admin from "@/pages/Admin";
 import { Loader2 } from "lucide-react";
@@ -60,6 +61,7 @@ function App() {
               <Route path="tracker/:id" element={<ProductDetail />} />
               <Route path="pc" element={<MyPcHub initialTab="overview" />} />
               <Route path="live" element={<MyPcHub initialTab="live" />} />
+              <Route path="network" element={<Network />} />
               <Route path="gaming" element={<Gaming initialTab="games" />} />
               <Route path="profiles" element={<Gaming initialTab="profiles" />} />
               <Route path="games" element={<Gaming initialTab="games" />} />
