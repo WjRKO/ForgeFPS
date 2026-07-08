@@ -524,14 +524,14 @@ function Start-Fps {
   Remove-Item $script:PM_CSV, $script:PM_OUT, $script:PM_ERR -ErrorAction SilentlyContinue
   try {
     $script:PM_PROC = Start-Process -FilePath $script:PM_EXE `
-      -ArgumentList '--output_file', "`"$($script:PM_CSV)`"", '--stop_existing_session', '--v1_metrics', '--no_console_stats' `
+      -ArgumentList '--output_stdout', '--stop_existing_session', '--v1_metrics', '--no_console_stats' `
       -WindowStyle Hidden -PassThru -RedirectStandardOutput $script:PM_OUT -RedirectStandardError $script:PM_ERR
     $script:PM_ON = $true
     Start-Sleep -Milliseconds 1500
     if ($script:PM_PROC -and $script:PM_PROC.HasExited) {
       $script:PM_ON = $false
       $err = ''
-      foreach ($lf in @($script:PM_ERR, $script:PM_OUT)) { if (Test-Path $lf) { $err += (Get-Content $lf -Raw -ErrorAction SilentlyContinue) } }
+      if (Test-Path $script:PM_ERR) { $err = (Get-Content $script:PM_ERR -Raw -ErrorAction SilentlyContinue) }
       Say ('   [FPS] PresentMon si e chiuso subito (exit ' + $script:PM_PROC.ExitCode + '). Dettaglio: ' + ($err.Trim() -replace "`r?`n", ' | ')) 'DarkYellow'
     } else {
       Say '   [FPS] Cattura FPS attiva. Avvia un gioco (o uno screensaver 3D) a schermo intero.' 'DarkGray'
@@ -545,26 +545,26 @@ function Show-FpsDiag {
   Say '   [diag FPS] Nessun FPS ancora rilevato. Controllo stato:' 'DarkYellow'
   $alive = ($script:PM_PROC -and -not $script:PM_PROC.HasExited)
   Say ("             PresentMon attivo: {0}" -f $(if($alive){'si'}else{'NO'})) 'DarkGray'
-  if (Test-Path $script:PM_CSV) {
-    $sz = (Get-Item $script:PM_CSV).Length
-    Say ("             CSV presente: si ({0} byte)" -f $sz) 'DarkGray'
-    $raw = Read-Shared $script:PM_CSV
+  if (Test-Path $script:PM_OUT) {
+    $sz = (Get-Item $script:PM_OUT).Length
+    Say ("             Output PresentMon: si ({0} byte)" -f $sz) 'DarkGray'
+    $raw = Read-Shared $script:PM_OUT
     $ln = $raw -split "`r?`n" | Where-Object { $_ -ne '' }
-    Say ("             Righe CSV: {0}" -f $ln.Count) 'DarkGray'
+    Say ("             Righe dati: {0}" -f $ln.Count) 'DarkGray'
     if ($ln.Count -ge 1) { Say ("             Intestazione: " + ($ln[0].Substring(0,[math]::Min(120,$ln[0].Length)))) 'DarkGray' }
   } else {
-    Say '             CSV presente: NO (PresentMon non sta scrivendo dati)' 'DarkGray'
+    Say '             Output PresentMon: NO (nessun dato)' 'DarkGray'
   }
   if (-not $alive) {
     $err = ''
-    foreach ($lf in @($script:PM_ERR, $script:PM_OUT)) { if (Test-Path $lf) { $err += (Get-Content $lf -Raw -ErrorAction SilentlyContinue) } }
+    if (Test-Path $script:PM_ERR) { $err = (Get-Content $script:PM_ERR -Raw -ErrorAction SilentlyContinue) }
     if ($err.Trim()) { Say ('             Errore PresentMon: ' + ($err.Trim() -replace "`r?`n", ' | ')) 'DarkGray' }
   }
   Say '   [diag FPS] Se serve, incolla queste righe in chat. Ricorda: gli FPS compaiono SOLO mentre un app renderizza a schermo (uno screensaver si chiude al primo movimento del mouse).' 'DarkYellow'
 }
 function Get-Fps {
   if (-not $script:PM_ON) { return $null }
-  $raw = Read-Shared $script:PM_CSV
+  $raw = Read-Shared $script:PM_OUT
   if (-not $raw) { return $null }
   $lines = $raw -split "`r?`n" | Where-Object { $_ -ne '' }
   if (-not $lines -or $lines.Count -le $script:PM_ROWS) { return $null }
