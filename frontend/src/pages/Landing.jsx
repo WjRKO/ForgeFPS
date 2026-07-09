@@ -229,7 +229,7 @@ function TerminalMockup() {
         <span className="ml-2 text-[10px] font-mono text-zinc-600">PowerShell</span>
       </div>
       <div className="p-4 font-mono text-xs leading-relaxed">
-        <div className="text-zinc-500">PS C:\Users\Streamer&gt; <span className="text-[#00FF66]">irm boostpc.app/run | iex</span></div>
+        <div className="text-zinc-500">PS C:\Users\Streamer&gt; <span className="text-[#00FF66]">irm frameforge.app/run | iex</span></div>
         <div className="text-zinc-400 mt-2">[<span className="text-[#00FF66]">✓</span>] Hardware detected · RTX 3070</div>
         <div className="text-zinc-400">[<span className="text-[#00FF66]">✓</span>] Power plan · Ultimate</div>
         <div className="text-zinc-400">[<span className="text-[#00FF66]">✓</span>] 26 tweaks applied · reversible</div>
@@ -295,7 +295,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-[#E5FF00] flex items-center justify-center"><Zap size={18} className="text-black" /></div>
-            <span className="font-display font-black tracking-tighter text-lg">BOOST<span className="text-[#E5FF00]">PC</span></span>
+            <span className="font-display font-black tracking-tighter text-lg">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
           </div>
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
@@ -398,7 +398,7 @@ export default function Landing() {
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-7 h-7 bg-[#E5FF00] flex items-center justify-center"><Zap size={15} className="text-black" /></div>
-              <span className="font-display font-black tracking-tighter">BOOST<span className="text-[#E5FF00]">PC</span></span>
+              <span className="font-display font-black tracking-tighter">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
             </div>
             <p className="text-zinc-500 text-sm max-w-xs leading-relaxed">{t("landing.footer_bio")}</p>
           </div>

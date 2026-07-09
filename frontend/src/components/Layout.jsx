@@ -124,7 +124,7 @@ export default function Layout() {
       <aside className="w-60 border-r border-[#2A2A35] bg-[#0A0A0C] flex flex-col fixed h-full">
         <div className="p-5 border-b border-[#2A2A35] flex items-center gap-2">
           <div className="w-8 h-8 bg-[#E5FF00] flex items-center justify-center"><Zap size={18} className="text-black" /></div>
-          <span className="font-display font-black tracking-tighter text-lg">BOOST<span className="text-[#E5FF00]">PC</span></span>
+          <span className="font-display font-black tracking-tighter text-lg">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {NAV_GROUPS.map((group, gi) => {

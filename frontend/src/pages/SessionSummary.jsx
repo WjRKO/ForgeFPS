@@ -34,13 +34,13 @@ export const SessionSummary = ({ summary, onReset }) => {
     try {
       const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, backgroundColor: "#0A0A0C", cacheBust: true });
       const blob = await (await fetch(dataUrl)).blob();
-      const file = new File([blob], "boostpc-session.png", { type: "image/png" });
+      const file = new File([blob], "frameforge-session.png", { type: "image/png" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "BoostPC", text: t("live.session_share_text") });
+        await navigator.share({ files: [file], title: "FrameForge", text: t("live.session_share_text") });
         toast.success(t("live.session_shared"));
       } else {
         const a = document.createElement("a");
-        a.href = dataUrl; a.download = "boostpc-session.png"; a.click();
+        a.href = dataUrl; a.download = "frameforge-session.png"; a.click();
         toast.success(t("live.session_shared"));
       }
     } catch {
@@ -77,7 +77,7 @@ export const SessionSummary = ({ summary, onReset }) => {
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-[#E5FF00] flex items-center justify-center"><Zap size={16} className="text-black" fill="black" /></div>
-            <span className="font-display font-black text-lg tracking-tight">BOOST<span className="text-[#E5FF00]">PC</span></span>
+            <span className="font-display font-black text-lg tracking-tight">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
           </div>
           <div className="text-right">
             <div className="text-[10px] uppercase tracking-[0.25em] text-[#E5FF00]">{t("live.session_recap")}</div>
@@ -110,7 +110,7 @@ export const SessionSummary = ({ summary, onReset }) => {
         )}
 
         <div className="mt-5 pt-3 border-t border-[#1A1A24] flex items-center justify-between text-[10px] text-zinc-600">
-          <span>boostpc · AI performance for gamers & streamers</span>
+          <span>frameforge · AI performance for gamers & streamers</span>
           <span>{summary.samples} {t("live.session_samples")}</span>
         </div>
       </div>

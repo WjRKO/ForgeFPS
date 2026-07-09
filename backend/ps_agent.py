@@ -22,7 +22,7 @@ function Say($m, $c='Gray') { Write-Host $m -ForegroundColor $c }
 function ConvertTo-HashtableSafe { $h=@{}; foreach($p in $input.PSObject.Properties){ $h[$p.Name]=$p.Value }; return $h }
 
 Say '======================================' 'Yellow'
-Say '   BOOST PC AI - Agent PowerShell' 'Yellow'
+Say '   FrameForge - Agent PowerShell' 'Yellow'
 Say '======================================' 'Yellow'
 
 function Test-Admin {
@@ -863,14 +863,14 @@ function Show-Gui {
   $gray = [System.Drawing.Color]::FromArgb(150,150,160)
 
   $form = New-Object System.Windows.Forms.Form
-  $form.Text = 'BOOST PC AI - Ottimizzazioni'
+  $form.Text = 'FrameForge - Ottimizzazioni'
   $form.Size = New-Object System.Drawing.Size(700, 860)
   $form.StartPosition = 'CenterScreen'
   $form.BackColor = $bg; $form.ForeColor = [System.Drawing.Color]::White
   $form.Font = New-Object System.Drawing.Font('Segoe UI', 9)
 
   $title = New-Object System.Windows.Forms.Label
-  $title.Text = 'BOOST PC  -  Ottimizzazioni per streamer & gamer'
+  $title.Text = 'FrameForge  -  Ottimizzazioni per streamer & gamer'
   $title.ForeColor = $acc; $title.Font = New-Object System.Drawing.Font('Segoe UI', 13, [System.Drawing.FontStyle]::Bold)
   $title.Location = New-Object System.Drawing.Point(16, 12); $title.AutoSize = $true
   $form.Controls.Add($title)
@@ -968,7 +968,7 @@ function Show-Gui {
     }
     foreach ($t in $script:TWEAKS) { $script:CHECKS[$t.id].Text = ("{0}    [{1}]" -f $t.name, (& $t.state)) }
     Send-Data (Get-Specs) (Get-Health) (Get-StartupList)
-    GuiLog 'FATTO. Dati inviati a BOOST PC. Riavvio consigliato.'
+    GuiLog 'FATTO. Dati inviati a FrameForge. Riavvio consigliato.'
     $script:APPLYBTN.Enabled = $true
   })
 
@@ -1001,7 +1001,7 @@ if ($MODE -eq 'benchmark') {
   Say "`n[*] Benchmark (CPU / RAM / Disco / Rete)..." 'Cyan'
   $bench = Run-Benchmark; Show-Bench $bench 'BENCHMARK'
   Send-Benchmark @{ after = $bench; ts = (Get-Date).ToString('o') }
-  Say "`n[OK] Benchmark inviato! Vedi il confronto in BOOST PC -> Il mio PC." 'Green'
+  Say "`n[OK] Benchmark inviato! Vedi il confronto in FrameForge -> Il mio PC." 'Green'
   return
 }
 
@@ -1133,11 +1133,11 @@ function Run-Bufferbloat {
     samples   = ($idle.rtts.Count + $down.rtts.Count)
   }
   Send-NetResult $res
-  Say "`n[OK] Test rete completato. Apri BOOST PC -> Rete per il voto (A-F) e i consigli." 'Green'
+  Say "`n[OK] Test rete completato. Apri FrameForge -> Rete per il voto (A-F) e i consigli." 'Green'
 }
 
 if ($MODE -eq 'bufferbloat') {
-  Say "`n== BoostPC - Test rete / Bufferbloat ==" 'Cyan'
+  Say "`n== FrameForge - Test rete / Bufferbloat ==" 'Cyan'
   Say '   Non usare internet durante il test (~15s). Misuro latenza a riposo e sotto carico.' 'DarkGray'
   Run-Bufferbloat
   return
@@ -1146,7 +1146,7 @@ if ($MODE -eq 'bufferbloat') {
 
 if ($MODE -eq 'monitor') {
   Say "`n[*] Monitoraggio live avviato. Lascia aperta questa finestra. Premi Ctrl+C per fermare." 'Cyan'
-  Say '   Apri BOOST PC -> Live per i grafici in tempo reale.' 'DarkGray'
+  Say '   Apri FrameForge -> Live per i grafici in tempo reale.' 'DarkGray'
   Start-Fps
   $noFpsCount = 0
   try {
@@ -1168,7 +1168,7 @@ if ($MODE -eq 'monitor') {
 }
 
 if ($MODE -eq 'prematch') {
-  Say "`n== BoostPC - Modalita Prima del match ==" 'Cyan'
+  Say "`n== FrameForge - Modalita Prima del match ==" 'Cyan'
   $setPower = __PREMATCH_POWER__
   $prevPlan = ''
   if ($setPower) {
@@ -1234,5 +1234,5 @@ if ($games.Count -gt 0) { Send-Games $games; Say ("   Giochi rilevati: {0}" -f $
 $running = Get-RunningApps
 Send-Running $running
 Say ("   App in background attive: {0}" -f $running.Count) 'DarkGray'
-Say "`n[OK] Dati inviati! Apri BOOST PC -> Il mio PC per analisi e consigli." 'Green'
+Say "`n[OK] Dati inviati! Apri FrameForge -> Il mio PC per analisi e consigli." 'Green'
 '''

@@ -236,7 +236,7 @@ def build(get_current_user):
     async def agent_script(t: str = "", mode: str = "sync", profile: str = ""):
         rec = await db.agent_tokens.find_one({"token": t})
         if not rec:
-            return PlainTextResponse("Write-Host '[BOOST PC] Token non valido. Riapri la pagina Desktop Agent.' -ForegroundColor Red",
+            return PlainTextResponse("Write-Host '[FrameForge] Token non valido. Riapri la pagina Desktop Agent.' -ForegroundColor Red",
                                      media_type="text/plain")
         if mode not in ("sync", "optimize", "restore", "benchmark", "monitor", "prematch", "bufferbloat"):
             mode = "sync"

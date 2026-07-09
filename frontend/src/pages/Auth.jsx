@@ -34,7 +34,7 @@ export default function Auth({ mode }) {
       <div className="w-full max-w-md">
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
           <div className="w-9 h-9 bg-[#E5FF00] flex items-center justify-center"><Zap size={20} className="text-black" /></div>
-          <span className="font-display font-black tracking-tighter text-xl">BOOST<span className="text-[#E5FF00]">PC</span></span>
+          <span className="font-display font-black tracking-tighter text-xl">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
         </Link>
         <div className="bg-[#0F0F12] border border-[#2A2A35] p-8">
           <h1 className="font-display font-bold text-2xl tracking-tight mb-1">{isLogin ? t("auth.login_title") : t("auth.register_title")}</h1>

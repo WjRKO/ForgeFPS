@@ -15,7 +15,7 @@ from routers import advisor, builds, products, pc, push_routes, admin, profiles
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("boostpc")
 
-app = FastAPI(title="BOOST PC AI")
+app = FastAPI(title="FrameForge")
 auth_router, get_current_user = build_auth_router(db)
 scheduler = AsyncIOScheduler()
 
@@ -26,7 +26,7 @@ for module in (advisor, builds, products, pc, push_routes, admin, profiles):
 
 @app.get("/api/")
 async def root():
-    return {"message": "BOOST PC AI online"}
+    return {"message": "FrameForge online"}
 
 
 app.add_middleware(
@@ -79,7 +79,7 @@ async def startup():
     _write_test_credentials()
     scheduler.add_job(scheduled_price_check, "interval", minutes=45, id="price_check", replace_existing=True)
     scheduler.start()
-    logger.info("BOOST PC AI started")
+    logger.info("FrameForge started")
 
 
 @app.on_event("shutdown")

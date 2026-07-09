@@ -31,7 +31,7 @@ def build(get_current_user):
     @r.post("/test")
     async def push_test(user: dict = Depends(get_current_user)):
         await push.send_push_to_user(db, str(user["_id"]), {
-            "title": "🔔 BOOST PC", "body": "Le notifiche push sono attive!", "url": "/app/tracker"})
+            "title": "🔔 FrameForge", "body": "Le notifiche push sono attive!", "url": "/app/tracker"})
         return {"ok": True}
 
     return r

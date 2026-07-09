@@ -1,8 +1,8 @@
-/* BOOST PC service worker - web push */
+/* FrameForge service worker - web push */
 self.addEventListener("push", function (event) {
   let data = {};
-  try { data = event.data.json(); } catch (e) { data = { title: "BOOST PC", body: event.data ? event.data.text() : "" }; }
-  const title = data.title || "BOOST PC";
+  try { data = event.data.json(); } catch (e) { data = { title: "FrameForge", body: event.data ? event.data.text() : "" }; }
+  const title = data.title || "FrameForge";
   const options = {
     body: data.body || "",
     icon: "/logo192.png",

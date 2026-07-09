@@ -134,7 +134,7 @@ function toB64Utf8(str) {
 }
 
 function buildMaintScript(withBom) {
-  const lines = ["Write-Host '== BoostPC - Manutenzione settimanale ==' -ForegroundColor Cyan"];
+  const lines = ["Write-Host '== FrameForge - Manutenzione settimanale ==' -ForegroundColor Cyan"];
   MAINT.forEach((m, i) => {
     lines.push(`Write-Host '[${i + 1}/${MAINT.length}] ${m.slabel}...' -ForegroundColor Yellow`);
     lines.push(m.cmd);
@@ -153,13 +153,13 @@ function MaintenanceCard() {
     const b64 = toB64Utf8(buildMaintScript(true));
     return [
       `$b='${b64}'`,
-      `$p="$env:LOCALAPPDATA\\BoostPC"`,
+      `$p="$env:LOCALAPPDATA\\FrameForge"`,
       `New-Item -ItemType Directory -Force -Path $p | Out-Null`,
       `[IO.File]::WriteAllBytes("$p\\Manutenzione.ps1",[Convert]::FromBase64String($b))`,
       `$arg='-WindowStyle Hidden -ExecutionPolicy Bypass -File "'+$p+'\\Manutenzione.ps1"'`,
       `$a=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arg`,
       `$t=New-ScheduledTaskTrigger -Weekly -DaysOfWeek ${day} -At '${time}'`,
-      `Register-ScheduledTask -TaskName 'BoostPC-Manutenzione' -Action $a -Trigger $t -Description 'Manutenzione settimanale BoostPC' -Force`,
+      `Register-ScheduledTask -TaskName 'FrameForge-Manutenzione' -Action $a -Trigger $t -Description 'Manutenzione settimanale FrameForge' -Force`,
     ].join("; ");
   })();
 
@@ -167,7 +167,7 @@ function MaintenanceCard() {
     const blob = new Blob([buildMaintScript(true)], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = "BoostPC-Manutenzione.ps1"; document.body.appendChild(a); a.click(); a.remove();
+    a.href = url; a.download = "FrameForge-Manutenzione.ps1"; document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
     toast.success(t("commands.toast_download"));
   };
@@ -211,7 +211,7 @@ function MaintenanceCard() {
           <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-[11px] text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="maint-schedule-cmd">{scheduleCmd}</code>
           <CopyBtn text={scheduleCmd} testid="maint-schedule-copy" />
         </div>
-        <p className="text-[11px] text-zinc-600 mt-2">{t("commands.remove_schedule")} <span className="text-zinc-400">Unregister-ScheduledTask -TaskName 'BoostPC-Manutenzione' -Confirm:$false</span></p>
+        <p className="text-[11px] text-zinc-600 mt-2">{t("commands.remove_schedule")} <span className="text-zinc-400">Unregister-ScheduledTask -TaskName 'FrameForge-Manutenzione' -Confirm:$false</span></p>
       </div>
     </div>
   );

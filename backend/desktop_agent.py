@@ -1,6 +1,6 @@
 AGENT_SCRIPT = r'''#!/usr/bin/env python3
 """
-BOOST PC AI - Desktop Agent (Windows)
+FrameForge - Desktop Agent (Windows)
 Companion locale: ottimizzazioni REALI reversibili + benchmark prima/dopo +
 rilevamento hardware/salute per consigli AI su misura.
 Uso:  python boostpc_agent.py   (consigliato come Amministratore)
@@ -373,7 +373,7 @@ def show_compare(b, a):
 # ---------------- Reporting ----------------
 def _post(payload):
     if "__AGENT" in AGENT_TOKEN or not BACKEND_URL.startswith("http"):
-        print("\n[!] Token non configurato. Riscarica l'agent dal tuo account BOOST PC.")
+        print("\n[!] Token non configurato. Riscarica l'agent dal tuo account FrameForge.")
         return False
     req = urllib.request.Request(f"{BACKEND_URL}/api/agent/report-specs",
                                  data=json.dumps(payload).encode("utf-8"),
@@ -395,12 +395,12 @@ def send_all():
     for k, v in specs.items():
         print(f"    {k.upper():12}: {v or 'n/d'}")
     if _post({"data": specs, "health": health, "startup": startup}):
-        print("\n[OK] Dati inviati! Apri BOOST PC -> Il mio PC / Upgrade per analisi e consigli.")
+        print("\n[OK] Dati inviati! Apri FrameForge -> Il mio PC / Upgrade per analisi e consigli.")
 
 
 def send_benchmark(rec):
     if _post({"benchmark": rec}):
-        print("\n[OK] Benchmark inviato! Vedi il confronto in BOOST PC -> Il mio PC.")
+        print("\n[OK] Benchmark inviato! Vedi il confronto in FrameForge -> Il mio PC.")
 
 
 def benchmark_only():
@@ -604,7 +604,7 @@ def menu():
         "A": ("OTTIMIZZA TUTTO + benchmark prima/dopo", optimize_with_benchmark),
     }
     print("=" * 54)
-    print("   BOOST PC AI - Desktop Agent")
+    print("   FrameForge - Desktop Agent")
     print("=" * 54)
     if not is_admin():
         print("[!] Suggerito eseguire come Amministratore.")
