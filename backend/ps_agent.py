@@ -593,12 +593,15 @@ function Get-Fps {
   $lines = $raw -split "`r?`n" | Where-Object { $_ -ne '' }
   if (-not $lines -or $lines.Count -le $script:PM_ROWS) { return $null }
   $hdr = $lines[0] -split ','
-  $iApp = -1; $iMs = -1
+  $iApp = -1; $iMs = -1; $iLat = -1; $iLatFb = -1
   for ($k = 0; $k -lt $hdr.Count; $k++) {
     $h = $hdr[$k].Trim().ToLower()
     if ($h -eq 'application') { $iApp = $k }
     if ($h -like '*betweenpresents*') { $iMs = $k }
+    if ($h -like '*untildisplayed*') { $iLat = $k }
+    if ($h -like '*untilrendercomplete*') { $iLatFb = $k }
   }
+  if ($iLat -lt 0) { $iLat = $iLatFb }
   if ($iMs -lt 0) { $script:PM_ROWS = $lines.Count; return $null }
   $new = $lines[$script:PM_ROWS..($lines.Count - 1)]
   $script:PM_ROWS = $lines.Count
@@ -610,14 +613,18 @@ function Get-Fps {
     $app = if ($iApp -ge 0 -and $c.Count -gt $iApp) { $c[$iApp] } else { 'game' }
     try { $ms = [double]::Parse($c[$iMs], $inv) } catch { continue }
     if ($ms -le 0) { continue }
-    if (-not $byApp.ContainsKey($app)) { $byApp[$app] = @{ sum = 0.0; n = 0 } }
+    if (-not $byApp.ContainsKey($app)) { $byApp[$app] = @{ sum = 0.0; n = 0; lsum = 0.0; ln = 0 } }
     $byApp[$app].sum += $ms; $byApp[$app].n++
+    if ($iLat -ge 0 -and $c.Count -gt $iLat) {
+      try { $lat = [double]::Parse($c[$iLat], $inv); if ($lat -gt 0 -and $lat -lt 1000) { $byApp[$app].lsum += $lat; $byApp[$app].ln++ } } catch {}
+    }
   }
   if ($byApp.Count -eq 0) { return $null }
   $top = $byApp.GetEnumerator() | Sort-Object { $_.Value.n } -Descending | Select-Object -First 1
   $avg = $top.Value.sum / $top.Value.n
   if ($avg -le 0) { return $null }
-  return @{ fps = [int]([math]::Round(1000 / $avg)); game = ($top.Key -replace '\.exe$', '') }
+  $lat = if ($top.Value.ln -gt 0) { [int]([math]::Round($top.Value.lsum / $top.Value.ln)) } else { $null }
+  return @{ fps = [int]([math]::Round(1000 / $avg)); game = ($top.Key -replace '\.exe$', ''); latency_ms = $lat }
 }
 
 # ---------------- Tweak actions ----------------
@@ -1146,12 +1153,13 @@ if ($MODE -eq 'monitor') {
     while ($true) {
       $s = Get-TelemetrySample
       $f = Get-Fps
-      if ($f) { $s.fps = $f.fps; $s.game = $f.game; $noFpsCount = 0 }
+      if ($f) { $s.fps = $f.fps; $s.game = $f.game; if ($null -ne $f.latency_ms) { $s.latency_ms = $f.latency_ms }; $noFpsCount = 0 }
       elseif ($script:PM_ON) { $noFpsCount++; if ($noFpsCount -eq 10) { Show-FpsDiag } }
       Send-Telemetry $s
       $g = if ($s.ContainsKey('gpu_util')) { ("GPU {0}% {1}C {2}MHz" -f $s.gpu_util, $s.gpu_temp, $s.gpu_clock) } else { 'GPU n/d' }
       $ct = if ($s.ContainsKey('cpu_temp')) { ("{0}C" -f $s.cpu_temp) } else { '' }
-      $fp = if ($s.ContainsKey('fps')) { (" | {0} FPS ({1})" -f $s.fps, $s.game) } else { '' }
+      $lt = if ($s.ContainsKey('latency_ms')) { (" {0}ms" -f $s.latency_ms) } else { '' }
+      $fp = if ($s.ContainsKey('fps')) { (" | {0} FPS ({1}){2}" -f $s.fps, $s.game, $lt) } else { '' }
       Say ("   CPU {0}% {1} | RAM {2}% | {3}{4}" -f $s.cpu_util, $ct, $s.ram_used_pct, $g, $fp)
       Start-Sleep -Milliseconds 1000
     }

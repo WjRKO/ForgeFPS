@@ -356,3 +356,10 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - Nuova pagina `Network.jsx` (rotta /app/network) + voce menu "Rete & Bufferbloat" (Layout, icona Gauge). Mostra comando da eseguire, poll /net-result ogni 5s, badge Voto A-F colorato, bufferbloat +ms, metriche idle/down/up/jitter/loss con grade per fase, e consigli dinamici (SQM/fq_codel, Ethernet, upload bg, QoS BoostPC, server vicini, loss). i18n network.* + nav.network (it+en).
 - Verificato E2E: POST netresult {idle19,down78,up45} -> grade B, bloat +59ms; pagina render OK (idle Excellent, down Grade B, up Grade A). PS PARSE OK, frontend compiled, grade fn testata. Dati test rimossi.
 ### Prossimo (raccomandazione secca, resto): #3 Report Before/After cliente (bufferbloat+FPS+health prima/dopo, export immagine/PDF brandizzato) e #2 input lag reale (PresentMon latency + tweak Reflex/cap FPS).
+
+## Aggiornamento 2026-07-09 (23) — Input lag reale (PresentMon) + guida Reflex
+- ps_agent Get-Fps: ora estrae anche la latenza reale dalla colonna PresentMon `MsUntilDisplayed` (fallback `MsUntilRenderComplete`), media per l'app top, ritorna latency_ms (0<lat<1000). Monitor loop: aggiunge $s.latency_ms al campione telemetria + stampa "..ms" in console.
+- Live.jsx: nuovo Stat "Latenza" (last.latency_ms); accumulo sessione latSum/latN/latMax -> summary.latAvg/latMax; card guida "Reduce input lag (Reflex & low latency)" con 4 step azionabili (Reflex On+Boost, G-Sync+VSync+cap FPS, Low Latency Ultra, preset Competitive FPS). SessionSummary.jsx: metriche Avg/Max latency (mostrate se presenti).
+- i18n live.st_latency, session_lat_avg/max, reflex_* (it+en).
+- Verificato E2E: telemetria con latency_ms -> Stat 25ms, summary Avg 22/Max 30, card render OK. PS PARSE OK, frontend compiled. Dati test rimossi. NB: latenza = tempo present->schermo (proxy render-to-photon); il click-to-photon completo richiede Reflex/hardware. Misura reale solo su Windows con gioco attivo + admin.
+### Raccomandazione servizio boost - stato: #1 Bufferbloat FATTO, #2 Input lag FATTO. Resta #3 Report Before/After cliente (bufferbloat+FPS+health+latenza prima/dopo, export immagine/PDF brandizzato).

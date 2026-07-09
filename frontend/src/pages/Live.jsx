@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Cpu, Gauge, Thermometer, MemoryStick, Zap, Copy, Check, Radio, Gamepad2, Bell } from "lucide-react";
+import { Cpu, Gauge, Thermometer, MemoryStick, Zap, Copy, Check, Radio, Gamepad2, Bell, Timer, Sparkles } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -8,7 +8,7 @@ import { SessionSummary } from "./SessionSummary";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 
-const freshAcc = () => ({ startTs: null, lastTs: null, fps: [], cpuTempMax: 0, gpuTempMax: 0, cpuSum: 0, cpuN: 0, gpuSum: 0, gpuN: 0, games: {}, samples: 0 });
+const freshAcc = () => ({ startTs: null, lastTs: null, fps: [], cpuTempMax: 0, gpuTempMax: 0, cpuSum: 0, cpuN: 0, gpuSum: 0, gpuN: 0, latSum: 0, latN: 0, latMax: 0, games: {}, samples: 0 });
 
 const buildSummary = (a) => {
   if (a.samples === 0) return null;
@@ -25,6 +25,8 @@ const buildSummary = (a) => {
     cpuTempMax: a.cpuTempMax, gpuTempMax: a.gpuTempMax,
     cpuUtilAvg: a.cpuN ? Math.round(a.cpuSum / a.cpuN) : null,
     gpuUtilAvg: a.gpuN ? Math.round(a.gpuSum / a.gpuN) : null,
+    latAvg: a.latN ? Math.round(a.latSum / a.latN) : null,
+    latMax: a.latMax || null,
   };
 };
 
@@ -71,6 +73,7 @@ export default function Live() {
           if (s.cpu_temp != null && s.cpu_temp > b.cpuTempMax) b.cpuTempMax = s.cpu_temp;
           if (s.gpu_temp != null && s.gpu_temp > b.gpuTempMax) b.gpuTempMax = s.gpu_temp;
           if (s.fps != null && s.fps > 0) { b.fps.push(s.fps); if (s.game) b.games[s.game] = (b.games[s.game] || 0) + 1; }
+          if (s.latency_ms != null && s.latency_ms > 0) { b.latSum += s.latency_ms; b.latN++; if (s.latency_ms > b.latMax) b.latMax = s.latency_ms; }
         }
         setSummary(buildSummary(acc.current));
       } catch {}
@@ -130,9 +133,20 @@ export default function Live() {
         <Stat icon={MemoryStick} label={t("live.st_ram")} value={last.ram_used_pct} unit="%" accent="text-[#00FF66]" testid="stat-ram" />
         <Stat icon={MemoryStick} label={t("live.st_vram")} value={last.vram_used_pct} unit="%" accent="text-[#B388FF]" testid="stat-vram" />
         <Stat icon={Zap} label={t("live.st_gpu_power")} value={last.gpu_power} unit="W" accent="text-[#E5FF00]" testid="stat-gpu-power" />
+        <Stat icon={Timer} label={t("live.st_latency")} value={last.latency_ms} unit="ms" accent="text-[#00E0FF]" testid="stat-latency" />
       </div>
 
       {summary && <SessionSummary summary={summary} onReset={resetSession} />}
+
+      <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 mb-6" data-testid="reflex-card">
+        <div className="flex items-center gap-2 text-sm font-bold mb-1"><Sparkles size={16} className="text-[#00E0FF]" /> {t("live.reflex_title")}</div>
+        <p className="text-xs text-zinc-400 mb-3">{t("live.reflex_desc")}</p>
+        <ul className="space-y-1.5 text-sm text-zinc-300">
+          {["reflex_t1", "reflex_t2", "reflex_t3", "reflex_t4"].map((k) => (
+            <li key={k} className="flex items-start gap-2" data-testid={`reflex-${k}`}><span className="text-[#00E0FF] mt-0.5">→</span> {t(`live.${k}`)}</li>
+          ))}
+        </ul>
+      </div>
 
       <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 mb-6" data-testid="alert-settings">
         <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4"><Bell size={14} className="text-[#FF3B30]" /> {t("live.alert_title")}</div>

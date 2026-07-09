@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
-import { Share2, RotateCcw, Zap, Gamepad2, Thermometer, Cpu, Gauge, Clock, Loader2 } from "lucide-react";
+import { Share2, RotateCcw, Zap, Gamepad2, Thermometer, Cpu, Gauge, Clock, Loader2, Timer } from "lucide-react";
 
 const fmtDuration = (sec) => {
   const s = Math.max(0, Math.round(sec));
@@ -102,6 +102,12 @@ export const SessionSummary = ({ summary, onReset }) => {
           <Metric icon={Cpu} label={t("live.cpu_avg")} value={summary.cpuUtilAvg} unit="%" accent="text-[#E5FF00]" testid="sc-cpu-avg" />
           <Metric icon={Clock} label={t("live.session_duration")} value={fmtDuration(summary.durationSec)} unit="" accent="text-[#B388FF]" testid="sc-duration" />
         </div>
+        {summary.latAvg != null && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
+            <Metric icon={Timer} label={t("live.session_lat_avg")} value={summary.latAvg} unit="ms" accent="text-[#00E0FF]" testid="sc-lat-avg" />
+            <Metric icon={Timer} label={t("live.session_lat_max")} value={summary.latMax} unit="ms" accent="text-[#FF6B00]" testid="sc-lat-max" />
+          </div>
+        )}
 
         <div className="mt-5 pt-3 border-t border-[#1A1A24] flex items-center justify-between text-[10px] text-zinc-600">
           <span>boostpc · AI performance for gamers & streamers</span>
