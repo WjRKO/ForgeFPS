@@ -8,6 +8,7 @@ import {
 import { AreaChart, Area, LineChart, Line, ReferenceLine, ResponsiveContainer } from "recharts";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { usePageMeta } from "@/hooks/usePageMeta";
 
 const EASE = [0.16, 1, 0.3, 1];
 const fadeUp = {
@@ -266,6 +267,10 @@ function FeatureRow({ eyebrow, title, desc, bullets, accent, reverse, mockup }) 
 
 export default function Landing() {
   const { t } = useTranslation();
+  usePageMeta(
+    "FrameForge — AI Performance Command Center per gamer & streamer",
+    "FrameForge ottimizza il tuo PC gaming con consigli AI, telemetria live (FPS, temperature, input lag), build su misura e price tracking dei componenti. Gratis, in meno di un minuto.",
+  );
 
   const trust = [
     { v: t("landing.trust_fps_v"), l: t("landing.trust_fps_l"), c: "#00FF66" },

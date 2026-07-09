@@ -1,0 +1,16 @@
+# FrameForge
+
+> FrameForge is the AI performance command center for gamers and streamers. It optimizes Windows gaming PCs with AI-driven advice, detects hardware and computes a health score, applies real reversible OS tweaks, tracks live telemetry (FPS, CPU/GPU temps, input lag, network bufferbloat) and monitors component prices across stores like Amazon.
+
+## Core features
+
+- [AI Advisor](https://forgefps.dev/): Context-aware AI that knows your hardware and health score and recommends optimizations and upgrades.
+- [Live Telemetry](https://forgefps.dev/): Real-time FPS, CPU/GPU temperatures, input lag and network latency monitoring.
+- [PC Optimization](https://forgefps.dev/): Downloadable Windows agent (PowerShell) that applies real, 100% reversible tweaks.
+- [Build Generator](https://forgefps.dev/): Tailored streamer/gaming PC build recommendations by budget.
+- [Price Tracker](https://forgefps.dev/): Track component prices across stores with drop alerts.
+
+## Access
+
+- [Sign in](https://forgefps.dev/login): Existing user login.
+- [Create account](https://forgefps.dev/register): Free registration, active in under a minute.

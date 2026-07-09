@@ -1,13 +1,18 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Zap, Loader2 } from "lucide-react";
+import { Zap, Loader2, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { usePageMeta } from "@/hooks/usePageMeta";
 
 export default function Auth({ mode }) {
   const { t } = useTranslation();
   const isLogin = mode === "login";
+  usePageMeta(
+    isLogin ? t("auth.meta_login_title") : t("auth.meta_register_title"),
+    isLogin ? t("auth.meta_login_desc") : t("auth.meta_register_desc"),
+  );
   const { login, register, formatApiErrorDetail } = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState("");
@@ -74,6 +79,20 @@ export default function Auth({ mode }) {
               <>{t("auth.have_account")} <Link to="/login" data-testid="go-login" className="text-[#E5FF00] hover:underline">{t("auth.go_login")}</Link></>
             )}
           </div>
+        </div>
+
+        <div className="mt-6 border border-[#1A1A24] bg-[#0F0F12]/60 p-5">
+          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3">{t("auth.feat_title")}</div>
+          <ul className="space-y-2.5">
+            {[t("auth.feat1"), t("auth.feat2"), t("auth.feat3")].map((f, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-sm text-zinc-300 leading-relaxed">
+                <span className="w-4 h-4 mt-0.5 border border-[#E5FF00] flex items-center justify-center shrink-0">
+                  <Check size={10} className="text-[#E5FF00]" />
+                </span>
+                {f}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </div>
