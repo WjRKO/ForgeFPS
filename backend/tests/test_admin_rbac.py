@@ -8,7 +8,7 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://stream-gear-monitor.
 API = f"{BASE_URL}/api"
 
 ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASSWORD = "admin123"
+ADMIN_PASSWORD = "4zWK4o_xSw5prU-2b7w9dQ"
 
 
 def _register(email=None, password="Password123!"):

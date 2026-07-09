@@ -1,0 +1,39 @@
+{
+  "summary": "Backend verification of 3 pre-deploy security fixes (strong admin password, restricted CORS, scheduled price-check limit). Created /app/backend/tests/test_security_predeploy.py (15 tests, all PASS). Also re-ran admin RBAC regression suite with the new password (15/15 PASS). Old 'admin123' correctly rejected (401). Admin login with new strong password works and /auth/me returns role=admin. All core authenticated endpoints (products CRUD, pc-specs, pc-health, advisor stream, profiles, admin stats/users) verified functional and RBAC enforced (401 unauth, 403 non-admin).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "preview ingress (Cloudflare)", "issue": "Preview edge overrides backend CORS with 'access-control-allow-origin: *' AND 'allow-credentials: true' — browser-invalid combination and defeats the backend restriction *at the preview URL only*. Backend code (get_cors_origins) is correct as verified against localhost:8001 (rejects evil origins with 400 on preflight, echoes only ALLOWED_ORIGIN). This is an infra artifact of the preview environment, not a code bug; production deployment (which does not sit behind CF preview) will use the backend CORSMiddleware."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_security_predeploy.py",
+    "/app/backend/tests/test_admin_rbac.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/security_predeploy.xml",
+    "/app/test_reports/pytest/admin_rbac.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: If preview URL is used by a real browser for the frontend during pre-prod QA, the CF-level '*' + credentials combo means fetch()/XHR credentialed requests will be rejected by the browser. Confirm whether the frontend runs under this preview host or a different origin before shipping.",
+    "OPTIONAL: seed_admin correctly updates existing admin's password when it changes (verified by successful new-password login and rejection of the old one), but LOCKOUT_MINUTES (15) counter on login_attempts is not cleared on successful admin seed rotation; not a blocker but worth noting."
+  ],
+  "critical_code_review_comments": [
+    "auth.py seed_admin: good — no weak fallback, rotates password if env differs from stored hash.",
+    "server.py scheduled_price_check: limit(100) with .sort('updated_at', 1) confirmed present at line ~45; PRICE_CHECK_BATCH constant used (clean).",
+    "settings.get_cors_origins strips '*' entries and always includes FRONTEND_URL; correct and minimal.",
+    "auth cookies set with secure=False in set_auth_cookies — acceptable for preview HTTP local, but in production over HTTPS this should be secure=True (currently HTTPS traffic still gets non-Secure cookies). Consider making secure driven by env before deploy.",
+    "verify_password swallows all exceptions returning False — fine; but ensures no timing side channel is present since bcrypt.checkpw is constant-time."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (ADMIN_PASSWORD updated to strong pw)",
+    "/app/backend/tests/test_admin_rbac.py (ADMIN_PASSWORD updated to strong pw)",
+    "/app/backend/tests/test_security_predeploy.py (NEW - 15 tests)"
+  ],
+  "success_rate": {"backend": "100% (30/30 across security + rbac suites)", "frontend": "n/a (skipped as requested)"},
+  "test_credentials": "admin@boostpc.io / 4zWK4o_xSw5prU-2b7w9dQ",
+  "seed_data_creation": "Several disposable users created via /auth/register (sec_*, reg_*, rbac_*) and cleaned up where possible.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The three pre-deploy security blockers are verified fixed at the backend code level. If future testing agents run CORS tests against the external preview URL, expect access-control-allow-origin: '*' due to Cloudflare edge; test CORS against http://localhost:8001 instead (as done in test_security_predeploy.py::TestCORS). Also note: old-password test intentionally exercises the failed-login lockout counter — running the security suite repeatedly (>5x in 15 min from same IP) can lock out the admin account for 15 min; use a distinct email for stress runs."
+}

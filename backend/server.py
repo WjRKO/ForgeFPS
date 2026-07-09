@@ -1,3 +1,4 @@
+import os
 import logging
 from pathlib import Path
 
@@ -8,7 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from database import db, client
 from auth import build_auth_router, seed_admin
 from helpers import refresh_product_price
-from settings import FRONTEND_URL
+from settings import get_cors_origins
 from routers import advisor, builds, products, pc, push_routes, admin, profiles
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -30,16 +31,19 @@ async def root():
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL],
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+PRICE_CHECK_BATCH = 100
+
 
 async def scheduled_price_check():
     logger.info("Running scheduled price check...")
-    async for product in db.products.find({"url": {"$ne": ""}}):
+    cursor = db.products.find({"url": {"$ne": ""}}).sort("updated_at", 1).limit(PRICE_CHECK_BATCH)
+    async for product in cursor:
         try:
             await refresh_product_price(product)
         except Exception as e:
@@ -59,9 +63,11 @@ async def _ensure_indexes():
 
 
 def _write_test_credentials():
+    email = os.environ.get("ADMIN_EMAIL", "")
+    password = os.environ.get("ADMIN_PASSWORD", "")
     Path("/app/memory").mkdir(exist_ok=True)
     Path("/app/memory/test_credentials.md").write_text(
-        "# Test Credentials\n\n## Admin\n- Email: admin@boostpc.io\n- Password: admin123\n- Role: admin\n\n"
+        f"# Test Credentials\n\n## Admin\n- Email: {email}\n- Password: {password}\n- Role: admin\n\n"
         "## Auth Endpoints\n- POST /api/auth/register\n- POST /api/auth/login\n- GET /api/auth/me\n"
         "- POST /api/auth/logout\n- POST /api/auth/refresh\n")
 

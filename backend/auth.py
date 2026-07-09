@@ -1,4 +1,5 @@
 import os
+import logging
 import jwt
 import bcrypt
 import secrets
@@ -199,8 +200,11 @@ def build_auth_router(db):
 
 
 async def seed_admin(db):
-    email = os.environ.get("ADMIN_EMAIL", "admin@example.com")
-    password = os.environ.get("ADMIN_PASSWORD", "admin123")
+    email = os.environ.get("ADMIN_EMAIL")
+    password = os.environ.get("ADMIN_PASSWORD")
+    if not email or not password:
+        logging.warning("ADMIN_EMAIL/ADMIN_PASSWORD not set; skipping admin seed")
+        return
     existing = await db.users.find_one({"email": email})
     if existing is None:
         await db.users.insert_one({"email": email, "password_hash": hash_password(password),
