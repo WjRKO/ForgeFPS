@@ -363,3 +363,10 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - i18n live.st_latency, session_lat_avg/max, reflex_* (it+en).
 - Verificato E2E: telemetria con latency_ms -> Stat 25ms, summary Avg 22/Max 30, card render OK. PS PARSE OK, frontend compiled. Dati test rimossi. NB: latenza = tempo present->schermo (proxy render-to-photon); il click-to-photon completo richiede Reflex/hardware. Misura reale solo su Windows con gioco attivo + admin.
 ### Raccomandazione servizio boost - stato: #1 Bufferbloat FATTO, #2 Input lag FATTO. Resta #3 Report Before/After cliente (bufferbloat+FPS+health+latenza prima/dopo, export immagine/PDF brandizzato).
+
+### 2026-07-09 - Pre-deploy security hardening (FATTO, testato backend 30/30)
+- Password admin debole rimossa: `auth.py` seed_admin richiede ADMIN_EMAIL/ADMIN_PASSWORD da env (no fallback admin123), ruota la pwd se cambia. .env preview usa password forte. Utente imposterà la propria pwd in fase di deploy via env.
+- CORS: `settings.get_cors_origins()` parsa CORS_ORIGINS (scarta '*') + FRONTEND_URL; `server.py` usa la lista invece del wildcard. Verificato: origini estranee rifiutate a livello app (il '*' sul preview URL è artefatto dell'ingress CF, non del codice).
+- scheduled_price_check: aggiunto `.sort('updated_at',1).limit(100)` (PRICE_CHECK_BATCH) per evitare OOM/rate-limit.
+- Cookie auth: `secure` ora guidato da FRONTEND_URL https (COOKIE_SECURE) -> Secure in produzione.
+- test_credentials.md ora scritto dinamicamente da env. Nuova suite /app/backend/tests/test_security_predeploy.py (15 test).

@@ -13,6 +13,7 @@ ACCESS_MINUTES = 15
 REFRESH_DAYS = 7
 MAX_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
+COOKIE_SECURE = os.environ.get("FRONTEND_URL", "").startswith("https")
 
 
 def get_jwt_secret() -> str:
@@ -46,9 +47,9 @@ def create_refresh_token(user_id: str) -> str:
 
 
 def set_auth_cookies(response: Response, access: str, refresh: str):
-    response.set_cookie("access_token", access, httponly=True, secure=False,
+    response.set_cookie("access_token", access, httponly=True, secure=COOKIE_SECURE,
                         samesite="lax", max_age=ACCESS_MINUTES * 60, path="/")
-    response.set_cookie("refresh_token", refresh, httponly=True, secure=False,
+    response.set_cookie("refresh_token", refresh, httponly=True, secure=COOKIE_SECURE,
                         samesite="lax", max_age=REFRESH_DAYS * 86400, path="/")
 
 
@@ -161,7 +162,7 @@ def build_auth_router(db):
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")
             access = create_access_token(str(user["_id"]), user["email"])
-            response.set_cookie("access_token", access, httponly=True, secure=False,
+            response.set_cookie("access_token", access, httponly=True, secure=COOKIE_SECURE,
                                 samesite="lax", max_age=ACCESS_MINUTES * 60, path="/")
             return {"ok": True}
         except jwt.InvalidTokenError:
