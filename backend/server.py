@@ -29,6 +29,11 @@ async def root():
     return {"message": "FrameForge online"}
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_cors_origins(),

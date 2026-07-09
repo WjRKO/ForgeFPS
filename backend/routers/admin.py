@@ -29,12 +29,16 @@ def build(get_current_user):
     @r.get("/users")
     async def list_users(admin: dict = Depends(require_admin)):
         users = await db.users.find({}, {"password_hash": 0}).sort("created_at", -1).to_list(1000)
+        product_counts = {d["_id"]: d["count"] async for d in db.products.aggregate(
+            [{"$group": {"_id": "$user_id", "count": {"$sum": 1}}}])}
+        build_counts = {d["_id"]: d["count"] async for d in db.builds.aggregate(
+            [{"$group": {"_id": "$user_id", "count": {"$sum": 1}}}])}
         out = []
         for u in users:
             pub = _public(u)
             uid = str(u["_id"])
-            pub["tracked_products"] = await db.products.count_documents({"user_id": uid})
-            pub["builds"] = await db.builds.count_documents({"user_id": uid})
+            pub["tracked_products"] = product_counts.get(uid, 0)
+            pub["builds"] = build_counts.get(uid, 0)
             out.append(pub)
         return out
 
