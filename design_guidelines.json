@@ -1,211 +1,102 @@
 {
-  "project_meta": {
-    "app_type": "Authenticated SaaS Dashboard",
-    "theme_archetype": "Tactical/HUD Performance",
-    "aesthetic": "Pure dark, sharp edges, high-contrast, technical precision",
-    "file_extension": ".js"
+  "project_context": {
+    "name": "ForgeFPS",
+    "type": "AI Performance Command Center",
+    "theme": "Dark Mode Only (Performance Pro / Cyber-Tactical)",
+    "aesthetic": "Monospace/tech 'command console' vibe, near-black, neon accents, sharp edges.",
+    "audience": "Gamers, Streamers, Power Users"
   },
-  "global_design_tokens": {
-    "colors": {
-      "background": {
-        "page": "#050505",
-        "panel": "#0F0F12",
-        "glass": "rgba(15, 15, 18, 0.8)"
-      },
-      "border": {
-        "subtle": "#1A1A24",
-        "strong": "#2A2A35",
-        "focus": "#E5FF00"
-      },
-      "accent": {
-        "primary_volt": "#E5FF00",
-        "success_green": "#00FF66",
-        "info_cyan": "#00E0FF",
-        "warning_orange": "#FF6B00",
-        "danger_red": "#FF3B30"
-      },
-      "text": {
-        "primary": "#FFFFFF",
-        "secondary": "#A0A0AB",
-        "muted": "#70707B"
-      }
+  "typography": {
+    "headings": "Chakra Petch, Rajdhani, or Space Mono. (Technical, aggressive, sharp).",
+    "body": "Inter or DM Sans (highly readable at small sizes for data).",
+    "mono": "JetBrains Mono or Fira Code for all command console text, eyebrows, metrics, and terminal lines.",
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight uppercase",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight uppercase",
+      "eyebrow": "font-mono text-sm tracking-[0.2em] uppercase text-[#E5FF00]"
+    }
+  },
+  "colors": {
+    "background": {
+      "main": "#050505",
+      "panel": "#0F0F12",
+      "panel_hover": "#1A1A20"
     },
-    "typography": {
-      "headings": {
-        "fontFamily": "Outfit, 'JetBrains Mono', sans-serif",
-        "h1": "text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter text-white",
-        "h2": "text-2xl md:text-3xl font-bold tracking-tight text-white",
-        "h3": "text-xl md:text-2xl font-semibold tracking-tight text-white",
-        "h4": "text-lg font-medium tracking-tight text-white"
-      },
-      "body": {
-        "fontFamily": "Inter, sans-serif",
-        "base": "text-base text-gray-300 leading-relaxed",
-        "sm": "text-sm text-gray-400"
-      },
-      "micro": {
-        "fontFamily": "'JetBrains Mono', monospace",
-        "eyebrow": "text-xs md:text-sm text-primary_volt uppercase tracking-[0.2em] font-mono",
-        "label": "text-xs text-gray-500 uppercase tracking-wider font-mono",
-        "code": "font-mono text-sm bg-[#1A1A24] px-1 py-0.5"
-      }
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#A1A1AA",
+      "muted": "#71717A"
     },
-    "spacing": {
-      "panel_padding": "p-6 md:p-8",
-      "section_gap": "gap-8 md:gap-12",
-      "grid_gap": "gap-4 md:gap-6"
+    "accent": {
+      "volt": "#E5FF00",
+      "neon_green": "#00FF66",
+      "cyan": "#00E0FF",
+      "red": "#FF3B30"
     },
     "borders": {
-      "radius": "rounded-none",
-      "width": "border border-t-2"
+      "default": "#27272A",
+      "focus": "#E5FF00",
+      "glow": "rgba(229, 255, 0, 0.2)"
     }
   },
-  "css_utilities_to_add": {
-    "file": "/app/frontend/src/index.css",
-    "utilities": [
-      "@keyframes shimmer { 100% { transform: translateX(100%); } }",
-      ".animate-shimmer { animation: shimmer 2s infinite; }",
-      ".text-glow-volt { text-shadow: 0 0 10px rgba(229, 255, 0, 0.5); }",
-      ".border-glow-volt { box-shadow: inset 0 0 0 1px #E5FF00, 0 0 15px rgba(229, 255, 0, 0.2); }",
-      ".hud-panel { background-color: #0F0F12; border: 1px solid #1A1A24; position: relative; }",
-      ".hud-panel::before { content: ''; position: absolute; top: 0; left: 0; width: 8px; height: 1px; background-color: #E5FF00; }",
-      ".hud-panel::after { content: ''; position: absolute; top: 0; left: 0; width: 1px; height: 8px; background-color: #E5FF00; }"
-    ]
+  "visual_enhancers": {
+    "grids": "Use a subtle grid background: bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]",
+    "surfaces": "Sharp edges (rounded-none). Panels MUST have a 1px solid border (border-[#27272A]). Avoid glassmorphism blur unless for sticky headers. No soft drop shadows.",
+    "shadows": "Replace soft shadows with 'Inner Glow' highlights (shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]) or sharp 1px solid drop shadows.",
+    "decorations": "Use `//` prefix for eyebrows (e.g., `// SYSTEM STATUS`). Use brackets for badges `[ OK ]`."
   },
-  "component_system": {
-    "PageHeader": {
-      "structure": "Container > Eyebrow > Title > Optional Action Slot",
-      "classes": "flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8 md:mb-12 pb-6 border-b border-[#1A1A24]",
-      "eyebrow_classes": "text-[#E5FF00] uppercase tracking-[0.2em] font-mono text-xs md:text-sm mb-2 block",
-      "title_classes": "text-3xl md:text-4xl lg:text-5xl font-black text-white tracking-tighter uppercase",
-      "usage": "Top of every main page."
+  "layouts": {
+    "general": "High-density, modular grid layouts resembling a command center or terminal. Padding should be generous within main containers (p-8 to p-12) but internal components can be dense.",
+    "bento": "Use bento grid protocol (High Density) for data dashboards and features. gap-4 or gap-6.",
+    "alignment": "Content inside should be left-aligned and structured. Never center-align paragraphs. Hero text left-aligned."
+  },
+  "motion": {
+    "hover": "Slight fast scale or border color shift to Volt Yellow. No bouncy springs.",
+    "scan_demo": "Simulate console logs using framer-motion stagger. Use a 'laser sweep' animation (a vertical line scanning down the panel) for the 'scanning' state.",
+    "transitions": "Fast, precise. transition-colors duration-150 ease-out."
+  },
+  "components": {
+    "buttons": {
+      "primary": "Sharp edges (rounded-none), flat background. bg-[#E5FF00] text-black font-semibold uppercase tracking-wide hover:bg-[#D4E800].",
+      "secondary": "bg-transparent border border-[#27272A] text-white uppercase hover:border-[#E5FF00] hover:text-[#E5FF00]."
     },
-    "StatCard": {
-      "classes": "hud-panel rounded-none p-6 flex flex-col gap-2 hover:border-[#2A2A35] transition-colors group",
-      "label_classes": "text-[#70707B] uppercase tracking-wider font-mono text-xs",
-      "value_classes": "text-3xl font-black text-white group-hover:text-glow-volt transition-all",
-      "trend_up": "text-[#00FF66] font-mono text-sm flex items-center gap-1",
-      "trend_down": "text-[#FF3B30] font-mono text-sm flex items-center gap-1"
+    "console_window": "A terminal-like panel with a header. Content is mono-spaced with glowing text highlights for metrics.",
+    "trust_badges": "Minimalist mono text with checkmarks. e.g., `[ ✓ ] SHA-256 VERIFIED`. text-sm font-mono text-[#00FF66].",
+    "cards": "border border-[#27272A] bg-[#0F0F12] p-6 hover:border-[#404040] transition-colors rounded-none"
+  },
+  "pages": {
+    "homepage": {
+      "hero": "Technical hero: 'Find FPS bottlenecks. Optimize latency. Improve gaming performance safely.' CTA: 'Run Free Scan'. Left aligned.",
+      "secure_installer": "Replace old terminal block with Secure Installer Card. Show download button, version, and Trust Badges (Signed by ForgeFPS, SHA256 verified, Secure installer, Transparent updates).",
+      "interactive_demo": "Terminal UI simulating a scan. User clicks 'Scan'. Shows RTX 4070 + Ryzen 7 5800X. Animates scanning state. Results: ⚠ Background processes, ⚠ NVIDIA latency settings, ⚠ OBS config. Improvement: +12-18 FPS, -8ms latency. CTA: 'Analyze my PC'."
     },
-    "SectionCard": {
-      "classes": "bg-[#0F0F12] border border-[#1A1A24] p-6 md:p-8 rounded-none flex flex-col gap-6"
+    "security": {
+      "layout": "Technical documentation style. Architecture diagram showing Windows Agent -> Encrypted API -> AI Analysis. Bento grid for Trust Badges (Local-first, No password collection, No telemetry selling, Signed binaries, Transparent changelog)."
     },
-    "Badge": {
-      "base": "px-2 py-1 font-mono text-xs uppercase border rounded-none tracking-widest",
-      "variants": {
-        "volt": "bg-[#E5FF00]/10 text-[#E5FF00] border-[#E5FF00]/30",
-        "green": "bg-[#00FF66]/10 text-[#00FF66] border-[#00FF66]/30",
-        "cyan": "bg-[#00E0FF]/10 text-[#00E0FF] border-[#00E0FF]/30",
-        "red": "bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/30",
-        "neutral": "bg-[#1A1A24] text-[#A0A0AB] border-[#2A2A35]"
-      }
+    "privacy_telemetry": {
+      "layout": "Two columns: 'COLLECTED' (Green checks) vs 'NEVER COLLECTED' (Red crosses). Section explaining 'LOCAL ONLY' mode. Tiering comparison (Free, Cloud AI, Pro)."
     },
-    "EmptyState": {
-      "container": "flex flex-col items-center justify-center p-12 md:p-24 border border-dashed border-[#2A2A35] bg-[#0F0F12]/50 text-center gap-4",
-      "icon_wrapper": "p-4 bg-[#1A1A24] border border-[#2A2A35] mb-2 text-[#70707B]",
-      "title": "text-xl font-bold text-white uppercase",
-      "description": "text-[#A0A0AB] text-sm max-w-md font-mono",
-      "cta": "mt-4 btn-ghost border border-[#E5FF00] text-[#E5FF00] hover:bg-[#E5FF00] hover:text-black rounded-none px-6 py-2 uppercase font-mono text-sm tracking-widest transition-all"
+    "changelog": {
+      "layout": "Timeline view. Version & Date on left. Added, Fixed, Changed with distinct color tags on right."
     },
-    "Skeleton": {
-      "base": "bg-[#1A1A24] relative overflow-hidden rounded-none",
-      "shimmer_layer": "before:absolute before:inset-0 before:-translate-x-full before:animate-shimmer before:bg-gradient-to-r before:from-transparent before:via-white/5 before:to-transparent",
-      "variants": {
-        "card": "h-32 w-full",
-        "row": "h-12 w-full",
-        "title": "h-8 w-1/3 mb-4"
-      }
-    },
-    "ChatBubble": {
-      "ai": "bg-[#0F0F12] border border-[#2A2A35] border-l-[#E5FF00] border-l-2 p-6 rounded-none shadow-lg text-gray-300 font-mono text-sm max-w-[85%]",
-      "user": "bg-[#1A1A24] border border-[#2A2A35] p-4 rounded-none text-white max-w-[75%] ml-auto text-sm",
-      "typing_indicator": "flex gap-1 items-center h-6 px-2 text-[#E5FF00]"
-    },
-    "SuggestionChip": {
-      "classes": "border border-[#2A2A35] bg-transparent hover:bg-[#1A1A24] hover:border-[#E5FF00] text-[#A0A0AB] hover:text-[#E5FF00] px-4 py-2 rounded-none text-xs font-mono uppercase tracking-widest transition-all cursor-pointer text-left"
-    },
-    "Table": {
-      "container": "w-full overflow-auto border border-[#1A1A24]",
-      "header": "bg-[#1A1A24] text-[#A0A0AB] font-mono text-xs uppercase tracking-widest text-left",
-      "th": "px-6 py-4 font-normal",
-      "row": "border-b border-[#1A1A24] hover:bg-[#1A1A24]/50 transition-colors bg-[#0F0F12]",
-      "td": "px-6 py-4 text-sm text-gray-300 whitespace-nowrap"
+    "pricing": {
+      "layout": "3 tiers (FREE, PRO €9.99/mo, CREATOR €19.99/mo). Highlight PRO with Volt border. Feature lists with monospace ticks."
     }
   },
-  "data_viz_recharts": {
-    "grid": {
-      "strokeDasharray": "3 3",
-      "stroke": "#1A1A24",
-      "vertical": false
-    },
-    "axis": {
-      "stroke": "#2A2A35",
-      "tick": { "fill": "#70707B", "fontSize": 12, "fontFamily": "monospace" }
-    },
-    "tooltip": {
-      "contentStyle": {
-        "backgroundColor": "#0F0F12",
-        "borderColor": "#E5FF00",
-        "borderRadius": 0,
-        "fontFamily": "monospace",
-        "color": "#FFF"
-      },
-      "itemStyle": { "color": "#E5FF00" }
-    },
-    "lines": {
-      "primary": "#E5FF00",
-      "secondary": "#00E0FF",
-      "strokeWidth": 2,
-      "activeDot": { "r": 6, "fill": "#E5FF00", "stroke": "#050505", "strokeWidth": 2 }
-    }
-  },
-  "page_layouts": {
-    "Navbar": {
-      "layout": "Sticky top, backdrop-blur-md bg-[#0F0F12]/90 border-b border-[#2A2A35]",
-      "nav_links": "font-mono uppercase text-sm tracking-widest text-[#A0A0AB] hover:text-white transition-colors relative px-2 py-4",
-      "nav_active": "text-[#E5FF00] after:absolute after:bottom-0 after:left-0 after:w-full after:h-[2px] after:bg-[#E5FF00]"
-    },
-    "Dashboard": {
-      "layout": "Bento Grid: Base grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-6",
-      "blocks": [
-        "Health Score (col-span-full md:col-span-2 row-span-2) - Features large circular SVG Gauge with #00FF66 or #E5FF00 stroke.",
-        "Quick Actions (col-span-1) - Square tiles using tile-hover.",
-        "Summary Stats (col-span-2) - Row of StatCards.",
-        "Recent Activity (col-span-full) - Wide section using Table component."
-      ]
-    },
-    "MyPC": {
-      "layout": "Tabs top navigation (border-b border-[#2A2A35], tab active is border-b-2 border-[#E5FF00]). Below tabs, grid layout for telemetry.",
-      "telemetry": "Cards displaying live data. Use colored gauges or status bars. CPU/GPU cards use #00E0FF or #FF3B30 based on temps."
-    },
-    "Tracker": {
-      "layout": "Grid of SectionCards. grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6.",
-      "card_content": "Header (Product name + Status Badge), Body (Large Current Price + Sparkline chart), Footer (Target progress bar using #E5FF00)."
-    },
-    "AI_Advisor": {
-      "layout": "Terminal-style chat interface. Max-width container (max-w-4xl). Main scrollable area for ChatBubbles. Sticky bottom input area.",
-      "input_area": "bg-[#0F0F12] border-t border-[#2A2A35] p-4. Input field: bg-[#1A1A24] border border-[#2A2A35] focus:border-[#E5FF00] rounded-none text-white font-mono p-4 w-full outline-none."
-    }
-  },
-  "motion_guidelines": {
-    "entrance": "framer-motion stagger children. container variants with staggerChildren: 0.1. Item variants: hidden { opacity: 0, y: 10 } visible { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 100 } }.",
-    "hover": "Scale transforms are FORBIDDEN (no bouncing). Use border color changes, text glows, and background shifts. e.g., hover:border-[#E5FF00].",
-    "prefers_reduced_motion": "Ensure framer-motion respects reduced motion natively or via useReducedMotion hook."
-  },
-  "accessibility": {
-    "focus": "All focusable elements must have focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5FF00] focus-visible:ring-offset-2 focus-visible:ring-offset-[#050505]",
-    "contrast": "Text must meet APCA or WCAG AA. Use #A0A0AB for muted text against #0F0F12 (meets 4.5:1).",
-    "aria": "Include aria-live=\"polite\" for telemetry updates and AI chat responses."
+  "bilingual_guidelines": {
+    "instructions": "Implement a simple dictionary-based i18n for IT/EN. Ensure UI handles longer Italian strings without breaking grid layouts."
   },
   "instructions_to_main_agent": [
-    "CRITICAL: Do NOT change any functionality, routing, or existing data-testids.",
-    "CRITICAL: Use .js extensions for React files. Do NOT create .tsx files.",
-    "CRITICAL: ALL text must use the react-i18next `t()` function. No hardcoded English or Italian text.",
-    "Add the new utilities defined in `css_utilities_to_add` to `/app/frontend/src/index.css`.",
-    "Ensure all new interactive elements have `data-testid` attributes in kebab-case (e.g., `data-testid=\"ai-chat-input\"`).",
-    "For icons, import exclusively from `lucide-react`.",
-    "Apply generous spacing. Panels should pad content with at least p-6 or p-8.",
-    "Maintain the strict 'Tactical HUD' aesthetic: NO rounded corners anywhere (`rounded-none`).",
-    "Do NOT touch the landing page route/components."
+    "DO NOT install Shadcn components if they use heavy rounded corners. If you do, override rounded-md/lg to rounded-none.",
+    "Focus on building the 6 specified pages/sections with Framer Motion for the Interactive Demo Scan.",
+    "Use Phosphor Icons or Lucide for precise, technical icons.",
+    "No remote installer scripts (no irm/iex). Implement the Secure Installer presentation card."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You MUST NOT apply universal transition. Eg: transition: all. Always add transitions for specific interactive elements.",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file.",
+    "All interactive and key informational elements MUST include a data-testid attribute to facilitate robust automated testing.",
+    "NEVER use fully transparent backgrounds for headers or overlays that have content underneath.",
+    "Preserve the 'Command Console' vibe: uppercase monospace eyebrows, sharp edges, dark backgrounds with high-contrast neon accents."
   ]
 }
