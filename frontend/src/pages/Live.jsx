@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Cpu, Gauge, Thermometer, MemoryStick, Zap, Copy, Check, Radio, Gamepad2, Bell, Timer, Sparkles } from "lucide-react";
+import { Cpu, Gauge, Thermometer, MemoryStick, Zap, Radio, Gamepad2, Bell, Timer, Sparkles } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { SessionSummary } from "./SessionSummary";
-
-const BACKEND = process.env.REACT_APP_BACKEND_URL;
+import { SecureRunBlock } from "@/components/SecureRunBlock";
 
 const freshAcc = () => ({ startTs: null, lastTs: null, fps: [], cpuTempMax: 0, gpuTempMax: 0, cpuSum: 0, cpuN: 0, gpuSum: 0, gpuN: 0, latSum: 0, latN: 0, latMax: 0, games: {}, samples: 0 });
 
@@ -43,7 +42,6 @@ export default function Live() {
   const { t } = useTranslation();
   const [data, setData] = useState({ samples: [], live: false });
   const [token, setToken] = useState("");
-  const [copied, setCopied] = useState(false);
   const [alerts, setAlerts] = useState({ enabled: true, cpu_max: 90, gpu_max: 85 });
   const [summary, setSummary] = useState(null);
   const acc = useRef(freshAcc());
@@ -93,11 +91,6 @@ export default function Live() {
   const chart = data.samples.map((s, i) => ({
     i, cpu: s.cpu_util ?? null, gpu: s.gpu_util ?? null, cpuT: s.cpu_temp ?? null, gpuT: s.gpu_temp ?? null, fps: s.fps ?? null,
   }));
-  const cmd = `irm "${BACKEND}/api/agent/script?t=${token || "IL_TUO_TOKEN"}&mode=monitor" | iex`;
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(cmd); } catch { const t = document.createElement("textarea"); t.value = cmd; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
-    setCopied(true); toast.success("Comando copiato!"); setTimeout(() => setCopied(false), 2000);
-  };
 
   return (
     <div className="max-w-5xl mx-auto fade-up" data-testid="live-page">
@@ -115,12 +108,7 @@ export default function Live() {
         <div className="bg-[#0F0F12] border border-[#E5FF00]/40 p-5 mb-6">
           <p className="text-sm text-zinc-300 mb-1 font-semibold">{t("live.start_title")}</p>
           <p className="text-xs text-zinc-500 mb-3">{t("live.start_desc")}</p>
-          <div className="flex items-stretch gap-2">
-            <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-xs text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="monitor-cmd">{cmd}</code>
-            <button data-testid="monitor-copy" onClick={copy} className="shrink-0 flex items-center gap-1 border border-[#2A2A35] px-3 hover:border-[#E5FF00] transition-colors text-xs">
-              {copied ? <Check size={14} className="text-[#00FF66]" /> : <Copy size={14} />}
-            </button>
-          </div>
+          <SecureRunBlock token={token} mode="monitor" testid="monitor-run-cmd" />
         </div>
       )}
 

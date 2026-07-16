@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Gauge, Loader2, Swords, Copy, Check, Rocket, MonitorDown, Search, Sparkles, RefreshCw, Settings2, Save } from "lucide-react";
+import { Gauge, Loader2, Swords, Rocket, MonitorDown, Search, Sparkles, RefreshCw, Settings2, Save } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
+import { SecureRunBlock } from "@/components/SecureRunBlock";
 
-const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const RES = ["1080p", "1440p", "4K"];
 
 const APP_GROUPS = [
@@ -22,7 +22,6 @@ export default function Games() {
   const [games, setGames] = useState([]);
   const [specs, setSpecs] = useState(null);
   const [token, setToken] = useState("");
-  const [copied, setCopied] = useState(false);
 
   const [game, setGame] = useState("");
   const [res, setRes] = useState("1440p");
@@ -39,7 +38,6 @@ export default function Games() {
   const [runningAt, setRunningAt] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [catalog, setCatalog] = useState([]);
-  const [recCopied, setRecCopied] = useState(false);
 
   const loadGames = async () => {
     try { const { data } = await api.get("/games"); setGames(data.games || []); } catch {}
@@ -68,11 +66,6 @@ export default function Games() {
     return templates.find((t) => (t.match || []).some((m) => g.includes(m)))
       || templates.find((t) => t.id === "tpl_balanced") || null;
   }, [game, templates]);
-  const recCmd = recTpl ? `irm "${BACKEND}/api/agent/script?t=${token || "IL_TUO_TOKEN"}&mode=optimize&profile=${recTpl.id}" | iex` : "";
-  const copyRec = async () => {
-    try { await navigator.clipboard.writeText(recCmd); } catch { const el = document.createElement("textarea"); el.value = recCmd; document.body.appendChild(el); el.select(); document.execCommand("copy"); el.remove(); }
-    setRecCopied(true); toast.success(t("games.rec_copied")); setTimeout(() => setRecCopied(false), 2000);
-  };
 
   const saveConfig = async () => {
     setSavingCfg(true);
@@ -83,13 +76,6 @@ export default function Games() {
   };
 
   const hasSpecs = !!specs?.data?.cpu;
-  const prematchCmd = `irm "${BACKEND}/api/agent/script?t=${token || "IL_TUO_TOKEN"}&mode=prematch" | iex`;
-  const syncCmd = `irm "${BACKEND}/api/agent/script?t=${token || "IL_TUO_TOKEN"}&mode=sync" | iex`;
-
-  const copyCmd = async (text) => {
-    try { await navigator.clipboard.writeText(text); } catch { const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
-    setCopied(true); toast.success(t("games.cmd_copied")); setTimeout(() => setCopied(false), 2000);
-  };
 
   const estimate = async (g) => {
     const name = (g ?? game).trim();
@@ -116,13 +102,7 @@ export default function Games() {
       <div className="bg-gradient-to-br from-[#E5FF00]/10 to-transparent border border-[#E5FF00]/40 p-5 mb-5" data-testid="prematch-card">
         <div className="flex items-center gap-2 text-sm font-bold mb-1 text-[#E5FF00]"><Rocket size={16} /> {t("games.prematch_title")}</div>
         <p className="text-xs text-zinc-400 mb-3 leading-relaxed">{t("games.prematch_desc")}</p>
-        <div className="flex items-stretch gap-2">
-          <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-xs text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="prematch-cmd">{prematchCmd}</code>
-          <button onClick={() => copyCmd(prematchCmd)} data-testid="prematch-copy"
-            className="shrink-0 flex items-center justify-center border border-[#2A2A35] px-3 hover:border-[#E5FF00] transition-colors">
-            {copied ? <Check size={14} className="text-[#00FF66]" /> : <Copy size={14} />}
-          </button>
-        </div>
+        <SecureRunBlock token={token} mode="prematch" testid="prematch-run-cmd" />
 
         <button onClick={() => setShowConfig((v) => !v)} data-testid="prematch-config-toggle"
           className="mt-3 inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-[#E5FF00] transition-colors">
@@ -265,12 +245,7 @@ export default function Games() {
             ))}
             {recTpl.tweak_ids.length > 8 && <span className="text-[11px] text-zinc-600 px-1">+{recTpl.tweak_ids.length - 8}</span>}
           </div>
-          <div className="flex items-stretch gap-2">
-            <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-[11px] text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="rec-preset-cmd">{recCmd}</code>
-            <button onClick={copyRec} data-testid="rec-preset-copy" className="shrink-0 flex items-center justify-center border border-[#2A2A35] px-3 hover:border-[#00E0FF] transition-colors">
-              {recCopied ? <Check size={14} className="text-[#00FF66]" /> : <Copy size={14} />}
-            </button>
-          </div>
+          <SecureRunBlock token={token} mode="optimize" profile={recTpl.id} testid="rec-preset-run" />
           <p className="text-[11px] text-zinc-500 mt-2">{t("games.rec_hint")}</p>
         </div>
       )}

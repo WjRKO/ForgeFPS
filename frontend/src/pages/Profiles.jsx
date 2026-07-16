@@ -1,19 +1,12 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Gamepad2, Plus, Trash2, Copy, Check, Save, X, Zap } from "lucide-react";
+import { Gamepad2, Plus, Trash2, Save, X, Zap } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
-
-const BACKEND = process.env.REACT_APP_BACKEND_URL;
+import { SecureRunBlock } from "@/components/SecureRunBlock";
 
 function ProfileCard({ p, catalog, token, onDelete }) {
-  const [copied, setCopied] = useState(false);
   const names = p.tweak_ids.map((id) => catalog.find((c) => c.id === id)?.name).filter(Boolean);
-  const cmd = `irm "${BACKEND}/api/agent/script?t=${token || "IL_TUO_TOKEN"}&mode=optimize&profile=${p.id}" | iex`;
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(cmd); } catch { const t = document.createElement("textarea"); t.value = cmd; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
-    setCopied(true); toast.success("Comando copiato! Esegui PowerShell come Amministratore."); setTimeout(() => setCopied(false), 2000);
-  };
   return (
     <div className="bg-[#0F0F12] border border-[#2A2A35] p-5" data-testid={`profile-${p.id}`}>
       <div className="flex items-center justify-between mb-3">
@@ -30,12 +23,7 @@ function ProfileCard({ p, catalog, token, onDelete }) {
         {names.slice(0, 8).map((n, i) => <span key={i} className="text-[11px] bg-black border border-[#1A1A24] px-2 py-0.5 text-zinc-400">{n}</span>)}
         {names.length > 8 && <span className="text-[11px] text-zinc-600 px-1 py-0.5">+{names.length - 8}</span>}
       </div>
-      <div className="flex items-stretch gap-2">
-        <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2 text-[11px] text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid={`profile-cmd-${p.id}`}>{cmd}</code>
-        <button data-testid={`profile-copy-${p.id}`} onClick={copy} className="shrink-0 flex items-center gap-1 border border-[#2A2A35] px-3 hover:border-[#E5FF00] transition-colors text-xs">
-          {copied ? <Check size={14} className="text-[#00FF66]" /> : <Copy size={14} />}
-        </button>
-      </div>
+      <SecureRunBlock token={token} mode="optimize" profile={p.id} testid={`profile-run-${p.id}`} />
     </div>
   );
 }

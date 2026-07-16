@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Gauge, Copy, Check, Wifi, Activity, ArrowDownToLine, ArrowUpToLine, Waves, AlertTriangle, ShieldCheck } from "lucide-react";
-import { toast } from "sonner";
+import { Gauge, Wifi, Activity, ArrowDownToLine, ArrowUpToLine, Waves, AlertTriangle, ShieldCheck } from "lucide-react";
 import api from "@/lib/api";
 import { PageHeader, SkeletonCard } from "@/components/hud";
-
-const BACKEND = process.env.REACT_APP_BACKEND_URL;
+import { SecureRunBlock } from "@/components/SecureRunBlock";
 
 const GRADE_COLOR = {
   "A+": "#00FF66", "A": "#00FF66", "B": "#E5FF00", "C": "#FF9500", "D": "#FF6B00", "F": "#FF3B30",
@@ -27,7 +25,6 @@ export default function Network() {
   const [token, setToken] = useState("");
   const [res, setRes] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
   const timer = useRef(null);
 
   useEffect(() => {
@@ -40,12 +37,6 @@ export default function Network() {
     timer.current = setInterval(load, 5000);
     return () => clearInterval(timer.current);
   }, []);
-
-  const cmd = `irm "${BACKEND}/api/agent/script?t=${token || "IL_TUO_TOKEN"}&mode=bufferbloat" | iex`;
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(cmd); } catch { const el = document.createElement("textarea"); el.value = cmd; document.body.appendChild(el); el.select(); document.execCommand("copy"); el.remove(); }
-    setCopied(true); toast.success(t("network.copied")); setTimeout(() => setCopied(false), 2000);
-  };
 
   const grade = res?.grade;
   const gc = gradeColor(grade);
@@ -67,12 +58,7 @@ export default function Network() {
       <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 mb-6" data-testid="network-run">
         <div className="flex items-center gap-2 text-sm font-bold mb-1"><Waves size={16} className="text-[#00E0FF]" /> {t("network.run_title")}</div>
         <p className="text-xs text-zinc-400 mb-3">{t("network.run_desc")}</p>
-        <div className="flex items-stretch gap-2">
-          <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-[11px] text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="network-cmd">{cmd}</code>
-          <button onClick={copy} data-testid="network-copy" className="shrink-0 flex items-center justify-center border border-[#2A2A35] px-3 hover:border-[#00E0FF] transition-colors">
-            {copied ? <Check size={14} className="text-[#00FF66]" /> : <Copy size={14} />}
-          </button>
-        </div>
+        <SecureRunBlock token={token} mode="bufferbloat" testid="network-run-cmd" />
         <p className="text-[11px] text-zinc-500 mt-2">{t("network.run_hint")}</p>
       </div>
 

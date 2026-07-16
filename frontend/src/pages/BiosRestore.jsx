@@ -2,12 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
-import { Cpu, RotateCcw, CheckCircle2, AlertTriangle, ShieldCheck, Copy, Check, KeyRound, Info, Star, MemoryStick, MonitorPlay, MessageSquareCode } from "lucide-react";
-import { toast } from "sonner";
+import { Cpu, RotateCcw, CheckCircle2, AlertTriangle, ShieldCheck, KeyRound, Info, Star, MemoryStick, MonitorPlay, MessageSquareCode } from "lucide-react";
 import api from "@/lib/api";
 import { PageHeader } from "@/components/hud";
+import { SecureRunBlock } from "@/components/SecureRunBlock";
 
-const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const isEn = () => i18n.language?.startsWith("en");
 
 const BIOS_KEYS = {
@@ -175,7 +174,6 @@ export default function BiosRestore() {
   const [tab, setTab] = useState("bios");
   const [specs, setSpecs] = useState(null);
   const [token, setToken] = useState("");
-  const [copied, setCopied] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -227,12 +225,6 @@ export default function BiosRestore() {
       ? `Guide me step by step through the restore operation "${item.s}" on Windows: when it's worth using, what the risks are and how to do it safely.${hwStr ? ` My system: ${hwStr}.` : ""}`
       : `Guidami passo-passo nell'operazione di ripristino "${item.s}" su Windows: quando conviene usarla, quali sono i rischi e come farla in sicurezza.${hwStr ? ` Il mio sistema: ${hwStr}.` : ""}`;
     navigate("/app/advisor", { state: { ask: q } });
-  };
-
-  const restoreCmd = `irm "${BACKEND}/api/agent/script?t=${token || "IL_TUO_TOKEN"}&mode=restore" | iex`;
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(restoreCmd); } catch { const ta = document.createElement("textarea"); ta.value = restoreCmd; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
-    setCopied(true); toast.success(t("bios.copied")); setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -320,13 +312,8 @@ export default function BiosRestore() {
             <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#00FF66]"><ShieldCheck size={16} /> {t("bios.restore_safe")}</div>
             <div className="border border-[#1A1A24]">{restoreSafe.map((it, i) => <Row key={it.id} item={it} tone="safe" i={i} section="restore" onAsk={askAIRestore} />)}</div>
             <div className="mt-4">
-              <div className="text-xs text-zinc-500 mb-1">{t("bios.restore_cmd_hint")}</div>
-              <div className="flex items-stretch gap-2">
-                <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-xs text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="restore-cmd">{restoreCmd}</code>
-                <button data-testid="restore-copy" onClick={copy} className="shrink-0 flex items-center gap-1 border border-[#2A2A35] px-3 hover:border-[#E5FF00] transition-colors text-xs">
-                  {copied ? <Check size={14} className="text-[#00FF66]" /> : <Copy size={14} />}
-                </button>
-              </div>
+              <div className="text-xs text-zinc-500 mb-2">{t("bios.restore_cmd_hint")}</div>
+              <SecureRunBlock token={token} mode="restore" testid="restore-run-cmd" />
             </div>
           </div>
 

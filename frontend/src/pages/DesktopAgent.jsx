@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
-import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu, Activity, Copy, Check, Zap, RotateCcw, Gamepad2, Sparkles } from "lucide-react";
+import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu, Activity, Copy, Check, Gamepad2, Sparkles, ChevronDown, FileCheck2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import api, { API } from "@/lib/api";
 
@@ -115,11 +115,54 @@ function CmdRow({ label, cmd, testid, accent }) {
   );
 }
 
+const SECURE = {
+  it: {
+    exe_badge: "In arrivo", exe_title: "App desktop con un click", exe_desc: "Presto: scarichi un'app Windows (.exe) e fai doppio click. Niente comandi. Firma digitale e installer verificabile in preparazione.",
+    exe_btn: "App .exe — presto",
+    secure_title: "Metodo sicuro (consigliato)", secure_desc: "Niente comandi remoti. Scarichi lo script, ne verifichi l'integrità (SHA256) ed esegui il file locale. Puoi aprirlo e leggerlo prima di eseguirlo.",
+    token_label: "Il tuo token (privato)",
+    s1: "1) Scarica lo script (non lo esegue)", s2: "2) Verifica l'integrità: l'hash deve coincidere con quello qui sotto", s3: "3) Esegui il file locale (cambia -Mode per l'azione)",
+    expected: "SHA256 atteso", modes_label: "Azioni disponibili (parametro -Mode)",
+    why_title: "Perché non usiamo «irm | iex»", why_desc: "Scaricare ed eseguire codice remoto in memoria non è verificabile: se la connessione o il server fossero compromessi, verrebbe eseguito codice arbitrario. Con il metodo sopra il file resta su disco, ispezionabile e con hash verificabile.",
+    why_link: "Scopri di più sulla sicurezza",
+    adv: "Avanzato / per utenti esperti", exec_note: "Suggerimento: apri PowerShell come Amministratore per applicare tutti i tweak.",
+  },
+  en: {
+    exe_badge: "Coming soon", exe_title: "One-click desktop app", exe_desc: "Soon: download a Windows app (.exe) and double-click. No commands. Digital signature and verifiable installer in progress.",
+    exe_btn: ".exe app — soon",
+    secure_title: "Secure method (recommended)", secure_desc: "No remote commands. Download the script, verify its integrity (SHA256) and run the local file. You can open and read it before running.",
+    token_label: "Your token (private)",
+    s1: "1) Download the script (does not run it)", s2: "2) Verify integrity: the hash must match the one below", s3: "3) Run the local file (change -Mode for the action)",
+    expected: "Expected SHA256", modes_label: "Available actions (-Mode parameter)",
+    why_title: "Why we don't use \u00abirm | iex\u00bb", why_desc: "Downloading and running remote code in memory isn't verifiable: if the connection or server were compromised, arbitrary code would run. With the method above the file stays on disk, inspectable and with a verifiable hash.",
+    why_link: "Learn more about security",
+    adv: "Advanced / for power users", exec_note: "Tip: open PowerShell as Administrator to apply all tweaks.",
+  },
+};
+
+const RUN_MODES = [
+  { m: "optimize", it: "Ottimizza (finestra grafica)", en: "Optimize (graphical window)" },
+  { m: "sync", it: "Rileva hardware/salute", en: "Detect hardware/health" },
+  { m: "benchmark", it: "Benchmark prima/dopo", en: "Before/after benchmark" },
+  { m: "monitor", it: "Monitor live", en: "Live monitor" },
+  { m: "prematch", it: "Prima del match", en: "Pre-match" },
+  { m: "restore", it: "Ripristina i tweak", en: "Restore tweaks" },
+];
+
 export default function DesktopAgent() {
   const { t } = useTranslation();
   const [token, setToken] = useState("");
+  const [sha, setSha] = useState("");
   const [gpuVendor, setGpuVendor] = useState(null);
+  const [advOpen, setAdvOpen] = useState(false);
+  const en = isEn();
+  const s = en ? SECURE.en : SECURE.it;
+
   useEffect(() => { api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {}); }, []);
+  useEffect(() => {
+    if (!token) return;
+    api.get(`/agent/script-info?t=${token}`).then(({ data }) => setSha(data.sha256)).catch(() => {});
+  }, [token]);
   useEffect(() => {
     api.get("/pc-specs").then(({ data }) => {
       const gpu = (data?.data?.gpu || "").toUpperCase();
@@ -128,7 +171,10 @@ export default function DesktopAgent() {
     }).catch(() => {});
   }, []);
 
-  const cmd = (mode) => `irm "${BACKEND}/api/agent/script?t=${token || "IL_TUO_TOKEN"}&mode=${mode}" | iex`;
+  const tk = token || "IL_TUO_TOKEN";
+  const dl = `irm "${BACKEND}/api/agent/script?t=${tk}" -OutFile "$HOME\\Downloads\\forgefps.ps1"`;
+  const verify = `Get-FileHash "$HOME\\Downloads\\forgefps.ps1" -Algorithm SHA256`;
+  const run = (mode) => `powershell -ExecutionPolicy Bypass -File "$HOME\\Downloads\\forgefps.ps1" -Token ${tk} -Mode ${mode}`;
 
   return (
     <div className="max-w-5xl mx-auto fade-up">
@@ -137,37 +183,72 @@ export default function DesktopAgent() {
         <h1 className="font-display font-black text-3xl tracking-tighter">{t("desktop.title")}</h1>
       </div>
 
-      {/* Quick method: PowerShell */}
-      <div className="bg-[#0F0F12] border border-[#E5FF00]/40 p-6 mb-4">
+      {/* Coming soon: one-click .exe */}
+      <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-4" data-testid="exe-teaser">
+        <div className="flex items-start gap-4">
+          <div className="w-11 h-11 border border-[#2A2A35] flex items-center justify-center shrink-0"><MonitorDown size={22} className="text-[#00E0FF]" /></div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h2 className="font-display font-bold text-lg">{s.exe_title}</h2>
+              <span className="text-[10px] font-mono uppercase tracking-widest bg-[#00E0FF]/15 text-[#00E0FF] border border-[#00E0FF]/30 px-2 py-0.5">{s.exe_badge}</span>
+            </div>
+            <p className="text-zinc-400 text-sm mt-1 max-w-2xl">{s.exe_desc}</p>
+            <button disabled data-testid="exe-download-btn" className="mt-3 inline-flex items-center gap-2 border border-[#2A2A35] text-zinc-500 px-5 py-2.5 text-sm cursor-not-allowed uppercase tracking-wide">
+              <Download size={16} /> {s.exe_btn}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Secure method */}
+      <div className="bg-[#0F0F12] border border-[#E5FF00]/40 p-6 mb-4" data-testid="secure-method">
         <div className="flex items-start gap-4 mb-4">
-          <div className="w-11 h-11 bg-[#E5FF00] flex items-center justify-center shrink-0"><Zap size={22} className="text-black" /></div>
+          <div className="w-11 h-11 bg-[#E5FF00] flex items-center justify-center shrink-0"><ShieldCheck size={22} className="text-black" /></div>
           <div>
-            <h2 className="font-display font-bold text-lg">{t("desktop.quick_title")}</h2>
-            <p className="text-zinc-400 text-sm mt-1 max-w-2xl">{t("desktop.quick_desc")}</p>
+            <h2 className="font-display font-bold text-lg">{s.secure_title}</h2>
+            <p className="text-zinc-400 text-sm mt-1 max-w-2xl">{s.secure_desc}</p>
           </div>
         </div>
 
-        <CmdRow label={t("desktop.step_sync")} cmd={cmd("sync")} testid="ps-sync" accent="text-[#00FF66]" />
-        <CmdRow label={t("desktop.step_bench")} cmd={cmd("benchmark")} testid="ps-benchmark" accent="text-[#00E0FF]" />
-        <CmdRow label={t("desktop.step_optimize")} cmd={cmd("optimize")} testid="ps-optimize" accent="text-[#E5FF00]" />
-        <CmdRow label={t("desktop.step_monitor")} cmd={cmd("monitor")} testid="ps-monitor" accent="text-[#FF6B00]" />
-        <CmdRow label={t("desktop.step_prematch")} cmd={cmd("prematch")} testid="ps-prematch" accent="text-[#E5FF00]" />
-
-        <div className="flex items-center gap-2 text-xs text-zinc-500 mt-2">
-          <RotateCcw size={13} /> {t("desktop.restore_label")}
-          <code className="text-zinc-400 truncate" data-testid="ps-restore-cmd">{cmd("restore")}</code>
+        <CmdRow label={s.token_label} cmd={token || "…"} testid="agent-token" accent="text-[#00E0FF]" />
+        <CmdRow label={s.s1} cmd={dl} testid="secure-download" accent="text-[#00FF66]" />
+        <div className="mb-3">
+          <div className="text-xs uppercase tracking-widest mb-1 text-[#00E0FF]">{s.s2}</div>
+          <div className="flex items-stretch gap-2">
+            <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-xs text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="secure-verify-cmd">{verify}</code>
+          </div>
+          <div className="flex items-center gap-2 mt-2 text-xs">
+            <FileCheck2 size={13} className="text-[#00FF66] shrink-0" />
+            <span className="text-zinc-500">{s.expected}:</span>
+            <code className="text-zinc-300 break-all" data-testid="expected-sha256">{sha || "…"}</code>
+          </div>
         </div>
-        <p className="text-xs text-zinc-600 mt-3">{t("desktop.exec_note")}</p>
+        <CmdRow label={s.s3} cmd={run("optimize")} testid="secure-run" accent="text-[#E5FF00]" />
+
+        <div className="mt-4 border-t border-[#1A1A24] pt-4 flex items-start gap-3">
+          <Lock size={16} className="text-zinc-400 shrink-0 mt-0.5" />
+          <div>
+            <div className="text-sm text-zinc-200 font-semibold">{s.why_title}</div>
+            <p className="text-xs text-zinc-500 max-w-2xl leading-relaxed mt-0.5">{s.why_desc}</p>
+            <Link to="/security" data-testid="why-security-link" className="text-xs text-[#E5FF00] hover:underline mt-1 inline-block">{s.why_link} →</Link>
+          </div>
+        </div>
       </div>
 
-      {/* Fallback: download .py */}
-      <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-6">
-        <div className="flex flex-col sm:flex-row items-start gap-4">
-          <div className="w-11 h-11 border border-[#2A2A35] flex items-center justify-center shrink-0"><MonitorDown size={22} className="text-zinc-400" /></div>
-          <div className="flex-1">
-            <h3 className="font-display font-semibold">{t("desktop.python_title")}</h3>
-            <p className="text-zinc-500 text-sm mt-1 mb-3">{t("desktop.python_desc")}</p>
-            <div className="flex flex-wrap gap-3">
+      {/* Advanced (collapsed) */}
+      <div className="bg-[#0F0F12] border border-[#2A2A35] mb-6">
+        <button onClick={() => setAdvOpen((v) => !v)} data-testid="advanced-toggle"
+          className="w-full flex items-center justify-between px-6 py-4 text-left">
+          <span className="flex items-center gap-2 text-sm font-semibold text-zinc-300"><Terminal size={16} className="text-zinc-500" /> {s.adv}</span>
+          <ChevronDown size={18} className={`text-zinc-500 transition-transform ${advOpen ? "rotate-180" : ""}`} />
+        </button>
+        {advOpen && (
+          <div className="px-6 pb-6" data-testid="advanced-content">
+            <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{s.modes_label}</div>
+            {RUN_MODES.map((rm) => (
+              <CmdRow key={rm.m} label={en ? rm.en : rm.it} cmd={run(rm.m)} testid={`run-${rm.m}`} accent="text-zinc-500" />
+            ))}
+            <div className="flex flex-wrap gap-3 mt-4 border-t border-[#1A1A24] pt-4">
               <a data-testid="download-agent-btn" href={`${API}/desktop-agent/download`}
                 className="inline-flex items-center gap-2 border border-[#2A2A35] px-5 py-2.5 text-sm hover:border-[#E5FF00] transition-colors">
                 <Download size={16} /> {t("desktop.download_py")}
@@ -177,8 +258,9 @@ export default function DesktopAgent() {
                 <Activity size={16} /> {t("desktop.see_mypc")}
               </Link>
             </div>
+            <p className="text-xs text-zinc-600 mt-3">{s.exec_note}</p>
           </div>
-        </div>
+        )}
       </div>
 
       <GpuGuide vendor={gpuVendor} />

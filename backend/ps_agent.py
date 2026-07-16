@@ -1,4 +1,5 @@
-"""PowerShell agent, served at GET /api/agent/script and run via `irm ... | iex`.
+"""PowerShell agent, served at GET /api/agent/script. Downloaded to a file and run as
+`powershell -ExecutionPolicy Bypass -File forgefps.ps1 -Token <TOKEN> -Mode <mode>` (no irm|iex).
 Modes:
   sync      -> safe: detect hardware/health/startup and report (no changes)
                High-precision detection: real CPU/GPU temps via LibreHardwareMonitor (admin),
@@ -10,13 +11,21 @@ Modes:
   restore   -> revert every tweak from the backup file
 All reg/service/DNS/power tweaks are backed up before being applied so `restore` reverts them."""
 
-PS_SCRIPT = r'''
+PS_SCRIPT = r'''Param([string]$Token = '', [string]$Mode = 'sync')
 $ErrorActionPreference = 'SilentlyContinue'
 $BACKEND = '__BACKEND_URL__'
-$TOKEN   = '__AGENT_TOKEN__'
-$MODE    = '__MODE__'
+$TOKEN   = $Token
+$MODE    = $Mode
 $BACKUP  = Join-Path $env:TEMP 'boostpc_backup.json'
 $script:PROFILE = @(__PROFILE_IDS__)
+
+if ([string]::IsNullOrWhiteSpace($TOKEN)) {
+  Write-Host ''
+  Write-Host '[FrameForge] Token mancante / Missing token.' -ForegroundColor Red
+  Write-Host 'Esegui / Run:  powershell -ExecutionPolicy Bypass -File .\forgefps.ps1 -Token IL_TUO_TOKEN -Mode optimize' -ForegroundColor Yellow
+  Write-Host 'Il token si trova nella pagina "Collega il PC" del tuo account. / Find the token on the Connect PC page.' -ForegroundColor Yellow
+  return
+}
 
 function Say($m, $c='Gray') { Write-Host $m -ForegroundColor $c }
 function ConvertTo-HashtableSafe { $h=@{}; foreach($p in $input.PSObject.Properties){ $h[$p.Name]=$p.Value }; return $h }
@@ -983,8 +992,13 @@ function Show-Gui {
     $elevBtn.Text = 'Riavvia come Amministratore'; $elevBtn.Location = New-Object System.Drawing.Point(374, 752); $elevBtn.Size = New-Object System.Drawing.Size(220, 42)
     $elevBtn.FlatStyle = 'Flat'; $elevBtn.ForeColor = [System.Drawing.Color]::White
     $elevBtn.Add_Click({
-      $cmd = "irm '$BACKEND/api/agent/script?t=$TOKEN&mode=optimize' | iex"
-      Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-Command',$cmd 2>$null
+      if ($PSCommandPath) {
+        Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',$PSCommandPath,'-Token',$TOKEN,'-Mode','optimize' 2>$null
+      } else {
+        $ff = Join-Path $env:TEMP 'forgefps.ps1'
+        try { Invoke-RestMethod -Uri "$BACKEND/api/agent/script?t=$TOKEN" -OutFile $ff } catch {}
+        Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',$ff,'-Token',$TOKEN,'-Mode','optimize' 2>$null
+      }
       $form.Close()
     })
     $form.Controls.Add($elevBtn)

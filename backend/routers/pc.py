@@ -1,4 +1,5 @@
 import os
+import hashlib
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Header
@@ -29,6 +30,20 @@ def _iso_age(ts):
         return (datetime.now(timezone.utc) - datetime.fromisoformat(ts)).total_seconds()
     except Exception:
         return 1e9
+
+
+async def _build_agent_script(user_id: str, profile: str = "") -> str:
+    backend = os.environ.get("FRONTEND_URL", "http://localhost:8001")
+    ids = await resolve_tweak_ids(db, user_id, profile) if profile else []
+    profile_literal = ",".join("'" + i.replace("'", "") + "'" for i in ids)
+    pm = await db.prematch_settings.find_one({"user_id": user_id}) or {}
+    pm_apps = pm.get("close_apps", DEFAULT_PREMATCH_APPS)
+    pm_apps_literal = ",".join("'" + a.replace("'", "") + "'" for a in pm_apps)
+    pm_power = "$true" if pm.get("set_power", True) else "$false"
+    return (PS_SCRIPT.replace("__BACKEND_URL__", backend)
+            .replace("__PROFILE_IDS__", profile_literal)
+            .replace("__PREMATCH_APPS__", pm_apps_literal)
+            .replace("__PREMATCH_POWER__", pm_power))
 
 
 def build(get_current_user):
@@ -230,28 +245,25 @@ def build(get_current_user):
         token = await get_or_create_agent_token(str(user["_id"]))
         backend = os.environ.get("FRONTEND_URL", "http://localhost:8001")
         script = AGENT_SCRIPT.replace("__BACKEND_URL__", backend).replace("__AGENT_TOKEN__", token)
-        return PlainTextResponse(script, headers={"Content-Disposition": "attachment; filename=boostpc_agent.py"})
+        return PlainTextResponse(script, headers={"Content-Disposition": "attachment; filename=forgefps_agent.py"})
 
     @r.get("/agent/script")
-    async def agent_script(t: str = "", mode: str = "sync", profile: str = ""):
+    async def agent_script(t: str = "", profile: str = ""):
         rec = await db.agent_tokens.find_one({"token": t})
         if not rec:
-            return PlainTextResponse("Write-Host '[FrameForge] Token non valido. Riapri la pagina Desktop Agent.' -ForegroundColor Red",
-                                     media_type="text/plain")
-        if mode not in ("sync", "optimize", "restore", "benchmark", "monitor", "prematch", "bufferbloat"):
-            mode = "sync"
-        backend = os.environ.get("FRONTEND_URL", "http://localhost:8001")
-        ids = await resolve_tweak_ids(db, rec["user_id"], profile) if profile else []
-        profile_literal = ",".join("'" + i.replace("'", "") + "'" for i in ids)
-        pm = await db.prematch_settings.find_one({"user_id": rec["user_id"]}) or {}
-        pm_apps = pm.get("close_apps", DEFAULT_PREMATCH_APPS)
-        pm_apps_literal = ",".join("'" + a.replace("'", "") + "'" for a in pm_apps)
-        pm_power = "$true" if pm.get("set_power", True) else "$false"
-        script = (PS_SCRIPT.replace("__BACKEND_URL__", backend)
-                  .replace("__AGENT_TOKEN__", t).replace("__MODE__", mode)
-                  .replace("__PROFILE_IDS__", profile_literal)
-                  .replace("__PREMATCH_APPS__", pm_apps_literal)
-                  .replace("__PREMATCH_POWER__", pm_power))
-        return PlainTextResponse(script, media_type="text/plain")
+            return PlainTextResponse(
+                "Write-Host '[FrameForge] Token non valido. Riapri la pagina Collega il PC.' -ForegroundColor Red",
+                media_type="text/plain")
+        script = await _build_agent_script(rec["user_id"], profile)
+        return PlainTextResponse(script, media_type="text/plain",
+                                 headers={"Content-Disposition": "attachment; filename=forgefps.ps1"})
+
+    @r.get("/agent/script-info")
+    async def agent_script_info(t: str = "", profile: str = "", user: dict = Depends(get_current_user)):
+        rec = await db.agent_tokens.find_one({"token": t})
+        user_id = rec["user_id"] if rec else str(user["_id"])
+        script = await _build_agent_script(user_id, profile)
+        data = script.encode("utf-8")
+        return {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data), "filename": "forgefps.ps1"}
 
     return r

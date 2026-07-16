@@ -1,4 +1,4 @@
-AGENT_SCRIPT = r'''#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 FrameForge - Desktop Agent (Windows)
 Companion locale: ottimizzazioni REALI reversibili + benchmark prima/dopo +
@@ -20,7 +20,7 @@ import urllib.request
 
 _parser = argparse.ArgumentParser(description="FrameForge Desktop Agent")
 _parser.add_argument("--token", default=os.environ.get("FORGEFPS_TOKEN", "__AGENT_TOKEN__"))
-_parser.add_argument("--backend", default=os.environ.get("FORGEFPS_BACKEND", "__BACKEND_URL__"))
+_parser.add_argument("--backend", default=os.environ.get("FORGEFPS_BACKEND", "https://forgefps.dev"))
 _parser.add_argument("--mode", default="optimize")
 _args, _ = _parser.parse_known_args()
 
@@ -640,4 +640,3 @@ if __name__ == "__main__":
     while True:
         os.system("cls")
         menu()
-'''
