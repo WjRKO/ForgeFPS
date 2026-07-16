@@ -375,3 +375,15 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - Rebrand completo BoostPC → FrameForge in tutta l'app (logo, title/meta/OG, i18n IT+EN, sw.js push, ps_agent.py/desktop_agent.py display, server.py). File interni (backup json/temp) invariati per continuità restore.
 - SEO: hook usePageMeta (title/description unici per home/login/register), public/robots.txt (plain-text + sitemap), public/sitemap.xml, public/llms.txt, contenuti su login/register (feature highlights), code-splitting React.lazy in App.js.
 - Deploy fix: aggiunto endpoint GET /health (200) per la k8s probe (era 404 → deploy fallito). Ottimizzato N+1 in admin.list_users con aggregation. deployment_agent status=PASS.
+
+### 2026-07-16 - Fase 1 security-first + trust + UX + conversione (FATTO, test 10/10 BE, 27/28 FE)
+- SICUREZZA: rimosso comando remoto insicuro 'irm .../run | iex' dalla landing → sostituito con Secure Installer card (badge Signed/SHA256/Secure/Transparent, firma reale deferita). Security headers middleware (CSP, HSTS, X-Frame-Options DENY, X-Content-Type-Options, Referrer-Policy, Permissions-Policy). Rate limit AI /api/advisor/chat = 100/ora/utente (429). Validazione ChatMessageInput (min1/max2000 → 422).
+- TRUST/UX: nuove pagine pubbliche /security (architettura Agent→API cifrata→AI + badge), /privacy-telemetry (Collected vs Never + LOCAL ONLY + tiering Free/Cloud AI/Pro), /changelog (timeline v0.4.2/0.4.0/0.3.0 + link roadmap/issues), /pricing (Free/Pro €9.99/Creator €19.99 informativo, no checkout).
+- CONVERSIONE: homepage hero tecnico ("Trova i colli di bottiglia / Find the bottlenecks", CTA "Run Free Scan" → #demo). Demo Scan interattivo simulato (RTX 4070 + Ryzen 7 5800X, problemi + +12-18 FPS/-8ms). Nav/footer con link alle nuove pagine. Componenti: MarketingChrome, DemoScan, SecureInstaller.
+- Test: /app/backend/tests/test_phase1_security.py (10/10). /app/test_reports/iteration_17.json.
+
+### Backlog fasi successive (ForgeFPS overhaul)
+- FASE 2: auth backend — migrazione bcrypt→Argon2id (retro-compat), MFA/TOTP opzionale, refresh token rotation (richiede integration_expert).
+- FASE 3: agent Windows security-first in ps_agent.py — ogni tweak con Problema/Motivo/Modifica/Impatto/Apply, mai toccare Defender/servizi critici, backup+rollback obbligatori.
+- FASE 4: SaaS billing Stripe reale sul pricing (checkout Free/Pro/Creator).
+- Firma Authenticode reale + GitHub Release + checksum SHA256 pubblicato (richiede certificato utente).
