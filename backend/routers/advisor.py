@@ -1,12 +1,24 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 import ai_engine
 from database import db, now_iso
 from helpers import pc_context_text, compute_health
 from models import ChatMessageInput
+
+AI_RATE_LIMIT_PER_HOUR = 100
+
+
+async def _check_ai_rate_limit(uid: str):
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    used = await db.chat_messages.count_documents(
+        {"user_id": uid, "role": "user", "created_at": {"$gte": cutoff}})
+    if used >= AI_RATE_LIMIT_PER_HOUR:
+        raise HTTPException(status_code=429,
+                            detail=f"Limite AI raggiunto ({AI_RATE_LIMIT_PER_HOUR} richieste/ora). Riprova più tardi.")
 
 
 def build(get_current_user):
@@ -95,6 +107,7 @@ def build(get_current_user):
     @r.post("/chat")
     async def advisor_chat(data: ChatMessageInput, user: dict = Depends(get_current_user)):
         uid = str(user["_id"])
+        await _check_ai_rate_limit(uid)
         session_id = data.session_id or str(uuid.uuid4())
         if not await db.chat_sessions.find_one({"id": session_id, "user_id": uid}):
             title = data.message[:40] + ("..." if len(data.message) > 40 else "")

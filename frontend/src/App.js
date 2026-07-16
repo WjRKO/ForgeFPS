@@ -8,6 +8,10 @@ import { Loader2 } from "lucide-react";
 const Layout = lazy(() => import("@/components/Layout"));
 const Landing = lazy(() => import("@/pages/Landing"));
 const Auth = lazy(() => import("@/pages/Auth"));
+const Security = lazy(() => import("@/pages/Security"));
+const PrivacyTelemetry = lazy(() => import("@/pages/PrivacyTelemetry"));
+const Changelog = lazy(() => import("@/pages/Changelog"));
+const Pricing = lazy(() => import("@/pages/Pricing"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Advisor = lazy(() => import("@/pages/Advisor"));
 const BuildGenerator = lazy(() => import("@/pages/BuildGenerator"));
@@ -59,6 +63,10 @@ function App() {
           <Suspense fallback={<Fallback />}>
             <Routes>
               <Route path="/" element={<Landing />} />
+              <Route path="/security" element={<Security />} />
+              <Route path="/privacy-telemetry" element={<PrivacyTelemetry />} />
+              <Route path="/changelog" element={<Changelog />} />
+              <Route path="/pricing" element={<Pricing />} />
               <Route path="/login" element={<Guest><Auth mode="login" /></Guest>} />
               <Route path="/register" element={<Guest><Auth mode="register" /></Guest>} />
               <Route path="/app" element={<Protected><Layout /></Protected>}>

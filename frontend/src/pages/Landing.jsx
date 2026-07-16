@@ -9,6 +9,8 @@ import { AreaChart, Area, LineChart, Line, ReferenceLine, ResponsiveContainer } 
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import { DemoScan } from "@/components/DemoScan";
+import { SecureInstaller } from "@/components/SecureInstaller";
 
 const EASE = [0.16, 1, 0.3, 1];
 const fadeUp = {
@@ -230,8 +232,9 @@ function TerminalMockup() {
         <span className="ml-2 text-[10px] font-mono text-zinc-600">PowerShell</span>
       </div>
       <div className="p-4 font-mono text-xs leading-relaxed">
-        <div className="text-zinc-500">PS C:\Users\Streamer&gt; <span className="text-[#00FF66]">irm frameforge.app/run | iex</span></div>
-        <div className="text-zinc-400 mt-2">[<span className="text-[#00FF66]">✓</span>] Hardware detected · RTX 3070</div>
+        <div className="text-zinc-500">PS C:\Users\Streamer&gt; <span className="text-[#00FF66]">.\forgefps-setup.exe --verify</span></div>
+        <div className="text-zinc-400 mt-2">[<span className="text-[#00FF66]">✓</span>] SHA256 verified · signed installer</div>
+        <div className="text-zinc-400">[<span className="text-[#00FF66]">✓</span>] Hardware detected · RTX 3070</div>
         <div className="text-zinc-400">[<span className="text-[#00FF66]">✓</span>] Power plan · Ultimate</div>
         <div className="text-zinc-400">[<span className="text-[#00FF66]">✓</span>] 26 tweaks applied · reversible</div>
         <div className="text-[#00FF66] mt-1">Done. <span className="cursor-blink">▊</span></div>
@@ -302,9 +305,15 @@ export default function Landing() {
             <div className="w-8 h-8 bg-[#E5FF00] flex items-center justify-center"><Zap size={18} className="text-black" /></div>
             <span className="font-display font-black tracking-tighter text-lg">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
           </div>
+          <nav className="hidden md:flex items-center gap-1">
+            <Link to="/security" data-testid="nav-security" className="text-xs font-mono uppercase tracking-widest px-3 py-2 text-zinc-400 hover:text-white transition-colors">{t("landing.nav_security")}</Link>
+            <Link to="/privacy-telemetry" data-testid="nav-privacy" className="text-xs font-mono uppercase tracking-widest px-3 py-2 text-zinc-400 hover:text-white transition-colors">{t("landing.nav_privacy")}</Link>
+            <Link to="/changelog" data-testid="nav-changelog" className="text-xs font-mono uppercase tracking-widest px-3 py-2 text-zinc-400 hover:text-white transition-colors">{t("landing.nav_changelog")}</Link>
+            <Link to="/pricing" data-testid="nav-pricing" className="text-xs font-mono uppercase tracking-widest px-3 py-2 text-zinc-400 hover:text-white transition-colors">{t("landing.nav_pricing")}</Link>
+          </nav>
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
-            <Link to="/login" data-testid="nav-login-link" className="text-sm text-zinc-400 hover:text-white transition-colors px-3 py-2">{t("landing.login")}</Link>
+            <Link to="/login" data-testid="nav-login-link" className="text-sm text-zinc-400 hover:text-white transition-colors px-3 py-2 hidden sm:block">{t("landing.login")}</Link>
             <Link to="/register" data-testid="nav-register-link" className="text-sm bg-[#E5FF00] text-black font-bold px-4 py-2 hover:bg-[#D4EC00] transition-colors btn-volt">{t("landing.start")}</Link>
           </div>
         </div>
@@ -324,15 +333,27 @@ export default function Landing() {
             </h1>
             <p className="text-zinc-400 text-base sm:text-lg max-w-xl mb-8 leading-relaxed">{t("landing.hero_sub")}</p>
             <div className="flex flex-col sm:flex-row gap-3">
-              <Link to="/register" data-testid="hero-cta-btn" className="group inline-flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold px-6 py-3.5 hover:bg-[#D4EC00] transition-colors btn-volt">
+              <a href="#demo" data-testid="hero-cta-btn" className="group inline-flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold px-6 py-3.5 hover:bg-[#D4EC00] transition-colors btn-volt">
                 {t("landing.cta")} <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-              </Link>
+              </a>
               <Link to="/login" className="inline-flex items-center justify-center gap-2 border border-[#2A2A35] px-6 py-3.5 hover:border-[#E5FF00] hover:-translate-y-0.5 transition-all">
                 {t("landing.have_account")}
               </Link>
             </div>
           </motion.div>
           <div><HeroMockup /></div>
+        </div>
+      </section>
+
+      {/* DEMO SCAN + SECURE INSTALLER */}
+      <section id="demo" className="max-w-6xl mx-auto px-6 py-20 scroll-mt-20">
+        <motion.div {...fadeUp} className="mb-10">
+          <div className="text-xs font-mono tracking-[0.2em] uppercase text-zinc-500 mb-3">{t("landing.demo_eyebrow")}</div>
+          <h2 className="font-display font-black text-2xl sm:text-3xl tracking-tighter max-w-2xl">{t("landing.demo_title")}</h2>
+        </motion.div>
+        <div className="grid lg:grid-cols-2 gap-6 items-start">
+          <DemoScan />
+          <SecureInstaller />
         </div>
       </section>
 
@@ -410,10 +431,10 @@ export default function Landing() {
           <div>
             <div className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">{t("landing.footer_product")}</div>
             <ul className="space-y-2 text-sm text-zinc-400">
-              <li><Link to="/login" className="hover:text-[#E5FF00] transition-colors">{t("landing.f_advisor_t")}</Link></li>
-              <li><Link to="/login" className="hover:text-[#E5FF00] transition-colors">{t("landing.f_build_t")}</Link></li>
-              <li><Link to="/login" className="hover:text-[#E5FF00] transition-colors">{t("landing.f_price_t")}</Link></li>
-              <li><Link to="/login" className="hover:text-[#E5FF00] transition-colors">{t("landing.f_agent_t")}</Link></li>
+              <li><Link to="/security" className="hover:text-[#E5FF00] transition-colors">{t("landing.nav_security")}</Link></li>
+              <li><Link to="/privacy-telemetry" className="hover:text-[#E5FF00] transition-colors">{t("landing.nav_privacy")}</Link></li>
+              <li><Link to="/changelog" className="hover:text-[#E5FF00] transition-colors">{t("landing.nav_changelog")}</Link></li>
+              <li><Link to="/pricing" className="hover:text-[#E5FF00] transition-colors">{t("landing.nav_pricing")}</Link></li>
             </ul>
           </div>
           <div>

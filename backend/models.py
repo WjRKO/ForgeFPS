@@ -3,9 +3,9 @@ from pydantic import BaseModel, Field
 
 
 class ChatMessageInput(BaseModel):
-    message: str
-    session_id: Optional[str] = None
-    lang: Optional[str] = "it"
+    message: str = Field(min_length=1, max_length=2000)
+    session_id: Optional[str] = Field(default=None, max_length=64)
+    lang: Optional[str] = Field(default="it", max_length=5)
 
 
 class BuildInput(BaseModel):
