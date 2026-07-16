@@ -25,6 +25,7 @@ const Commands = lazy(() => import("@/pages/Commands"));
 const Network = lazy(() => import("@/pages/Network"));
 const BiosRestore = lazy(() => import("@/pages/BiosRestore"));
 const Admin = lazy(() => import("@/pages/Admin"));
+const Account = lazy(() => import("@/pages/Account"));
 
 const Fallback = () => (
   <div className="min-h-screen bg-[#050505] flex items-center justify-center">
@@ -85,6 +86,7 @@ function App() {
                 <Route path="bios" element={<BiosRestore />} />
                 <Route path="commands" element={<Commands />} />
                 <Route path="desktop" element={<DesktopAgent />} />
+                <Route path="account" element={<Account />} />
                 <Route path="admin" element={<AdminOnly><Admin /></AdminOnly>} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />

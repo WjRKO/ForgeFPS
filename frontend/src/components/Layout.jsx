@@ -1,7 +1,7 @@
 import { NavLink, useNavigate, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal, TerminalSquare, Swords, Gauge } from "lucide-react";
+import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal, TerminalSquare, Swords, Gauge, Menu, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -116,12 +116,18 @@ export default function Layout() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   const doLogout = async () => { await logout(); navigate("/login"); };
 
   return (
     <div className="min-h-screen flex bg-[#050505] text-zinc-100">
-      <aside className="w-60 border-r border-[#2A2A35] bg-[#0A0A0C] flex flex-col fixed h-full">
+      {mobileOpen && (
+        <div className="fixed inset-0 bg-black/60 z-40 md:hidden" onClick={() => setMobileOpen(false)} data-testid="sidebar-overlay" />
+      )}
+      <aside className={`w-60 border-r border-[#2A2A35] bg-[#0A0A0C] flex flex-col fixed h-full z-50 transition-transform duration-200 ${mobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`} data-testid="sidebar">
         <div className="p-5 border-b border-[#2A2A35] flex items-center gap-2">
           <div className="w-8 h-8 bg-[#E5FF00] flex items-center justify-center"><Zap size={18} className="text-black" /></div>
           <span className="font-display font-black tracking-tighter text-lg">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
@@ -149,7 +155,10 @@ export default function Layout() {
           })}
         </nav>
         <div className="p-3 border-t border-[#2A2A35]">
-          <div className="px-3 py-2 text-xs text-zinc-500 truncate">{user?.email}</div>
+          <NavLink to="/app/account" data-testid="nav-account"
+            className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${isActive ? "bg-[#E5FF00] text-black font-bold" : "text-zinc-400 hover:text-white hover:bg-[#141419]"}`}>
+            <Settings size={17} /> <span className="truncate">{user?.email}</span>
+          </NavLink>
           <button onClick={doLogout} data-testid="logout-btn"
             className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-zinc-400 hover:text-[#FF3B30] transition-colors">
             <LogOut size={17} /> {t("common.logout")}
@@ -157,17 +166,22 @@ export default function Layout() {
         </div>
       </aside>
 
-      <div className="flex-1 ml-60 flex flex-col">
-        <header className="h-16 border-b border-[#2A2A35] bg-black/60 backdrop-blur-xl sticky top-0 z-40 flex items-center justify-between px-6">
-          <div className="text-xs uppercase tracking-[0.2em] text-zinc-500" data-testid="page-title">
-            {(() => { const n = NAV.find((x) => (x.end ? location.pathname === x.to : location.pathname.startsWith(x.to))); return n ? t(n.label) : t("common.console"); })()}
+      <div className="flex-1 md:ml-60 flex flex-col min-w-0">
+        <header className="h-16 border-b border-[#2A2A35] bg-black/60 backdrop-blur-xl sticky top-0 z-40 flex items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-3 min-w-0">
+            <button className="md:hidden p-2 border border-[#2A2A35] hover:border-[#E5FF00] transition-colors" onClick={() => setMobileOpen(true)} data-testid="sidebar-toggle" aria-label="Menu">
+              <Menu size={18} />
+            </button>
+            <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 truncate" data-testid="page-title">
+              {(() => { const n = NAV.find((x) => (x.end ? location.pathname === x.to : location.pathname.startsWith(x.to))); return n ? t(n.label) : t("common.console"); })()}
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <LanguageSwitcher />
             <Notifications />
           </div>
         </header>
-        <main className="flex-1 p-6 grid-bg">
+        <main className="flex-1 p-4 sm:p-6 grid-bg">
           <Outlet />
         </main>
       </div>

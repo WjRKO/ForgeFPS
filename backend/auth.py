@@ -73,6 +73,25 @@ class ResetInput(BaseModel):
     password: str = Field(min_length=6)
 
 
+class ChangePasswordInput(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=6)
+
+
+class UpdateProfileInput(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+
+class PreferencesInput(BaseModel):
+    local_only: bool = False
+    email_alerts: bool = False
+    language: str = Field(default="it", max_length=5)
+
+
+class DeleteAccountInput(BaseModel):
+    password: str
+
+
 def public_user(user: dict) -> dict:
     return {"id": str(user["_id"]), "email": user["email"],
             "name": user.get("name", ""), "role": user.get("role", "user")}
@@ -195,6 +214,51 @@ def build_auth_router(db):
         await db.users.update_one({"_id": ObjectId(rec["user_id"])},
                                   {"$set": {"password_hash": hash_password(data.password)}})
         await db.password_reset_tokens.update_one({"token": data.token}, {"$set": {"used": True}})
+        return {"ok": True}
+
+    @router.get("/preferences")
+    async def get_preferences(user: dict = Depends(get_current_user)):
+        p = user.get("preferences") or {}
+        return {"local_only": p.get("local_only", False),
+                "email_alerts": p.get("email_alerts", False),
+                "language": p.get("language", "it")}
+
+    @router.put("/preferences")
+    async def set_preferences(data: PreferencesInput, user: dict = Depends(get_current_user)):
+        await db.users.update_one({"_id": user["_id"]}, {"$set": {"preferences": data.model_dump()}})
+        return {"ok": True, **data.model_dump()}
+
+    @router.patch("/profile")
+    async def update_profile(data: UpdateProfileInput, user: dict = Depends(get_current_user)):
+        await db.users.update_one({"_id": user["_id"]}, {"$set": {"name": data.name}})
+        updated = await db.users.find_one({"_id": user["_id"]})
+        return public_user(updated)
+
+    @router.post("/change-password")
+    async def change_password(data: ChangePasswordInput, response: Response, user: dict = Depends(get_current_user)):
+        if not verify_password(data.current_password, user["password_hash"]):
+            raise HTTPException(status_code=400, detail="Password attuale non corretta")
+        if data.new_password == data.current_password:
+            raise HTTPException(status_code=400, detail="La nuova password deve essere diversa da quella attuale")
+        await db.users.update_one({"_id": user["_id"]},
+                                  {"$set": {"password_hash": hash_password(data.new_password)}})
+        uid = str(user["_id"])
+        set_auth_cookies(response, create_access_token(uid, user["email"]), create_refresh_token(uid))
+        return {"ok": True}
+
+    @router.post("/delete-account")
+    async def delete_account(data: DeleteAccountInput, response: Response, user: dict = Depends(get_current_user)):
+        if user.get("role") == "admin":
+            raise HTTPException(status_code=400, detail="Gli account admin non possono essere eliminati da qui")
+        if not verify_password(data.password, user["password_hash"]):
+            raise HTTPException(status_code=400, detail="Password non corretta")
+        uid = str(user["_id"])
+        await db.users.delete_one({"_id": user["_id"]})
+        for coll in ("products", "price_history", "builds", "chat_sessions", "chat_messages",
+                     "notifications", "pc_specs", "agent_tokens", "push_subscriptions"):
+            await db[coll].delete_many({"user_id": uid})
+        response.delete_cookie("access_token", path="/")
+        response.delete_cookie("refresh_token", path="/")
         return {"ok": True}
 
     return router, get_current_user
