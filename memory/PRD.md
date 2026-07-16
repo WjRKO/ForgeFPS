@@ -405,3 +405,7 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - Config: /app/frontend/src/config/agent.js (AGENT_EXE_URL, AGENT_EXE_SHA256=0f9b1dbb..., version v0.4.2).
 - DesktopAgent.jsx: card 'One-click desktop app' con bottone download reale + SHA256 + comando 'forgefps-agent.exe --token <T> --mode optimize'. SecureInstaller.jsx (Landing + /security): download → release reale + SHA256 mostrato.
 - Backlog UX: l'.exe attuale esce se manca --token; migliorare desktop_agent.py per PROMPT interattivo del token (input) così il doppio click funziona senza CLI (richiede rebuild utente). Firma Authenticode = fase successiva (toglie SmartScreen).
+
+### 2026-07-16 - .exe v0.4.3 (prompt token interattivo)
+- desktop_agent.py: se il token manca chiede input() interattivo (doppio click funziona). Standalone rigenerato in /app/agent-build/forgefps_agent.py.
+- Release aggiornata: WjRKO/ForgeFPS v0.4.3, SHA256=899f2e7f412221d0189ecd9acc045a42521181d2e5174facf6b7f0fb560539ac. Config agent.js aggiornata (URL+sha+version). Pagina Connect PC + SecureInstaller (Landing/security) puntano al file reale.
