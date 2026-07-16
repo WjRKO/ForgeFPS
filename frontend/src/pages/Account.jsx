@@ -18,6 +18,7 @@ const T = {
     mfa_secret: "Oppure inserisci manualmente questa chiave:", mfa_code_ph: "Codice a 6 cifre", mfa_confirm: "Conferma e attiva",
     mfa_recovery_title: "Codici di recupero", mfa_recovery_desc: "Salvali in un posto sicuro: ti servono se perdi l'accesso all'app. Non verranno più mostrati.",
     mfa_done: "Ho salvato i codici", mfa_enabled_ok: "2FA attivata", mfa_disabled_ok: "2FA disattivata",
+    mfa_disable_hint: "Inserisci un codice della tua app authenticator (o un codice di recupero) per disattivare la 2FA.",
     prefs: "Preferenze", local_only: "Modalità LOCAL ONLY", local_only_d: "Usa FrameForge senza inviare dati al cloud (analisi e ottimizzazioni restano in locale).",
     email_alerts: "Avvisi email", email_alerts_d: "Ricevi email quando un prezzo tracciato cala (in arrivo).",
     language: "Lingua", prefs_ok: "Preferenze salvate",
@@ -35,6 +36,7 @@ const T = {
     mfa_secret: "Or enter this key manually:", mfa_code_ph: "6-digit code", mfa_confirm: "Confirm & enable",
     mfa_recovery_title: "Recovery codes", mfa_recovery_desc: "Store them somewhere safe: you'll need them if you lose access to your app. They won't be shown again.",
     mfa_done: "I saved the codes", mfa_enabled_ok: "2FA enabled", mfa_disabled_ok: "2FA disabled",
+    mfa_disable_hint: "Enter a code from your authenticator app (or a recovery code) to disable 2FA.",
     prefs: "Preferences", local_only: "LOCAL ONLY mode", local_only_d: "Use FrameForge without sending data to the cloud (analysis and optimizations stay local).",
     email_alerts: "Email alerts", email_alerts_d: "Get an email when a tracked price drops (coming soon).",
     language: "Language", prefs_ok: "Preferences saved",
@@ -73,6 +75,8 @@ const MfaCard = ({ c }) => {
   const [code, setCode] = useState("");
   const [recovery, setRecovery] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [disabling, setDisabling] = useState(false);
+  const [disableCode, setDisableCode] = useState("");
 
   useEffect(() => { api.get("/auth/mfa/status").then(({ data }) => setEnabled(data.enabled)).catch(() => {}); }, []);
 
@@ -87,9 +91,9 @@ const MfaCard = ({ c }) => {
     catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); } finally { setBusy(false); }
   };
   const disable = async () => {
-    const v = window.prompt(c.mfa_code_ph); if (!v) return;
+    const v = disableCode.trim(); if (!v) return;
     setBusy(true);
-    try { await api.post("/auth/mfa/disable", { code: v.trim() }); setEnabled(false); setRecovery(null); toast.success(c.mfa_disabled_ok); }
+    try { await api.post("/auth/mfa/disable", { code: v }); setEnabled(false); setRecovery(null); setDisabling(false); setDisableCode(""); toast.success(c.mfa_disabled_ok); }
     catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); } finally { setBusy(false); }
   };
 
@@ -135,11 +139,27 @@ const MfaCard = ({ c }) => {
         </div>
       )}
 
-      {enabled && !recovery && (
-        <button onClick={disable} disabled={busy} data-testid="mfa-disable-btn"
+      {enabled && !recovery && !disabling && (
+        <button onClick={() => setDisabling(true)} disabled={busy} data-testid="mfa-disable-btn"
           className="inline-flex items-center gap-2 border border-[#FF3B30]/50 text-[#FF3B30] px-5 py-2.5 hover:bg-[#FF3B30]/10 transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
           {busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldAlert size={15} />} {c.mfa_disable}
         </button>
+      )}
+
+      {enabled && !recovery && disabling && (
+        <div className="space-y-3 max-w-sm" data-testid="mfa-disable-form">
+          <p className="text-sm text-zinc-400">{c.mfa_disable_hint}</p>
+          <input value={disableCode} onChange={(e) => setDisableCode(e.target.value)} placeholder={c.mfa_code_ph} inputMode="numeric" autoFocus data-testid="mfa-disable-code-input"
+            className="w-full bg-black border-b border-[#2A2A35] focus:border-[#FF3B30] outline-none py-2 text-sm tracking-widest transition-colors" />
+          <div className="flex items-center gap-2">
+            <button onClick={disable} disabled={busy || disableCode.trim().length < 6} data-testid="mfa-disable-confirm-btn"
+              className="inline-flex items-center gap-2 bg-[#FF3B30] text-white font-bold px-5 py-2.5 hover:bg-[#e02a20] transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
+              {busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldAlert size={15} />} {c.mfa_disable}
+            </button>
+            <button onClick={() => { setDisabling(false); setDisableCode(""); }} data-testid="mfa-disable-cancel-btn"
+              className="text-xs border border-[#2A2A35] px-4 py-2.5 hover:border-white transition-colors uppercase tracking-wide">{c.cancel || "Annulla"}</button>
+          </div>
+        </div>
       )}
     </Card>
   );

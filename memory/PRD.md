@@ -409,3 +409,16 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 ### 2026-07-16 - .exe v0.4.3 (prompt token interattivo)
 - desktop_agent.py: se il token manca chiede input() interattivo (doppio click funziona). Standalone rigenerato in /app/agent-build/forgefps_agent.py.
 - Release aggiornata: WjRKO/ForgeFPS v0.4.3, SHA256=899f2e7f412221d0189ecd9acc045a42521181d2e5174facf6b7f0fb560539ac. Config agent.js aggiornata (URL+sha+version). Pagina Connect PC + SecureInstaller (Landing/security) puntano al file reale.
+
+### 2026-07-16 - FASE 2 CHIUSA: MFA/TOTP frontend verificato (FATTO, test FE 100% - iteration_20)
+- Fix lint pre-esistente in Games.jsx: comando "sync" ora usa <SecureRunBlock mode="sync"> (rimossi riferimenti orfani syncCmd/copyCmd/Copy).
+- BUG CRITICO trovato dal testing agent e corretto: MfaCard era definita ma MAI montata in Account.jsx → 2FA inaccessibile dalla UI. Ora <MfaCard c={c}/> è nel render tree tra Password e Preferenze.
+- POLISH: sostituito window.prompt() del "Disattiva 2FA" con form inline stilizzato (data-testid mfa-disable-form / mfa-disable-code-input / mfa-disable-confirm-btn / mfa-disable-cancel-btn) coerente con il design cyber. Nuove chiavi i18n mfa_disable_hint (it+en).
+- Verifica backend E2E via curl: setup → enable (10 codici recupero) → login richiede codice → login con codice OK → disable OK. Argon2id + pyotp funzionanti.
+- Verifica frontend testing_agent iteration_20.json: 7/7 step MFA PASS (badge Disabled → Enable → QR+secret+input → conferma TOTP → 10 recovery codes + badge Enabled → logout → login richiede mfa-code-field → login con TOTP → dashboard → disable → badge Disabled).
+- Stato finale: admin MFA DISABILITATO. Credenziali admin invariate (vedi test_credentials.md).
+- FASE 2 auth COMPLETA (Argon2id + TOTP MFA opzionale). Refresh token rotation NON implementato (non richiesto per ora).
+
+### Prossimo: FASE 3 - Agent Windows security-first (ps_agent.py)
+- Ogni tweak deve mostrare: Problema trovato → Motivo → Modifica proposta → Impatto stimato + pulsante "Applica".
+- Guardrail: mai toccare Windows Defender/servizi sicurezza, privilegi minimi, backup+rollback obbligatorio prima di ogni tweak.
