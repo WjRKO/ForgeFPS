@@ -387,3 +387,9 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - FASE 3: agent Windows security-first in ps_agent.py — ogni tweak con Problema/Motivo/Modifica/Impatto/Apply, mai toccare Defender/servizi critici, backup+rollback obbligatori.
 - FASE 4: SaaS billing Stripe reale sul pricing (checkout Free/Pro/Creator).
 - Firma Authenticode reale + GitHub Release + checksum SHA256 pubblicato (richiede certificato utente).
+
+### 2026-07-16 - Post-login: Fase A (Account & Sicurezza) + Fase B (responsive mobile) (FATTO, test BE 14/14, FE 100%)
+- Fase A: nuova pagina /app/account (Account.jsx). Backend auth.py endpoint: GET/PUT /api/auth/preferences (local_only, email_alerts, language), PATCH /api/auth/profile (nome), POST /api/auth/change-password (verifica pwd attuale, rifiuta uguale, ruota cookie), POST /api/auth/delete-account (verifica pwd, admin non eliminabile, cascade su products/price_history/builds/chat_sessions/chat_messages/notifications/pc_specs/agent_tokens/push_subscriptions). AuthContext espone setUser/refreshUser. Link "account" in sidebar.
+- Fase B: Layout.jsx responsive — sidebar drawer a scomparsa <768px con hamburger (sidebar-toggle) + overlay; su desktop sempre visibile. Header con hamburger mobile, padding adattivo. Chiude drawer al cambio route.
+- Test: /app/backend/tests (14/14). /app/test_reports/iteration_18.json.
+- IN SOSPESO (concordato col user): Fase comandi PowerShell sicuri (rimuovere irm|iex dalla pagina Connect PC/DesktopAgent.jsx: flusso download→Get-FileHash SHA256→esegui file locale con -Token param; richiede Param block in ps_agent.py e /api/agent/script senza token embedded + endpoint checksum).
