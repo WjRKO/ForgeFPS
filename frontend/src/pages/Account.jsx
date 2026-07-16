@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { User, KeyRound, SlidersHorizontal, ShieldAlert, Loader2, Server, Mail, Save, Trash2 } from "lucide-react";
+import { User, KeyRound, SlidersHorizontal, ShieldAlert, Loader2, Server, Mail, Save, Trash2, ShieldCheck, QrCode } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api, { formatApiErrorDetail } from "@/lib/api";
 
@@ -11,6 +11,13 @@ const T = {
     eyebrow: "// account & sicurezza", title: "Account e sicurezza",
     profile: "Profilo", name: "Nome", email: "Email", save: "Salva", saved: "Salvato",
     pwd: "Cambia password", current: "Password attuale", newp: "Nuova password", change: "Aggiorna password", pwd_ok: "Password aggiornata",
+    mfa_title: "Autenticazione a due fattori (2FA)", mfa_on: "Attiva", mfa_off: "Non attiva",
+    mfa_desc_off: "Aggiungi un secondo livello di sicurezza con un'app authenticator (Google Authenticator, Authy...).",
+    mfa_desc_on: "Il tuo account è protetto con 2FA. Al login ti verrà chiesto un codice.",
+    mfa_enable: "Attiva 2FA", mfa_disable: "Disattiva 2FA", mfa_scan: "Scansiona il QR con la tua app authenticator, poi inserisci il codice a 6 cifre.",
+    mfa_secret: "Oppure inserisci manualmente questa chiave:", mfa_code_ph: "Codice a 6 cifre", mfa_confirm: "Conferma e attiva",
+    mfa_recovery_title: "Codici di recupero", mfa_recovery_desc: "Salvali in un posto sicuro: ti servono se perdi l'accesso all'app. Non verranno più mostrati.",
+    mfa_done: "Ho salvato i codici", mfa_enabled_ok: "2FA attivata", mfa_disabled_ok: "2FA disattivata",
     prefs: "Preferenze", local_only: "Modalità LOCAL ONLY", local_only_d: "Usa FrameForge senza inviare dati al cloud (analisi e ottimizzazioni restano in locale).",
     email_alerts: "Avvisi email", email_alerts_d: "Ricevi email quando un prezzo tracciato cala (in arrivo).",
     language: "Lingua", prefs_ok: "Preferenze salvate",
@@ -21,6 +28,13 @@ const T = {
     eyebrow: "// account & security", title: "Account & security",
     profile: "Profile", name: "Name", email: "Email", save: "Save", saved: "Saved",
     pwd: "Change password", current: "Current password", newp: "New password", change: "Update password", pwd_ok: "Password updated",
+    mfa_title: "Two-factor authentication (2FA)", mfa_on: "Enabled", mfa_off: "Disabled",
+    mfa_desc_off: "Add a second layer of security with an authenticator app (Google Authenticator, Authy...).",
+    mfa_desc_on: "Your account is protected with 2FA. You'll be asked for a code at login.",
+    mfa_enable: "Enable 2FA", mfa_disable: "Disable 2FA", mfa_scan: "Scan the QR with your authenticator app, then enter the 6-digit code.",
+    mfa_secret: "Or enter this key manually:", mfa_code_ph: "6-digit code", mfa_confirm: "Confirm & enable",
+    mfa_recovery_title: "Recovery codes", mfa_recovery_desc: "Store them somewhere safe: you'll need them if you lose access to your app. They won't be shown again.",
+    mfa_done: "I saved the codes", mfa_enabled_ok: "2FA enabled", mfa_disabled_ok: "2FA disabled",
     prefs: "Preferences", local_only: "LOCAL ONLY mode", local_only_d: "Use FrameForge without sending data to the cloud (analysis and optimizations stay local).",
     email_alerts: "Email alerts", email_alerts_d: "Get an email when a tracked price drops (coming soon).",
     language: "Language", prefs_ok: "Preferences saved",
@@ -52,6 +66,84 @@ const Field = ({ label, ...props }) => (
     <input {...props} className="w-full bg-black border-b border-[#2A2A35] focus:border-[#E5FF00] outline-none py-2 mt-1 text-sm transition-colors" />
   </label>
 );
+
+const MfaCard = ({ c }) => {
+  const [enabled, setEnabled] = useState(false);
+  const [setup, setSetup] = useState(null); // {qr, secret}
+  const [code, setCode] = useState("");
+  const [recovery, setRecovery] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { api.get("/auth/mfa/status").then(({ data }) => setEnabled(data.enabled)).catch(() => {}); }, []);
+
+  const start = async () => {
+    setBusy(true);
+    try { const { data } = await api.post("/auth/mfa/setup"); setSetup(data); }
+    catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); } finally { setBusy(false); }
+  };
+  const enable = async () => {
+    setBusy(true);
+    try { const { data } = await api.post("/auth/mfa/enable", { code: code.trim() }); setRecovery(data.recovery_codes); setSetup(null); setCode(""); setEnabled(true); toast.success(c.mfa_enabled_ok); }
+    catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); } finally { setBusy(false); }
+  };
+  const disable = async () => {
+    const v = window.prompt(c.mfa_code_ph); if (!v) return;
+    setBusy(true);
+    try { await api.post("/auth/mfa/disable", { code: v.trim() }); setEnabled(false); setRecovery(null); toast.success(c.mfa_disabled_ok); }
+    catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); } finally { setBusy(false); }
+  };
+
+  return (
+    <Card icon={ShieldCheck} title={c.mfa_title} accent="#00FF66" testid="account-mfa">
+      <div className="flex items-center gap-2 mb-3">
+        <span className={`text-[10px] font-mono uppercase tracking-widest px-2 py-1 border ${enabled ? "text-[#00FF66] border-[#00FF66]/40 bg-[#00FF66]/10" : "text-zinc-500 border-[#2A2A35]"}`} data-testid="mfa-badge">
+          {enabled ? c.mfa_on : c.mfa_off}
+        </span>
+      </div>
+      <p className="text-sm text-zinc-500 mb-4 max-w-lg">{enabled ? c.mfa_desc_on : c.mfa_desc_off}</p>
+
+      {recovery && (
+        <div className="mb-4 border border-[#E5FF00]/40 bg-[#E5FF00]/5 p-4" data-testid="mfa-recovery">
+          <div className="text-sm font-semibold text-[#E5FF00] mb-1">{c.mfa_recovery_title}</div>
+          <p className="text-xs text-zinc-400 mb-3">{c.mfa_recovery_desc}</p>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 font-mono text-xs">
+            {recovery.map((r, i) => <code key={i} className="bg-black border border-[#2A2A35] px-2 py-1 text-center text-zinc-200">{r}</code>)}
+          </div>
+          <button onClick={() => setRecovery(null)} className="mt-3 text-xs border border-[#2A2A35] px-4 py-2 hover:border-white transition-colors uppercase tracking-wide" data-testid="mfa-recovery-done">{c.mfa_done}</button>
+        </div>
+      )}
+
+      {!enabled && !setup && !recovery && (
+        <button onClick={start} disabled={busy} data-testid="mfa-enable-btn"
+          className="inline-flex items-center gap-2 border border-[#00FF66]/50 text-[#00FF66] px-5 py-2.5 hover:bg-[#00FF66]/10 transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
+          {busy ? <Loader2 size={15} className="animate-spin" /> : <QrCode size={15} />} {c.mfa_enable}
+        </button>
+      )}
+
+      {setup && (
+        <div className="space-y-3 max-w-sm" data-testid="mfa-setup">
+          <p className="text-sm text-zinc-400">{c.mfa_scan}</p>
+          <img src={setup.qr} alt="QR" className="w-40 h-40 bg-white p-2" data-testid="mfa-qr" />
+          <div className="text-xs text-zinc-500">{c.mfa_secret}</div>
+          <code className="block bg-black border border-[#2A2A35] px-3 py-2 text-xs text-zinc-300 break-all" data-testid="mfa-secret">{setup.secret}</code>
+          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder={c.mfa_code_ph} inputMode="numeric" data-testid="mfa-code-input"
+            className="w-full bg-black border-b border-[#2A2A35] focus:border-[#00FF66] outline-none py-2 text-sm tracking-widest transition-colors" />
+          <button onClick={enable} disabled={busy || code.trim().length < 6} data-testid="mfa-confirm-btn"
+            className="inline-flex items-center gap-2 bg-[#00FF66] text-black font-bold px-5 py-2.5 hover:bg-[#00e05c] transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} {c.mfa_confirm}
+          </button>
+        </div>
+      )}
+
+      {enabled && !recovery && (
+        <button onClick={disable} disabled={busy} data-testid="mfa-disable-btn"
+          className="inline-flex items-center gap-2 border border-[#FF3B30]/50 text-[#FF3B30] px-5 py-2.5 hover:bg-[#FF3B30]/10 transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
+          {busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldAlert size={15} />} {c.mfa_disable}
+        </button>
+      )}
+    </Card>
+  );
+};
 
 export default function Account() {
   const { user, setUser, logout } = useAuth();

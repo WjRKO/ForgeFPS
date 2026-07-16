@@ -162,10 +162,7 @@ export default function Games() {
             <div className="text-sm text-zinc-400 leading-relaxed">
               <div className="flex items-center gap-2 text-zinc-300 mb-2"><MonitorDown size={16} className="text-[#E5FF00]" /> {t("games.no_games")}</div>
               <p className="text-xs text-zinc-500 mb-3">{t("games.no_games_hint")}</p>
-              <div className="flex items-stretch gap-2">
-                <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-[11px] text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="games-sync-cmd">{syncCmd}</code>
-                <button onClick={() => copyCmd(syncCmd)} className="shrink-0 flex items-center justify-center border border-[#2A2A35] px-3 hover:border-[#E5FF00] transition-colors"><Copy size={14} /></button>
-              </div>
+              <SecureRunBlock token={token} mode="sync" testid="games-sync-cmd" />
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">

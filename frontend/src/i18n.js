@@ -153,6 +153,7 @@ const resources = {
         feat1: "Advisor AI che conosce il tuo hardware e ti guida agli upgrade giusti.",
         feat2: "Telemetria live: FPS, temperature CPU/GPU, input lag e test di rete.",
         feat3: "Ottimizzazioni reali e reversibili al 100% + price tracking dei componenti.",
+        mfa_code: "Codice di verifica (2FA)", mfa_hint: "Inserisci il codice a 6 cifre dalla tua app authenticator (o un codice di recupero).",
       },
       build: {
         eyebrow: "// Build Generator", title: "Genera la tua build",
@@ -480,6 +481,7 @@ const resources = {
         feat1: "An AI Advisor that knows your hardware and guides the right upgrades.",
         feat2: "Live telemetry: FPS, CPU/GPU temps, input lag and network tests.",
         feat3: "Real, 100% reversible optimizations + component price tracking.",
+        mfa_code: "Verification code (2FA)", mfa_hint: "Enter the 6-digit code from your authenticator app (or a recovery code).",
       },
       build: {
         eyebrow: "// Build Generator", title: "Generate your build",

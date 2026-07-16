@@ -20,13 +20,17 @@ export default function Auth({ mode }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [code, setCode] = useState("");
 
   const submit = async (e) => {
     e.preventDefault();
     setError(""); setLoading(true);
     try {
-      if (isLogin) await login(email, password);
-      else await register(name, email, password);
+      if (isLogin) {
+        const res = await login(email, password, code || undefined);
+        if (res && res.mfa_required) { setMfaRequired(true); setLoading(false); return; }
+      } else await register(name, email, password);
       navigate("/app");
     } catch (err) {
       setError(formatApiErrorDetail(err.response?.data?.detail) || err.message);
@@ -65,6 +69,14 @@ export default function Auth({ mode }) {
               <input data-testid="password-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
                 className="w-full bg-black border-b border-[#2A2A35] focus:border-[#E5FF00] outline-none py-2 mt-1 text-sm transition-colors" />
             </div>
+            {isLogin && mfaRequired && (
+              <div data-testid="mfa-code-field">
+                <label className="text-xs uppercase tracking-widest text-[#E5FF00]">{t("auth.mfa_code")}</label>
+                <input data-testid="mfa-code-input" value={code} onChange={(e) => setCode(e.target.value)} autoFocus inputMode="numeric" placeholder="123456"
+                  className="w-full bg-black border-b border-[#E5FF00]/50 focus:border-[#E5FF00] outline-none py-2 mt-1 text-sm tracking-widest transition-colors" />
+                <p className="text-[11px] text-zinc-500 mt-1">{t("auth.mfa_hint")}</p>
+              </div>
+            )}
             <button type="submit" data-testid="auth-submit-btn" disabled={loading}
               className="w-full bg-[#E5FF00] text-black font-bold py-3 hover:bg-[#D4EC00] transition-colors flex items-center justify-center gap-2 disabled:opacity-60 btn-volt">
               {loading && <Loader2 size={16} className="animate-spin" />}

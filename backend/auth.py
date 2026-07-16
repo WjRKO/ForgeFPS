@@ -3,10 +3,17 @@ import logging
 import jwt
 import bcrypt
 import secrets
+import pyotp
+import qrcode
+import io
+import base64
+from argon2 import PasswordHasher
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Request, Response, Depends
 from pydantic import BaseModel, EmailStr, Field
 from bson import ObjectId
+
+_ph = PasswordHasher()
 
 JWT_ALGORITHM = "HS256"
 ACCESS_MINUTES = 15
@@ -21,15 +28,21 @@ def get_jwt_secret() -> str:
 
 
 def hash_password(password: str) -> str:
-    salt = bcrypt.gensalt()
-    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+    return _ph.hash(password)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     try:
+        if hashed.startswith("$argon2"):
+            _ph.verify(hashed, plain)
+            return True
         return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
     except Exception:
         return False
+
+
+def needs_rehash(hashed: str) -> bool:
+    return not hashed.startswith("$argon2")
 
 
 def create_access_token(user_id: str, email: str) -> str:
@@ -62,6 +75,11 @@ class RegisterInput(BaseModel):
 class LoginInput(BaseModel):
     email: EmailStr
     password: str
+    code: str | None = Field(default=None, max_length=16)
+
+
+class MfaCodeInput(BaseModel):
+    code: str = Field(min_length=6, max_length=16)
 
 
 class ForgotInput(BaseModel):
@@ -94,7 +112,21 @@ class DeleteAccountInput(BaseModel):
 
 def public_user(user: dict) -> dict:
     return {"id": str(user["_id"]), "email": user["email"],
-            "name": user.get("name", ""), "role": user.get("role", "user")}
+            "name": user.get("name", ""), "role": user.get("role", "user"),
+            "mfa_enabled": bool(user.get("mfa_enabled"))}
+
+
+def _verify_mfa(user: dict, code: str) -> bool:
+    if not code:
+        return False
+    code = code.strip().replace(" ", "")
+    secret = user.get("mfa_secret")
+    if secret and pyotp.TOTP(secret).verify(code, valid_window=1):
+        return True
+    for rc in user.get("mfa_recovery", []):
+        if verify_password(code, rc):
+            return True
+    return False
 
 
 def build_auth_router(db):
@@ -155,6 +187,14 @@ def build_auth_router(db):
             raise HTTPException(status_code=401, detail="Invalid email or password")
         await db.login_attempts.delete_one({"identifier": identifier})
         uid = str(user["_id"])
+        if user.get("mfa_enabled"):
+            if not _verify_mfa(user, data.code or ""):
+                return {"mfa_required": True}
+            await db.users.update_one(
+                {"_id": user["_id"]},
+                {"$pull": {"mfa_recovery": {"$in": [rc for rc in user.get("mfa_recovery", []) if verify_password((data.code or "").strip(), rc)]}}})
+        if needs_rehash(user["password_hash"]):
+            await db.users.update_one({"_id": user["_id"]}, {"$set": {"password_hash": hash_password(data.password)}})
         set_auth_cookies(response, create_access_token(uid, email), create_refresh_token(uid))
         return public_user(user)
 
@@ -181,8 +221,7 @@ def build_auth_router(db):
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")
             access = create_access_token(str(user["_id"]), user["email"])
-            response.set_cookie("access_token", access, httponly=True, secure=COOKIE_SECURE,
-                                samesite="lax", max_age=ACCESS_MINUTES * 60, path="/")
+            set_auth_cookies(response, access, create_refresh_token(str(user["_id"])))
             return {"ok": True}
         except jwt.InvalidTokenError:
             raise HTTPException(status_code=401, detail="Invalid refresh token")
@@ -259,6 +298,44 @@ def build_auth_router(db):
             await db[coll].delete_many({"user_id": uid})
         response.delete_cookie("access_token", path="/")
         response.delete_cookie("refresh_token", path="/")
+        return {"ok": True}
+
+    @router.get("/mfa/status")
+    async def mfa_status(user: dict = Depends(get_current_user)):
+        return {"enabled": bool(user.get("mfa_enabled"))}
+
+    @router.post("/mfa/setup")
+    async def mfa_setup(user: dict = Depends(get_current_user)):
+        secret = pyotp.random_base32()
+        await db.users.update_one({"_id": user["_id"]}, {"$set": {"mfa_pending": secret}})
+        uri = pyotp.TOTP(secret).provisioning_uri(name=user["email"], issuer_name="FrameForge")
+        img = qrcode.make(uri)
+        buf = io.BytesIO(); img.save(buf, format="PNG")
+        qr_data = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+        return {"secret": secret, "otpauth_uri": uri, "qr": qr_data}
+
+    @router.post("/mfa/enable")
+    async def mfa_enable(data: MfaCodeInput, user: dict = Depends(get_current_user)):
+        secret = user.get("mfa_pending")
+        if not secret:
+            raise HTTPException(status_code=400, detail="Avvia prima la configurazione MFA")
+        if not pyotp.TOTP(secret).verify(data.code.strip().replace(" ", ""), valid_window=1):
+            raise HTTPException(status_code=400, detail="Codice non valido")
+        recovery = [secrets.token_hex(4) for _ in range(10)]
+        await db.users.update_one({"_id": user["_id"]}, {
+            "$set": {"mfa_enabled": True, "mfa_secret": secret,
+                     "mfa_recovery": [hash_password(r) for r in recovery]},
+            "$unset": {"mfa_pending": ""}})
+        return {"ok": True, "recovery_codes": recovery}
+
+    @router.post("/mfa/disable")
+    async def mfa_disable(data: MfaCodeInput, user: dict = Depends(get_current_user)):
+        if not user.get("mfa_enabled"):
+            return {"ok": True}
+        if not _verify_mfa(user, data.code):
+            raise HTTPException(status_code=400, detail="Codice non valido")
+        await db.users.update_one({"_id": user["_id"]},
+                                  {"$unset": {"mfa_enabled": "", "mfa_secret": "", "mfa_recovery": "", "mfa_pending": ""}})
         return {"ok": True}
 
     return router, get_current_user

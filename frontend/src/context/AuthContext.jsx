@@ -20,8 +20,9 @@ export function AuthProvider({ children }) {
 
   useEffect(() => { check(); }, [check]);
 
-  const login = async (email, password) => {
-    const { data } = await api.post("/auth/login", { email, password });
+  const login = async (email, password, code) => {
+    const { data } = await api.post("/auth/login", { email, password, code });
+    if (data && data.mfa_required) return data;
     setUser(data);
     return data;
   };

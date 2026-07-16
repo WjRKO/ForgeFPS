@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
-import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu, Activity, Copy, Check, Gamepad2, Sparkles, ChevronDown, FileCheck2, Lock } from "lucide-react";
-import { AGENT_EXE_URL, AGENT_EXE_SHA256, AGENT_EXE_VERSION } from "@/config/agent";
+import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu, Activity, Copy, Check, Gamepad2, Sparkles, ChevronDown, FileCheck2, Lock, History } from "lucide-react";
+import { AGENT_EXE_URL, AGENT_EXE_SHA256, AGENT_EXE_VERSION, AGENT_EXE_DATE, AGENT_RELEASES_URL } from "@/config/agent";
 import { toast } from "sonner";
 import api, { API } from "@/lib/api";
 
@@ -192,6 +192,10 @@ export default function DesktopAgent() {
             <div className="flex items-center gap-2">
               <h2 className="font-display font-bold text-lg">{s.exe_title}</h2>
               <span className="text-[10px] font-mono uppercase tracking-widest bg-[#00E0FF]/15 text-[#00E0FF] border border-[#00E0FF]/30 px-2 py-0.5">{AGENT_EXE_VERSION}</span>
+            </div>
+            <div className="flex items-center gap-3 mt-1 text-[11px] font-mono text-zinc-500">
+              <span className="inline-flex items-center gap-1"><History size={11} /> {en ? "Updated" : "Aggiornato"} {AGENT_EXE_DATE}</span>
+              <a href={AGENT_RELEASES_URL} target="_blank" rel="noreferrer" data-testid="exe-releases-link" className="text-[#00E0FF] hover:underline">{en ? "All versions" : "Tutte le versioni"} →</a>
             </div>
             <p className="text-zinc-400 text-sm mt-1 max-w-2xl">{s.exe_desc}</p>
             <a href={AGENT_EXE_URL} target="_blank" rel="noreferrer" data-testid="exe-download-btn"
