@@ -214,6 +214,8 @@ export default function Account() {
           </div>
         </Card>
 
+        <MfaCard c={c} />
+
         <Card icon={SlidersHorizontal} title={c.prefs} accent="#00FF66" testid="account-prefs">
           <div className="space-y-4">
             <div className="flex items-start justify-between gap-4">
