@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu, Activity, Copy, Check, Gamepad2, Sparkles, ChevronDown, FileCheck2, Lock } from "lucide-react";
+import { AGENT_EXE_URL, AGENT_EXE_SHA256, AGENT_EXE_VERSION } from "@/config/agent";
 import { toast } from "sonner";
 import api, { API } from "@/lib/api";
 
@@ -117,8 +118,8 @@ function CmdRow({ label, cmd, testid, accent }) {
 
 const SECURE = {
   it: {
-    exe_badge: "In arrivo", exe_title: "App desktop con un click", exe_desc: "Presto: scarichi un'app Windows (.exe) e fai doppio click. Niente comandi. Firma digitale e installer verificabile in preparazione.",
-    exe_btn: "App .exe — presto",
+    exe_badge: "In arrivo", exe_title: "App desktop con un click", exe_desc: "Scarica l'app Windows (.exe) e avviala. Firma digitale in preparazione: al primo avvio Windows può mostrare «App non riconosciuta» → Ulteriori informazioni → Esegui comunque.",
+    exe_btn: "Scarica FrameForge (.exe)", exe_run: "Avvia l'app con il tuo token:", exe_sha: "SHA256 dell'.exe",
     secure_title: "Metodo sicuro (consigliato)", secure_desc: "Niente comandi remoti. Scarichi lo script, ne verifichi l'integrità (SHA256) ed esegui il file locale. Puoi aprirlo e leggerlo prima di eseguirlo.",
     token_label: "Il tuo token (privato)",
     s1: "1) Scarica lo script (non lo esegue)", s2: "2) Verifica l'integrità: l'hash deve coincidere con quello qui sotto", s3: "3) Esegui il file locale (cambia -Mode per l'azione)",
@@ -128,8 +129,8 @@ const SECURE = {
     adv: "Avanzato / per utenti esperti", exec_note: "Suggerimento: apri PowerShell come Amministratore per applicare tutti i tweak.",
   },
   en: {
-    exe_badge: "Coming soon", exe_title: "One-click desktop app", exe_desc: "Soon: download a Windows app (.exe) and double-click. No commands. Digital signature and verifiable installer in progress.",
-    exe_btn: ".exe app — soon",
+    exe_badge: "Coming soon", exe_title: "One-click desktop app", exe_desc: "Download the Windows app (.exe) and launch it. Digital signature in progress: on first run Windows may show \u201cUnrecognized app\u201d \u2192 More info \u2192 Run anyway.",
+    exe_btn: "Download FrameForge (.exe)", exe_run: "Launch the app with your token:", exe_sha: ".exe SHA256",
     secure_title: "Secure method (recommended)", secure_desc: "No remote commands. Download the script, verify its integrity (SHA256) and run the local file. You can open and read it before running.",
     token_label: "Your token (private)",
     s1: "1) Download the script (does not run it)", s2: "2) Verify integrity: the hash must match the one below", s3: "3) Run the local file (change -Mode for the action)",
@@ -183,19 +184,29 @@ export default function DesktopAgent() {
         <h1 className="font-display font-black text-3xl tracking-tighter">{t("desktop.title")}</h1>
       </div>
 
-      {/* Coming soon: one-click .exe */}
-      <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-4" data-testid="exe-teaser">
+      {/* One-click .exe */}
+      <div className="bg-[#0F0F12] border border-[#00E0FF]/40 p-6 mb-4" data-testid="exe-teaser">
         <div className="flex items-start gap-4">
-          <div className="w-11 h-11 border border-[#2A2A35] flex items-center justify-center shrink-0"><MonitorDown size={22} className="text-[#00E0FF]" /></div>
-          <div className="flex-1">
+          <div className="w-11 h-11 border border-[#00E0FF]/40 flex items-center justify-center shrink-0"><MonitorDown size={22} className="text-[#00E0FF]" /></div>
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="font-display font-bold text-lg">{s.exe_title}</h2>
-              <span className="text-[10px] font-mono uppercase tracking-widest bg-[#00E0FF]/15 text-[#00E0FF] border border-[#00E0FF]/30 px-2 py-0.5">{s.exe_badge}</span>
+              <span className="text-[10px] font-mono uppercase tracking-widest bg-[#00E0FF]/15 text-[#00E0FF] border border-[#00E0FF]/30 px-2 py-0.5">{AGENT_EXE_VERSION}</span>
             </div>
             <p className="text-zinc-400 text-sm mt-1 max-w-2xl">{s.exe_desc}</p>
-            <button disabled data-testid="exe-download-btn" className="mt-3 inline-flex items-center gap-2 border border-[#2A2A35] text-zinc-500 px-5 py-2.5 text-sm cursor-not-allowed uppercase tracking-wide">
+            <a href={AGENT_EXE_URL} target="_blank" rel="noreferrer" data-testid="exe-download-btn"
+              className="mt-3 inline-flex items-center gap-2 bg-[#00E0FF] text-black font-bold px-5 py-2.5 text-sm uppercase tracking-wide hover:bg-[#33e8ff] transition-colors">
               <Download size={16} /> {s.exe_btn}
-            </button>
+            </a>
+            <div className="flex items-center gap-2 mt-3 text-xs">
+              <FileCheck2 size={13} className="text-[#00FF66] shrink-0" />
+              <span className="text-zinc-500">{s.exe_sha}:</span>
+              <code className="text-zinc-300 break-all" data-testid="exe-sha256">{AGENT_EXE_SHA256}</code>
+            </div>
+            <div className="mt-3">
+              <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">{s.exe_run}</div>
+              <CmdRow label="" cmd={`forgefps-agent.exe --token ${token || "IL_TUO_TOKEN"} --mode optimize`} testid="exe-run" accent="text-[#E5FF00]" />
+            </div>
           </div>
         </div>
       </div>

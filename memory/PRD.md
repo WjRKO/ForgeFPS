@@ -399,3 +399,9 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - KIT .EXE (Fase C, prep): /app/agent-build/ con forgefps_agent.py (backend=forgefps.dev, token via --token), build.bat, build.ps1, README.md (build PyInstaller + SHA256 + istruzioni firma Authenticode). desktop_agent.py: argparse --token/--backend/--mode, esce se token mancante. NB: l'.exe va generato/testato su Windows dall'utente; poi fornirà l'URL della GitHub Release da collegare al bottone 'Scarica FrameForge'.
 - Nota build: warning preesistenti react-hooks/exhaustive-deps in BiosRestore/Commands (non bloccanti sul deploy attuale).
 - Test: /app/backend/tests (12/12). /app/test_reports/iteration_19.json.
+
+### 2026-07-16 - .exe collegato (GitHub Release)
+- Utente ha buildato forgefps-agent.exe e pubblicato su GitHub Release v0.4.2 (WjRKO/ForgeFPS).
+- Config: /app/frontend/src/config/agent.js (AGENT_EXE_URL, AGENT_EXE_SHA256=0f9b1dbb..., version v0.4.2).
+- DesktopAgent.jsx: card 'One-click desktop app' con bottone download reale + SHA256 + comando 'forgefps-agent.exe --token <T> --mode optimize'. SecureInstaller.jsx (Landing + /security): download → release reale + SHA256 mostrato.
+- Backlog UX: l'.exe attuale esce se manca --token; migliorare desktop_agent.py per PROMPT interattivo del token (input) così il doppio click funziona senza CLI (richiede rebuild utente). Firma Authenticode = fase successiva (toglie SmartScreen).

@@ -1,6 +1,6 @@
 import { Download, ShieldCheck, FileCheck2, Lock, RefreshCw } from "lucide-react";
-import { Link } from "react-router-dom";
 import { useLang } from "@/components/MarketingChrome";
+import { AGENT_EXE_URL, AGENT_EXE_SHA256, AGENT_EXE_VERSION } from "@/config/agent";
 
 const COPY = {
   it: {
@@ -42,12 +42,18 @@ export const SecureInstaller = ({ compact }) => {
       <h3 className="font-display font-black text-2xl tracking-tight mb-2">{c.title}</h3>
       <p className="text-zinc-400 text-sm mb-5 max-w-md">{c.sub}</p>
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-5">
-        <Link to="/register" data-testid="secure-installer-download"
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
+        <a href={AGENT_EXE_URL} target="_blank" rel="noreferrer" data-testid="secure-installer-download"
           className="group inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-6 py-3 hover:bg-[#D4EC00] transition-colors btn-volt uppercase tracking-wide text-sm">
           <Download size={16} /> {c.download}
-        </Link>
-        <span className="text-xs font-mono text-zinc-500">{c.version}</span>
+        </a>
+        <span className="text-xs font-mono text-zinc-500">{AGENT_EXE_VERSION} · Windows 10/11 · x64</span>
+      </div>
+
+      <div className="flex items-center gap-2 mb-5 text-xs">
+        <FileCheck2 size={13} className="text-[#00FF66] shrink-0" />
+        <span className="text-zinc-500">SHA256:</span>
+        <code className="text-zinc-300 break-all" data-testid="secure-installer-sha256">{AGENT_EXE_SHA256}</code>
       </div>
 
       <div className={`grid ${compact ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2"} gap-2`}>
