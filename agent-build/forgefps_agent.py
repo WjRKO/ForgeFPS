@@ -29,9 +29,22 @@ AGENT_TOKEN = _args.token
 BACKUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "boostpc_backup.json")
 
 if not AGENT_TOKEN or AGENT_TOKEN.startswith("__"):
-    print("[FrameForge] Token mancante. Avvia:  forgefps-agent.exe --token IL_TUO_TOKEN")
-    print("[FrameForge] Il token si trova nella pagina 'Collega il PC' del tuo account.")
-    sys.exit(1)
+    print("=" * 50)
+    print("  FrameForge Desktop Agent")
+    print("=" * 50)
+    print("Incolla il tuo token (pagina 'Collega il PC' del tuo account) e premi INVIO.")
+    print("Paste your token (from the 'Connect PC' page) and press ENTER.")
+    try:
+        AGENT_TOKEN = input("Token > ").strip()
+    except Exception:
+        AGENT_TOKEN = ""
+    if not AGENT_TOKEN:
+        print("Nessun token inserito. / No token provided.")
+        try:
+            input("Premi INVIO per chiudere... / Press ENTER to close...")
+        except Exception:
+            pass
+        sys.exit(1)
 
 
 def is_admin():

@@ -119,7 +119,7 @@ function CmdRow({ label, cmd, testid, accent }) {
 const SECURE = {
   it: {
     exe_badge: "In arrivo", exe_title: "App desktop con un click", exe_desc: "Scarica l'app Windows (.exe) e avviala. Firma digitale in preparazione: al primo avvio Windows può mostrare «App non riconosciuta» → Ulteriori informazioni → Esegui comunque.",
-    exe_btn: "Scarica FrameForge (.exe)", exe_run: "Avvia l'app con il tuo token:", exe_sha: "SHA256 dell'.exe",
+    exe_btn: "Scarica FrameForge (.exe)", exe_run: "Fai doppio click e incolla il token quando richiesto — oppure da terminale:", exe_sha: "SHA256 dell'.exe",
     secure_title: "Metodo sicuro (consigliato)", secure_desc: "Niente comandi remoti. Scarichi lo script, ne verifichi l'integrità (SHA256) ed esegui il file locale. Puoi aprirlo e leggerlo prima di eseguirlo.",
     token_label: "Il tuo token (privato)",
     s1: "1) Scarica lo script (non lo esegue)", s2: "2) Verifica l'integrità: l'hash deve coincidere con quello qui sotto", s3: "3) Esegui il file locale (cambia -Mode per l'azione)",
@@ -130,7 +130,7 @@ const SECURE = {
   },
   en: {
     exe_badge: "Coming soon", exe_title: "One-click desktop app", exe_desc: "Download the Windows app (.exe) and launch it. Digital signature in progress: on first run Windows may show \u201cUnrecognized app\u201d \u2192 More info \u2192 Run anyway.",
-    exe_btn: "Download FrameForge (.exe)", exe_run: "Launch the app with your token:", exe_sha: ".exe SHA256",
+    exe_btn: "Download FrameForge (.exe)", exe_run: "Double-click and paste the token when asked — or from a terminal:", exe_sha: ".exe SHA256",
     secure_title: "Secure method (recommended)", secure_desc: "No remote commands. Download the script, verify its integrity (SHA256) and run the local file. You can open and read it before running.",
     token_label: "Your token (private)",
     s1: "1) Download the script (does not run it)", s2: "2) Verify integrity: the hash must match the one below", s3: "3) Run the local file (change -Mode for the action)",
