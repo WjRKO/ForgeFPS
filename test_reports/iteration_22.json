@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend E2E of FrameForge Demo Scan (/) and Guest Demo (/demo). All 7 review items verified via Playwright against the preview URL. Real client-side scan executes: browser hardware detection (WebGL GPU 'Vulkan 1.3.0', 8 threads, RAM >=8GB, Linux OS) plus a real Cloudflare bufferbloat test (grade C, latency 45ms, under-load 111ms, download 319 Mb). Rule-based advice renders (advice-0 = 'Update your GPU drivers'). Both CTAs on landing (demo-scan-cta -> /register, demo-scan-explore -> /demo) work. /demo renders demo-app + demo-banner, all 4 tabs switch without errors, dashboard health ring shows 87, Live tab shows recharts SVG chart with sample lines, Advisor Send button wrapper renders (inner <button disabled> is correctly disabled inside LockedBtn), Report tab loads. Register CTAs (demo-unlock-cta, demo-bottom-cta) both navigate to /register. Language toggle IT/EN does not break the page.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/demo Dashboard hero telemetry (top-right widget on landing) and any pre-mount recharts container", "issues": ["Recharts console warnings: 'The width(-1) and height(-1) of chart should be greater than 0' repeated 4-8x per navigation. Purely cosmetic/log-noise (chart still renders after mount) but should be silenced by giving ResponsiveContainer a minHeight or fixed aspect ratio."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional) Silence recharts width(-1)/height(-1) warnings by adding minHeight/aspect to ResponsiveContainer parents (Live tab and any hero telemetry chart)."
+  ],
+  "critical_code_review_comments": [
+    "LockedBtn wraps a real disabled <button> inside a div carrying the data-testid; testers doing await el.get_attribute('disabled') on the testid element get null. Consider moving data-testid onto the <button> itself, or adding aria-disabled='true' on the wrapper for easier automated verification. Current behavior is functionally correct (button IS disabled).",
+    "Real scan gracefully handled server-side environment (Linux, headless browser reported Vulkan 1.3.0) - good fallback path.",
+    "Cloudflare speed.cloudflare.com fetch worked from preview environment. Consider a client-side timeout guard so users on very slow links still see fallback within ~15s."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only run requested)", "frontend": "100%"},
+  "test_credentials": "None required - both routes are public.",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All demo scan + /demo flows verified working end-to-end on the preview URL. If iterating: the network test can take up to ~10s; allow 30s for demo-scan-results. The demo-advisor-send data-testid is on a wrapper div (button disabled is inside). Recharts console warnings are non-blocking.",
+  "rca of the issue": "N/A - no bugs found."
+}

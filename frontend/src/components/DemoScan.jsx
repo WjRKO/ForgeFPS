@@ -1,46 +1,55 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Cpu, MonitorPlay, AlertTriangle, TrendingUp, Loader2, ScanLine, ArrowRight, Check } from "lucide-react";
+import { Cpu, MonitorPlay, MemoryStick, MonitorSmartphone, AlertTriangle, Loader2, ScanLine, ArrowRight, Check, Gauge, Wifi } from "lucide-react";
 import { useLang } from "@/components/MarketingChrome";
+import { detectBrowserSpecs } from "@/lib/detectSpecs";
+import { runNetTest } from "@/lib/netTest";
+import { buildAdvice } from "@/lib/quickAdvice";
 
 const COPY = {
   it: {
-    eyebrow: "// demo · nessuna installazione",
-    title: "Scansione demo",
-    sub: "Prova una diagnostica dimostrativa su una build di esempio. I dati sono illustrativi.",
-    rig: "Build di esempio",
+    eyebrow: "// scansione reale · nessun account",
+    title: "Scansiona il tuo PC",
+    sub: "Analisi reale dal browser: hardware, qualità di rete e consigli su misura. Nessun download, nessun account.",
     run: "Avvia scansione gratuita",
     scanning: "Scansione in corso...",
-    problems: "Problemi trovati",
-    improvement: "Miglioramento stimato",
-    cta: "Analizza il mio PC",
-    steps: ["Rilevamento hardware", "Analisi processi in background", "Controllo impostazioni latenza", "Verifica configurazione streaming"],
-    probs: [
-      { t: "Processi in background", d: "7 app non necessarie occupano CPU/RAM durante il gioco." },
-      { t: "Impostazioni latenza NVIDIA", d: "Low Latency Mode e Reflex non ottimizzati." },
-      { t: "Configurazione OBS", d: "Encoder e priorità non ideali per lo streaming 1080p60." },
-    ],
-    fps: "+12–18 FPS", lat: "−8 ms latenza", note: "Basato su hardware simile. Risultati reali dopo la scansione con l'agent.",
+    steps: ["Rilevamento hardware", "Latenza di rete (a riposo)", "Test bufferbloat sotto carico", "Consigli su misura"],
+    hw: "Il tuo hardware",
+    net: "Qualità di rete",
+    idle: "Latenza", load: "Sotto carico", bloat: "Bufferbloat", down: "Download",
+    unknown: "Non rilevato",
+    netfail: "Test di rete non disponibile (bloccato dal browser o rete). Consigli comunque su misura qui sotto.",
+    advice: "Consigli per te",
+    note: "Dati reali rilevati dal tuo browser. Temperature, FPS in-game e ottimizzazioni reali richiedono l'agent (dopo la registrazione).",
+    cta: "Ottimizza davvero — registrati",
+    demo: "Esplora la demo dell'app",
   },
   en: {
-    eyebrow: "// demo · no install",
-    title: "Demo scan",
-    sub: "Try a demonstrative diagnostic on a sample build. Data is illustrative.",
-    rig: "Sample build",
+    eyebrow: "// real scan · no account",
+    title: "Scan your PC",
+    sub: "Real in-browser analysis: hardware, network quality and tailored tips. No download, no account.",
     run: "Run free scan",
     scanning: "Scanning...",
-    problems: "Problems found",
-    improvement: "Estimated improvement",
-    cta: "Analyze my PC",
-    steps: ["Hardware detection", "Background process analysis", "Latency settings check", "Streaming config verification"],
-    probs: [
-      { t: "Background processes", d: "7 unnecessary apps consuming CPU/RAM during gameplay." },
-      { t: "NVIDIA latency settings", d: "Low Latency Mode and Reflex not optimized." },
-      { t: "OBS configuration", d: "Encoder and priority not ideal for 1080p60 streaming." },
-    ],
-    fps: "+12–18 FPS", lat: "−8 ms latency", note: "Based on similar hardware. Real results after scanning with the agent.",
+    steps: ["Hardware detection", "Idle network latency", "Bufferbloat under load", "Tailored recommendations"],
+    hw: "Your hardware",
+    net: "Network quality",
+    idle: "Latency", load: "Under load", bloat: "Bufferbloat", down: "Download",
+    unknown: "Not detected",
+    netfail: "Network test unavailable (blocked by browser or network). Tailored tips still shown below.",
+    advice: "Recommendations for you",
+    note: "Real data detected from your browser. Temperatures, in-game FPS and real optimizations require the agent (after sign-up).",
+    cta: "Optimize for real — sign up",
+    demo: "Explore the app demo",
   },
+};
+
+const gradeColor = (g) => {
+  if (!g) return "text-zinc-400";
+  if (g.startsWith("A")) return "text-[#00FF66]";
+  if (g === "B") return "text-[#E5FF00]";
+  if (g === "C") return "text-[#FF6B00]";
+  return "text-[#FF3B30]";
 };
 
 export const DemoScan = () => {
@@ -48,15 +57,42 @@ export const DemoScan = () => {
   const c = COPY[lang];
   const [state, setState] = useState("idle"); // idle | scanning | done
   const [step, setStep] = useState(0);
+  const [specs, setSpecs] = useState(null);
+  const [net, setNet] = useState(null);
+  const [advice, setAdvice] = useState([]);
 
-  const run = () => {
-    setState("scanning"); setStep(0);
-    let i = 0;
-    const iv = setInterval(() => {
-      i += 1; setStep(i);
-      if (i >= c.steps.length) { clearInterval(iv); setTimeout(() => setState("done"), 500); }
-    }, 650);
+  const run = async () => {
+    setState("scanning"); setStep(0); setNet(null);
+    // 1. Hardware (real, instant)
+    const hw = detectBrowserSpecs();
+    setSpecs(hw);
+    await new Promise((r) => setTimeout(r, 500));
+    setStep(1);
+    // 2 + 3. Network test (real, client-side)
+    let netRes = null;
+    try {
+      await new Promise((r) => setTimeout(r, 300));
+      setStep(2);
+      netRes = await runNetTest();
+    } catch {
+      netRes = null;
+    }
+    setNet(netRes);
+    setStep(3);
+    // 4. Advice (rules)
+    const adv = buildAdvice(hw, netRes, lang);
+    setAdvice(adv);
+    await new Promise((r) => setTimeout(r, 400));
+    setStep(4);
+    setState("done");
   };
+
+  const HwCell = ({ icon: Icon, label, value, color }) => (
+    <div className="bg-black border border-[#1A1A24] p-3" data-testid={`demo-hw-${label.toLowerCase()}`}>
+      <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-zinc-500"><Icon size={11} className={color} /> {label}</div>
+      <div className="font-display font-bold text-sm mt-1 truncate">{value || c.unknown}</div>
+    </div>
+  );
 
   return (
     <div className="bg-[#0A0A0C] border border-[#2A2A35] relative overflow-hidden" data-testid="demo-scan">
@@ -69,19 +105,8 @@ export const DemoScan = () => {
 
       <div className="p-6">
         <div className="text-[10px] font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-2">{c.eyebrow}</div>
-        <h3 className="font-display font-black text-2xl tracking-tight mb-4">{c.title}</h3>
-
-        {/* Sample rig */}
-        <div className="grid grid-cols-2 gap-2 mb-5">
-          <div className="bg-black border border-[#1A1A24] p-3">
-            <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-zinc-500"><Cpu size={11} className="text-[#00FF66]" /> CPU</div>
-            <div className="font-display font-bold text-sm mt-1">Ryzen 7 5800X</div>
-          </div>
-          <div className="bg-black border border-[#1A1A24] p-3">
-            <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-zinc-500"><MonitorPlay size={11} className="text-[#00E0FF]" /> GPU</div>
-            <div className="font-display font-bold text-sm mt-1">RTX 4070</div>
-          </div>
-        </div>
+        <h3 className="font-display font-black text-2xl tracking-tight mb-2">{c.title}</h3>
+        <p className="text-sm text-zinc-500 mb-5 leading-relaxed">{c.sub}</p>
 
         {state === "idle" && (
           <button onClick={run} data-testid="demo-scan-run"
@@ -108,11 +133,46 @@ export const DemoScan = () => {
         <AnimatePresence>
           {state === "done" && (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} data-testid="demo-scan-results">
-              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{c.problems}</div>
-              <div className="space-y-2 mb-5">
-                {c.probs.map((p, i) => (
-                  <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.12 }}
-                    className="flex items-start gap-3 bg-black border border-[#1A1A24] border-l-2 border-l-[#E5FF00] px-3 py-2.5">
+              {/* Real hardware */}
+              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{c.hw}</div>
+              <div className="grid grid-cols-2 gap-2 mb-5">
+                <HwCell icon={MonitorPlay} label="GPU" value={specs?.gpu} color="text-[#00E0FF]" />
+                <HwCell icon={Cpu} label="CPU" value={specs?.cpu_threads ? `${specs.cpu_threads} ${lang === "en" ? "threads" : "thread"}` : ""} color="text-[#00FF66]" />
+                <HwCell icon={MemoryStick} label="RAM" value={specs?.ram} color="text-[#B388FF]" />
+                <HwCell icon={MonitorSmartphone} label="OS" value={specs?.os} color="text-[#E5FF00]" />
+              </div>
+
+              {/* Real network */}
+              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{c.net}</div>
+              {net ? (
+                <div className="grid grid-cols-4 gap-2 mb-5" data-testid="demo-net-result">
+                  <div className="bg-black border border-[#1A1A24] p-3 text-center">
+                    <div className="text-[9px] uppercase tracking-widest text-zinc-500 flex items-center justify-center gap-1"><Gauge size={10} /> {c.bloat}</div>
+                    <div className={`font-display font-black text-2xl mt-1 ${gradeColor(net.grade)}`}>{net.grade || "--"}</div>
+                  </div>
+                  <div className="bg-black border border-[#1A1A24] p-3 text-center">
+                    <div className="text-[9px] uppercase tracking-widest text-zinc-500">{c.idle}</div>
+                    <div className="font-display font-black text-lg mt-1 text-zinc-100">{net.idleMs}<span className="text-xs text-zinc-500">ms</span></div>
+                  </div>
+                  <div className="bg-black border border-[#1A1A24] p-3 text-center">
+                    <div className="text-[9px] uppercase tracking-widest text-zinc-500">{c.load}</div>
+                    <div className="font-display font-black text-lg mt-1 text-zinc-100">{net.loadedMs ?? "--"}<span className="text-xs text-zinc-500">ms</span></div>
+                  </div>
+                  <div className="bg-black border border-[#1A1A24] p-3 text-center">
+                    <div className="text-[9px] uppercase tracking-widest text-zinc-500 flex items-center justify-center gap-1"><Wifi size={10} /> {c.down}</div>
+                    <div className="font-display font-black text-lg mt-1 text-zinc-100">{net.downloadMbps ?? "--"}<span className="text-xs text-zinc-500"> Mb</span></div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-zinc-500 border border-[#1A1A24] bg-black px-3 py-2.5 mb-5">{c.netfail}</p>
+              )}
+
+              {/* Rule-based advice */}
+              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{c.advice}</div>
+              <div className="space-y-2 mb-4">
+                {advice.map((p, i) => (
+                  <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }}
+                    className="flex items-start gap-3 bg-black border border-[#1A1A24] border-l-2 border-l-[#E5FF00] px-3 py-2.5" data-testid={`demo-advice-${i}`}>
                     <AlertTriangle size={15} className="text-[#E5FF00] shrink-0 mt-0.5" />
                     <div>
                       <div className="text-sm text-zinc-100 font-semibold">{p.t}</div>
@@ -121,22 +181,18 @@ export const DemoScan = () => {
                   </motion.div>
                 ))}
               </div>
-              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{c.improvement}</div>
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                <div className="bg-[#00FF66]/10 border border-[#00FF66]/30 p-3">
-                  <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-[#00FF66]"><TrendingUp size={11} /> FPS</div>
-                  <div className="font-display font-black text-xl text-[#00FF66] mt-1">{c.fps}</div>
-                </div>
-                <div className="bg-[#00E0FF]/10 border border-[#00E0FF]/30 p-3">
-                  <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-[#00E0FF]"><TrendingUp size={11} /> LAT</div>
-                  <div className="font-display font-black text-xl text-[#00E0FF] mt-1">{c.lat}</div>
-                </div>
-              </div>
+
               <p className="text-[11px] text-zinc-600 mb-4 leading-relaxed">{c.note}</p>
-              <Link to="/register" data-testid="demo-scan-cta"
-                className="group w-full flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold py-3 hover:bg-[#D4EC00] transition-colors btn-volt uppercase tracking-wide text-sm">
-                {c.cta} <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-              </Link>
+              <div className="flex flex-col gap-2">
+                <Link to="/register" data-testid="demo-scan-cta"
+                  className="group w-full flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold py-3 hover:bg-[#D4EC00] transition-colors btn-volt uppercase tracking-wide text-sm">
+                  {c.cta} <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                </Link>
+                <Link to="/demo" data-testid="demo-scan-explore"
+                  className="w-full flex items-center justify-center gap-2 border border-[#2A2A35] text-zinc-300 font-semibold py-2.5 hover:border-[#E5FF00]/50 hover:text-white transition-colors text-sm">
+                  {c.demo}
+                </Link>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

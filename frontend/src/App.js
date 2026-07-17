@@ -12,6 +12,7 @@ const Security = lazy(() => import("@/pages/Security"));
 const PrivacyTelemetry = lazy(() => import("@/pages/PrivacyTelemetry"));
 const Changelog = lazy(() => import("@/pages/Changelog"));
 const Pricing = lazy(() => import("@/pages/Pricing"));
+const DemoApp = lazy(() => import("@/pages/DemoApp"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Advisor = lazy(() => import("@/pages/Advisor"));
 const BuildGenerator = lazy(() => import("@/pages/BuildGenerator"));
@@ -69,6 +70,7 @@ function App() {
               <Route path="/privacy-telemetry" element={<PrivacyTelemetry />} />
               <Route path="/changelog" element={<Changelog />} />
               <Route path="/pricing" element={<Pricing />} />
+              <Route path="/demo" element={<DemoApp />} />
               <Route path="/login" element={<Guest><Auth mode="login" /></Guest>} />
               <Route path="/register" element={<Guest><Auth mode="register" /></Guest>} />
               <Route path="/app" element={<Protected><Layout /></Protected>}>
