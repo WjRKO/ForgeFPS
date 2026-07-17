@@ -6,6 +6,7 @@ import { useLang } from "@/components/MarketingChrome";
 import { detectBrowserSpecs } from "@/lib/detectSpecs";
 import { runNetTest } from "@/lib/netTest";
 import { buildAdvice } from "@/lib/quickAdvice";
+import { trackConversion } from "@/lib/gtag";
 
 const COPY = {
   it: {
@@ -85,6 +86,7 @@ export const DemoScan = () => {
     await new Promise((r) => setTimeout(r, 400));
     setStep(4);
     setState("done");
+    trackConversion("demo_scan");
   };
 
   const HwCell = ({ icon: Icon, label, value, color }) => (

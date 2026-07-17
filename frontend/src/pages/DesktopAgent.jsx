@@ -6,6 +6,7 @@ import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, C
 import { AGENT_EXE_URL, AGENT_EXE_SHA256, AGENT_EXE_VERSION, AGENT_EXE_DATE, AGENT_RELEASES_URL, AGENT_DEFAULT_BACKEND } from "@/config/agent";
 import { toast } from "sonner";
 import api, { API } from "@/lib/api";
+import { trackConversion } from "@/lib/gtag";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const isEn = () => i18n.language?.startsWith("en");
@@ -214,7 +215,7 @@ export default function DesktopAgent() {
               <a href={AGENT_RELEASES_URL} target="_blank" rel="noreferrer" data-testid="exe-releases-link" className="text-[#00E0FF] hover:underline">{en ? "All versions" : "Tutte le versioni"} →</a>
             </div>
             <p className="text-zinc-400 text-sm mt-1 max-w-2xl">{s.exe_desc}</p>
-            <a href={AGENT_EXE_URL} target="_blank" rel="noreferrer" data-testid="exe-download-btn"
+            <a href={AGENT_EXE_URL} target="_blank" rel="noreferrer" data-testid="exe-download-btn" onClick={() => trackConversion("agent_download")}
               className="mt-3 inline-flex items-center gap-2 bg-[#00E0FF] text-black font-bold px-5 py-2.5 text-sm uppercase tracking-wide hover:bg-[#33e8ff] transition-colors">
               <Download size={16} /> {s.exe_btn}
             </a>
@@ -307,7 +308,7 @@ export default function DesktopAgent() {
               <CmdRow key={rm.m} label={en ? rm.en : rm.it} cmd={run(rm.m)} testid={`run-${rm.m}`} accent="text-zinc-500" />
             ))}
             <div className="flex flex-wrap gap-3 mt-4 border-t border-[#1A1A24] pt-4">
-              <a data-testid="download-agent-btn" href={`${API}/desktop-agent/download`}
+              <a data-testid="download-agent-btn" href={`${API}/desktop-agent/download`} onClick={() => trackConversion("agent_download")}
                 className="inline-flex items-center gap-2 border border-[#2A2A35] px-5 py-2.5 text-sm hover:border-[#E5FF00] transition-colors">
                 <Download size={16} /> {t("desktop.download_py")}
               </a>
