@@ -16,3 +16,23 @@ export function trackConversion(key) {
   if (!label) return; // no label configured yet -> skip silently
   window.gtag("event", "conversion", { send_to: `${AW_ID}/${label}` });
 }
+
+export const CONSENT_KEY = "ff_consent";
+
+// Update Google Consent Mode v2 signals based on the user's choice.
+export function setConsent(granted) {
+  const v = granted ? "granted" : "denied";
+  try { localStorage.setItem(CONSENT_KEY, v); } catch (e) {}
+  if (typeof window !== "undefined" && typeof window.gtag === "function") {
+    window.gtag("consent", "update", {
+      ad_storage: v,
+      ad_user_data: v,
+      ad_personalization: v,
+      analytics_storage: v,
+    });
+  }
+}
+
+export function getStoredConsent() {
+  try { return localStorage.getItem(CONSENT_KEY); } catch (e) { return null; }
+}

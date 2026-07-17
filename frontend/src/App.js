@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
+import { ConsentBanner } from "@/components/ConsentBanner";
 
 const Layout = lazy(() => import("@/components/Layout"));
 const Landing = lazy(() => import("@/pages/Landing"));
@@ -63,6 +64,7 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <Toaster theme="dark" position="top-right" />
+          <ConsentBanner />
           <Suspense fallback={<Fallback />}>
             <Routes>
               <Route path="/" element={<Landing />} />
