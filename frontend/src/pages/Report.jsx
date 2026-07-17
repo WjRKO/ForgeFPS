@@ -147,7 +147,7 @@ export default function Report() {
         a.href = dataUrl; a.download = "frameforge-report.png"; a.click();
       }
       toast.success(c.exported);
-    } catch { toast.error(c.err); } finally { setBusy(""); }
+    } catch (e) { console.error("report export failed", e); toast.error(c.err); } finally { setBusy(""); }
   };
 
   const { before, after, deltas } = report;

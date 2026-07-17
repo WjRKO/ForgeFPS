@@ -422,3 +422,17 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 ### Prossimo: FASE 3 - Agent Windows security-first (ps_agent.py)
 - Ogni tweak deve mostrare: Problema trovato → Motivo → Modifica proposta → Impatto stimato + pulsante "Applica".
 - Guardrail: mai toccare Windows Defender/servizi sicurezza, privilegi minimi, backup+rollback obbligatorio prima di ogni tweak.
+
+### 2026-07-17 - FASE 3 Agent security-first + Report Prima/Dopo (FATTO)
+#### Fase 3 - ps_agent.py GUI security-first (parse OK + guardrail runtime testati; GUI WinForms testabile solo su Windows reale)
+- GUARDRAIL SICUREZZA: $script:FORBIDDEN_SVC (WinDefend/WdNisSvc/WdFilter/Sense/SecurityHealthService/wscsvc/mpssvc/MpsSvc/SgrmBroker...) + $script:FORBIDDEN_REG (Windows Defender/Security Center/Security Health). Set-Reg blocca qualsiasi scrittura su area protetta; Disable-ServiceSafe rifiuta i servizi di sicurezza. Do-Telemetry/Do-SearchIndex ora usano Disable-ServiceSafe. Testato via pwsh: Defender reg/svc bloccati, DiagTrack/WSearch consentiti, firewall (mpssvc) bloccato.
+- CATALOGO TWEAKS esteso: ogni tweak (26) ora ha problem (Problema trovato), reason (Motivo), desc (Modifica proposta), impact (Impatto stimato), risk (safe/caution). Preservati cat/id/name/state/apply.
+- NUOVA GUI a CARD: header con branding FrameForge + banner verde "SICUREZZA GARANTITA - non tocchiamo mai Defender/Firewall, backup automatico reversibile" + stato admin + contatore backup. Preset (Competitivo/Streaming/Completo). TabControl 4 categorie con FlowLayoutPanel di card. Ogni card: barra accento (volt/arancio se caution), checkbox nome, badge CAUTELA, "Stato attuale", righe Problema/Motivo/Modifica/Impatto colorate, pulsante "Applica" per singolo tweak (pattern .Tag, no GetNewClosure). Bottom: benchmark PRIMA/DOPO, log console, APPLICA SELEZIONATI, RIPRISTINA TUTTO, elevazione admin. Refresh-Status aggiorna stato+backup dopo ogni azione.
+- Backup/rollback OBBLIGATORIO: Save-Backup dopo ogni apply (singolo e bulk); RIPRISTINA TUTTO usa Invoke-Restore.
+- Validazione: pwsh 7.4.6 Parser = PARSE OK (script servito 85KB), catalogo integro (26 tweak, tutti i campi), guardrail runtime OK. agent/script HTTP 200 + script-info SHA coerente.
+
+#### Report Prima/Dopo cliente (backend testato curl, frontend testing_agent iteration_21 = 100%)
+- BACKEND pc.py: _gather_snapshot(uid) raccoglie health_score/grade (compute_health da pc_specs.health), bufferbloat_ms/grade (net_results), fps_avg (media fps da pc_telemetry.samples), bench_overall (pc_specs.benchmark). Endpoint: POST /api/report/snapshot {phase:before|after} (upsert db.boost_reports), GET /api/report (before/after + deltas calcolati), DELETE /api/report. models.ReportPhaseInput (pattern before|after -> 422 se invalido).
+- FRONTEND Report.jsx (/app/report, nav "Report Prima/Dopo" icona FileBarChart): guida 3 step, pulsanti Cattura PRIMA/DOPO/Reset, card brandizzata FrameForge esportabile in PNG (html-to-image toPng + Web Share/download). 4 metriche in colonne Prima->Dopo con badge delta colorato (verde=migliorato, considera bufferbloat lower-is-better), riga voti Health/Bufferbloat. Dizionario locale IT/EN. Nav label i18n nav.report (it+en).
+- Verificato: curl (before/after/get/delete/422), screenshot (card render + toast), testing_agent iteration_21 (100% frontend, export PNG OK, reset OK). Admin report lasciato pulito.
+- Nota: le metriche bufferbloat/fps mostrano "--" senza dati agent (atteso). I delta reali compaiono catturando PRIMA, eseguendo il boost/test, poi DOPO.
