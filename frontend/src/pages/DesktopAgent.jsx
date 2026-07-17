@@ -125,6 +125,7 @@ const SECURE = {
     warn_desc_b: "(produzione). Il token deve provenire dallo stesso sito a cui punta l'app: se lo copi da un ambiente diverso vedrai «Token non valido».",
     warn_prod: "Stai usando il sito di produzione: scarica il token qui sotto e avvia l'.exe normalmente.",
     warn_test: "Stai usando un ambiente di test/anteprima. Per far funzionare l'.exe con QUESTO ambiente (e questo token), aggiungi il parametro --backend:",
+    av_note: "Alcuni antivirus (spesso Windows Defender) possono segnalare un falso positivo: è tipico degli .exe creati con PyInstaller, non è un vero virus. In quel caso usa il «Metodo sicuro» qui sotto (script .ps1, ispezionabile e non flaggato), oppure vedi la guida per firmare/segnalare l'app.",
     secure_title: "Metodo sicuro (consigliato)", secure_desc: "Niente comandi remoti. Scarichi lo script, ne verifichi l'integrità (SHA256) ed esegui il file locale. Puoi aprirlo e leggerlo prima di eseguirlo.",
     token_label: "Il tuo token (privato)",
     s1: "1) Scarica lo script (non lo esegue)", s2: "2) Verifica l'integrità: l'hash deve coincidere con quello qui sotto", s3: "3) Esegui il file locale (cambia -Mode per l'azione)",
@@ -141,6 +142,7 @@ const SECURE = {
     warn_desc_b: "(production). The token must come from the same site the app points to: if you copy it from a different environment you'll see \u201cInvalid token\u201d.",
     warn_prod: "You're on the production site: copy the token below and launch the .exe normally.",
     warn_test: "You're on a test/preview environment. To make the .exe work with THIS environment (and this token), add the --backend parameter:",
+    av_note: "Some antivirus (often Windows Defender) may show a false positive: it's typical of PyInstaller .exe files, not a real virus. If it happens, use the \u201cSecure method\u201d below (.ps1 script, inspectable and not flagged), or see the guide to sign/report the app.",
     secure_title: "Secure method (recommended)", secure_desc: "No remote commands. Download the script, verify its integrity (SHA256) and run the local file. You can open and read it before running.",
     token_label: "Your token (private)",
     s1: "1) Download the script (does not run it)", s2: "2) Verify integrity: the hash must match the one below", s3: "3) Run the local file (change -Mode for the action)",
@@ -246,6 +248,12 @@ export default function DesktopAgent() {
                 </div>
               </div>
             </div>
+
+            {/* Antivirus false-positive note */}
+            <p className="mt-3 text-xs text-zinc-500 leading-relaxed flex items-start gap-2" data-testid="exe-av-note">
+              <ShieldCheck size={13} className="text-[#00FF66] shrink-0 mt-0.5" />
+              <span>{s.av_note}</span>
+            </p>
           </div>
         </div>
       </div>

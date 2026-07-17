@@ -13,7 +13,27 @@ Windows Defender, Firewall o servizi di sicurezza (guardrail integrati). Ricompi
 ## Cosa contiene
 - `forgefps_agent.py` — sorgente dell'agent (backend già impostato su `https://forgefps.dev`)
 - `build.bat` / `build.ps1` — script di build con PyInstaller + calcolo SHA256
+- `version_info.txt` — metadati versione dell'.exe (riducono i falsi positivi antivirus)
 - `README.md` — questa guida
+
+## ⚠️ L'antivirus segnala un virus? (FALSO POSITIVO)
+Gli eseguibili creati con **PyInstaller** vengono **spessissimo** segnalati come malware da Windows Defender
+e altri antivirus, anche quando sono puliti al 100%. È un **falso positivo euristico** (il bootloader di
+PyInstaller è usato anche da malware reale, quindi i motori lo flaggano "per precauzione"). Il codice è
+in chiaro in `forgefps_agent.py`: puoi leggerlo tutto.
+
+**Cosa abbiamo già fatto per ridurlo:** `build.bat`/`build.ps1` ora aggiungono i **metadati versione**
+(`version_info.txt`) e disattivano **UPX** (`--noupx`): due accorgimenti che abbassano molto le segnalazioni.
+
+**Come eliminarlo del tutto (in ordine di efficacia):**
+1. **Firma Authenticode** (soluzione definitiva): un `.exe` firmato non viene flaggato e sparisce anche SmartScreen.
+   Certificati: DigiCert/Sectigo (a pagamento) oppure gratis per progetti open-source via **SignPath.io** o **Certum Open Source**.
+2. **Segnala il falso positivo a Microsoft**: https://www.microsoft.com/wdsi/filesubmission
+   (carichi l'.exe come "software non dannoso"; di solito lo mettono in whitelist in 1-3 giorni e Defender smette di bloccarlo per tutti).
+3. **Verifica su VirusTotal**: https://www.virustotal.com — carichi l'.exe e vedi quali/quanti motori lo flaggano.
+   Se sono pochi motori minori è quasi certamente un falso positivo.
+4. **Alternativa immediata senza .exe**: usa il **Metodo sicuro** nella pagina *Collega il PC* (scarichi lo `.ps1`,
+   verifichi l'hash, lo esegui): lo script PowerShell non viene flaggato come l'.exe e puoi leggerlo prima di eseguirlo.
 
 ## Prerequisiti (una tantum)
 1. Un PC **Windows 10/11**
