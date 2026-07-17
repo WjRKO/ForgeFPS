@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
 import { Cpu, MonitorPlay, MemoryStick, MonitorSmartphone, AlertTriangle, Loader2, ScanLine, ArrowRight, Check, Gauge, Wifi } from "lucide-react";
@@ -61,29 +61,39 @@ export const DemoScan = () => {
   const [specs, setSpecs] = useState(null);
   const [net, setNet] = useState(null);
   const [advice, setAdvice] = useState([]);
+  const mountedRef = useRef(true);
+  const abortRef = useRef(null);
+
+  useEffect(() => () => { mountedRef.current = false; abortRef.current?.abort(); }, []);
 
   const run = async () => {
     setState("scanning"); setStep(0); setNet(null);
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     // 1. Hardware (real, instant)
     const hw = detectBrowserSpecs();
     setSpecs(hw);
     await new Promise((r) => setTimeout(r, 500));
+    if (!mountedRef.current) return;
     setStep(1);
     // 2 + 3. Network test (real, client-side)
     let netRes = null;
     try {
       await new Promise((r) => setTimeout(r, 300));
+      if (!mountedRef.current) return;
       setStep(2);
-      netRes = await runNetTest();
+      netRes = await runNetTest(15000, ctrl.signal);
     } catch {
       netRes = null;
     }
+    if (!mountedRef.current) return;
     setNet(netRes);
     setStep(3);
     // 4. Advice (rules)
     const adv = buildAdvice(hw, netRes, lang);
     setAdvice(adv);
     await new Promise((r) => setTimeout(r, 400));
+    if (!mountedRef.current) return;
     setStep(4);
     setState("done");
     trackConversion("demo_scan");

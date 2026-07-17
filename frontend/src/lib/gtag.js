@@ -31,6 +31,13 @@ export function setConsent(granted) {
       analytics_storage: v,
     });
   }
+  // Mirror the choice to PostHog product analytics.
+  try {
+    if (typeof window !== "undefined" && window.posthog) {
+      if (granted) window.posthog.opt_in_capturing();
+      else window.posthog.opt_out_capturing();
+    }
+  } catch (e) {}
 }
 
 export function getStoredConsent() {

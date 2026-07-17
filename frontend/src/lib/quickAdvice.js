@@ -41,8 +41,8 @@ export function buildAdvice(specs = {}, net = null, lang = "it") {
       ? { t: "Chiudi le app in background", d: `Rilevati ${threads} thread CPU: la modalità 'Prima del match' libera CPU/RAM chiudendo Chrome, Discord e overlay.` }
       : { t: "Close background apps", d: `${threads} CPU threads detected: 'Pre-Match' mode frees CPU/RAM by closing Chrome, Discord and overlays.` });
   }
-  if (specs.ram && /(^| )([1-7]) ?GB|≥8/.test(specs.ram) === false && /GB/.test(specs.ram)) {
-    // generic RAM tip when detected
+  if (specs.ram && /GB/.test(specs.ram) && !/≥8/.test(specs.ram)) {
+    // Low RAM detected (< 8 GB)
     out.push(it
       ? { t: "Ottimizza la RAM", d: "Disattiva le app all'avvio e la memoria in background per liberare RAM durante il gioco." }
       : { t: "Optimize RAM usage", d: "Disable startup apps and background memory to free up RAM while gaming." });

@@ -1,9 +1,13 @@
 // Client-side network quality / bufferbloat test using Cloudflare's public speed endpoints.
 // No backend, no account. Measures idle latency vs latency under download load.
+// All fetches are tied to an AbortController so the test stops cleanly on timeout/unmount.
 const DOWN = (bytes) => `https://speed.cloudflare.com/__down?bytes=${bytes}&r=${Math.random()}`;
 
-async function ping(timeout = 4000) {
+async function ping(masterSignal, timeout = 3000) {
+  if (masterSignal?.aborted) return null;
   const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort();
+  masterSignal?.addEventListener("abort", onAbort);
   const to = setTimeout(() => ctrl.abort(), timeout);
   const t0 = performance.now();
   try {
@@ -13,6 +17,7 @@ async function ping(timeout = 4000) {
     return null;
   } finally {
     clearTimeout(to);
+    masterSignal?.removeEventListener("abort", onAbort);
   }
 }
 
@@ -23,14 +28,16 @@ function median(arr) {
   return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
 }
 
-async function idleLatency(samples = 6) {
+async function idleLatency(signal, samples = 6) {
   const res = [];
-  for (let i = 0; i < samples; i++) res.push(await ping());
+  for (let i = 0; i < samples; i++) {
+    if (signal?.aborted) break;
+    res.push(await ping(signal));
+  }
   return median(res);
 }
 
-async function loadedLatency(durationMs = 5000, streams = 4) {
-  const ctrl = new AbortController();
+async function loadedLatency(signal, durationMs = 4000, streams = 3) {
   let bytes = 0;
   const start = performance.now();
   const downloads = [];
@@ -38,26 +45,24 @@ async function loadedLatency(durationMs = 5000, streams = 4) {
     downloads.push(
       (async () => {
         try {
-          const resp = await fetch(DOWN(50000000), { cache: "no-store", signal: ctrl.signal });
+          const resp = await fetch(DOWN(25000000), { cache: "no-store", signal });
           const reader = resp.body.getReader();
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             bytes += value.length;
-            if (performance.now() - start > durationMs) break;
+            if (performance.now() - start > durationMs || signal?.aborted) break;
           }
-        } catch {
-          /* aborted or blocked */
-        }
+          try { await reader.cancel(); } catch { /* ignore */ }
+        } catch { /* aborted or blocked */ }
       })()
     );
   }
   const lat = [];
-  while (performance.now() - start < durationMs) {
-    const p = await ping(3000);
+  while (performance.now() - start < durationMs && !signal?.aborted) {
+    const p = await ping(signal, 3000);
     if (p != null) lat.push(p);
   }
-  ctrl.abort();
   await Promise.allSettled(downloads);
   const elapsed = (performance.now() - start) / 1000;
   const mbps = elapsed > 0 && bytes > 0 ? (bytes * 8) / elapsed / 1e6 : null;
@@ -74,11 +79,10 @@ export function gradeBufferbloat(increaseMs) {
   return "F";
 }
 
-// Returns { idleMs, loadedMs, bufferbloatMs, grade, downloadMbps } or null if the test can't run.
-async function _runNetTest() {
-  const idle = await idleLatency();
-  if (idle == null) return null;
-  const loaded = await loadedLatency();
+async function _runNetTest(signal) {
+  const idle = await idleLatency(signal);
+  if (idle == null || signal?.aborted) return null;
+  const loaded = await loadedLatency(signal);
   const inc = loaded.max != null ? Math.max(0, loaded.max - idle) : null;
   return {
     idleMs: Math.round(idle),
@@ -89,10 +93,19 @@ async function _runNetTest() {
   };
 }
 
-// Overall guard: on very slow/blocked links, resolve to null (graceful fallback) within maxMs.
-export function runNetTest(maxMs = 15000) {
-  return Promise.race([
-    _runNetTest().catch(() => null),
-    new Promise((resolve) => setTimeout(() => resolve(null), maxMs)),
-  ]);
+// Returns { idleMs, loadedMs, bufferbloatMs, grade, downloadMbps } or null.
+// Aborts all in-flight fetches on timeout (maxMs) or when externalSignal aborts.
+export function runNetTest(maxMs = 15000, externalSignal) {
+  if (externalSignal?.aborted) return Promise.resolve(null);
+  const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort();
+  externalSignal?.addEventListener("abort", onAbort);
+  const timer = setTimeout(() => ctrl.abort(), maxMs);
+  return _runNetTest(ctrl.signal)
+    .catch(() => null)
+    .finally(() => {
+      clearTimeout(timer);
+      ctrl.abort();
+      externalSignal?.removeEventListener("abort", onAbort);
+    });
 }
