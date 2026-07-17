@@ -1,6 +1,7 @@
-import { Plus, Wrench, RefreshCw, Github, Map } from "lucide-react";
+import { Plus, Wrench, RefreshCw, Github, Map, Loader2, CircleDot, Lightbulb } from "lucide-react";
 import { MarketingNav, MarketingFooter, useLang } from "@/components/MarketingChrome";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import { AGENT_REPO_URL } from "@/config/agent";
 
 const TAGS = {
   added: { icon: Plus, color: "#00FF66", it: "Aggiunto", en: "Added" },
@@ -8,10 +9,34 @@ const TAGS = {
   changed: { icon: RefreshCw, color: "#E5FF00", it: "Modificato", en: "Changed" },
 };
 
+const ROADMAP = {
+  progress: {
+    icon: Loader2, color: "#E5FF00", it: "In corso", en: "In progress",
+    items: {
+      it: ["Firma digitale dell'agent (SignPath) — elimina l'avviso antivirus", "Build \u00ab--onedir\u00bb per ridurre i falsi positivi \u201cdropper\u201d"],
+      en: ["Agent code signing (SignPath) — removes the antivirus warning", "\u00ab--onedir\u00bb build to reduce \u201cdropper\u201d false positives"],
+    },
+  },
+  planned: {
+    icon: CircleDot, color: "#00E0FF", it: "Pianificato", en: "Planned",
+    items: {
+      it: ["Alert salute PC: avviso quando il punteggio scende sotto soglia", "Report PDF completo con grafico storico e checklist", "Abbonamenti Free / Pro / Creator con checkout"],
+      en: ["PC health alerts: notify when the score drops below a threshold", "Full PDF report with historical chart and checklist", "Free / Pro / Creator plans with checkout"],
+    },
+  },
+  exploring: {
+    icon: Lightbulb, color: "#B388FF", it: "In valutazione", en: "Exploring",
+    items: {
+      it: ["Testimonianze utenti e contatore stelle GitHub", "Conversioni avanzate per una misurazione pi\u00f9 precisa"],
+      en: ["User testimonials and live GitHub stars counter", "Enhanced conversions for more accurate measurement"],
+    },
+  },
+};
+
 const RELEASES = [
   {
     version: "0.4.5", date: "2026-07-17",
-    added: { it: ["Scansione demo reale dal browser: hardware + test bufferbloat, senza account né download", "Demo interattiva dell'app in sola lettura", "Badge VirusTotal e trust bar di sicurezza", "Sezione FAQ \"È sicuro?\""], en: ["Real in-browser demo scan: hardware + bufferbloat test, no account or download", "Read-only interactive app demo", "VirusTotal badge and security trust bar", "\"Is it safe?\" FAQ section"] },
+    added: { it: ["Roadmap pubblica e issue tracker collegati", "Scansione demo reale dal browser: hardware + test bufferbloat, senza account né download", "Demo interattiva dell'app in sola lettura", "Badge VirusTotal e trust bar di sicurezza", "Sezione FAQ \"È sicuro?\""], en: ["Public roadmap and issue tracker linked", "Real in-browser demo scan: hardware + bufferbloat test, no account or download", "Read-only interactive app demo", "VirusTotal badge and security trust bar", "\"Is it safe?\" FAQ section"] },
     fixed: { it: ["Consiglio RAM nella scansione rapida"], en: ["RAM tip in the quick scan"] },
     changed: { it: ["Consenso cookie (Consent Mode v2) per una misurazione conforme al GDPR"], en: ["Cookie consent (Consent Mode v2) for GDPR-compliant measurement"] },
   },
@@ -36,8 +61,8 @@ const RELEASES = [
 ];
 
 const COPY = {
-  it: { meta_t: "Changelog — FrameForge | Note di rilascio", meta_d: "Tutte le novità di FrameForge versione per versione: nuove funzioni, correzioni e miglioramenti. Roadmap e issue tracker pubblici.", eyebrow: "// changelog", title: "Cosa cambia, versione per versione.", sub: "Aggiornamenti trasparenti. Ogni release è documentata: nuove funzioni, fix e modifiche.", roadmap: "Roadmap pubblica", issues: "Issue tracker" },
-  en: { meta_t: "Changelog — FrameForge | Release notes", meta_d: "Everything new in FrameForge version by version: new features, fixes and improvements. Public roadmap and issue tracker.", eyebrow: "// changelog", title: "What changes, version by version.", sub: "Transparent updates. Every release is documented: new features, fixes and changes.", roadmap: "Public roadmap", issues: "Issue tracker" },
+  it: { meta_t: "Changelog — FrameForge | Note di rilascio", meta_d: "Tutte le novità di FrameForge versione per versione: nuove funzioni, correzioni e miglioramenti. Roadmap e issue tracker pubblici.", eyebrow: "// changelog", title: "Cosa cambia, versione per versione.", sub: "Aggiornamenti trasparenti. Ogni release è documentata: nuove funzioni, fix e modifiche.", roadmap: "Roadmap pubblica", issues: "Issue tracker", roadmap_title: "Roadmap pubblica", roadmap_sub: "Su cosa stiamo lavorando e cosa arriverà. Trasparenza totale, come il resto del prodotto." },
+  en: { meta_t: "Changelog — FrameForge | Release notes", meta_d: "Everything new in FrameForge version by version: new features, fixes and improvements. Public roadmap and issue tracker.", eyebrow: "// changelog", title: "What changes, version by version.", sub: "Transparent updates. Every release is documented: new features, fixes and changes.", roadmap: "Public roadmap", issues: "Issue tracker", roadmap_title: "Public roadmap", roadmap_sub: "What we're working on and what's coming. Full transparency, like the rest of the product." },
 };
 
 const Section = ({ tagKey, items, lang }) => {
@@ -70,11 +95,37 @@ export default function Changelog() {
         <p className="text-zinc-400 text-base sm:text-lg max-w-xl leading-relaxed mb-8">{c.sub}</p>
 
         <div className="flex flex-wrap gap-3 mb-14">
-          <a href="https://github.com" target="_blank" rel="noreferrer" data-testid="roadmap-link"
+          <a href="#roadmap" data-testid="roadmap-link"
             className="inline-flex items-center gap-2 border border-[#2A2A35] px-4 py-2 text-sm hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors"><Map size={15} /> {c.roadmap}</a>
-          <a href="https://github.com" target="_blank" rel="noreferrer" data-testid="issues-link"
+          <a href={`${AGENT_REPO_URL}/issues`} target="_blank" rel="noreferrer" data-testid="issues-link"
             className="inline-flex items-center gap-2 border border-[#2A2A35] px-4 py-2 text-sm hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors"><Github size={15} /> {c.issues}</a>
         </div>
+
+        {/* Public roadmap */}
+        <section id="roadmap" className="scroll-mt-24 mb-16" data-testid="roadmap-section">
+          <h2 className="font-display font-black text-2xl sm:text-3xl tracking-tight mb-2">{c.roadmap_title}</h2>
+          <p className="text-zinc-500 text-sm mb-6 max-w-xl">{c.roadmap_sub}</p>
+          <div className="grid md:grid-cols-3 gap-4">
+            {["progress", "planned", "exploring"].map((key) => {
+              const col = ROADMAP[key];
+              return (
+                <div key={key} className="bg-[#0F0F12] border border-[#1A1A24] p-5" data-testid={`roadmap-col-${key}`}>
+                  <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-widest mb-4" style={{ color: col.color }}>
+                    <col.icon size={13} className={key === "progress" ? "animate-spin" : ""} /> {col[lang]}
+                  </div>
+                  <ul className="space-y-3">
+                    {col.items[lang].map((it, i) => (
+                      <li key={i} className="text-sm text-zinc-300 flex gap-2 leading-relaxed">
+                        <span className="mt-1.5 w-1.5 h-1.5 shrink-0" style={{ backgroundColor: col.color }} />
+                        {it}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
         <div className="relative border-l border-[#1A1A24] pl-6 ml-1 space-y-10">
           {RELEASES.map((r, i) => (
