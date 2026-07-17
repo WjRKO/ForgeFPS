@@ -5,9 +5,9 @@ const AW_ID = "AW-18329532067";
 // send_to value like "AW-18329532067/AbC-D_efGh". Paste ONLY the part AFTER the
 // slash here. Leave as "" to keep a conversion disabled until you have its label.
 export const CONVERSION_LABELS = {
-  signup: "",          // "Registrazione completata"
-  demo_scan: "",       // "Scansione demo completata"
-  agent_download: "",  // "Download agent"
+  signup: "N2UNCMDjmtIcEKPtmaRE",          // "Registrazione FrameForge"
+  demo_scan: "RNNxCMPjmtIcEKPtmaRE",       // "Scansione demo FrameForge"
+  agent_download: "B9KYCMbjmtIcEKPtmaRE",  // "Download agent FrameForge"
 };
 
 export function trackConversion(key) {
