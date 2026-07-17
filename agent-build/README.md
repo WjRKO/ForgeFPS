@@ -14,6 +14,9 @@ Windows Defender, Firewall o servizi di sicurezza (guardrail integrati). Ricompi
 - `forgefps_agent.py` — sorgente dell'agent (backend già impostato su `https://forgefps.dev`)
 - `build.bat` / `build.ps1` — script di build con PyInstaller + calcolo SHA256
 - `version_info.txt` — metadati versione dell'.exe (riducono i falsi positivi antivirus)
+- `sign.bat` — firma locale dell'.exe con signtool (per Certum/SimplySign o .pfx)
+- `github-workflow-build-sign.yml` — workflow GitHub Actions per build + firma gratuita via SignPath (OSS)
+- `SIGNING_AND_TRUST.md` — **guida completa** ai 3 percorsi per togliere antivirus/SmartScreen (Microsoft / Certum / SignPath)
 - `README.md` — questa guida
 
 ## ⚠️ L'antivirus segnala un virus? (FALSO POSITIVO)

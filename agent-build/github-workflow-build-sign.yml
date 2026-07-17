@@ -1,0 +1,74 @@
+# ============================================================
+#  FrameForge - GitHub Actions: build .exe + firma con SignPath (OSS, GRATIS)
+#  COPIA questo file in:  .github/workflows/build-sign.yml  del tuo repo PUBBLICO
+#
+#  Prerequisiti (una tantum, dopo l'approvazione di SignPath Foundation):
+#   - Il repo deve essere PUBBLICO e contenere il sorgente (forgefps_agent.py + version_info.txt)
+#   - Installa la GitHub App di SignPath sull'organizzazione/repo
+#   - Aggiungi in Settings > Secrets:  SIGNPATH_API_TOKEN
+#   - Aggiungi in Settings > Variables: SIGNPATH_ORGANIZATION_ID
+#   - Crea in SignPath un progetto + una signing policy (es. "release-signing")
+#
+#  Trigger: ad ogni push di un tag "v*" (es. v0.4.5) fa build, firma e crea la Release.
+# ============================================================
+name: build-and-sign
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # per creare la Release
+
+jobs:
+  build-sign:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Build .exe (metadati + no UPX)
+        run: >
+          pyinstaller --onefile --name forgefps-agent --console --noupx --clean
+          --version-file version_info.txt forgefps_agent.py
+
+      - name: Upload unsigned artifact
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: forgefps-agent-unsigned
+          path: dist/forgefps-agent.exe
+
+      - name: Submit signing request to SignPath
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: 'forgefps-agent'          # <-- il tuo project slug in SignPath
+          signing-policy-slug: 'release-signing'   # <-- la tua policy in SignPath
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: 'signed'
+
+      - name: Compute SHA256 of signed .exe
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash signed/forgefps-agent.exe -Algorithm SHA256).Hash.ToLower()
+          echo "SHA256 = $h"
+          echo "SHA256=$h" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Create GitHub Release with signed .exe
+        uses: softprops/action-gh-release@v2
+        with:
+          files: signed/forgefps-agent.exe
+          generate_release_notes: true
