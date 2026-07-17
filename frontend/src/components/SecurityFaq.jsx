@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, HelpCircle, ShieldCheck, ExternalLink } from "lucide-react";
 import { useLang } from "@/components/MarketingChrome";
@@ -39,13 +40,15 @@ export const SecurityFaq = () => {
   const lang = useLang();
   const c = COPY[lang];
   const [open, setOpen] = useState(0);
+  const location = useLocation();
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.location.hash === "#faq-av") {
+    if (location.hash === "#faq-av") {
       setOpen(1);
-      setTimeout(() => document.getElementById("faq-av")?.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
+      const id = setTimeout(() => document.getElementById("faq-av")?.scrollIntoView({ behavior: "smooth", block: "center" }), 350);
+      return () => clearTimeout(id);
     }
-  }, []);
+  }, [location]);
 
   return (
     <section className="max-w-3xl" data-testid="security-faq">
