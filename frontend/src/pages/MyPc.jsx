@@ -108,7 +108,7 @@ function BenchmarkCard({ bench }) {
     try {
       const lang = (i18n.resolvedLanguage || i18n.language || "it").slice(0, 2);
       const { data } = await api.post("/benchmark/explain", { lang });
-      setExplanation(data.explanation);
+      setExplanation((data.explanation || "").replace(/^\s*#{1,6}[^\n]*\n/, "").trim());
     } catch (e) {
       setExplainErr(formatApiErrorDetail(e.response?.data?.detail) || t("mypcpage.bench_explain_err"));
     } finally { setExplaining(false); }
