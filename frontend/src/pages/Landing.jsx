@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { DemoScan } from "@/components/DemoScan";
+import { TrustBar } from "@/components/TrustBar";
 import { SecureInstaller } from "@/components/SecureInstaller";
 
 const EASE = [0.16, 1, 0.3, 1];
@@ -367,6 +368,11 @@ export default function Landing() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* SECURITY TRUST BAR */}
+      <section className="max-w-6xl mx-auto px-6 py-10">
+        <TrustBar />
       </section>
 
       {/* HOW IT WORKS */}

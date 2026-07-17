@@ -10,6 +10,12 @@ const TAGS = {
 
 const RELEASES = [
   {
+    version: "0.4.5", date: "2026-07-17",
+    added: { it: ["Scansione demo reale dal browser: hardware + test bufferbloat, senza account né download", "Demo interattiva dell'app in sola lettura", "Badge VirusTotal e trust bar di sicurezza", "Sezione FAQ \"È sicuro?\""], en: ["Real in-browser demo scan: hardware + bufferbloat test, no account or download", "Read-only interactive app demo", "VirusTotal badge and security trust bar", "\"Is it safe?\" FAQ section"] },
+    fixed: { it: ["Consiglio RAM nella scansione rapida"], en: ["RAM tip in the quick scan"] },
+    changed: { it: ["Consenso cookie (Consent Mode v2) per una misurazione conforme al GDPR"], en: ["Cookie consent (Consent Mode v2) for GDPR-compliant measurement"] },
+  },
+  {
     version: "0.4.2", date: "2026-07-09",
     added: { it: ["Supporto GPU RTX serie 50", "Rilevamento temperatura Ryzen", "Ottimizzazione OBS per streaming"], en: ["RTX 50 series GPU support", "Ryzen temperature detection", "OBS streaming optimization"] },
     fixed: { it: ["Blocco file durante il rilevamento FPS", "Etichette Health Score mancanti"], en: ["File lock during FPS detection", "Missing Health Score labels"] },

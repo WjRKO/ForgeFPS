@@ -2,6 +2,8 @@ import { motion } from "framer-motion";
 import { MonitorDown, Lock, BrainCircuit, ArrowRight, ArrowDown, ShieldCheck, KeyRound, EyeOff, FileSignature, GitBranch } from "lucide-react";
 import { MarketingNav, MarketingFooter, useLang } from "@/components/MarketingChrome";
 import { SecureInstaller } from "@/components/SecureInstaller";
+import { TrustBar } from "@/components/TrustBar";
+import { SecurityFaq } from "@/components/SecurityFaq";
 import { usePageMeta } from "@/hooks/usePageMeta";
 
 const COPY = {
@@ -96,6 +98,11 @@ export default function Security() {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* Security FAQ */}
+        <section className="mb-16">
+          <SecurityFaq />
         </section>
 
         {/* Secure installer */}

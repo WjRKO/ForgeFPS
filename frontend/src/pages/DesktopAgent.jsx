@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
-import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu, Activity, Copy, Check, Gamepad2, Sparkles, ChevronDown, FileCheck2, Lock, History, AlertTriangle } from "lucide-react";
+import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu, Activity, Copy, Check, Gamepad2, Sparkles, ChevronDown, FileCheck2, Lock, History, AlertTriangle, ExternalLink } from "lucide-react";
 import { AGENT_EXE_URL, AGENT_EXE_SHA256, AGENT_EXE_VERSION, AGENT_EXE_DATE, AGENT_RELEASES_URL, AGENT_DEFAULT_BACKEND } from "@/config/agent";
 import { toast } from "sonner";
 import api, { API } from "@/lib/api";
@@ -120,7 +120,7 @@ function CmdRow({ label, cmd, testid, accent }) {
 const SECURE = {
   it: {
     exe_badge: "In arrivo", exe_title: "App desktop con un click", exe_desc: "Scarica l'app Windows (.exe) e avviala. Firma digitale in preparazione: al primo avvio Windows può mostrare «App non riconosciuta» → Ulteriori informazioni → Esegui comunque.",
-    exe_btn: "Scarica FrameForge (.exe)", exe_run: "Fai doppio click e incolla il token quando richiesto — oppure da terminale:", exe_sha: "SHA256 dell'.exe",
+    exe_btn: "Scarica FrameForge (.exe)", exe_run: "Fai doppio click e incolla il token quando richiesto — oppure da terminale:", exe_sha: "SHA256 dell'.exe", exe_vt: "Verifica questo file su VirusTotal",
     warn_title: "Importante: a quale server si collega l'app?",
     warn_desc_a: "Per impostazione predefinita l'.exe si collega a",
     warn_desc_b: "(produzione). Il token deve provenire dallo stesso sito a cui punta l'app: se lo copi da un ambiente diverso vedrai «Token non valido».",
@@ -137,7 +137,7 @@ const SECURE = {
   },
   en: {
     exe_badge: "Coming soon", exe_title: "One-click desktop app", exe_desc: "Download the Windows app (.exe) and launch it. Digital signature in progress: on first run Windows may show \u201cUnrecognized app\u201d \u2192 More info \u2192 Run anyway.",
-    exe_btn: "Download FrameForge (.exe)", exe_run: "Double-click and paste the token when asked — or from a terminal:", exe_sha: ".exe SHA256",
+    exe_btn: "Download FrameForge (.exe)", exe_run: "Double-click and paste the token when asked — or from a terminal:", exe_sha: ".exe SHA256", exe_vt: "Check this file on VirusTotal",
     warn_title: "Important: which server does the app connect to?",
     warn_desc_a: "By default the .exe connects to",
     warn_desc_b: "(production). The token must come from the same site the app points to: if you copy it from a different environment you'll see \u201cInvalid token\u201d.",
@@ -224,6 +224,10 @@ export default function DesktopAgent() {
               <span className="text-zinc-500">{s.exe_sha}:</span>
               <code className="text-zinc-300 break-all" data-testid="exe-sha256">{AGENT_EXE_SHA256}</code>
             </div>
+            <a href={`https://www.virustotal.com/gui/file/${AGENT_EXE_SHA256}`} target="_blank" rel="noreferrer" data-testid="exe-virustotal"
+              className="inline-flex items-center gap-1.5 mt-2 text-xs text-[#00FF66] hover:underline">
+              <ShieldCheck size={13} /> {s.exe_vt} <ExternalLink size={10} />
+            </a>
             <div className="mt-3">
               <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">{s.exe_run}</div>
               <CmdRow label="" cmd={exeCmd} testid="exe-run" accent="text-[#E5FF00]" />
