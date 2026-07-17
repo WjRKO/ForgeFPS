@@ -64,6 +64,11 @@ def build(get_current_user):
             fields["data"] = data.data
         if data.health is not None:
             fields["health"] = data.health
+            _h = compute_health(data.health)
+            await db.health_history.insert_one({
+                "user_id": uid, "score": _h.get("score"), "grade": _h.get("grade"),
+                "cpu_temp": _h.get("cpu_temp"), "gpu_temp": _h.get("gpu_temp"),
+                "created_at": now_iso()})
         if data.startup is not None:
             fields["startup"] = data.startup
         if data.games is not None:
@@ -268,6 +273,14 @@ def build(get_current_user):
         if not doc or not doc.get("health"):
             return {"available": False}
         return {**compute_health(doc["health"]), "available": True}
+
+    @r.get("/health-history")
+    async def health_history(user: dict = Depends(get_current_user)):
+        uid = str(user["_id"])
+        rows = await db.health_history.find({"user_id": uid}, {"_id": 0, "user_id": 0}) \
+            .sort("created_at", -1).limit(90).to_list(90)
+        rows.reverse()
+        return {"points": rows}
 
     @r.post("/upgrade/analyze")
     async def upgrade_analyze(data: GoalInput, user: dict = Depends(get_current_user)):

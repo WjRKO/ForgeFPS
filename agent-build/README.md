@@ -3,6 +3,13 @@
 Questo kit produce **`forgefps-agent.exe`**: un eseguibile Windows standalone, senza token
 incorporato (il token si passa a runtime), così il file è generico, verificabile e firmabile.
 
+## Novità v0.5 (GUI sicura)
+L'agent ora apre una **GUI sicura** (opzione **G** nel menu, o `--mode securegui`): per **ogni** tweak
+mostra **Problema trovato → Motivo → Modifica proposta → Impatto stimato** con un pulsante **Applica**
+per singolo tweak. **Backup automatico** e **Ripristina tutto** sempre disponibili. La GUI **non tocca MAI**
+Windows Defender, Firewall o servizi di sicurezza (guardrail integrati). Ricompila e ripubblica per aggiornare.
+
+
 ## Cosa contiene
 - `forgefps_agent.py` — sorgente dell'agent (backend già impostato su `https://forgefps.dev`)
 - `build.bat` / `build.ps1` — script di build con PyInstaller + calcolo SHA256

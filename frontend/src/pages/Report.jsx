@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
-import { Zap, HeartPulse, Gauge, Activity, Cpu, Share2, RotateCcw, Loader2, Camera, ArrowRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Zap, HeartPulse, Gauge, Activity, Cpu, Share2, RotateCcw, Loader2, Camera, ArrowRight, TrendingUp, TrendingDown, Minus, FileText } from "lucide-react";
+import { jsPDF } from "jspdf";
 import api, { formatApiErrorDetail } from "@/lib/api";
 
 const DICT = {
@@ -21,7 +22,12 @@ const DICT = {
     capture_after: "Cattura DOPO",
     reset: "Reset",
     export: "Esporta PNG",
+    export_pdf: "Esporta PDF",
     exported: "Report esportato!",
+    notes: "Note per il cliente (opzionale)",
+    notes_ph: "Es. Boost eseguito il... Interventi: piano energetico, DNS Cloudflare, bufferbloat SQM. Consigli: aggiornare driver GPU.",
+    pdf_title: "Report Ottimizzazione PC",
+    pdf_notes_head: "Note",
     captured: "Snapshot salvato",
     err: "Errore",
     report_title: "Report Ottimizzazione PC",
@@ -56,7 +62,12 @@ const DICT = {
     capture_after: "Capture AFTER",
     reset: "Reset",
     export: "Export PNG",
+    export_pdf: "Export PDF",
     exported: "Report exported!",
+    notes: "Notes for the client (optional)",
+    notes_ph: "E.g. Boost done on... Applied: power plan, Cloudflare DNS, bufferbloat SQM. Recommendations: update GPU drivers.",
+    pdf_title: "PC Optimization Report",
+    pdf_notes_head: "Notes",
     captured: "Snapshot saved",
     err: "Error",
     report_title: "PC Optimization Report",
@@ -115,6 +126,7 @@ export default function Report() {
   const cardRef = useRef(null);
   const [report, setReport] = useState({ before: null, after: null, deltas: {} });
   const [busy, setBusy] = useState("");
+  const [notes, setNotes] = useState("");
 
   const load = useCallback(async () => {
     try { const { data } = await api.get("/report"); setReport(data); } catch {}
@@ -148,6 +160,40 @@ export default function Report() {
       }
       toast.success(c.exported);
     } catch (e) { console.error("report export failed", e); toast.error(c.err); } finally { setBusy(""); }
+  };
+
+  const exportPdf = async () => {
+    if (!cardRef.current) return;
+    setBusy("pdf");
+    try {
+      const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, backgroundColor: "#0A0A0C", cacheBust: true });
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const pw = doc.internal.pageSize.getWidth();
+      const margin = 40;
+      const cw = pw - margin * 2;
+      // header
+      doc.setFillColor(9, 9, 11); doc.rect(0, 0, pw, 70, "F");
+      doc.setTextColor(229, 255, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(20);
+      doc.text("FRAMEFORGE", margin, 42);
+      doc.setTextColor(160, 160, 160); doc.setFont("helvetica", "normal"); doc.setFontSize(11);
+      doc.text(`${c.pdf_title}  ·  ${new Date().toLocaleDateString()}`, margin, 58);
+      // card image
+      const ih = (img.height / img.width) * cw;
+      doc.addImage(dataUrl, "PNG", margin, 90, cw, ih);
+      let y = 90 + ih + 28;
+      if (notes.trim()) {
+        doc.setTextColor(20, 20, 20); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+        doc.text(c.pdf_notes_head, margin, y); y += 18;
+        doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(60, 60, 60);
+        const lines = doc.splitTextToSize(notes.trim(), cw);
+        doc.text(lines, margin, y);
+      }
+      doc.setTextColor(150, 150, 150); doc.setFontSize(9);
+      doc.text(c.footer, margin, doc.internal.pageSize.getHeight() - 24);
+      doc.save("frameforge-report.pdf");
+      toast.success(c.exported);
+    } catch (e) { console.error("report pdf failed", e); toast.error(c.err); } finally { setBusy(""); }
   };
 
   const { before, after, deltas } = report;
@@ -191,6 +237,18 @@ export default function Report() {
           className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-5 py-2.5 hover:bg-[#c9e000] transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
           {busy === "export" ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />} {c.export}
         </button>
+        <button onClick={exportPdf} disabled={!!busy || (!before && !after)} data-testid="report-export-pdf-btn"
+          className="inline-flex items-center gap-2 border border-[#E5FF00]/60 text-[#E5FF00] font-bold px-5 py-2.5 hover:bg-[#E5FF00]/10 transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
+          {busy === "pdf" ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />} {c.export_pdf}
+        </button>
+      </div>
+
+      {/* Notes for the PDF */}
+      <div>
+        <label className="text-[11px] uppercase tracking-widest text-zinc-500 mb-1.5 block">{c.notes}</label>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} data-testid="report-notes"
+          placeholder={c.notes_ph}
+          className="w-full bg-[#0F0F12] border border-[#2A2A35] focus:border-[#E5FF00] outline-none p-3 text-sm text-zinc-200 transition-colors resize-y" />
       </div>
 
       {/* Branded report card (exported) */}

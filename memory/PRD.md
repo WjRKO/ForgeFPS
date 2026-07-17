@@ -436,3 +436,15 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - FRONTEND Report.jsx (/app/report, nav "Report Prima/Dopo" icona FileBarChart): guida 3 step, pulsanti Cattura PRIMA/DOPO/Reset, card brandizzata FrameForge esportabile in PNG (html-to-image toPng + Web Share/download). 4 metriche in colonne Prima->Dopo con badge delta colorato (verde=migliorato, considera bufferbloat lower-is-better), riga voti Health/Bufferbloat. Dizionario locale IT/EN. Nav label i18n nav.report (it+en).
 - Verificato: curl (before/after/get/delete/422), screenshot (card render + toast), testing_agent iteration_21 (100% frontend, export PNG OK, reset OK). Admin report lasciato pulito.
 - Nota: le metriche bufferbloat/fps mostrano "--" senza dati agent (atteso). I delta reali compaiono catturando PRIMA, eseguendo il boost/test, poi DOPO.
+
+### 2026-07-17 (2) - Agent v0.5 (GUI sicura) + Storico Salute + Report PDF (FATTO)
+#### Agent v0.5 - GUI sicura nel .exe (lato codice fatto; build/pubblicazione = utente su Windows)
+- forgefps_agent.py (sorgente .exe) + desktop_agent.py (script servito): nuova funzione launch_secure_gui() che scarica /api/agent/script e lancia la NUOVA GUI sicura PowerShell (Problema/Motivo/Modifica/Impatto per tweak + guardrail Defender + backup/rollback), elevata via UAC se non admin. Menu: nuova opzione "G" (consigliata) + supporto --mode securegui|gui. Vecchio "A" (apply tutto) resta come avanzato. AGENT_VERSION=0.5.0 mostrato nell'header. README agent-build aggiornato con sezione "Novita v0.5".
+- Entrambi i file compilano/parse OK. NB: l'.exe va RICOMPILATO su Windows dall'utente e ripubblicato su GitHub Release; poi aggiornare /app/frontend/src/config/agent.js (URL+SHA256+version). Config attuale resta v0.4.3 (link funzionante) finche l'utente non fornisce la nuova Release.
+#### Storico Salute (backend + frontend, testato)
+- Backend pc.py: report_specs ora storicizza ogni health in db.health_history {score,grade,cpu_temp,gpu_temp,created_at}. GET /api/health-history (ultimi 90, asc).
+- Frontend components/HealthHistoryCard.jsx (recharts LineChart doppio asse: Health Score 0-100 volt + temp CPU cyan/GPU red 0-110), montato in MyPc.jsx dopo il benchmark. Si mostra solo con >=2 punti. Bilingue IT/EN.
+- Verificato: curl /health-history (5 punti seed) + screenshot MyPc (grafico render con tooltip/legenda).
+#### Report PDF (frontend, testato)
+- Report.jsx: aggiunto textarea "Note per il cliente" + pulsante "Esporta PDF" (jspdf). PDF A4: header FrameForge + titolo/data, immagine della card (html-to-image toPng), note del cliente, footer. Mantiene anche Esporta PNG. Dipendenza: jspdf (yarn).
+- Verificato: screenshot (pulsante EXPORT PDF, note compilate, toast "Report exported!", nessun errore console tranne warning font non bloccante).

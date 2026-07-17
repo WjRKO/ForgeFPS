@@ -26,6 +26,7 @@ _args, _ = _parser.parse_known_args()
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
+AGENT_VERSION = "0.5.0"
 BACKUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "boostpc_backup.json")
 
 if not AGENT_TOKEN or AGENT_TOKEN.startswith("__"):
@@ -563,6 +564,33 @@ def optimize_with_benchmark():
     send_benchmark({"before": before, "after": after, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")})
 
 
+def launch_secure_gui():
+    """Scarica e avvia la GUI sicura FrameForge: per ogni tweak mostra Problema, Motivo,
+    Modifica proposta e Impatto stimato, con pulsante Applica per singolo tweak.
+    Backup automatico + Ripristina sempre disponibili. Non tocca MAI Windows Defender / Firewall."""
+    url = "%s/api/agent/script?t=%s" % (BACKEND_URL, AGENT_TOKEN)
+    dest = os.path.join(tempfile.gettempdir(), "forgefps.ps1")
+    print("\n[*] Scarico la GUI sicura FrameForge...")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "FrameForge-Agent"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = r.read()
+        with open(dest, "wb") as f:
+            f.write(data)
+    except Exception as e:
+        print("    Impossibile scaricare lo script: %s" % e)
+        return
+    args = '-NoProfile -ExecutionPolicy Bypass -File "%s" -Token %s -Mode optimize' % (dest, AGENT_TOKEN)
+    try:
+        if not is_admin():
+            ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell.exe", args, None, 1)
+        else:
+            subprocess.Popen("powershell.exe %s" % args, shell=True)
+        print("    GUI sicura avviata: segui le istruzioni nella finestra (Problema/Motivo/Impatto per ogni tweak).")
+    except Exception as e:
+        print("    Errore nell'avvio della GUI sicura: %s" % e)
+
+
 def restore_tweaks():
     print("\n[8] Ripristino impostazioni dal backup...")
     if not os.path.exists(BACKUP_FILE):
@@ -620,20 +648,21 @@ def top_processes():
 
 def menu():
     actions = {
+        "G": ("GUI SICURA - Problema/Motivo/Impatto per ogni tweak (consigliato)", launch_secure_gui),
         "1": ("Pulizia temp + cache Windows Update", _cleanup),
         "3": ("Piano energetico alte prestazioni", high_performance_power),
         "4": ("Mostra processi pesanti", top_processes),
         "7": ("Rileva hardware/salute e invia al cloud", send_all),
         "8": ("Ripristina impostazioni (backup)", restore_tweaks),
         "B": ("Benchmark del sistema", benchmark_only),
-        "A": ("OTTIMIZZA TUTTO + benchmark prima/dopo", optimize_with_benchmark),
+        "A": ("OTTIMIZZA TUTTO + benchmark prima/dopo (avanzato)", optimize_with_benchmark),
     }
     print("=" * 54)
-    print("   FrameForge - Desktop Agent")
+    print("   FrameForge - Desktop Agent  v%s" % AGENT_VERSION)
     print("=" * 54)
     if not is_admin():
         print("[!] Suggerito eseguire come Amministratore.")
-    for k in ["1", "3", "4", "7", "8", "B", "A"]:
+    for k in ["G", "1", "3", "4", "7", "8", "B", "A"]:
         print(f"  {k}. {actions[k][0]}")
     print("  Q. Esci")
     choice = input("\nScegli un'azione: ").strip().upper()
@@ -650,6 +679,13 @@ if __name__ == "__main__":
     if not sys.platform.startswith("win"):
         print("Questo agent e' progettato per Windows.")
         sys.exit(1)
+    if _args.mode in ("securegui", "gui"):
+        launch_secure_gui()
+        try:
+            input("\nPremi INVIO per chiudere...")
+        except Exception:
+            pass
+        sys.exit(0)
     while True:
         os.system("cls")
         menu()
