@@ -74,7 +74,7 @@ SignPath firma **solo artefatti costruiti automaticamente da GitHub Actions** da
    - Crea in SignPath un **progetto** (`project-slug`) e una **signing policy** (`release-signing`).
    - Aggiungi in GitHub: **Secret** `SIGNPATH_API_TOKEN` e **Variable** `SIGNPATH_ORGANIZATION_ID`.
    - Aggiorna nel workflow `project-slug`/`signing-policy-slug` con i tuoi valori.
-5. **Rilascia**: fai `git tag v0.4.5 && git push --tags`. Il workflow builda, **firma** e crea la Release con l'.exe firmato.
+5. **Rilascia**: fai `git tag v0.6.0 && git push --tags`. Il workflow builda, **firma** e crea la Release con l'.exe firmato.
 
 ---
 

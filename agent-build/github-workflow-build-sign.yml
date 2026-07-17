@@ -9,7 +9,7 @@
 #   - Aggiungi in Settings > Variables: SIGNPATH_ORGANIZATION_ID
 #   - Crea in SignPath un progetto + una signing policy (es. "release-signing")
 #
-#  Trigger: ad ogni push di un tag "v*" (es. v0.4.5) fa build, firma e crea la Release.
+#  Trigger: ad ogni push di un tag "v*" (es. v0.6.0) fa build, firma e crea la Release.
 # ============================================================
 name: build-and-sign
 

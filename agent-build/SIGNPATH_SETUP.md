@@ -37,11 +37,11 @@ SignPath ti guiderà; in sintesi:
    - **Variable** `SIGNPATH_ORGANIZATION_ID` = il tuo Organization ID
 4. Nel file `.github/workflows/build-sign.yml` aggiorna `project-slug` e `signing-policy-slug` con i tuoi valori.
 
-## FASE 4 — Rilascia la v0.4.5 firmata
+## FASE 4 — Rilascia la v0.6.0 firmata
 Dal repo:
 ```
-git tag v0.4.5
-git push origin v0.4.5
+git tag v0.6.0
+git push origin v0.6.0
 ```
 (oppure crea il tag/release dalla UI di GitHub). Il workflow:
 - builda `forgefps-agent.exe` (con metadati + no UPX),

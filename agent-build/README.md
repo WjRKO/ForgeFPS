@@ -3,6 +3,15 @@
 Questo kit produce **`forgefps-agent.exe`**: un eseguibile Windows standalone, senza token
 incorporato (il token si passa a runtime), così il file è generico, verificabile e firmabile.
 
+## Novità v0.6 (Boost Adattivo + Benchmark v2)
+- **Tweak adattivi**: l'agent rileva Laptop/Desktop, RAM totale e SSD/HDD e adatta le ottimizzazioni
+  (es. su laptop usa *High Performance* invece di *Ultimate* per proteggere batteria e temperature;
+  disattiva SysMain e verifica il TRIM **solo** su SSD; tiene il kernel in RAM solo con 16GB+).
+- **Nuovi tweak**: Fullscreen Optimizations OFF, Power Throttling OFF (solo desktop),
+  QoS 20% rimosso, Edge preload OFF.
+- **Benchmark v2**: latenza DPC/scheduler (p95), scrittura disco REALE (fsync, no cache),
+  4K random IOPS, jitter ping su 10 campioni, tempo di avvio Windows e **SCORE 0-100** confrontabile.
+
 ## Novità v0.5 (GUI sicura)
 L'agent ora apre una **GUI sicura** (opzione **G** nel menu, o `--mode securegui`): per **ogni** tweak
 mostra **Problema trovato → Motivo → Modifica proposta → Impatto stimato** con un pulsante **Applica**

@@ -565,3 +565,9 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - P1: Alert storico salute (notifica se health score sotto soglia storica).
 - P2: Report PDF completo; condivisione SCORE benchmark (immagine/link social).
 - P3: Stripe billing, conversioni avanzate Google Ads, testimonianze + stelle GitHub.
+
+### 2026-07-17 (17) - Rebuild kit v0.6.0 preparato (build resta --onefile su richiesta utente)
+- version_info.txt: 0.4.5 -> 0.6.0 (metadati exe). Docs tag esempio v0.4.5 -> v0.6.0 (SIGNING_AND_TRUST, SIGNPATH_SETUP, workflow).
+- README.md agent-build: sezione "Novita v0.6" (boost adattivo + benchmark v2).
+- NUOVO /app/agent-build/REBUILD_v0.6.0.md: checklist 5 passi (build.bat -> test -> release GitHub v0.6.0 -> aggiornare frontend/src/config/agent.js con URL+SHA256+versione+data -> VirusTotal/segnalazione FP).
+- Da fare DALL'UTENTE dopo la build: aggiornare config/agent.js con lo SHA256 reale e fare Deploy. --onedir rimandato (P1 backlog).
