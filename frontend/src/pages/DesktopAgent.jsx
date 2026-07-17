@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
-import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu, Activity, Copy, Check, Gamepad2, Sparkles, ChevronDown, FileCheck2, Lock, History } from "lucide-react";
-import { AGENT_EXE_URL, AGENT_EXE_SHA256, AGENT_EXE_VERSION, AGENT_EXE_DATE, AGENT_RELEASES_URL } from "@/config/agent";
+import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu, Activity, Copy, Check, Gamepad2, Sparkles, ChevronDown, FileCheck2, Lock, History, AlertTriangle } from "lucide-react";
+import { AGENT_EXE_URL, AGENT_EXE_SHA256, AGENT_EXE_VERSION, AGENT_EXE_DATE, AGENT_RELEASES_URL, AGENT_DEFAULT_BACKEND } from "@/config/agent";
 import { toast } from "sonner";
 import api, { API } from "@/lib/api";
 
@@ -120,6 +120,11 @@ const SECURE = {
   it: {
     exe_badge: "In arrivo", exe_title: "App desktop con un click", exe_desc: "Scarica l'app Windows (.exe) e avviala. Firma digitale in preparazione: al primo avvio Windows può mostrare «App non riconosciuta» → Ulteriori informazioni → Esegui comunque.",
     exe_btn: "Scarica FrameForge (.exe)", exe_run: "Fai doppio click e incolla il token quando richiesto — oppure da terminale:", exe_sha: "SHA256 dell'.exe",
+    warn_title: "Importante: a quale server si collega l'app?",
+    warn_desc_a: "Per impostazione predefinita l'.exe si collega a",
+    warn_desc_b: "(produzione). Il token deve provenire dallo stesso sito a cui punta l'app: se lo copi da un ambiente diverso vedrai «Token non valido».",
+    warn_prod: "Stai usando il sito di produzione: scarica il token qui sotto e avvia l'.exe normalmente.",
+    warn_test: "Stai usando un ambiente di test/anteprima. Per far funzionare l'.exe con QUESTO ambiente (e questo token), aggiungi il parametro --backend:",
     secure_title: "Metodo sicuro (consigliato)", secure_desc: "Niente comandi remoti. Scarichi lo script, ne verifichi l'integrità (SHA256) ed esegui il file locale. Puoi aprirlo e leggerlo prima di eseguirlo.",
     token_label: "Il tuo token (privato)",
     s1: "1) Scarica lo script (non lo esegue)", s2: "2) Verifica l'integrità: l'hash deve coincidere con quello qui sotto", s3: "3) Esegui il file locale (cambia -Mode per l'azione)",
@@ -131,6 +136,11 @@ const SECURE = {
   en: {
     exe_badge: "Coming soon", exe_title: "One-click desktop app", exe_desc: "Download the Windows app (.exe) and launch it. Digital signature in progress: on first run Windows may show \u201cUnrecognized app\u201d \u2192 More info \u2192 Run anyway.",
     exe_btn: "Download FrameForge (.exe)", exe_run: "Double-click and paste the token when asked — or from a terminal:", exe_sha: ".exe SHA256",
+    warn_title: "Important: which server does the app connect to?",
+    warn_desc_a: "By default the .exe connects to",
+    warn_desc_b: "(production). The token must come from the same site the app points to: if you copy it from a different environment you'll see \u201cInvalid token\u201d.",
+    warn_prod: "You're on the production site: copy the token below and launch the .exe normally.",
+    warn_test: "You're on a test/preview environment. To make the .exe work with THIS environment (and this token), add the --backend parameter:",
     secure_title: "Secure method (recommended)", secure_desc: "No remote commands. Download the script, verify its integrity (SHA256) and run the local file. You can open and read it before running.",
     token_label: "Your token (private)",
     s1: "1) Download the script (does not run it)", s2: "2) Verify integrity: the hash must match the one below", s3: "3) Run the local file (change -Mode for the action)",
@@ -173,6 +183,10 @@ export default function DesktopAgent() {
   }, []);
 
   const tk = token || "IL_TUO_TOKEN";
+  const isProd = (BACKEND || "").includes("forgefps.dev");
+  const exeCmd = isProd
+    ? `forgefps-agent.exe --token ${tk} --mode optimize`
+    : `forgefps-agent.exe --backend "${BACKEND}" --token ${tk} --mode optimize`;
   const dl = `irm "${BACKEND}/api/agent/script?t=${tk}" -OutFile "$HOME\\Downloads\\forgefps.ps1"`;
   const verify = `Get-FileHash "$HOME\\Downloads\\forgefps.ps1" -Algorithm SHA256`;
   const run = (mode) => `powershell -ExecutionPolicy Bypass -File "$HOME\\Downloads\\forgefps.ps1" -Token ${tk} -Mode ${mode}`;
@@ -209,7 +223,28 @@ export default function DesktopAgent() {
             </div>
             <div className="mt-3">
               <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">{s.exe_run}</div>
-              <CmdRow label="" cmd={`forgefps-agent.exe --token ${token || "IL_TUO_TOKEN"} --mode optimize`} testid="exe-run" accent="text-[#E5FF00]" />
+              <CmdRow label="" cmd={exeCmd} testid="exe-run" accent="text-[#E5FF00]" />
+            </div>
+
+            {/* Backend / token mismatch notice */}
+            <div className={`mt-3 border p-3.5 ${isProd ? "border-[#00FF66]/30 bg-[#00FF66]/5" : "border-[#FFAA00]/40 bg-[#FFAA00]/5"}`} data-testid="exe-backend-notice">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle size={16} className={`shrink-0 mt-0.5 ${isProd ? "text-[#00FF66]" : "text-[#FFAA00]"}`} />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-zinc-200">{s.warn_title}</div>
+                  <p className="text-xs text-zinc-400 leading-relaxed mt-1">
+                    {s.warn_desc_a} <code className="text-[#00E0FF]">{AGENT_DEFAULT_BACKEND}</code> {s.warn_desc_b}
+                  </p>
+                  <p className={`text-xs leading-relaxed mt-2 ${isProd ? "text-[#00FF66]" : "text-[#FFAA00]"}`}>
+                    {isProd ? s.warn_prod : s.warn_test}
+                  </p>
+                  {!isProd && (
+                    <div className="mt-2">
+                      <CmdRow label="" cmd={exeCmd} testid="exe-backend-cmd" accent="text-[#FFAA00]" />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
