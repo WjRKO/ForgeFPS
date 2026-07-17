@@ -33,7 +33,7 @@ function Stat({ icon: Icon, label, value, unit, accent, testid }) {
   return (
     <div className="bg-[#0F0F12] border border-[#2A2A35] p-4" data-testid={testid}>
       <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-zinc-500 mb-2"><Icon size={14} className={accent} /> {label}</div>
-      <div className="font-display font-black text-3xl">{value ?? "--"}<span className="text-base text-zinc-500 ml-1">{value != null ? unit : ""}</span></div>
+      <div className="font-display font-black text-3xl tabular-nums">{value ?? "--"}<span className="text-base text-zinc-500 ml-1">{value != null ? unit : ""}</span></div>
     </div>
   );
 }

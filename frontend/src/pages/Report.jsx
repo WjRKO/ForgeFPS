@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import { Zap, HeartPulse, Gauge, Activity, Cpu, Share2, RotateCcw, Loader2, Camera, ArrowRight, TrendingUp, TrendingDown, Minus, FileText } from "lucide-react";
-import { jsPDF } from "jspdf";
 import api, { formatApiErrorDetail } from "@/lib/api";
 
 const DICT = {
@@ -149,6 +147,7 @@ export default function Report() {
     if (!cardRef.current) return;
     setBusy("export");
     try {
+      const { toPng } = await import("html-to-image");
       const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, backgroundColor: "#0A0A0C", cacheBust: true });
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], "frameforge-report.png", { type: "image/png" });
@@ -166,6 +165,7 @@ export default function Report() {
     if (!cardRef.current) return;
     setBusy("pdf");
     try {
+      const [{ toPng }, { jsPDF }] = await Promise.all([import("html-to-image"), import("jspdf")]);
       const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, backgroundColor: "#0A0A0C", cacheBust: true });
       const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
       const doc = new jsPDF({ unit: "pt", format: "a4" });
