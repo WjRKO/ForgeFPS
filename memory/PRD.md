@@ -453,3 +453,121 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - Utente ha pubblicato forgefps-agent.exe su GitHub Release WjRKO/ForgeFPS tag v0.4.3.5 (repo PUBBLICO, verificato via API con User-Agent; senza UA GitHub restituisce 404 fuorviante).
 - config/agent.js aggiornato: URL v0.4.3.5, SHA256=569dc9e365905c89eda20a41ed9eaf78e3d4432b5142a61dc4e2de333d31d510 (verificato: download 9.04MB + sha256sum COMBACIA), version v0.5.0, date 2026-07-17.
 - Connect PC + SecureInstaller (Landing/security) puntano al file reale. Screenshot Connect PC: badge v0.5.0 + SHA corretto + download attivo.
+
+### 2026-07-17 (4) - Agent v0.4.4 + avviso backend su "Collega il PC"
+- Diagnosi "Token non valido": l'.exe si collega di default a https://forgefps.dev (produzione, codice VECCHIO "Desktop Agent") mentre l'utente copiava il token dalla PREVIEW (db separato) -> token invalido. Non un bug: mismatch ambiente/token. Regola: il token deve venire dallo stesso backend a cui punta l'.exe.
+- config/agent.js -> Release v0.4.4, SHA256=8460ed1d73dbaa6415e2ab9035293d411639fa8642e44d46147043dfc372130c (download HTTP200 9.05MB + sha256sum COMBACIA), version v0.4.4.
+- DesktopAgent.jsx: aggiunto AVVISO (data-testid exe-backend-notice) nella card .exe. Mostra il backend di default (forgefps.dev via AGENT_DEFAULT_BACKEND) e avverte del mismatch token. Se il sito corrente NON e' forgefps.dev -> box AMBRA con comando pronto `forgefps-agent.exe --backend "<BACKEND_CORRENTE>" --token <tk> --mode optimize` (anche il comando principale exe-run include --backend in questo caso). Se e' produzione -> box VERDE "usa il token e avvia normalmente". Bilingue IT/EN. Verificato via screenshot in preview.
+
+### 2026-07-17 (5) - Antivirus falso positivo sull'.exe (mitigazioni build + guida + nota UI)
+- Causa: gli .exe PyInstaller (--onefile) sono spessissimo flaggati come falso positivo euristico (Windows Defender & co). Non e' un vero virus.
+- agent-build: creato version_info.txt (metadati CompanyName/ProductName/FileVersion) + build.bat/build.ps1 aggiornati con --noupx --clean --version-file version_info.txt (riducono molto i flag). README con sezione dedicata (firma Authenticode via SignPath/Certum gratis per OSS; segnalazione falso positivo a Microsoft wdsi/filesubmission; VirusTotal; alternativa .ps1).
+- DesktopAgent.jsx: nota AV (data-testid exe-av-note) sotto il download che rassicura ed indirizza al Metodo sicuro .ps1 (non flaggato). Bilingue IT/EN. Verificato via screenshot.
+- NB: le mitigazioni build valgono solo dopo RICOMPILAZIONE+ripubblicazione dell'.exe da parte dell'utente. Il v0.4.4 attuale resta flaggato finche non si ricompila/firma/segnala.
+
+### 2026-07-17 (6) - Kit firma OSS + guida trust (per togliere antivirus/SmartScreen)
+- agent-build: version_info.txt bump a 0.4.5.0; nuovi file sign.bat (signtool locale per Certum/SimplySign o .pfx), github-workflow-build-sign.yml (GitHub Actions build PyInstaller + firma SignPath Foundation gratis OSS + release), SIGNING_AND_TRUST.md (guida 3 percorsi: A Microsoft false positive gratis 1-3gg; B Certum Open Source cloud ~59EUR/anno firma locale; C SignPath gratis ma richiede sorgente pubblico + GH Actions). README aggiornato con elenco file.
+- Ricerca web 2026 verificata: SignPath richiede build automatica via GitHub Actions su repo pubblico OSI-licensed; Certum ~49EUR+IVA cloud SimplySign (persona fisica + ID + video verifica); Microsoft wdsi/filesubmission categoria "Software developer / false positive".
+- PENDING utente: (1) ricompilare v0.4.5 con nuovo build.bat e ripubblicare -> poi aggiorno config/agent.js con URL+SHA; (2) firma; (3) segnalazione Microsoft.
+
+### 2026-07-17 (7) - SignPath setup files + unblock immediato (.ps1)
+- Utente NON riesce a scaricare l'.exe (Defender blocca il download). Unblock immediato: Metodo sicuro .ps1 gia' in pagina (non flaggato, stessa GUI con -Mode optimize).
+- Preparati file pronti-da-committare nel repo pubblico per SignPath: LICENSE (MIT), CODE_SIGNING_POLICY.md (sezione da incollare nel README), SIGNPATH_SETUP.md (guida 5 fasi: commit sorgente+workflow -> apply signpath.org -> config secrets/GitHub App -> tag v0.4.5 build+firma -> collego). Workflow gia' in github-workflow-build-sign.yml. La v0.4.5 firmata viene prodotta dal workflow SignPath (o build manuale).
+- PENDING utente: committare i file nel repo, fare domanda SignPath, poi taggare v0.4.5 -> mi manda URL+SHA della release firmata.
+
+### 2026-07-17 (8) - Ottimizzazione performance + decluttering globale (mantenendo lo stile)
+- Design blueprint generata in /app/design_guidelines.json (decluttering entro l'estetica FrameForge esistente).
+- PERFORMANCE (lighter/faster loading):
+  - Lazy-load librerie pesanti con import() dinamico: jspdf + html-to-image in Report.jsx (export PNG/PDF), html-to-image in SessionSummary.jsx -> escono dal chunk iniziale, caricate solo al click. Verificato: export PNG+PDF funzionanti, nessun ChunkLoadError.
+  - HealthHistoryCard: isAnimationActive={false} sulle 3 linee. Live.jsx metriche con tabular-nums (anti-jitter durante update rapidi; chart gia' senza animazione).
+- DECLUTTER GLOBALE (tutte le pagine in un colpo, senza riscriverle): Layout.jsx <main> ora avvolge l'Outlet in un contenitore max-w-7xl centrato con padding coerente (px-4 sm:px-6 lg:px-8, py-6/8) + overflow-x-hidden. Su schermi larghi il contenuto non si sparpaglia piu' -> pagine piu' calme e leggibili. Stile invariato.
+- PRIMITIVES aggiunti a components/hud.jsx: PageContainer, Section, HUDCard, DataMetric (per standardizzare le pagine dense in futuro).
+- Verificato via screenshot: Dashboard, Report (+export), Prices/Tracker -> tutte pulite, centrate, stile FrameForge preservato, nessun errore console (solo RUM Cloudflare non correlato). Landing NON toccata.
+- Possibile continuare: decluttering di dettaglio per-pagina (raggruppare metriche, ridurre badge) sulle pagine piu' dense usando i nuovi primitives.
+
+### 2026-07-17 (9) - Pre-deploy: fix warning eslint + deploy check PASS
+- deployment_agent: PASS, nessun blocco (no secret hardcoded, porte/CORS ok, /health presente, build ok).
+- Fix warning react-hooks/exhaustive-deps: BiosRestore.jsx (data memoizzato, hw dep corretta, lang mantenuto con eslint-disable-line perche' e' trigger legittimo per i18n IT/EN) e Commands.jsx (data memoizzato + dep data.gpu). Frontend ora "Compiled successfully!" SENZA warning.
+- Live.jsx gia' riordinato (MetricGroup: Prestazioni/Temperature/Memoria&Rete) - blocco precedente risultava gia' risolto.
+- PRONTO AL REDEPLOY. Note pre-deploy comunicate all'utente: impostare ADMIN_PASSWORD forte da env in produzione; l'.exe punta di default a forgefps.dev (token dallo stesso backend).
+- IN SOSPESO (concordato): decluttering di Tracker.jsx e MyPc.jsx (Live gia' fatto) da fare dopo il deploy.
+
+### 2026-07-17 (10) - Scansione demo REALE (no account) + Guest demo mode (FATTO, test FE 100% iteration_22)
+- OBIETTIVO utente: togliere l'account come vincolo per provare l'app + migliorare il funnel (piani Free/Pro/Creator visti dopo).
+- SCELTE utente: demo reale = hardware browser + test bufferbloat REALE client-side (Cloudflare); niente AI senza account (consigli a regole); guest mode leggero (sola lettura, dati esempio); gating piani rimandato; net test 100% lato browser (Opzione A).
+- DEMO SCAN REALE (components/DemoScan.jsx riscritta, era 100% simulata): step reali -> (1) detectBrowserSpecs() mostra GPU/CPU-thread/RAM/OS veri; (2) lib/netTest.js runNetTest() satura la linea via speed.cloudflare.com/__down (CORS '*') e misura latenza idle vs sotto carico -> voto bufferbloat A+..F + download Mbps; (3) lib/quickAdvice.js buildAdvice() consigli a regole (vendor GPU, thread CPU, RAM, power plan, bufferbloat) costo zero. CTA: 'Registrati' -> /register, 'Esplora la demo' -> /demo. Fallback se rete bloccata. Guard timeout 15s.
+- GUEST MODE (pages/DemoApp.jsx, rotta PUBBLICA /demo in App.js): tour sola-lettura con dati esempio, 4 tab (Dashboard health ring 87 + stat + checklist / Live chart recharts / AI Advisor chat con Invia disabilitato / Report Prima-Dopo), banner giallo 'demo dati esempio' + CTA 'Registrati per sbloccare' (demo-unlock-cta, demo-bottom-cta -> /register). Bilingue IT/EN via COPY locale.
+- Verificato: testing_agent iteration_22.json = 100% FE. Scan reale eseguito (WebGL GPU, 8 thread, RAM>=8, bufferbloat grade C 45->111ms, 319 Mb), advice render, tutti i tab e CTA ok. Cloudflare fetch confermato raggiungibile con Access-Control-Allow-Origin '*'; nessuna CSP frontend che blocca.
+- NB: modifiche SOLO frontend -> per vederle su forgefps.dev serve REDEPLOY. Note minori non bloccanti: warning recharts width(-1) (cosmetico).
+
+### 2026-07-17 (11) - Google Ads: tag + conversioni + Consent Mode v2 (FATTO, redeploy pendente)
+- Google tag (gtag.js, ID AW-18329532067) inserito in public/index.html subito dopo <head>.
+- CONSENT MODE v2 (GDPR/EEA): default DENIED per ad_storage/ad_user_data/ad_personalization/analytics_storage prima di config; ripristina scelta 'granted' salvata prima del mount React.
+- BANNER COOKIE: components/ConsentBanner.jsx (Accetta/Rifiuta + link /privacy-telemetry), bilingue IT/EN, montato globalmente in App.js. Salva scelta in localStorage 'ff_consent' e chiama gtag('consent','update',...). Verificato via screenshot (banner render + accept).
+- CONVERSIONI (lib/gtag.js trackConversion): 3 eventi collegati -> signup (Auth.jsx dopo register), demo_scan (DemoScan al completamento), agent_download (DesktopAgent onClick su exe-download-btn e download-agent-btn). Le etichette CONVERSION_LABELS sono VUOTE (placeholder) -> nessun invio finche' l'utente non fornisce le 3 label da Google Ads. In attesa label utente.
+- NB: solo frontend -> serve REDEPLOY per attivare su forgefps.dev. Google verifica il tag sul dominio live dopo il redeploy.
+
+### 2026-07-17 (12) - Code review fixes (3 MEDIUM + 2 LOW) su modifiche recenti
+- Etichette conversione inserite in lib/gtag.js: signup=N2UNCMDjmtIcEKPtmaRE, demo_scan=RNNxCMPjmtIcEKPtmaRE, agent_download=B9KYCMbjmtIcEKPtmaRE.
+- FIX MEDIUM #1 (async cleanup): lib/netTest.js riscritto con AbortController condiviso propagato a tutti i fetch/ping; runNetTest(maxMs, externalSignal) aborta al timeout/unmount; ridotto consumo dati (3 stream x 25MB x 4s invece di 4x50MB x 5s); reader.cancel() rilascia gli stream. DemoScan.jsx: mountedRef + abortRef con cleanup in useEffect, guardie !mountedRef prima di ogni setState, niente trackConversion dopo unmount.
+- FIX MEDIUM #2 (bug confermato RAM): quickAdvice.js regex invertita -> ora `/GB/.test(ram) && !/≥8/.test(ram)` mostra il consiglio RAM per <8GB. Verificato via Node (4GB=true, ≥8GB=false).
+- FIX MEDIUM #3 (GDPR PostHog): index.html posthog.init ora con opt_out_capturing_by_default:true + blocco che fa opt_in solo se ff_consent='granted'. lib/gtag.js setConsent() specchia la scelta su PostHog (opt_in/opt_out). Ora sia Google Ads (Consent Mode v2) sia PostHog rispettano il banner cookie.
+- FIX LOW: og:url -> https://forgefps.dev/ (era dominio preview); consumo dati net test ridotto.
+- Verifica: frontend compila pulito; logica pura testata via Node; consent gating confermato nell'HTML servito. NB: tutto frontend -> serve REDEPLOY.
+
+### 2026-07-17 (13) - Trust: TrustBar + badge VirusTotal + FAQ sicurezza (FATTO, test FE iteration_23)
+- Obiettivo utente: aumentare la fiducia del cliente. Scelte: badge VirusTotal + trust bar, sezione FAQ. Inoltre l'agente mantiene aggiornato il CHANGELOG ad ogni novita' degna di nota.
+- TrustBar (components/TrustBar.jsx): 6 segnali (VirusTotal link a virustotal.com/gui/file/<sha256>, SHA256 verificabile, Open source MIT link repo, 100% reversibile, nessun codice remoto, local-first). Aggiunta su Landing (dopo la stats strip) e su Security (sotto hero). config/agent.js: aggiunto AGENT_REPO_URL.
+- SecurityFaq (components/SecurityFaq.jsx): accordion "E' sicuro?" con 6 domande (rovina PC, falso positivo AV, dati/password, come annullo, admin, prova senza download), bilingue. In Security.jsx prima di SecureInstaller.
+- DesktopAgent.jsx: link 'Verifica su VirusTotal' (exe-virustotal) accanto a SHA256.
+- Changelog.jsx: nuovo entry v0.4.5 (2026-07-17) in cima con demo reale, badge VirusTotal, FAQ, Consent Mode.
+- Test iteration_23: 5/6 pass; unico fail (TrustBar non renderizzata su /security) RISOLTO riapplicando il render (line 67), verificato compile + parita' con Landing (passata). Nota non bloccante: 401 da /auth/me su pagine pubbliche (pre-esistente).
+- NB: tutto frontend -> serve REDEPLOY per forgefps.dev. POLICY: aggiornare Changelog.jsx ad ogni feature/fix degna di nota.
+
+### 2026-07-17 (14) - Deployment readiness check + fix blocker
+- deployment_agent run 1: FAIL, 2 blocker critici: (a) .gitignore bloccava .env (righe 100-102: .env/.env.*/*.env) -> RIMOSSE (restano credentials.json, *.key, .credentials, test_credentials.md ignorati); (b) CORS_ORIGINS al dominio preview -> cambiato a "*" in backend/.env.
+- deployment_agent run 2: WARN (nessun blocker critico). WARN CORS: get_cors_origins() filtra "*" e ritorna [FRONTEND_URL] -> CORRETTO e VOLUTO perche' CORSMiddleware usa allow_credentials=True (cookie httpOnly) e il wildcard "*" e' vietato dai browser con credenziali. In prod il platform sostituisce FRONTEND_URL con forgefps.dev. NON modificato (romperebbe l'auth). WARN stats projection (products.py:122) = micro-ottimizzazione non bloccante, non toccato.
+- Backend riavviato, login 200, /health a livello app OK. PRONTO AL REDEPLOY (WARN non bloccanti).
+
+### 2026-07-17 (15) - FASE A: Motore di Boost ADATTIVO + 9 nuovi tweak (35 totali) (FATTO, 162/162 test backend)
+- Piano approvato dall'utente: A (boost adattivo) -> C (benchmark avanzato + spiegazione AI) -> B (game booster real-time).
+- ps_agent.py: nuova Get-HwProfile ($script:HW: laptop/ram/ssd/win11/gpu) + campo `fit` per tweak (ok | note: | warn: | skip:).
+  - GUI: header mostra "PC RILEVATO: Desktop|Laptop, GPU, RAM, SSD/HDD"; card con nota ADATTIVO colorata; skip=checkbox disabilitata; warn=deselezionata di default; preset saltano i tweak skip; fallback non-GUI salta skip/warn.
+  - Do-Power adattivo: laptop -> High Performance (non Ultimate), niente USB/PCIe power off globale.
+  - 9 NUOVI TWEAK: fse (Fullscreen Optimizations OFF), power_throttling (desktop), standby_clear (purge RAM standby via NtSetSystemInformation, C# inline compilato/verificato con pwsh), nic_power (PnPCapabilities=24 + InterruptModeration off), paging_exec (RAM>=16GB), sysmain (solo SSD), trim (solo SSD), ntfs (disablelastaccess con backup+restore dedicato), edge_preload.
+  - Regole adattive: amd_ulps/nvidia_tel ora skip per GPU diversa; usb/hibernate/nic_power/power_throttling warn su laptop.
+  - Sintassi PS validata con pwsh 7.4.6 (Parser API: SYNTAX OK) + C# Add-Type compilato OK.
+- routers/profiles.py: TWEAK_CATALOG 26->35, template aggiornati (fse in tutti, nic_power/paging_exec nei competitivi/stream).
+- forgefps_agent.py v0.6.0: apply_all_tweaks adattivo (laptop/ram/ssd) + FSE + QoS + PowerThrottling + DisablePagingExecutive + SysMain/TRIM + Edge preload.
+- Frontend: Landing "35/35 adaptive tweaks", DesktopAgent "35 tweak adattivi".
+- Test aggiornati (erano stali, non regressioni): $MODE ora via -Mode CLI, PresentMon 2.4.1, template ids attuali, DB_NAME test_database, password admin da test_credentials.md. TUTTI i 162 test passano.
+- ESCLUSI di proposito (sicurezza): disattivazione VBS/HVCI e mitigazioni Spectre (guadagno FPS ma riducono la sicurezza -> contro la promessa FrameForge).
+
+## PROSSIMI PASSI CONCORDATI
+- P0 FASE C: Benchmark avanzato (latenza DPC, test disco reale, jitter ping, punteggio 0-100 storico) + endpoint /api/benchmark/explain con Claude che spiega i risultati in italiano.
+- P0 FASE B: Game Booster real-time (watcher processi giochi, priorita' HIGH, sospensione app pesanti, purge standby, ripristino a fine sessione).
+- P1: PyInstaller --onedir (fix falsi positivi AV), Alert storico salute.
+
+### 2026-07-17 (16) - FASE C (Benchmark Avanzato + AI) e FASE B (Game Booster opt-in) (FATTO, testing_agent iter 25: 100%)
+- FASE C Benchmark v2 (ps_agent.py Run-Benchmark + forgefps_agent.py parita'):
+  - Nuove metriche: dpc_ms (latenza scheduler p95, proxy DPC), disco 256MB WriteThrough (scrittura REALE no cache), iops_4k (scritture casuali 4K sincrone), jitter_ms (10 ping), boot_s (event log Diagnostics-Performance 100), SCORE 0-100 pesato (cpu.20 ram.10 diskW.15 diskR.10 iops.10 dpc.15 ping.15 jitter.05). overall legacy mantenuto.
+  - POST /api/benchmark/explain {lang}: Claude spiega prima/dopo in italiano (ai_engine.explain_benchmark, BENCH_SYSTEM), cache in db.benchmark_explanations per (user, bench_ts, lang), rate limit solo su generazione.
+  - MyPc.jsx: card score/dpc/iops/jitter/boot, ScoreSparkline (storico SCORE, >=2 benchmark), bottone bench-explain-btn + pannello bench-explanation (strip heading markdown).
+- FASE B Game Booster (MAI automatico al 100%, per scelta esplicita utente):
+  - Mode 'booster' in ps_agent.py: rileva gioco via PresentMon FPS (admin) o finestra fullscreen-foreground (FFWin C#); al rilevamento COUNTDOWN 5s con tasto per ANNULLARE; azioni configurabili: priorita' HIGH, piano energetico temporaneo (ripristinato), chiusura app (default NESSUNA), purge RAM standby; a fine partita ripristina e invia boost_session al backend; Ctrl+C ripristina (finally).
+  - Backend: GET/PUT /api/booster (booster_settings), GET /api/booster/sessions (ultime 10), report-specs accetta boost_session -> db.boost_sessions; placeholders __BOOSTER_APPS__/_POWER_/_PRIORITY_/_PURGE_ iniettati in _build_agent_script.
+  - Games.jsx: card Game Booster con SecureRunBlock mode=booster, config 3 toggle + gruppi app, sessioni recenti. DesktopAgent.jsx: mode aggiunto. i18n it/en completo.
+- LEZIONE: search_replace di 2 blocchi grandi sullo stesso file nello stesso batch ha corrotto ps_agent.py (frammento oltre la chiusura ''')-> git checkout e riapplicati UNO ALLA VOLTA con ast.parse + pwsh Parser dopo ognuno. pwsh 7.4.6 arm64 disponibile in /tmp/pwsh/pwsh.
+- Test: sintassi PS OK, 11/11 pytest nuovi (test_booster_bench.py), flussi UI verificati dal testing agent, regressione prematch OK.
+
+## PROSSIMI PASSI
+- P1: PyInstaller --onedir (falsi positivi AV) + testi per vendor AV.
+- P1: Alert storico salute (notifica se health score sotto soglia storica).
+- P2: Report PDF completo; condivisione SCORE benchmark (immagine/link social).
+- P3: Stripe billing, conversioni avanzate Google Ads, testimonianze + stelle GitHub.
+
+### 2026-07-17 (17) - Rebuild kit v0.6.0 preparato (build resta --onefile su richiesta utente)
+- version_info.txt: 0.4.5 -> 0.6.0 (metadati exe). Docs tag esempio v0.4.5 -> v0.6.0 (SIGNING_AND_TRUST, SIGNPATH_SETUP, workflow).
+- README.md agent-build: sezione "Novita v0.6" (boost adattivo + benchmark v2).
+- NUOVO /app/agent-build/REBUILD_v0.6.0.md: checklist 5 passi (build.bat -> test -> release GitHub v0.6.0 -> aggiornare frontend/src/config/agent.js con URL+SHA256+versione+data -> VirusTotal/segnalazione FP).
+- Da fare DALL'UTENTE dopo la build: aggiornare config/agent.js con lo SHA256 reale e fare Deploy. --onedir rimandato (P1 backlog).

@@ -181,12 +181,12 @@ export default function BiosRestore() {
     api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
   }, []);
 
-  const data = specs?.data || {};
-  const hw = useMemo(() => detectHardware(data), [specs]);
+  const data = useMemo(() => specs?.data || {}, [specs]);
+  const hw = useMemo(() => detectHardware(data), [data]);
   const hasHw = hw.cpu || hw.gpu;
 
-  const safe = useMemo(() => filterForHardware(BIOS_SAFE, hw), [hw, lang]);
-  const caution = useMemo(() => filterForHardware(BIOS_CAUTION, hw), [hw, lang]);
+  const safe = useMemo(() => filterForHardware(BIOS_SAFE, hw), [hw, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  const caution = useMemo(() => filterForHardware(BIOS_CAUTION, hw), [hw, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const topPicks = useMemo(
     () => [...safe, ...caution].filter((t) => t.impact).slice(0, 3),
     [safe, caution]
@@ -215,8 +215,8 @@ export default function BiosRestore() {
     navigate("/app/advisor", { state: { ask: q } });
   };
 
-  const restoreSafe = useMemo(() => RESTORE_SAFE.map((t) => adaptRestore(t, hw, data.motherboard)), [hw, data.motherboard, lang]);
-  const restoreCaution = useMemo(() => RESTORE_CAUTION.map((t) => adaptRestore(t, hw, data.motherboard)), [hw, data.motherboard, lang]);
+  const restoreSafe = useMemo(() => RESTORE_SAFE.map((t) => adaptRestore(t, hw, data.motherboard)), [hw, data.motherboard, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  const restoreCaution = useMemo(() => RESTORE_CAUTION.map((t) => adaptRestore(t, hw, data.motherboard)), [hw, data.motherboard, lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const askAIRestore = (item) => {
     const en = isEn();

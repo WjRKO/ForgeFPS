@@ -6,7 +6,7 @@ import pytest
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://stream-gear-monitor.preview.emergentagent.com").rstrip("/")
 ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASSWORD = "admin123"
+ADMIN_PASSWORD = "4zWK4o_xSw5prU-2b7w9dQ"
 
 
 @pytest.fixture(scope="module")
@@ -79,9 +79,9 @@ class TestTemplates:
         assert r.status_code == 200
         data = r.json()
         assert len(data["templates"]) == 5
-        assert len(data["catalog"]) == 26
+        assert len(data["catalog"]) == 35
         ids = {t["id"] for t in data["templates"]}
-        assert {"tpl_valorant", "tpl_cs2", "tpl_warzone", "tpl_fortnite", "tpl_streaming"} <= ids
+        assert {"tpl_comp", "tpl_aaa", "tpl_moba", "tpl_streaming", "tpl_balanced"} <= ids
         # Each catalog entry has id/name/cat
         for c in data["catalog"]:
             assert set(["id", "name", "cat"]) <= set(c.keys())
@@ -127,7 +127,7 @@ class TestProfilesCRUD:
 class TestAgentScriptProfileMonitor:
     def test_valorant_profile_injected(self, agent_token):
         r = requests.get(f"{BASE_URL}/api/agent/script",
-                         params={"t": agent_token, "mode": "optimize", "profile": "tpl_valorant"})
+                         params={"t": agent_token, "mode": "optimize", "profile": "tpl_comp"})
         assert r.status_code == 200
         # must contain @('power','gaming',...) - check presence of key ids
         assert "$script:PROFILE = @(" in r.text
@@ -145,6 +145,6 @@ class TestAgentScriptProfileMonitor:
         r = requests.get(f"{BASE_URL}/api/agent/script",
                          params={"t": agent_token, "mode": "monitor"})
         assert r.status_code == 200
-        assert "$MODE    = 'monitor'" in r.text
+        assert "$MODE    = $Mode" in r.text
         assert "Get-TelemetrySample" in r.text
         assert "Send-Telemetry" in r.text

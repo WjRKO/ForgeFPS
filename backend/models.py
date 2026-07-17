@@ -52,6 +52,7 @@ class SpecsInput(BaseModel):
     benchmark: Optional[dict] = None
     games: Optional[list] = None
     running_apps: Optional[list] = None
+    boost_session: Optional[dict] = None
 
 
 class GoalInput(BaseModel):
@@ -95,6 +96,17 @@ class AlertInput(BaseModel):
 class PrematchInput(BaseModel):
     close_apps: list = []
     set_power: bool = True
+
+
+class BoosterInput(BaseModel):
+    close_apps: list = []
+    set_power: bool = True
+    boost_priority: bool = True
+    purge_ram: bool = True
+
+
+class BenchExplainInput(BaseModel):
+    lang: str = "it"
 
 
 class ReportPhaseInput(BaseModel):

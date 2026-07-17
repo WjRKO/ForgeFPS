@@ -17,6 +17,30 @@ ADVISOR_SYSTEM = (
     "codice PowerShell (```powershell ... ```). Se un'azione è rischiosa, avvisa l'utente. Non inventare comandi inesistenti."
 )
 
+BENCH_SYSTEM = (
+    "Sei un tecnico esperto di PC gaming. Spieghi i risultati dei benchmark in modo chiaro, onesto e concreto, "
+    "senza esagerare i numeri. Rispondi in Markdown semplice (grassetto ed elenchi puntati), massimo 220 parole."
+)
+
+
+async def explain_benchmark(specs_text: str, before: dict | None, after: dict, lang: str = "it") -> str:
+    import uuid as _uuid
+    lang_line = "Rispondi in italiano." if (lang or "it").startswith("it") else "Answer in English."
+    prompt = (
+        f"Hardware dell'utente:\n{specs_text or 'sconosciuto'}\n\n"
+        f"Benchmark PRIMA dell'ottimizzazione: {json.dumps(before, ensure_ascii=False) if before else 'non disponibile'}\n"
+        f"Benchmark DOPO/ATTUALE: {json.dumps(after, ensure_ascii=False)}\n\n"
+        "Significato metriche: cpu_score (piu alto=meglio), ram_mbps (banda RAM), disk_write_mbps/disk_read_mbps "
+        "(MB/s sequenziali reali), iops_4k (scritture casuali 4K sincrone: reattivita del disco), dpc_ms (latenza "
+        "scheduler/DPC p95: piu bassa=meglio, sopra 2ms causa micro-stutter nei giochi), ping_ms e jitter_ms (rete), "
+        "boot_s (secondi di avvio Windows), score (punteggio composito 0-100), free_ram_pct (RAM libera).\n"
+        "Scrivi: 1) se esiste un PRIMA, cosa e migliorato e di quanto (in percentuale); 2) il punto piu debole del "
+        "sistema e la causa probabile; 3) 2-3 consigli concreti e sicuri per migliorarlo. " + lang_line
+    )
+    chat = build_chat(f"bench-explain-{_uuid.uuid4()}", BENCH_SYSTEM)
+    text = await asyncio.wait_for(_collect(chat, prompt), timeout=AI_TIMEOUT)
+    return text.strip()
+
 
 def get_key() -> str:
     return os.environ.get("EMERGENT_LLM_KEY", "")

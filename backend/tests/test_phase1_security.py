@@ -132,7 +132,7 @@ class TestAIRateLimit:
         # seed via pymongo directly (backend uses motor async, we use sync driver here)
         from pymongo import MongoClient
         mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
-        db_name = os.environ.get("DB_NAME", "boostpc")
+        db_name = os.environ.get("DB_NAME", "test_database")
         cli = MongoClient(mongo_url)
         try:
             coll = cli[db_name]["chat_messages"]

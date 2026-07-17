@@ -89,6 +89,21 @@ function Get-GpuVendor {
   return 'n/d'
 }
 
+# ---------------- Profilo hardware adattivo ----------------
+function Get-HwProfile {
+  $lap = $false
+  $ct = (Get-CimInstance Win32_SystemEnclosure -ErrorAction SilentlyContinue).ChassisTypes
+  foreach ($c in @($ct)) { if (@(8,9,10,14,30,31,32) -contains [int]$c) { $lap = $true } }
+  if (-not $lap) { if (Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue) { $lap = $true } }
+  $ram = 0; try { $ram = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB) } catch {}
+  $ssd = $false
+  try { $mt = (Get-Partition -DriveLetter C -ErrorAction SilentlyContinue | Get-Disk | Get-PhysicalDisk).MediaType; if ("$mt" -match 'SSD') { $ssd = $true } } catch {}
+  if (-not $ssd) { try { $bt = (Get-PhysicalDisk -ErrorAction SilentlyContinue | Select-Object -First 1).BusType; if ($bt -eq 17) { $ssd = $true } } catch {} }
+  $b = 0; try { $b = [int](Get-CimInstance Win32_OperatingSystem).BuildNumber } catch {}
+  return @{ laptop = $lap; ram = $ram; ssd = $ssd; win11 = ($b -ge 22000); gpu = (Get-GpuVendor) }
+}
+$script:HW = Get-HwProfile
+
 # ---------------- Precision helpers (LibreHardwareMonitor, VRAM, power, startup) ----------------
 $script:LHM_DIR = Join-Path $env:TEMP 'boostpc_lhm'
 $script:LHM_ZIP_URL = 'https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.4/LibreHardwareMonitor-net472.zip'
@@ -406,28 +421,75 @@ function Run-Benchmark {
   $buf = New-Object byte[] $size; $dst = New-Object byte[] $size
   $sw.Restart(); for ($i = 0; $i -lt 5; $i++) { [Array]::Copy($buf, $dst, $size) }; $sw.Stop()
   $r.ram_mbps = [int]([math]::Round((5 * $size / 1MB) / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+  # Disco: scrittura sequenziale REALE (WriteThrough bypassa la cache, 256MB)
   $tmp = Join-Path $env:TEMP 'boostpc_bench.bin'
-  $data = New-Object byte[] (64MB); (New-Object Random).NextBytes($data)
-  $sw.Restart(); [System.IO.File]::WriteAllBytes($tmp, $data); $sw.Stop()
-  $r.disk_write_mbps = [int]([math]::Round(64 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
-  $sw.Restart(); $null = [System.IO.File]::ReadAllBytes($tmp); $sw.Stop()
-  $r.disk_read_mbps = [int]([math]::Round(64 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+  try {
+    $chunk = New-Object byte[] (8MB); (New-Object Random).NextBytes($chunk)
+    $fs = New-Object System.IO.FileStream($tmp, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None, 1MB, [System.IO.FileOptions]::WriteThrough)
+    $sw.Restart(); for ($i = 0; $i -lt 32; $i++) { $fs.Write($chunk, 0, $chunk.Length) }; $fs.Flush($true); $sw.Stop(); $fs.Close()
+    $r.disk_write_mbps = [int]([math]::Round(256 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+    $sw.Restart(); $null = [System.IO.File]::ReadAllBytes($tmp); $sw.Stop()
+    $r.disk_read_mbps = [int]([math]::Round(256 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+    $b4 = New-Object byte[] 4096; $rnd = New-Object Random
+    $fs2 = New-Object System.IO.FileStream($tmp, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None, 4096, [System.IO.FileOptions]::WriteThrough)
+    $ops = 200
+    $sw.Restart()
+    for ($i = 0; $i -lt $ops; $i++) { $fs2.Position = 4096 * $rnd.Next(0, 65536); $fs2.Write($b4, 0, 4096) }
+    $fs2.Flush($true); $sw.Stop(); $fs2.Close()
+    $r.iops_4k = [int]([math]::Round($ops / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+  } catch { if (-not $r.ContainsKey('disk_write_mbps')) { $r.disk_write_mbps = 0 }; if (-not $r.ContainsKey('disk_read_mbps')) { $r.disk_read_mbps = 0 }; $r.iops_4k = 0 }
   Remove-Item $tmp -ErrorAction SilentlyContinue
+  # Latenza scheduler/DPC (proxy): oversleep p95 su 150 sleep da 1ms
+  $lat = New-Object System.Collections.Generic.List[double]
+  $sw2 = [System.Diagnostics.Stopwatch]::StartNew()
+  $prev = $sw2.Elapsed.TotalMilliseconds
+  for ($i = 0; $i -lt 150; $i++) {
+    Start-Sleep -Milliseconds 1
+    $nowMs = $sw2.Elapsed.TotalMilliseconds
+    $lat.Add([math]::Max(0, $nowMs - $prev - 1)); $prev = $nowMs
+  }
+  $sorted = @($lat | Sort-Object)
+  $r.dpc_ms = [math]::Round($sorted[[int][math]::Floor($sorted.Count * 0.95)], 1)
+  # Rete: ping medio + jitter su 10 campioni
   try {
     $png = New-Object System.Net.NetworkInformation.Ping
-    $tot = 0; $n = 0
-    for ($i = 0; $i -lt 4; $i++) { $res = $png.Send('1.1.1.1', 2000); if ($res.Status -eq 'Success') { $tot += $res.RoundtripTime; $n++ } }
-    $r.ping_ms = if ($n -gt 0) { [int]([math]::Round($tot / $n)) } else { 0 }
-  } catch { $r.ping_ms = 0 }
+    $rtts = New-Object System.Collections.Generic.List[double]
+    for ($i = 0; $i -lt 10; $i++) { $res = $png.Send('1.1.1.1', 2000); if ($res.Status -eq 'Success') { $rtts.Add([double]$res.RoundtripTime) } }
+    if ($rtts.Count -gt 0) {
+      $avg = ($rtts | Measure-Object -Average).Average
+      $r.ping_ms = [int]([math]::Round($avg))
+      $var = 0.0; foreach ($v in $rtts) { $var += [math]::Pow($v - $avg, 2) }
+      $r.jitter_ms = [math]::Round([math]::Sqrt($var / $rtts.Count), 1)
+    } else { $r.ping_ms = 0; $r.jitter_ms = 0 }
+  } catch { $r.ping_ms = 0; $r.jitter_ms = 0 }
+  # Tempo di avvio Windows (event log Diagnostics-Performance 100)
+  try {
+    $ev = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 100 } -MaxEvents 1 -ErrorAction SilentlyContinue
+    if ($ev) {
+      $x = [xml]$ev.ToXml()
+      $bt = ($x.Event.EventData.Data | Where-Object { $_.Name -eq 'BootTime' }).'#text'
+      if ($bt) { $r.boot_s = [math]::Round([double]$bt / 1000, 1) }
+    }
+  } catch {}
   $o = Get-CimInstance Win32_OperatingSystem
   $r.free_ram_pct = [int]([math]::Round($o.FreePhysicalMemory / $o.TotalVisibleMemorySize * 100))
+  # SCORE 0-100 pesato (confrontabile nel tempo)
+  $cpuN = [math]::Min(100, $r.cpu_score / 100.0)
+  $ramN = [math]::Min(100, $r.ram_mbps / 200.0)
+  $dwN = [math]::Min(100, $r.disk_write_mbps / 20.0)
+  $drN = [math]::Min(100, $r.disk_read_mbps / 30.0)
+  $ioN = [math]::Min(100, $r.iops_4k / 50.0)
+  $dpcN = [math]::Max(0, 100 - $r.dpc_ms * 20)
+  $pingN = [math]::Max(0, 100 - $r.ping_ms)
+  $jitN = [math]::Max(0, 100 - $r.jitter_ms * 10)
+  $r.score = [int]([math]::Round($cpuN * 0.20 + $ramN * 0.10 + $dwN * 0.15 + $drN * 0.10 + $ioN * 0.10 + $dpcN * 0.15 + $pingN * 0.15 + $jitN * 0.05))
   $r.overall = [int]([math]::Round($r.cpu_score + $r.ram_mbps/50.0 + $r.disk_write_mbps/50.0 + $r.disk_read_mbps/50.0 + [math]::Max(0, 120 - $r.ping_ms) + $r.free_ram_pct))
   return $r
 }
 function Show-Bench($r, $title) {
   Say "`n   [$title]" 'Cyan'
-  Say ("   CPU {0} | RAM {1} MB/s | Disco W/R {2}/{3} MB/s | Ping {4} ms | PUNTEGGIO {5}" -f `
-    $r.cpu_score, $r.ram_mbps, $r.disk_write_mbps, $r.disk_read_mbps, $r.ping_ms, $r.overall) 'Yellow'
+  Say ("   CPU {0} | RAM {1} MB/s | Disco W/R {2}/{3} MB/s | 4K {4} IOPS" -f $r.cpu_score, $r.ram_mbps, $r.disk_write_mbps, $r.disk_read_mbps, $r.iops_4k) 'Yellow'
+  Say ("   DPC {0} ms | Ping {1} ms (jitter {2} ms){3} | SCORE {4}/100" -f $r.dpc_ms, $r.ping_ms, $r.jitter_ms, $(if($r.ContainsKey('boot_s')){" | Avvio $($r.boot_s)s"}else{''}), $r.score) 'Yellow'
 }
 
 # ---------------- Reporting ----------------
@@ -671,6 +733,14 @@ function Do-Cleanup {
 function Do-Power {
   $curScheme = (powercfg /getactivescheme)
   if ($curScheme -match '([0-9a-fA-F-]{36})' -and -not $script:BK.ContainsKey('power_plan')) { $script:BK['power_plan'] = $matches[1] }
+  if ($script:HW.laptop) {
+    # Laptop: High Performance (non Ultimate), niente USB/PCIe power off globale per batteria/temperature
+    powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null
+    powercfg /setacvalueindex scheme_current sub_processor 893dee8e-2bef-41e0-89c6-b55d0929964c 100 2>$null
+    powercfg /setacvalueindex scheme_current sub_processor bc5038f7-23e0-4960-96da-33abaf5935ec 100 2>$null
+    powercfg -setactive scheme_current 2>$null
+    return
+  }
   $ultimate = 'e9a42b02-d5df-448d-aa00-03f14749eb61'
   powercfg -duplicatescheme $ultimate 2>$null | Out-Null
   powercfg -setactive $ultimate 2>$null
@@ -779,6 +849,68 @@ function Do-GamebarRec {
 function Do-SearchIndex {
   Disable-ServiceSafe 'WSearch' | Out-Null
 }
+function Do-Fse {
+  $g = 'HKCU:\System\GameConfigStore'
+  Set-Reg $g 'GameDVR_FSEBehaviorMode' 'DWord' 2
+  Set-Reg $g 'GameDVR_HonorUserFSEBehaviorMode' 'DWord' 1
+  Set-Reg $g 'GameDVR_DXGIHonorFSEWindowsCompatible' 'DWord' 1
+  Set-Reg $g 'GameDVR_EFSEFeatureFlags' 'DWord' 0
+}
+function Do-PowerThrottling { Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling' 'PowerThrottlingOff' 'DWord' 1 }
+function Do-PagingExec { Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' 'DisablePagingExecutive' 'DWord' 1 }
+function Do-SysMain { Disable-ServiceSafe 'SysMain' | Out-Null }
+function Do-Trim { fsutil behavior set DisableDeleteNotify 0 2>$null | Out-Null }
+function Do-Ntfs {
+  if (-not $script:BK.ContainsKey('ntfs::lastaccess')) {
+    $q = (fsutil behavior query disablelastaccess) -join ' '
+    $old = '2'; if ($q -match '=\s*(\d)') { $old = $matches[1] }
+    $script:BK['ntfs::lastaccess'] = $old
+  }
+  fsutil behavior set disablelastaccess 1 2>$null | Out-Null
+}
+function Do-NicPower {
+  $root = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}'
+  $ups = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' }
+  foreach ($a in $ups) {
+    Get-ChildItem $root -ErrorAction SilentlyContinue | ForEach-Object {
+      $id = (Get-ItemProperty $_.PSPath -Name NetCfgInstanceId -ErrorAction SilentlyContinue).NetCfgInstanceId
+      if ($id -eq $a.InterfaceGuid) {
+        Set-Reg $_.PSPath 'PnPCapabilities' 'DWord' 24
+        $im = (Get-ItemProperty $_.PSPath -Name '*InterruptModeration' -ErrorAction SilentlyContinue).'*InterruptModeration'
+        if ($null -ne $im) { Set-Reg $_.PSPath '*InterruptModeration' 'String' '0' }
+      }
+    }
+  }
+}
+function Do-EdgePreload {
+  Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' 'StartupBoostEnabled' 'DWord' 0
+  Set-Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' 'BackgroundModeEnabled' 'DWord' 0
+}
+function Clear-StandbyList {
+  if (-not ('FFMem' -as [type])) {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class FFMem {
+  [DllImport("ntdll.dll")] public static extern int NtSetSystemInformation(int cls, ref int info, int len);
+  [DllImport("advapi32.dll", SetLastError=true)] static extern bool OpenProcessToken(IntPtr h, int acc, out IntPtr tok);
+  [DllImport("advapi32.dll", SetLastError=true)] static extern bool LookupPrivilegeValue(string s, string n, out long luid);
+  [StructLayout(LayoutKind.Sequential)] struct TP { public int Count; public long Luid; public int Attr; }
+  [DllImport("advapi32.dll", SetLastError=true)] static extern bool AdjustTokenPrivileges(IntPtr tok, bool d, ref TP st, int len, IntPtr p, IntPtr r);
+  [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+  public static int Purge() {
+    IntPtr tok; OpenProcessToken(GetCurrentProcess(), 0x28, out tok);
+    long luid; LookupPrivilegeValue(null, "SeProfileSingleProcessPrivilege", out luid);
+    TP tp; tp.Count = 1; tp.Luid = luid; tp.Attr = 2;
+    AdjustTokenPrivileges(tok, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+    int cmd = 4;
+    return NtSetSystemInformation(80, ref cmd, 4);
+  }
+}
+"@ 2>$null
+  }
+  try { [FFMem]::Purge() | Out-Null } catch {}
+}
 $script:BLOAT = @('Microsoft.549981C3F5F10','Microsoft.BingNews','Microsoft.BingWeather','Microsoft.GetHelp',
   'Microsoft.Getstarted','Microsoft.WindowsFeedbackHub','Microsoft.MicrosoftSolitaireCollection',
   'Microsoft.People','Microsoft.WindowsMaps','Microsoft.3DBuilder','Microsoft.MixedReality.Portal',
@@ -794,6 +926,7 @@ $script:TWEAKS = @(
      desc='Attiva Ultimate/High Performance, disattiva core parking, processore al 100%, USB suspend e PCIe ASPM off.';
      impact='+3-8% FPS medi e 1% low piu stabili, meno micro-stutter. Consuma piu energia (irrilevante su desktop).';
      risk='safe';
+     fit={ if($script:HW.laptop){'note:Laptop rilevato: applico High Performance (non Ultimate) per proteggere batteria e temperature'}else{'ok'} };
      state={ $p=(powercfg /getactivescheme); if($p -match 'high|ultimate|prestazioni elevate'){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Power } }
   @{ cat='gaming'; id='gaming'; name='Boost gaming (Game Mode, HAGS, Game DVR off)';
      problem='Game DVR registra in background e la GPU scheduling hardware potrebbe essere disattivata.';
@@ -829,6 +962,7 @@ $script:TWEAKS = @(
      desc='Disattiva ULPS nelle chiavi di registro AMD (solo GPU AMD).';
      impact='Meno stutter e latenza su schede AMD, clock piu stabile.';
      risk='safe';
+     fit={ if($script:HW.gpu -eq 'AMD'){'ok'}else{"skip:Solo GPU AMD (rilevata $($script:HW.gpu))"} };
      state={ if((Get-GpuVendor) -eq 'AMD'){'GPU AMD: applicabile'}else{'Solo GPU AMD'} }; apply={ Do-AmdUlps } }
   @{ cat='gaming'; id='nvidia_tel'; name='NVIDIA: disabilita telemetria';
      problem='I driver NVIDIA installano task/servizi di telemetria che girano in background.';
@@ -836,6 +970,7 @@ $script:TWEAKS = @(
      desc='Disattiva i task pianificati e il servizio di telemetria NVIDIA (solo GPU NVIDIA).';
      impact='Meno processi in background, CPU leggermente piu libera.';
      risk='safe';
+     fit={ if($script:HW.gpu -eq 'NVIDIA'){'ok'}else{"skip:Solo GPU NVIDIA (rilevata $($script:HW.gpu))"} };
      state={ if((Get-GpuVendor) -eq 'NVIDIA'){'GPU NVIDIA: applicabile'}else{'Solo GPU NVIDIA'} }; apply={ Do-NvidiaTel } }
   @{ cat='gaming'; id='hibernate'; name='Disabilita ibernazione';
      problem='Il file hiberfil.sys occupa diversi GB di disco anche se non usi mai la sospensione.';
@@ -843,6 +978,7 @@ $script:TWEAKS = @(
      desc='Esegue powercfg -h off per rimuovere hiberfil.sys (reversibile con -h on).';
      impact='Libera 4-32 GB su disco. Perdi la sospensione ibrida/avvio rapido.';
      risk='caution';
+     fit={ if($script:HW.laptop){'warn:Su laptop l ibernazione e utile a batteria scarica: disattivala solo se non la usi mai'}else{'ok'} };
      state={ 'Applica per liberare spazio' }; apply={ Do-Hibernate } }
   # LATENZA & INPUT
   @{ cat='input'; id='mouse'; name='Accelerazione mouse OFF (raw input)';
@@ -865,6 +1001,7 @@ $script:TWEAKS = @(
      desc='Disattiva il risparmio energetico sui controller USB.';
      impact='Input di mouse/tastiera piu stabile, niente drop. Nessun rischio.';
      risk='safe';
+     fit={ if($script:HW.laptop){'warn:Su laptop aumenta il consumo della batteria: attiva solo se giochi collegato alla corrente'}else{'ok'} };
      state={ 'Applica per input stabile' }; apply={ Do-Usb } }
   @{ cat='input'; id='stickykeys'; name='Sticky/Filter/Toggle Keys OFF';
      problem='Premendo Shift ripetutamente compare il popup delle Sticky Keys che ti butta fuori dal gioco.';
@@ -973,11 +1110,80 @@ $script:TWEAKS = @(
      impact='Meno carico su disco/CPU, MA la ricerca file diventa piu lenta. Reversibile.';
      risk='caution';
      state={ $s=Get-Service WSearch -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){'Attivo'}else{'Disattivato'} }; apply={ Do-SearchIndex } }
+  # NUOVI TWEAK (motore adattivo)
+  @{ cat='gaming'; id='fse'; name='Fullscreen Optimizations OFF';
+     problem='Windows forza il fullscreen ottimizzato (borderless) invece del fullscreen esclusivo reale.';
+     reason='Il fullscreen esclusivo bypassa il compositor DWM: input piu diretto e frametime piu pulito.';
+     desc='Imposta FSEBehaviorMode=2 e HonorUserFSEBehavior nel GameConfigStore.';
+     impact='Input lag ridotto nei giochi a schermo intero. Nessun rischio.';
+     risk='safe';
+     state={ if((Get-RegVal 'HKCU:\System\GameConfigStore' 'GameDVR_FSEBehaviorMode') -eq 2){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Fse } }
+  @{ cat='gaming'; id='power_throttling'; name='Power throttling CPU OFF';
+     problem='Windows rallenta (throttla) i processi che considera poco importanti per risparmiare energia.';
+     reason='A volte il throttling colpisce anche giochi, OBS o launcher, causando cali improvvisi.';
+     desc='Imposta PowerThrottlingOff=1: nessun processo viene mai rallentato dal risparmio energetico.';
+     impact='CPU sempre reattiva per giochi e streaming. Consuma un po piu di energia.';
+     risk='safe';
+     fit={ if($script:HW.laptop){'warn:Su laptop il power throttling risparmia batteria: attiva solo se giochi sempre collegato alla corrente'}else{'ok'} };
+     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling' 'PowerThrottlingOff') -eq 1){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-PowerThrottling } }
+  @{ cat='gaming'; id='standby_clear'; name='Svuota RAM standby (azione istantanea)';
+     problem='Windows tiene in RAM una cache standby che a volte non viene liberata abbastanza in fretta.';
+     reason='Svuotare la standby list prima di giocare rende la memoria subito disponibile per il gioco.';
+     desc='Purge della standby memory list via API di sistema (richiede Amministratore). Nessuna modifica permanente.';
+     impact='RAM libera immediata prima della sessione di gioco. Azione una tantum, sempre sicura.';
+     risk='safe';
+     state={ $o=Get-CimInstance Win32_OperatingSystem; "$([math]::Round($o.FreePhysicalMemory/1MB,1)) GB RAM libera ora" }; apply={ Clear-StandbyList } }
+  @{ cat='network'; id='nic_power'; name='Scheda di rete a piena potenza';
+     problem='Windows puo spegnere la scheda di rete per risparmiare energia e usa interrupt moderation che aggiunge latenza.';
+     reason='Il risparmio energetico della NIC causa micro-disconnessioni; la moderazione degli interrupt ritarda i pacchetti.';
+     desc='Disattiva il power saving della scheda attiva (PnPCapabilities=24) e la interrupt moderation.';
+     impact='Ping piu stabile, niente drop di connessione in game. Richiede riavvio o riconnessione.';
+     risk='safe';
+     fit={ if($script:HW.laptop){'warn:Su laptop la scheda di rete sempre attiva consuma piu batteria'}else{'ok'} };
+     state={ $a=Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1; if(-not $a){'n/d'}else{ $ok=$false; Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | ForEach-Object { $p=Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if($p.NetCfgInstanceId -eq $a.InterfaceGuid -and $p.PnPCapabilities -eq 24){$ok=$true} }; if($ok){'Attivo'}else{'Da ottimizzare'} } }; apply={ Do-NicPower } }
+  @{ cat='system'; id='paging_exec'; name='Kernel sempre in RAM (16GB+)';
+     problem='Windows puo spostare parti del kernel e dei driver nel file di paging su disco.';
+     reason='Con abbastanza RAM, tenere il kernel in memoria elimina micro-attese di paging.';
+     desc='Imposta DisablePagingExecutive=1 in Memory Management.';
+     impact='Sistema piu scattante sotto carico. Consigliato solo con 16 GB o piu.';
+     risk='safe';
+     fit={ if($script:HW.ram -ge 16){'ok'}else{"skip:Richiede almeno 16 GB di RAM (rilevati $($script:HW.ram) GB)"} };
+     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' 'DisablePagingExecutive') -eq 1){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-PagingExec } }
+  @{ cat='system'; id='sysmain'; name='SysMain/Superfetch OFF (solo SSD)';
+     problem='SysMain precarica app in RAM analizzando l uso del disco: su SSD e superfluo e consuma CPU/disco.';
+     reason='Gli SSD sono gia velocissimi in lettura casuale: il preload di SysMain non serve e genera carico.';
+     desc='Ferma e disabilita il servizio SysMain (ex Superfetch).';
+     impact='Meno attivita disco/CPU in background su SSD. Su HDD invece va lasciato attivo.';
+     risk='caution';
+     fit={ if($script:HW.ssd){'ok'}else{'skip:Solo con SSD: su HDD SysMain velocizza i caricamenti, meglio lasciarlo attivo'} };
+     state={ $s=Get-Service SysMain -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){'Attivo (da disattivare)'}else{'Disattivato'} }; apply={ Do-SysMain } }
+  @{ cat='system'; id='trim'; name='Verifica TRIM SSD attivo';
+     problem='Se il TRIM e disattivato, l SSD rallenta progressivamente con l uso.';
+     reason='Il TRIM permette all SSD di riorganizzare le celle libere mantenendo le prestazioni di scrittura.';
+     desc='Esegue fsutil behavior set DisableDeleteNotify 0 (TRIM attivo).';
+     impact='SSD sempre alla massima velocita nel tempo. Nessun rischio.';
+     risk='safe';
+     fit={ if($script:HW.ssd){'ok'}else{'skip:Solo per SSD: il TRIM non si applica agli HDD'} };
+     state={ $q=(fsutil behavior query DisableDeleteNotify) -join ' '; if($q -match 'DisableDeleteNotify\s*=\s*0'){'TRIM attivo'}else{'Da attivare'} }; apply={ Do-Trim } }
+  @{ cat='system'; id='ntfs'; name='NTFS: last-access timestamp OFF';
+     problem='NTFS aggiorna la data di ultimo accesso di ogni file letto, generando scritture inutili.';
+     reason='Disattivarlo riduce le scritture su disco a ogni lettura di file (utile anche per la vita dell SSD).';
+     desc='Esegue fsutil behavior set disablelastaccess 1 (con backup del valore precedente).';
+     impact='Meno I/O su disco nelle operazioni quotidiane. Nessun rischio.';
+     risk='safe';
+     state={ $q=(fsutil behavior query disablelastaccess) -join ' '; if($q -match '=\s*[13]'){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Ntfs } }
+  @{ cat='system'; id='edge_preload'; name='Edge preload/background OFF';
+     problem='Microsoft Edge si precarica all avvio e resta in background anche se non lo usi.';
+     reason='Lo startup boost di Edge occupa RAM e CPU all accensione per un browser che magari non apri mai.';
+     desc='Imposta StartupBoostEnabled=0 e BackgroundModeEnabled=0 via policy.';
+     impact='Avvio piu pulito e RAM libera se non usi Edge. Nessun rischio.';
+     risk='safe';
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' 'StartupBoostEnabled') -eq 0){'Disattivato'}else{'Attivo (da disattivare)'} }; apply={ Do-EdgePreload } }
 )
 
 $script:PRESETS = @{
-  'competitivo' = @('power','gaming','priority','mpo','gpu_msi','amd_ulps','nvidia_tel','mouse','timer','usb','stickykeys','network','qos','visual','bgapps')
-  'streaming'   = @('power','gaming','priority','mpo','gpu_msi','amd_ulps','nvidia_tel','network','dns','qos','deliveryopt','obs_priority','telemetry','ads','bgapps','gamebar_rec')
+  'competitivo' = @('power','gaming','priority','mpo','gpu_msi','amd_ulps','nvidia_tel','fse','power_throttling','standby_clear','mouse','timer','usb','stickykeys','network','nic_power','qos','visual','bgapps','paging_exec','ntfs')
+  'streaming'   = @('power','gaming','priority','mpo','gpu_msi','amd_ulps','nvidia_tel','fse','network','dns','nic_power','qos','deliveryopt','obs_priority','telemetry','ads','bgapps','gamebar_rec','edge_preload','paging_exec')
 }
 
 # ---------------- Restore ----------------
@@ -995,6 +1201,7 @@ function Invoke-Restore {
       if ($mode -ne 'Disabled') { Start-Service $svcName 2>$null }
       continue
     }
+    if ($k -eq 'ntfs::lastaccess') { fsutil behavior set disablelastaccess ([int]$b[$k]) 2>$null | Out-Null; continue }
     if ($k.StartsWith('dns::')) { Set-DnsClientServerAddress -InterfaceAlias $k.Substring(5) -ResetServerAddresses 2>$null; continue }
     $parts = $k -split '::', 2
     if ($parts.Count -ne 2) { continue }
@@ -1033,19 +1240,21 @@ function Show-Gui {
 
   $script:TWMAP = @{}
   foreach ($t in $script:TWEAKS) { $script:TWMAP[$t.id] = $t }
+  $script:FITMAP = @{}
+  foreach ($t in $script:TWEAKS) { $f = 'ok'; if ($t.fit) { $f = & $t.fit }; if (-not $f) { $f = 'ok' }; $script:FITMAP[$t.id] = $f }
   $script:CHECKS = @{}
   $script:STATUS = @{}
 
   $form = New-Object System.Windows.Forms.Form
   $form.Text = 'FrameForge - Ottimizzazioni sicure'
-  $form.Size = New-Object System.Drawing.Size(800, 940)
+  $form.Size = New-Object System.Drawing.Size(800, 962)
   $form.StartPosition = 'CenterScreen'
   $form.BackColor = $bg; $form.ForeColor = $white
   $form.Font = New-Object System.Drawing.Font('Segoe UI', 9)
 
   # ---- Header ----
   $head = New-Object System.Windows.Forms.Panel
-  $head.Location = New-Object System.Drawing.Point(0, 0); $head.Size = New-Object System.Drawing.Size(800, 128); $head.BackColor = $bg2
+  $head.Location = New-Object System.Drawing.Point(0, 0); $head.Size = New-Object System.Drawing.Size(800, 150); $head.BackColor = $bg2
   $form.Controls.Add($head)
 
   $bolt = New-Object System.Windows.Forms.Label
@@ -1065,29 +1274,35 @@ function Show-Gui {
   $sec.MaximumSize = New-Object System.Drawing.Size(760, 0); $sec.AutoSize = $true
   $head.Controls.Add($sec)
 
+  $hwLbl = New-Object System.Windows.Forms.Label
+  $hwLbl.Text = ("PC RILEVATO: {0}  |  GPU {1}  |  RAM {2} GB  |  {3}{4}   ->  tweak adattati automaticamente al tuo hardware" -f $(if($script:HW.laptop){'Laptop'}else{'Desktop'}), $script:HW.gpu, $script:HW.ram, $(if($script:HW.ssd){'SSD'}else{'HDD'}), $(if($script:HW.win11){'  |  Win 11'}else{''}))
+  $hwLbl.ForeColor = $blue; $hwLbl.Location = New-Object System.Drawing.Point(20, 100); $hwLbl.AutoSize = $true
+  $head.Controls.Add($hwLbl)
+
   $adminLbl = New-Object System.Windows.Forms.Label
-  $adminLbl.Location = New-Object System.Drawing.Point(20, 102); $adminLbl.AutoSize = $true
+  $adminLbl.Location = New-Object System.Drawing.Point(20, 124); $adminLbl.AutoSize = $true
   if ($isAdmin) { $adminLbl.Text = 'Amministratore: SI - tutte le ottimizzazioni disponibili.'; $adminLbl.ForeColor = $green }
   else { $adminLbl.Text = 'Amministratore: NO - alcune opzioni non verranno applicate. Usa "Riavvia come Amministratore" in basso.'; $adminLbl.ForeColor = $red }
   $head.Controls.Add($adminLbl)
 
   $bkLbl = New-Object System.Windows.Forms.Label
-  $bkLbl.ForeColor = $blue; $bkLbl.Location = New-Object System.Drawing.Point(470, 102); $bkLbl.AutoSize = $true
+  $bkLbl.ForeColor = $blue; $bkLbl.Location = New-Object System.Drawing.Point(470, 124); $bkLbl.AutoSize = $true
   $head.Controls.Add($bkLbl); $script:BKLBL = $bkLbl
 
   # ---- Preset row ----
   $presetLbl = New-Object System.Windows.Forms.Label
-  $presetLbl.Text = 'Preset rapidi:'; $presetLbl.Location = New-Object System.Drawing.Point(18, 138); $presetLbl.AutoSize = $true; $presetLbl.ForeColor = $gray
+  $presetLbl.Text = 'Preset rapidi:'; $presetLbl.Location = New-Object System.Drawing.Point(18, 160); $presetLbl.AutoSize = $true; $presetLbl.ForeColor = $gray
   $form.Controls.Add($presetLbl)
   function New-Preset($text, $x, $key) {
     $b = New-Object System.Windows.Forms.Button
-    $b.Text = $text; $b.Location = New-Object System.Drawing.Point($x, 158); $b.Size = New-Object System.Drawing.Size(170, 32)
+    $b.Text = $text; $b.Location = New-Object System.Drawing.Point($x, 180); $b.Size = New-Object System.Drawing.Size(170, 32)
     $b.FlatStyle = 'Flat'; $b.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(42,42,53)
     $b.ForeColor = $white; $b.BackColor = [System.Drawing.Color]::FromArgb(28,28,36)
     $b.Tag = $key
     $b.Add_Click({
       $k = $this.Tag
       foreach ($t in $script:TWEAKS) {
+        if ($script:FITMAP[$t.id] -like 'skip:*') { $script:CHECKS[$t.id].Checked = $false; continue }
         if ($k -eq 'completo') { $script:CHECKS[$t.id].Checked = $true }
         else { $script:CHECKS[$t.id].Checked = ($script:PRESETS[$k] -contains $t.id) }
       }
@@ -1101,7 +1316,7 @@ function Show-Gui {
   # ---- log (defined early so GuiLog works in handlers) ----
   $out = New-Object System.Windows.Forms.TextBox
   $out.Multiline = $true; $out.ReadOnly = $true; $out.ScrollBars = 'Vertical'
-  $out.Location = New-Object System.Drawing.Point(16, 636); $out.Size = New-Object System.Drawing.Size(760, 150)
+  $out.Location = New-Object System.Drawing.Point(16, 658); $out.Size = New-Object System.Drawing.Size(760, 150)
   $out.BackColor = [System.Drawing.Color]::Black; $out.ForeColor = $green
   $out.Font = New-Object System.Drawing.Font('Consolas', 9); $out.BorderStyle = 'FixedSingle'
   $form.Controls.Add($out); $script:OUT = $out
@@ -1124,7 +1339,7 @@ function Show-Gui {
 
   # ---- Tabs with cards ----
   $tc = New-Object System.Windows.Forms.TabControl
-  $tc.Location = New-Object System.Drawing.Point(14, 200); $tc.Size = New-Object System.Drawing.Size(766, 396)
+  $tc.Location = New-Object System.Drawing.Point(14, 222); $tc.Size = New-Object System.Drawing.Size(766, 396)
   $cats = @(
     @{ key='gaming';  title='Gaming & FPS' },
     @{ key='input';   title='Latenza & Input' },
@@ -1133,18 +1348,24 @@ function Show-Gui {
   )
 
   function New-TweakCard($t, $flow) {
+    $fit = $script:FITMAP[$t.id]; if (-not $fit) { $fit = 'ok' }
+    $isSkip = $fit -like 'skip:*'; $isWarn = $fit -like 'warn:*'
+    $h = 176; if ($fit -ne 'ok') { $h = 200 }
     $card = New-Object System.Windows.Forms.Panel
-    $card.Size = New-Object System.Drawing.Size(710, 176)
+    $card.Size = New-Object System.Drawing.Size(710, $h)
     $card.Margin = New-Object System.Windows.Forms.Padding(4, 4, 4, 8)
     $card.BackColor = $script:C_CARD
 
     $bar = New-Object System.Windows.Forms.Panel
-    $bar.Location = New-Object System.Drawing.Point(0, 0); $bar.Size = New-Object System.Drawing.Size(4, 176)
-    if ($t.risk -eq 'caution') { $bar.BackColor = $script:C_ORANGE } else { $bar.BackColor = $script:C_ACC }
+    $bar.Location = New-Object System.Drawing.Point(0, 0); $bar.Size = New-Object System.Drawing.Size(4, $h)
+    if ($isSkip) { $bar.BackColor = $script:C_GRAY }
+    elseif ($t.risk -eq 'caution') { $bar.BackColor = $script:C_ORANGE } else { $bar.BackColor = $script:C_ACC }
     $card.Controls.Add($bar)
 
     $cb = New-Object System.Windows.Forms.CheckBox
-    if ($script:PROFILE.Count -gt 0) { $cb.Checked = ($script:PROFILE -contains $t.id) }
+    if ($isSkip) { $cb.Checked = $false; $cb.Enabled = $false }
+    elseif ($script:PROFILE.Count -gt 0) { $cb.Checked = ($script:PROFILE -contains $t.id) }
+    elseif ($isWarn) { $cb.Checked = $false }
     else { $cb.Checked = ($t.risk -ne 'caution') }
     $cb.Text = $t.name; $cb.ForeColor = $script:C_WHITE
     $cb.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
@@ -1175,6 +1396,16 @@ function Show-Gui {
     $card.Controls.Add((New-Line 'Modifica:' $t.desc    112 $script:C_LIGHT))
     $card.Controls.Add((New-Line 'Impatto:'  $t.impact  140 $script:C_GREEN))
 
+    if ($fit -ne 'ok') {
+      $an = New-Object System.Windows.Forms.Label
+      $msg = $fit.Substring($fit.IndexOf(':') + 1)
+      $an.Text = "ADATTIVO:  $msg"
+      if ($isSkip) { $an.ForeColor = $script:C_GRAY } elseif ($isWarn) { $an.ForeColor = $script:C_ORANGE } else { $an.ForeColor = $script:C_BLUE }
+      $an.Font = New-Object System.Drawing.Font('Segoe UI', 8, [System.Drawing.FontStyle]::Bold)
+      $an.Location = New-Object System.Drawing.Point(32, 164); $an.MaximumSize = New-Object System.Drawing.Size(660, 0); $an.AutoSize = $true
+      $card.Controls.Add($an)
+    }
+
     $ab = New-Object System.Windows.Forms.Button
     $ab.Text = 'Applica'; $ab.Tag = $t.id
     $ab.Location = New-Object System.Drawing.Point(576, 34); $ab.Size = New-Object System.Drawing.Size(118, 32)
@@ -1188,12 +1419,13 @@ function Show-Gui {
       Refresh-Status
       GuiLog ("   OK - backup aggiornato ({0} modifiche reversibili)." -f $script:BK.Count)
     })
+    if ($isSkip) { $ab.Enabled = $false }
     $card.Controls.Add($ab)
 
     $flow.Controls.Add($card)
   }
 
-  $script:C_CARD = $cardBg; $script:C_WHITE = $white; $script:C_ORANGE = $orange
+  $script:C_CARD = $cardBg; $script:C_WHITE = $white; $script:C_ORANGE = $orange; $script:C_BLUE = $blue
   $script:C_GRAY = $gray; $script:C_LIGHT = $light
 
   foreach ($c in $cats) {
@@ -1211,12 +1443,12 @@ function Show-Gui {
   $benchCb = New-Object System.Windows.Forms.CheckBox
   $benchCb.Text = 'Esegui benchmark PRIMA/DOPO per misurare il guadagno reale'
   $benchCb.Checked = $true; $benchCb.ForeColor = $blue
-  $benchCb.Location = New-Object System.Drawing.Point(18, 606); $benchCb.AutoSize = $true
+  $benchCb.Location = New-Object System.Drawing.Point(18, 628); $benchCb.AutoSize = $true
   $form.Controls.Add($benchCb); $script:BENCHCB = $benchCb
 
   # ---- action buttons ----
   $applyBtn = New-Object System.Windows.Forms.Button
-  $applyBtn.Text = 'APPLICA SELEZIONATI'; $applyBtn.Location = New-Object System.Drawing.Point(16, 800); $applyBtn.Size = New-Object System.Drawing.Size(240, 46)
+  $applyBtn.Text = 'APPLICA SELEZIONATI'; $applyBtn.Location = New-Object System.Drawing.Point(16, 822); $applyBtn.Size = New-Object System.Drawing.Size(240, 46)
   $applyBtn.FlatStyle = 'Flat'; $applyBtn.BackColor = $acc; $applyBtn.ForeColor = [System.Drawing.Color]::Black
   $applyBtn.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
   $form.Controls.Add($applyBtn); $script:APPLYBTN = $applyBtn
@@ -1239,7 +1471,7 @@ function Show-Gui {
   })
 
   $restoreBtn = New-Object System.Windows.Forms.Button
-  $restoreBtn.Text = 'RIPRISTINA TUTTO'; $restoreBtn.Location = New-Object System.Drawing.Point(266, 800); $restoreBtn.Size = New-Object System.Drawing.Size(180, 46)
+  $restoreBtn.Text = 'RIPRISTINA TUTTO'; $restoreBtn.Location = New-Object System.Drawing.Point(266, 822); $restoreBtn.Size = New-Object System.Drawing.Size(180, 46)
   $restoreBtn.FlatStyle = 'Flat'; $restoreBtn.FlatAppearance.BorderColor = $red; $restoreBtn.ForeColor = $red
   $restoreBtn.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
   $restoreBtn.Add_Click({ GuiLog 'Ripristino dal backup...'; GuiLog ('  ' + (Invoke-Restore)); Refresh-Status })
@@ -1247,7 +1479,7 @@ function Show-Gui {
 
   if (-not $isAdmin) {
     $elevBtn = New-Object System.Windows.Forms.Button
-    $elevBtn.Text = 'Riavvia come Amministratore'; $elevBtn.Location = New-Object System.Drawing.Point(456, 800); $elevBtn.Size = New-Object System.Drawing.Size(224, 46)
+    $elevBtn.Text = 'Riavvia come Amministratore'; $elevBtn.Location = New-Object System.Drawing.Point(456, 822); $elevBtn.Size = New-Object System.Drawing.Size(224, 46)
     $elevBtn.FlatStyle = 'Flat'; $elevBtn.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(42,42,53); $elevBtn.ForeColor = $white
     $elevBtn.Add_Click({
       if ($PSCommandPath) {
@@ -1283,7 +1515,12 @@ if ($MODE -eq 'optimize') {
   if (-not $ok) {
     Say '[!] Interfaccia grafica non disponibile. Applico i preset Completo...' 'Yellow'
     $before = Run-Benchmark; Show-Bench $before 'PRIMA'
-    foreach ($t in $script:TWEAKS) { if ($t.id -ne 'search_index') { Say ("   -> {0}" -f $t.name); & $t.apply } }
+    Say ("[HW] {0} | GPU {1} | RAM {2} GB | {3} -> tweak adattati" -f $(if($script:HW.laptop){'Laptop'}else{'Desktop'}), $script:HW.gpu, $script:HW.ram, $(if($script:HW.ssd){'SSD'}else{'HDD'})) 'Cyan'
+    foreach ($t in $script:TWEAKS) {
+      $f = 'ok'; if ($t.fit) { $f = & $t.fit }
+      if ($t.id -eq 'search_index' -or $f -like 'skip:*' -or $f -like 'warn:*') { Say ("   -- saltato (adattivo): {0}" -f $t.name) 'DarkGray'; continue }
+      Say ("   -> {0}" -f $t.name); & $t.apply
+    }
     Save-Backup
     $after = Run-Benchmark; Show-Bench $after 'DOPO'
     Send-Benchmark @{ before = $before; after = $after; ts = (Get-Date).ToString('o') }
@@ -1466,6 +1703,126 @@ if ($MODE -eq 'prematch') {
     else { powercfg /setactive scheme_balanced 2>$null; Say "   [OK] Piano energetico bilanciato ripristinato." 'Green' }
   }
   Say "`n[FATTO] Le app chiuse puoi riaprirle normalmente. A presto!" 'Cyan'
+  return
+}
+
+if ($MODE -eq 'booster') {
+  Say "`n== FrameForge - GAME BOOSTER ==" 'Cyan'
+  Say '   Sorveglio i giochi in avvio: quando ne rilevo uno ti propongo il boost con 5 secondi per annullare.' 'Gray'
+  Say '   NIENTE parte in automatico al 100%: hai sempre la scelta. A fine partita ripristino tutto. Ctrl+C per uscire.' 'Gray'
+  try { Add-Type -AssemblyName System.Windows.Forms } catch {}
+  $doPower = __BOOSTER_POWER__
+  $doPriority = __BOOSTER_PRIORITY__
+  $doPurge = __BOOSTER_PURGE__
+  $apps = @(__BOOSTER_APPS__)
+  Say ("   Azioni configurate (FrameForge -> Games): priorita={0} energia={1} purgeRAM={2} appDaChiudere={3}" -f $doPriority, $doPower, $doPurge, $apps.Count) 'DarkGray'
+  if (-not (Test-Admin)) { Say '   [i] Senza Amministratore rilevo il gioco dalla finestra a schermo intero (niente conteggio FPS).' 'DarkYellow' }
+  if (-not ('FFWin' -as [type])) {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class FFWin {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L; public int T; public int R; public int B; }
+}
+"@ 2>$null
+  }
+  function Test-KeyCancel { try { if ([Console]::KeyAvailable) { [void][Console]::ReadKey($true); return $true } } catch {}; return $false }
+  function Get-FullscreenGame {
+    try {
+      $h = [FFWin]::GetForegroundWindow()
+      if ($h -eq [IntPtr]::Zero) { return $null }
+      $rc = New-Object FFWin+RECT
+      [void][FFWin]::GetWindowRect($h, [ref]$rc)
+      $mw = [System.Windows.Forms.SystemInformation]::PrimaryMonitorSize.Width
+      $mh = [System.Windows.Forms.SystemInformation]::PrimaryMonitorSize.Height
+      if (($rc.R - $rc.L) -lt ($mw - 2) -or ($rc.B - $rc.T) -lt ($mh - 2)) { return $null }
+      $gp = [uint32]0; [void][FFWin]::GetWindowThreadProcessId($h, [ref]$gp)
+      $p = Get-Process -Id $gp -ErrorAction SilentlyContinue
+      if (-not $p) { return $null }
+      $skipRe = 'explorer|dwm|powershell|pwsh|WindowsTerminal|cmd|chrome|msedge|firefox|opera|brave|Code|devenv|obs64|obs32|Taskmgr|SearchHost|ShellExperienceHost|ApplicationFrameHost|LockApp|vlc|Photos|Netflix|Spotify'
+      if ($p.Name -match $skipRe) { return $null }
+      return $p
+    } catch { return $null }
+  }
+  if (Test-Admin) { Start-Fps }
+  $boosted = $false; $skipUntilExit = $false; $bGame = ''; $bStart = $null; $prevPlan = ''
+  $curName = ''; $detCount = 0; $lostCount = 0; $script:BACTS = @()
+  Say "`n[SORVEGLIANZA ATTIVA] Avvia pure il tuo gioco quando vuoi." 'Green'
+  try {
+    while ($true) {
+      $name = ''; $gpid = 0
+      $f = Get-Fps
+      if ($f -and $f.fps -ge 15) { $name = $f.game }
+      if (-not $name) { $p = Get-FullscreenGame; if ($p) { $name = $p.Name; $gpid = $p.Id } }
+      if ($name) {
+        if ($name -eq $curName) { $detCount++ } else { $curName = $name; $detCount = 1 }
+        $lostCount = 0
+      } else {
+        $lostCount++
+        if ($lostCount -ge 8 -and -not $boosted -and -not $skipUntilExit) { $curName = ''; $detCount = 0 }
+      }
+      if (-not $boosted -and -not $skipUntilExit -and $curName -and $detCount -eq 3) {
+        Say ("`n[GIOCO RILEVATO] {0}" -f $curName) 'Yellow'
+        Say '   Boost tra 5 secondi... premi un tasto QUALSIASI per ANNULLARE il boost di questa sessione.' 'Yellow'
+        while (Test-KeyCancel) {}
+        $cancel = $false
+        for ($i = 5; $i -ge 1; $i--) {
+          Write-Host ("   {0}..." -f $i) -ForegroundColor DarkGray
+          $t0 = Get-Date
+          while (((Get-Date) - $t0).TotalMilliseconds -lt 1000) {
+            if (Test-KeyCancel) { $cancel = $true; break }
+            Start-Sleep -Milliseconds 100
+          }
+          if ($cancel) { break }
+        }
+        if ($cancel) {
+          Say '   Boost ANNULLATO: nessuna modifica. Riprendo la sorveglianza a fine partita.' 'DarkYellow'
+          $skipUntilExit = $true
+        } else {
+          $acts = New-Object System.Collections.Generic.List[string]
+          if ($doPriority) {
+            if (-not $gpid) { $pp = Get-Process -Name ($curName -replace '\.exe$', '') -ErrorAction SilentlyContinue | Select-Object -First 1; if ($pp) { $gpid = $pp.Id } }
+            if ($gpid) { try { (Get-Process -Id $gpid).PriorityClass = 'High'; $acts.Add('priorita_high'); Say '   [OK] Priorita CPU del gioco: HIGH.' 'Green' } catch {} }
+          }
+          if ($doPower) {
+            $out = powercfg /getactivescheme
+            $prevPlan = ([regex]::Match($out, '([0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})')).Value
+            powercfg /setactive scheme_min 2>$null
+            $acts.Add('piano_energetico'); Say '   [OK] Piano Prestazioni elevate attivo (solo durante il gioco).' 'Green'
+          }
+          if ($apps.Count -gt 0) {
+            $closed = 0
+            foreach ($a in $apps) { $pr = Get-Process -Name $a -ErrorAction SilentlyContinue; if ($pr) { Stop-Process -InputObject $pr -Force -ErrorAction SilentlyContinue; $closed++ } }
+            if ($closed -gt 0) { $acts.Add("app_chiuse_$closed"); Say ("   [OK] App in background chiuse: {0}." -f $closed) 'Green' }
+          }
+          if ($doPurge) { Clear-StandbyList; $acts.Add('purge_ram'); Say '   [OK] RAM standby svuotata.' 'Green' }
+          $boosted = $true; $bGame = $curName; $bStart = Get-Date; $script:BACTS = @($acts)
+          Say ("`n[BOOST ATTIVO] Buona partita! Ripristino tutto quando esci da {0}." -f ($curName -replace '\.exe$', '')) 'Yellow'
+        }
+      }
+      if (($boosted -or $skipUntilExit) -and $lostCount -ge 8) {
+        if ($boosted) {
+          Say ("`n[FINE PARTITA] {0}: ripristino..." -f ($bGame -replace '\.exe$', '')) 'Cyan'
+          if ($doPower) { if ($prevPlan) { powercfg /setactive $prevPlan 2>$null } else { powercfg /setactive scheme_balanced 2>$null }; Say '   [OK] Piano energetico ripristinato.' 'Green' }
+          $dur = [int]((Get-Date) - $bStart).TotalSeconds
+          $body = @{ boost_session = @{ game = ($bGame -replace '\.exe$', ''); duration_s = $dur; actions = @($script:BACTS); ended_at = (Get-Date).ToString('o') } } | ConvertTo-Json -Depth 4 -Compress
+          try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+          Say ("   Sessione registrata ({0} min). Torno in sorveglianza." -f [math]::Round($dur / 60, 1)) 'DarkGray'
+        } else {
+          Say "`n[i] Partita finita (boost annullato). Torno in sorveglianza." 'DarkGray'
+        }
+        $boosted = $false; $skipUntilExit = $false; $bGame = ''; $prevPlan = ''; $curName = ''; $detCount = 0
+      }
+      Start-Sleep -Milliseconds 2000
+    }
+  } finally {
+    Stop-Fps
+    if ($boosted -and $doPower) { if ($prevPlan) { powercfg /setactive $prevPlan 2>$null } else { powercfg /setactive scheme_balanced 2>$null } }
+    Say "`n[STOP] Game Booster fermato. Tutto ripristinato." 'Cyan'
+  }
   return
 }
 

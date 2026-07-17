@@ -1,0 +1,35 @@
+{
+  "summary": "Full end-to-end test of FASE B (Game Booster opt-in) and FASE C (Advanced Benchmark + AI explain). Backend: 11/11 pytest tests PASS (booster GET/PUT/persistence, agent/script placeholders __BOOSTER_/__PREMATCH_ correctly replaced across all modes, boost_session ingest via /agent/report-specs, /booster/sessions listing, /benchmark/explain returning AI text then cached:true on 2nd call, 404 for user without benchmark, prematch regression). Frontend: /app/games shows booster-card, booster-run-cmd, config panel with 3 toggles + 6 app groups; toggling purge_ram + chat group + save shows sonner toast; after reload, settings persist correctly. booster-sessions card is rendered with entries created by tests. Prematch card and save still work (regression OK). /app/pc renders benchmark-card with bench-overall / bench-cpu_score / bench-ram_mbps etc.; bench-explain-btn triggers /api/benchmark/explain and the bench-explanation panel renders the Italian/English AI text (~1205 chars).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "MyPc benchmark AI panel", "issues": ["AI explanation text starts with a leading space + duplicate section title 'AI benchmark analysis' (i18n title) followed by '## Benchmark Analysis' from the model. Consider stripping leading markdown heading or normalising whitespace. Non-blocking."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_booster_bench.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional polish) Strip leading '##' heading and leading whitespace from AI benchmark explanation before rendering, to avoid duplicated 'Benchmark Analysis' title.",
+    "(Data note) The admin's stored benchmark uses the legacy fields (overall/cpu_score/ram_mbps) — the new 'score' metric card only shows when benchmark payload contains a 'score' field. Real Windows agent will populate it (ps_agent.py Run-Benchmark v2)."
+  ],
+  "critical_code_review_comments": [
+    "pc.py /benchmark/explain correctly caches by (user_id, bench_ts, lang) and skips rate-limit on cache hit — good.",
+    "_build_agent_script uses simple .replace on __BOOSTER_*__ placeholders with $true/$false — safe and readable.",
+    "Games.jsx: booster-save serialises groups -> close_apps by flatMap of enabled group procs; matches backend BoosterInput contract.",
+    "MyPc.jsx BenchmarkCard: hides bench-explain-btn once explanation is set (one-shot); OK, but user cannot re-request in another language without page reload. Consider a small 'regenerate' link.",
+    "ScoreSparkline requires >=2 points; correctly reads either h.after.score or h.score."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_booster_bench.py (new)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (all data-testid flows verified)"},
+  "test_credentials": "admin@boostpc.io / 4zWK4o_xSw5prU-2b7w9dQ (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Two boost_session rows added via /api/agent/report-specs for admin (games TESTGame, TESTGameB). Admin booster settings mutated during UI test then restored to defaults (close_apps=[], set_power/boost_priority/purge_ram=true) via curl.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "FASE B & C work end-to-end. Admin has a cached IT benchmark explanation (2nd call returns cached:true). If retesting bench explain from a fresh state, clear db.benchmark_explanations for admin. bench-history-chart only appears when >=2 benchmark records exist in db.benchmarks for the user (currently admin has 1)."
+}

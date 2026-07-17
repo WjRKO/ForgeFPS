@@ -44,9 +44,9 @@ export default function HealthHistoryCard() {
             <YAxis yAxisId="score" domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 10 }} stroke="#2A2A35" />
             <YAxis yAxisId="temp" orientation="right" domain={[0, 110]} tick={{ fill: "#71717a", fontSize: 10 }} stroke="#2A2A35" />
             <Tooltip contentStyle={{ background: "#0A0A0C", border: "1px solid #2A2A35", fontSize: 12 }} labelStyle={{ color: "#a1a1aa" }} />
-            <Line yAxisId="score" type="monotone" dataKey="score" name={c.score} stroke="#E5FF00" strokeWidth={2} dot={false} connectNulls />
-            <Line yAxisId="temp" type="monotone" dataKey="cpu_temp" name={c.cpu} stroke="#00E0FF" strokeWidth={2} dot={false} connectNulls />
-            <Line yAxisId="temp" type="monotone" dataKey="gpu_temp" name={c.gpu} stroke="#FF3B30" strokeWidth={2} dot={false} connectNulls />
+            <Line yAxisId="score" type="monotone" dataKey="score" name={c.score} stroke="#E5FF00" strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
+            <Line yAxisId="temp" type="monotone" dataKey="cpu_temp" name={c.cpu} stroke="#00E0FF" strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
+            <Line yAxisId="temp" type="monotone" dataKey="gpu_temp" name={c.gpu} stroke="#FF3B30" strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
           </LineChart>
         </ResponsiveContainer>
       </div>

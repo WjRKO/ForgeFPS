@@ -7,7 +7,7 @@ import pytest
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://stream-gear-monitor.preview.emergentagent.com").rstrip("/")
 ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASS = "admin123"
+ADMIN_PASS = "4zWK4o_xSw5prU-2b7w9dQ"
 
 
 @pytest.fixture(scope="module")
@@ -100,7 +100,7 @@ class TestOtherModes:
                          params={"t": agent_token, "mode": mode}, timeout=15)
         assert r.status_code == 200
         assert len(r.text) > 500
-        assert f"$MODE    = '{mode}'" in r.text
+        assert "$MODE    = $Mode" in r.text
 
     def test_optimize_with_profile(self, admin_session, agent_token):
         # find a template id

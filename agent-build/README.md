@@ -3,6 +3,15 @@
 Questo kit produce **`forgefps-agent.exe`**: un eseguibile Windows standalone, senza token
 incorporato (il token si passa a runtime), così il file è generico, verificabile e firmabile.
 
+## Novità v0.6 (Boost Adattivo + Benchmark v2)
+- **Tweak adattivi**: l'agent rileva Laptop/Desktop, RAM totale e SSD/HDD e adatta le ottimizzazioni
+  (es. su laptop usa *High Performance* invece di *Ultimate* per proteggere batteria e temperature;
+  disattiva SysMain e verifica il TRIM **solo** su SSD; tiene il kernel in RAM solo con 16GB+).
+- **Nuovi tweak**: Fullscreen Optimizations OFF, Power Throttling OFF (solo desktop),
+  QoS 20% rimosso, Edge preload OFF.
+- **Benchmark v2**: latenza DPC/scheduler (p95), scrittura disco REALE (fsync, no cache),
+  4K random IOPS, jitter ping su 10 campioni, tempo di avvio Windows e **SCORE 0-100** confrontabile.
+
 ## Novità v0.5 (GUI sicura)
 L'agent ora apre una **GUI sicura** (opzione **G** nel menu, o `--mode securegui`): per **ogni** tweak
 mostra **Problema trovato → Motivo → Modifica proposta → Impatto stimato** con un pulsante **Applica**
@@ -13,7 +22,30 @@ Windows Defender, Firewall o servizi di sicurezza (guardrail integrati). Ricompi
 ## Cosa contiene
 - `forgefps_agent.py` — sorgente dell'agent (backend già impostato su `https://forgefps.dev`)
 - `build.bat` / `build.ps1` — script di build con PyInstaller + calcolo SHA256
+- `version_info.txt` — metadati versione dell'.exe (riducono i falsi positivi antivirus)
+- `sign.bat` — firma locale dell'.exe con signtool (per Certum/SimplySign o .pfx)
+- `github-workflow-build-sign.yml` — workflow GitHub Actions per build + firma gratuita via SignPath (OSS)
+- `SIGNING_AND_TRUST.md` — **guida completa** ai 3 percorsi per togliere antivirus/SmartScreen (Microsoft / Certum / SignPath)
 - `README.md` — questa guida
+
+## ⚠️ L'antivirus segnala un virus? (FALSO POSITIVO)
+Gli eseguibili creati con **PyInstaller** vengono **spessissimo** segnalati come malware da Windows Defender
+e altri antivirus, anche quando sono puliti al 100%. È un **falso positivo euristico** (il bootloader di
+PyInstaller è usato anche da malware reale, quindi i motori lo flaggano "per precauzione"). Il codice è
+in chiaro in `forgefps_agent.py`: puoi leggerlo tutto.
+
+**Cosa abbiamo già fatto per ridurlo:** `build.bat`/`build.ps1` ora aggiungono i **metadati versione**
+(`version_info.txt`) e disattivano **UPX** (`--noupx`): due accorgimenti che abbassano molto le segnalazioni.
+
+**Come eliminarlo del tutto (in ordine di efficacia):**
+1. **Firma Authenticode** (soluzione definitiva): un `.exe` firmato non viene flaggato e sparisce anche SmartScreen.
+   Certificati: DigiCert/Sectigo (a pagamento) oppure gratis per progetti open-source via **SignPath.io** o **Certum Open Source**.
+2. **Segnala il falso positivo a Microsoft**: https://www.microsoft.com/wdsi/filesubmission
+   (carichi l'.exe come "software non dannoso"; di solito lo mettono in whitelist in 1-3 giorni e Defender smette di bloccarlo per tutti).
+3. **Verifica su VirusTotal**: https://www.virustotal.com — carichi l'.exe e vedi quali/quanti motori lo flaggano.
+   Se sono pochi motori minori è quasi certamente un falso positivo.
+4. **Alternativa immediata senza .exe**: usa il **Metodo sicuro** nella pagina *Collega il PC* (scarichi lo `.ps1`,
+   verifichi l'hash, lo esegui): lo script PowerShell non viene flaggato come l'.exe e puoi leggerlo prima di eseguirlo.
 
 ## Prerequisiti (una tantum)
 1. Un PC **Windows 10/11**

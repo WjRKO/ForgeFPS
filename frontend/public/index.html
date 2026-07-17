@@ -1,6 +1,31 @@
 <!doctype html>
 <html lang="en">
     <head>
+        <!-- Google tag (gtag.js) -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18329532067"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          // Consent Mode v2 — default DENIED (GDPR/EEA) until the user accepts.
+          gtag('consent', 'default', {
+            ad_storage: 'denied',
+            ad_user_data: 'denied',
+            ad_personalization: 'denied',
+            analytics_storage: 'denied',
+            wait_for_update: 500
+          });
+          // Restore a previous "granted" choice before React mounts.
+          try {
+            if (localStorage.getItem('ff_consent') === 'granted') {
+              gtag('consent', 'update', {
+                ad_storage: 'granted', ad_user_data: 'granted',
+                ad_personalization: 'granted', analytics_storage: 'granted'
+              });
+            }
+          } catch (e) {}
+          gtag('js', new Date());
+          gtag('config', 'AW-18329532067');
+        </script>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#050505" />
@@ -16,7 +41,7 @@
         <meta property="og:image" content="https://static.prod-images.emergentagent.com/jobs/44baf98e-cc25-4b24-9cda-c6385e29c5d8/images/743add2c761b069e74e1beb9f642be6a3906b18457f9cc040128eddd8b5293cd.png" />
         <meta property="og:image:width" content="1264" />
         <meta property="og:image:height" content="848" />
-        <meta property="og:url" content="https://stream-gear-monitor.preview.emergentagent.com/" />
+        <meta property="og:url" content="https://forgefps.dev/" />
 
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="FrameForge — AI Performance Command Center" />
@@ -121,11 +146,17 @@
             posthog.init("phc_xAvL2Iq4tFmANRE7kzbKwaSqp1HJjN7x48s3vr0CMjs", {
                 api_host: "https://us.i.posthog.com",
                 person_profiles: "identified_only", // or 'always' to create profiles for anonymous users as well,
+                opt_out_capturing_by_default: true, // GDPR: no capture until consent
                 session_recording: {
                     recordCrossOriginIframes: true,
                     capturePerformance: false,
                 },
             });
+            // Respect the cookie consent choice (banner + Google Consent Mode).
+            try {
+                if (localStorage.getItem('ff_consent') === 'granted') { posthog.opt_in_capturing(); }
+                else { posthog.opt_out_capturing(); }
+            } catch (e) {}
         </script>
     </body>
 </html>

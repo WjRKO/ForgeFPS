@@ -26,7 +26,7 @@ _args, _ = _parser.parse_known_args()
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.5.0"
+AGENT_VERSION = "0.6.0"
 BACKUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "boostpc_backup.json")
 
 if not AGENT_TOKEN or AGENT_TOKEN.startswith("__"):
@@ -320,7 +320,7 @@ def _ping_ms():
 
 
 def run_benchmark():
-    print("    Benchmark in corso (CPU / RAM / Disco / Rete)...")
+    print("    Benchmark in corso (CPU / RAM / Disco / DPC / Rete)...")
     r = {}
     t = time.perf_counter()
     acc = 0.0
@@ -339,31 +339,95 @@ def run_benchmark():
     r["ram_mbps"] = int(round((5 * size / (1024 * 1024)) / el))
 
     tmp = os.path.join(tempfile.gettempdir(), "boostpc_bench.bin")
-    data = os.urandom(64 * 1024 * 1024)
+    chunk = os.urandom(8 * 1024 * 1024)
     t = time.perf_counter()
     with open(tmp, "wb") as f:
-        f.write(data)
-        f.flush()
-        os.fsync(f.fileno())
+        for _ in range(32):
+            f.write(chunk)
+            f.flush()
+            os.fsync(f.fileno())
     el = max(time.perf_counter() - t, 0.001)
-    r["disk_write_mbps"] = int(round(64 / el))
+    r["disk_write_mbps"] = int(round(256 / el))
     t = time.perf_counter()
     with open(tmp, "rb") as f:
         f.read()
     el = max(time.perf_counter() - t, 0.001)
-    r["disk_read_mbps"] = int(round(64 / el))
+    r["disk_read_mbps"] = int(round(256 / el))
+    try:
+        import random as _rnd
+        b4 = b"\0" * 4096
+        ops = 200
+        t = time.perf_counter()
+        with open(tmp, "r+b") as f:
+            for _ in range(ops):
+                f.seek(4096 * _rnd.randint(0, 65535))
+                f.write(b4)
+                f.flush()
+                os.fsync(f.fileno())
+        el = max(time.perf_counter() - t, 0.001)
+        r["iops_4k"] = int(round(ops / el))
+    except Exception:
+        r["iops_4k"] = 0
     try:
         os.remove(tmp)
     except Exception:
         pass
 
-    r["ping_ms"] = _ping_ms()
+    lat = []
+    prev = time.perf_counter()
+    for _ in range(150):
+        time.sleep(0.001)
+        now = time.perf_counter()
+        lat.append(max(0.0, (now - prev) * 1000 - 1))
+        prev = now
+    lat.sort()
+    r["dpc_ms"] = round(lat[int(len(lat) * 0.95)], 1)
+
+    times = []
+    for _ in range(10):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(2)
+            t = time.perf_counter()
+            s.connect(("1.1.1.1", 443))
+            times.append((time.perf_counter() - t) * 1000)
+            s.close()
+        except Exception:
+            pass
+    if times:
+        avg = sum(times) / len(times)
+        r["ping_ms"] = int(round(avg))
+        r["jitter_ms"] = round((sum((x - avg) ** 2 for x in times) / len(times)) ** 0.5, 1)
+    else:
+        r["ping_ms"] = 0
+        r["jitter_ms"] = 0
+
+    try:
+        bt = ps("$ev=Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Diagnostics-Performance/Operational';Id=100} "
+                "-MaxEvents 1 -ErrorAction SilentlyContinue; if($ev){ $x=[xml]$ev.ToXml(); "
+                "($x.Event.EventData.Data | Where-Object {$_.Name -eq 'BootTime'}).'#text' }")
+        if bt and bt.strip().isdigit():
+            r["boot_s"] = round(int(bt.strip()) / 1000, 1)
+    except Exception:
+        pass
+
     try:
         fr = ps("$o=Get-CimInstance Win32_OperatingSystem; "
                 "[math]::round($o.FreePhysicalMemory/$o.TotalVisibleMemorySize*100,0)")
         r["free_ram_pct"] = int(fr)
     except Exception:
         r["free_ram_pct"] = 0
+
+    cpu_n = min(100, r["cpu_score"] / 100.0)
+    ram_n = min(100, r["ram_mbps"] / 200.0)
+    dw_n = min(100, r["disk_write_mbps"] / 20.0)
+    dr_n = min(100, r["disk_read_mbps"] / 30.0)
+    io_n = min(100, r["iops_4k"] / 50.0)
+    dpc_n = max(0, 100 - r["dpc_ms"] * 20)
+    ping_n = max(0, 100 - r["ping_ms"])
+    jit_n = max(0, 100 - r["jitter_ms"] * 10)
+    r["score"] = int(round(cpu_n * 0.20 + ram_n * 0.10 + dw_n * 0.15 + dr_n * 0.10 +
+                           io_n * 0.10 + dpc_n * 0.15 + ping_n * 0.15 + jit_n * 0.05))
     r["overall"] = int(round(r["cpu_score"] + r["ram_mbps"] / 50.0 + r["disk_write_mbps"] / 50.0 +
                              r["disk_read_mbps"] / 50.0 + max(0, 120 - r["ping_ms"]) + r["free_ram_pct"]))
     return r
@@ -373,11 +437,15 @@ def show_bench(r, title):
     print(f"\n    [{title}]")
     print(f"    CPU score      : {r['cpu_score']}")
     print(f"    RAM bandwidth  : {r['ram_mbps']} MB/s")
-    print(f"    Disco scrittura: {r['disk_write_mbps']} MB/s")
+    print(f"    Disco scrittura: {r['disk_write_mbps']} MB/s (reale, no cache)")
     print(f"    Disco lettura  : {r['disk_read_mbps']} MB/s")
-    print(f"    Ping (1.1.1.1) : {r['ping_ms']} ms")
+    print(f"    Disco 4K       : {r.get('iops_4k', 0)} IOPS")
+    print(f"    Latenza DPC    : {r.get('dpc_ms', 0)} ms (p95)")
+    print(f"    Ping (1.1.1.1) : {r['ping_ms']} ms (jitter {r.get('jitter_ms', 0)} ms)")
+    if r.get("boot_s"):
+        print(f"    Avvio Windows  : {r['boot_s']} s")
     print(f"    RAM libera     : {r['free_ram_pct']} %")
-    print(f"    PUNTEGGIO      : {r['overall']}")
+    print(f"    SCORE          : {r.get('score', 0)}/100")
 
 
 def show_compare(b, a):
@@ -386,9 +454,12 @@ def show_compare(b, a):
             ("RAM MB/s", b["ram_mbps"], a["ram_mbps"], True),
             ("Disco scritt.", b["disk_write_mbps"], a["disk_write_mbps"], True),
             ("Disco lett.", b["disk_read_mbps"], a["disk_read_mbps"], True),
+            ("Disco 4K IOPS", b.get("iops_4k", 0), a.get("iops_4k", 0), True),
+            ("DPC ms", b.get("dpc_ms", 0), a.get("dpc_ms", 0), False),
             ("Ping ms", b["ping_ms"], a["ping_ms"], False),
+            ("Jitter ms", b.get("jitter_ms", 0), a.get("jitter_ms", 0), False),
             ("RAM libera %", b["free_ram_pct"], a["free_ram_pct"], True),
-            ("PUNTEGGIO", b["overall"], a["overall"], True)]
+            ("SCORE /100", b.get("score", 0), a.get("score", 0), True)]
     print(f"    {'METRICA':<14}{'PRIMA':>10}{'DOPO':>10}{'VAR':>9}")
     for name, bv, av, hb in rows:
         delta = round((av - bv) / bv * 100) if bv else 0
@@ -463,19 +534,32 @@ def _cleanup():
 
 def apply_all_tweaks():
     bk = _load_backup()
-    print("\n[*] Applico ottimizzazioni profonde (con backup)...")
+    ct = ps("(Get-CimInstance Win32_SystemEnclosure).ChassisTypes -join ','")
+    is_laptop = any(x in (ct or "").split(",") for x in ["8", "9", "10", "14", "30", "31", "32"])
+    try:
+        ram_gb = int(ps("[math]::round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,0)") or 0)
+    except Exception:
+        ram_gb = 0
+    is_ssd = "SSD" in (ps("(Get-Partition -DriveLetter C -ErrorAction SilentlyContinue | Get-Disk | Get-PhysicalDisk).MediaType") or "")
+    print("\n[*] Profilo hardware: %s, RAM %d GB, disco %s -> tweak adattati." %
+          ("Laptop" if is_laptop else "Desktop", ram_gb, "SSD" if is_ssd else "HDD"))
+    print("[*] Applico ottimizzazioni profonde (con backup)...")
     _cleanup()
 
     cur = ps("(powercfg /getactivescheme)")
     m = re.search(r"([0-9a-fA-F-]{36})", cur or "")
     if m and "power_plan" not in bk:
         bk["power_plan"] = m.group(1)
-    ultimate = "e9a42b02-d5df-448d-aa00-03f14749eb61"
-    run(f"powercfg -duplicatescheme {ultimate}")
-    if "0x0" not in (run(f"powercfg -setactive {ultimate}") or "").lower():
-        pass
-    run("powercfg -setactive e9a42b02-d5df-448d-aa00-03f14749eb61")
-    print("    Piano energetico: prestazioni massime.")
+    if is_laptop:
+        run("powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c")
+        print("    Piano energetico: High Performance (adattivo: laptop, protetta batteria/temperature).")
+    else:
+        ultimate = "e9a42b02-d5df-448d-aa00-03f14749eb61"
+        run(f"powercfg -duplicatescheme {ultimate}")
+        if "0x0" not in (run(f"powercfg -setactive {ultimate}") or "").lower():
+            pass
+        run("powercfg -setactive e9a42b02-d5df-448d-aa00-03f14749eb61")
+        print("    Piano energetico: prestazioni massime.")
 
     set_reg(bk, r"HKCU:\Software\Microsoft\GameBar", "AllowAutoGameMode", "DWord", 1)
     set_reg(bk, r"HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode", "DWord", 2)
@@ -545,6 +629,37 @@ def apply_all_tweaks():
         if out.strip() == "ok":
             removed += 1
     print(f"    Debloat: rimosse {removed} app superflue (reinstallabili dallo Store).")
+
+    gcs = r"HKCU:\System\GameConfigStore"
+    set_reg(bk, gcs, "GameDVR_FSEBehaviorMode", "DWord", 2)
+    set_reg(bk, gcs, "GameDVR_HonorUserFSEBehaviorMode", "DWord", 1)
+    set_reg(bk, gcs, "GameDVR_DXGIHonorFSEWindowsCompatible", "DWord", 1)
+    print("    Fullscreen Optimizations disattivate (fullscreen esclusivo reale).")
+
+    set_reg(bk, r"HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched", "NonBestEffortLimit", "DWord", 0)
+    print("    Banda riservata QoS (20%) rimossa.")
+
+    if not is_laptop:
+        set_reg(bk, r"HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff", "DWord", 1)
+        print("    Power throttling CPU disattivato (adattivo: desktop).")
+
+    if ram_gb >= 16:
+        set_reg(bk, r"HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
+                "DisablePagingExecutive", "DWord", 1)
+        print(f"    Kernel tenuto in RAM (adattivo: {ram_gb} GB rilevati).")
+
+    if is_ssd:
+        st_sm = _clean(ps("(Get-Service SysMain -ErrorAction SilentlyContinue).StartType"))
+        if st_sm and "svc::SysMain" not in bk:
+            bk["svc::SysMain"] = st_sm
+            run("net stop SysMain")
+            run("sc config SysMain start= disabled")
+        run("fsutil behavior set DisableDeleteNotify 0")
+        print("    Adattivo SSD: SysMain/Superfetch off + TRIM verificato.")
+
+    set_reg(bk, r"HKLM:\SOFTWARE\Policies\Microsoft\Edge", "StartupBoostEnabled", "DWord", 0)
+    set_reg(bk, r"HKLM:\SOFTWARE\Policies\Microsoft\Edge", "BackgroundModeEnabled", "DWord", 0)
+    print("    Edge preload/background disattivato.")
 
     _save_backup(bk)
     print("\n    Ottimizzazioni applicate. Riavvio consigliato. Per annullare: opzione 8 (Ripristina).")

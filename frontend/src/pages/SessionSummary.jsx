@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import { Share2, RotateCcw, Zap, Gamepad2, Thermometer, Cpu, Gauge, Clock, Loader2, Timer } from "lucide-react";
 
@@ -32,6 +31,7 @@ export const SessionSummary = ({ summary, onReset }) => {
     if (!cardRef.current) return;
     setBusy(true);
     try {
+      const { toPng } = await import("html-to-image");
       const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, backgroundColor: "#0A0A0C", cacheBust: true });
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], "frameforge-session.png", { type: "image/png" });

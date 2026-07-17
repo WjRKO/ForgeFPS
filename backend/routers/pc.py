@@ -11,8 +11,9 @@ from database import db, now_iso
 from helpers import specs_to_text, compute_health, get_or_create_agent_token, grade_bufferbloat
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
-from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput
+from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput
 from routers.profiles import resolve_tweak_ids
+from routers.advisor import _check_ai_rate_limit
 
 # Default background processes closed by "Prima del match" (must stay in sync with frontend groups)
 DEFAULT_PREMATCH_APPS = [
@@ -40,10 +41,18 @@ async def _build_agent_script(user_id: str, profile: str = "") -> str:
     pm_apps = pm.get("close_apps", DEFAULT_PREMATCH_APPS)
     pm_apps_literal = ",".join("'" + a.replace("'", "") + "'" for a in pm_apps)
     pm_power = "$true" if pm.get("set_power", True) else "$false"
+    bs = await db.booster_settings.find_one({"user_id": user_id}) or {}
+    b_apps_literal = ",".join("'" + a.replace("'", "") + "'" for a in bs.get("close_apps", []))
+    def _psb(v):
+        return "$true" if v else "$false"
     return (PS_SCRIPT.replace("__BACKEND_URL__", backend)
             .replace("__PROFILE_IDS__", profile_literal)
             .replace("__PREMATCH_APPS__", pm_apps_literal)
-            .replace("__PREMATCH_POWER__", pm_power))
+            .replace("__PREMATCH_POWER__", pm_power)
+            .replace("__BOOSTER_APPS__", b_apps_literal)
+            .replace("__BOOSTER_POWER__", _psb(bs.get("set_power", True)))
+            .replace("__BOOSTER_PRIORITY__", _psb(bs.get("boost_priority", True)))
+            .replace("__BOOSTER_PURGE__", _psb(bs.get("purge_ram", True))))
 
 
 def build(get_current_user):
@@ -80,6 +89,8 @@ def build(get_current_user):
             record = {**data.benchmark, "user_id": uid, "created_at": now_iso()}
             fields["benchmark"] = record
             await db.benchmarks.insert_one({**record})
+        if data.boost_session is not None:
+            await db.boost_sessions.insert_one({**data.boost_session, "user_id": uid, "created_at": now_iso()})
         await db.pc_specs.update_one({"user_id": uid}, {"$set": fields}, upsert=True)
         return {"ok": True}
 
@@ -253,6 +264,50 @@ def build(get_current_user):
         if not doc:
             return {"close_apps": DEFAULT_PREMATCH_APPS, "set_power": True, **running}
         return {"close_apps": doc.get("close_apps", DEFAULT_PREMATCH_APPS), "set_power": doc.get("set_power", True), **running}
+
+    @r.get("/booster")
+    async def get_booster(user: dict = Depends(get_current_user)):
+        doc = await db.booster_settings.find_one({"user_id": str(user["_id"])}, {"_id": 0}) or {}
+        return {"close_apps": doc.get("close_apps", []), "set_power": doc.get("set_power", True),
+                "boost_priority": doc.get("boost_priority", True), "purge_ram": doc.get("purge_ram", True)}
+
+    @r.put("/booster")
+    async def set_booster(payload: BoosterInput, user: dict = Depends(get_current_user)):
+        await db.booster_settings.update_one(
+            {"user_id": str(user["_id"])},
+            {"$set": {"user_id": str(user["_id"]), "close_apps": payload.close_apps,
+                      "set_power": payload.set_power, "boost_priority": payload.boost_priority,
+                      "purge_ram": payload.purge_ram, "updated_at": now_iso()}},
+            upsert=True)
+        return {"ok": True}
+
+    @r.get("/booster/sessions")
+    async def booster_sessions(user: dict = Depends(get_current_user)):
+        rows = await db.boost_sessions.find({"user_id": str(user["_id"])}, {"_id": 0}).sort("created_at", -1).to_list(10)
+        return {"sessions": rows}
+
+    @r.post("/benchmark/explain")
+    async def benchmark_explain(payload: BenchExplainInput, user: dict = Depends(get_current_user)):
+        uid = str(user["_id"])
+        doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "benchmark": 1, "data": 1})
+        bench = (doc or {}).get("benchmark")
+        if not bench:
+            raise HTTPException(status_code=404, detail="Nessun benchmark disponibile. Esegui prima un benchmark dal Desktop Agent.")
+        lang = (payload.lang or "it")[:2]
+        bench_ts = bench.get("ts") or bench.get("created_at") or ""
+        cached = await db.benchmark_explanations.find_one(
+            {"user_id": uid, "bench_ts": bench_ts, "lang": lang}, {"_id": 0})
+        if cached:
+            return {"explanation": cached["text"], "cached": True}
+        await _check_ai_rate_limit(uid)
+        specs_text = specs_to_text((doc or {}).get("data") or {})
+        try:
+            text = await ai_engine.explain_benchmark(specs_text, bench.get("before"), bench.get("after") or bench, lang)
+        except Exception:
+            raise HTTPException(status_code=502, detail="Analisi AI non disponibile al momento. Riprova tra poco.")
+        await db.benchmark_explanations.insert_one(
+            {"user_id": uid, "bench_ts": bench_ts, "lang": lang, "text": text, "created_at": now_iso()})
+        return {"explanation": text, "cached": False}
 
     @r.put("/prematch")
     async def set_prematch(payload: PrematchInput, user: dict = Depends(get_current_user)):

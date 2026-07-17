@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import { trackConversion } from "@/lib/gtag";
 
 export default function Auth({ mode }) {
   const { t } = useTranslation();
@@ -30,7 +31,7 @@ export default function Auth({ mode }) {
       if (isLogin) {
         const res = await login(email, password, code || undefined);
         if (res && res.mfa_required) { setMfaRequired(true); setLoading(false); return; }
-      } else await register(name, email, password);
+      } else { await register(name, email, password); trackConversion("signup"); }
       navigate("/app");
     } catch (err) {
       setError(formatApiErrorDetail(err.response?.data?.detail) || err.message);

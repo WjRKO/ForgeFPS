@@ -2,6 +2,8 @@ import { motion } from "framer-motion";
 import { MonitorDown, Lock, BrainCircuit, ArrowRight, ArrowDown, ShieldCheck, KeyRound, EyeOff, FileSignature, GitBranch } from "lucide-react";
 import { MarketingNav, MarketingFooter, useLang } from "@/components/MarketingChrome";
 import { SecureInstaller } from "@/components/SecureInstaller";
+import { TrustBar } from "@/components/TrustBar";
+import { SecurityFaq } from "@/components/SecurityFaq";
 import { usePageMeta } from "@/hooks/usePageMeta";
 
 const COPY = {
@@ -61,7 +63,8 @@ export default function Security() {
         <div className="relative">
           <div className="text-xs font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-3">{c.eyebrow}</div>
           <h1 className="font-display font-black text-4xl sm:text-5xl tracking-tighter mb-4 max-w-2xl">{c.title}</h1>
-          <p className="text-zinc-400 text-base sm:text-lg max-w-xl leading-relaxed mb-14">{c.sub}</p>
+          <p className="text-zinc-400 text-base sm:text-lg max-w-xl leading-relaxed mb-8">{c.sub}</p>
+          <TrustBar className="justify-start mb-6" />
         </div>
 
         {/* Architecture */}
@@ -96,6 +99,11 @@ export default function Security() {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* Security FAQ */}
+        <section className="mb-16">
+          <SecurityFaq />
         </section>
 
         {/* Secure installer */}

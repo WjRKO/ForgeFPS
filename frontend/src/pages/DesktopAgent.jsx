@@ -2,17 +2,18 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
-import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu, Activity, Copy, Check, Gamepad2, Sparkles, ChevronDown, FileCheck2, Lock, History } from "lucide-react";
-import { AGENT_EXE_URL, AGENT_EXE_SHA256, AGENT_EXE_VERSION, AGENT_EXE_DATE, AGENT_RELEASES_URL } from "@/config/agent";
+import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu, Activity, Copy, Check, Gamepad2, Sparkles, ChevronDown, FileCheck2, Lock, History, AlertTriangle, ExternalLink } from "lucide-react";
+import { AGENT_EXE_URL, AGENT_EXE_SHA256, AGENT_EXE_VERSION, AGENT_EXE_DATE, AGENT_RELEASES_URL, AGENT_DEFAULT_BACKEND } from "@/config/agent";
 import { toast } from "sonner";
 import api, { API } from "@/lib/api";
+import { trackConversion } from "@/lib/gtag";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const isEn = () => i18n.language?.startsWith("en");
 
 const ACTIONS = [
   { icon: Gauge, title: "Benchmark prima/dopo", title_en: "Before/after benchmark", desc: "Misura CPU, RAM, disco e latenza di rete prima e dopo l'ottimizzazione per vedere il guadagno reale.", desc_en: "Measures CPU, RAM, disk and network latency before and after optimization to see the real gain." },
-  { icon: Wind, title: "Pannello grafico a categorie", title_en: "Graphical panel by category", desc: "Il comando 'Ottimizza' apre una finestra con tab (Gaming/Latenza/Rete/Sistema), preset Competitivo/Streaming/Completo e 26 tweak con stato attuale.", desc_en: "The 'Optimize' command opens a window with tabs (Gaming/Latency/Network/System), Competitive/Streaming/Full presets and 26 tweaks with their current state." },
+  { icon: Wind, title: "Pannello grafico adattivo", title_en: "Adaptive graphical panel", desc: "Il comando 'Ottimizza' apre una finestra con tab (Gaming/Latenza/Rete/Sistema), preset Competitivo/Streaming/Completo e 35 tweak che si adattano al TUO hardware: laptop vs desktop, SSD vs HDD, RAM, marca GPU.", desc_en: "The 'Optimize' command opens a window with tabs (Gaming/Latency/Network/System), Competitive/Streaming/Full presets and 35 tweaks that adapt to YOUR hardware: laptop vs desktop, SSD vs HDD, RAM, GPU brand." },
   { icon: Terminal, title: "Tweak pro NVIDIA/AMD/OBS", title_en: "Pro NVIDIA/AMD/OBS tweaks", desc: "MSI mode GPU (latenza DPC), MPO off (fix schermo nero OBS), timer resolution, OBS ad alta priorità, disabilita telemetria NVIDIA / ULPS AMD.", desc_en: "GPU MSI mode (DPC latency), MPO off (fixes OBS black screen), timer resolution, high-priority OBS, disable NVIDIA telemetry / AMD ULPS." },
   { icon: HardDrive, title: "Debloat & pulizia", title_en: "Debloat & cleanup", desc: "Rimuove app superflue, telemetria, ads di Windows e pulisce temp + cache Windows Update.", desc_en: "Removes bloatware, telemetry, Windows ads and cleans temp + Windows Update cache." },
   { icon: Cpu, title: "Rileva hardware/salute", title_en: "Detect hardware/health", desc: "Rileva CPU/GPU/RAM/temperature e le invia per analisi e consigli AI su misura.", desc_en: "Detects CPU/GPU/RAM/temperatures and sends them for tailored AI analysis and advice." },
@@ -119,7 +120,13 @@ function CmdRow({ label, cmd, testid, accent }) {
 const SECURE = {
   it: {
     exe_badge: "In arrivo", exe_title: "App desktop con un click", exe_desc: "Scarica l'app Windows (.exe) e avviala. Firma digitale in preparazione: al primo avvio Windows può mostrare «App non riconosciuta» → Ulteriori informazioni → Esegui comunque.",
-    exe_btn: "Scarica FrameForge (.exe)", exe_run: "Fai doppio click e incolla il token quando richiesto — oppure da terminale:", exe_sha: "SHA256 dell'.exe",
+    exe_btn: "Scarica FrameForge (.exe)", exe_run: "Fai doppio click e incolla il token quando richiesto — oppure da terminale:", exe_sha: "SHA256 dell'.exe", exe_vt: "Verifica questo file su VirusTotal",
+    warn_title: "Importante: a quale server si collega l'app?",
+    warn_desc_a: "Per impostazione predefinita l'.exe si collega a",
+    warn_desc_b: "(produzione). Il token deve provenire dallo stesso sito a cui punta l'app: se lo copi da un ambiente diverso vedrai «Token non valido».",
+    warn_prod: "Stai usando il sito di produzione: scarica il token qui sotto e avvia l'.exe normalmente.",
+    warn_test: "Stai usando un ambiente di test/anteprima. Per far funzionare l'.exe con QUESTO ambiente (e questo token), aggiungi il parametro --backend:",
+    av_note: "Alcuni antivirus (spesso Windows Defender) possono segnalare un falso positivo: è tipico degli .exe creati con PyInstaller, non è un vero virus. In quel caso usa il «Metodo sicuro» qui sotto (script .ps1, ispezionabile e non flaggato), oppure vedi la guida per firmare/segnalare l'app.",
     secure_title: "Metodo sicuro (consigliato)", secure_desc: "Niente comandi remoti. Scarichi lo script, ne verifichi l'integrità (SHA256) ed esegui il file locale. Puoi aprirlo e leggerlo prima di eseguirlo.",
     token_label: "Il tuo token (privato)",
     s1: "1) Scarica lo script (non lo esegue)", s2: "2) Verifica l'integrità: l'hash deve coincidere con quello qui sotto", s3: "3) Esegui il file locale (cambia -Mode per l'azione)",
@@ -130,7 +137,13 @@ const SECURE = {
   },
   en: {
     exe_badge: "Coming soon", exe_title: "One-click desktop app", exe_desc: "Download the Windows app (.exe) and launch it. Digital signature in progress: on first run Windows may show \u201cUnrecognized app\u201d \u2192 More info \u2192 Run anyway.",
-    exe_btn: "Download FrameForge (.exe)", exe_run: "Double-click and paste the token when asked — or from a terminal:", exe_sha: ".exe SHA256",
+    exe_btn: "Download FrameForge (.exe)", exe_run: "Double-click and paste the token when asked — or from a terminal:", exe_sha: ".exe SHA256", exe_vt: "Check this file on VirusTotal",
+    warn_title: "Important: which server does the app connect to?",
+    warn_desc_a: "By default the .exe connects to",
+    warn_desc_b: "(production). The token must come from the same site the app points to: if you copy it from a different environment you'll see \u201cInvalid token\u201d.",
+    warn_prod: "You're on the production site: copy the token below and launch the .exe normally.",
+    warn_test: "You're on a test/preview environment. To make the .exe work with THIS environment (and this token), add the --backend parameter:",
+    av_note: "Some antivirus (often Windows Defender) may show a false positive: it's typical of PyInstaller .exe files, not a real virus. If it happens, use the \u201cSecure method\u201d below (.ps1 script, inspectable and not flagged), or see the guide to sign/report the app.",
     secure_title: "Secure method (recommended)", secure_desc: "No remote commands. Download the script, verify its integrity (SHA256) and run the local file. You can open and read it before running.",
     token_label: "Your token (private)",
     s1: "1) Download the script (does not run it)", s2: "2) Verify integrity: the hash must match the one below", s3: "3) Run the local file (change -Mode for the action)",
@@ -147,6 +160,7 @@ const RUN_MODES = [
   { m: "benchmark", it: "Benchmark prima/dopo", en: "Before/after benchmark" },
   { m: "monitor", it: "Monitor live", en: "Live monitor" },
   { m: "prematch", it: "Prima del match", en: "Pre-match" },
+  { m: "booster", it: "Game Booster (sorveglia e boosta i giochi)", en: "Game Booster (watch & boost games)" },
   { m: "restore", it: "Ripristina i tweak", en: "Restore tweaks" },
 ];
 
@@ -173,6 +187,10 @@ export default function DesktopAgent() {
   }, []);
 
   const tk = token || "IL_TUO_TOKEN";
+  const isProd = (BACKEND || "").includes("forgefps.dev");
+  const exeCmd = isProd
+    ? `forgefps-agent.exe --token ${tk} --mode optimize`
+    : `forgefps-agent.exe --backend "${BACKEND}" --token ${tk} --mode optimize`;
   const dl = `irm "${BACKEND}/api/agent/script?t=${tk}" -OutFile "$HOME\\Downloads\\forgefps.ps1"`;
   const verify = `Get-FileHash "$HOME\\Downloads\\forgefps.ps1" -Algorithm SHA256`;
   const run = (mode) => `powershell -ExecutionPolicy Bypass -File "$HOME\\Downloads\\forgefps.ps1" -Token ${tk} -Mode ${mode}`;
@@ -198,7 +216,7 @@ export default function DesktopAgent() {
               <a href={AGENT_RELEASES_URL} target="_blank" rel="noreferrer" data-testid="exe-releases-link" className="text-[#00E0FF] hover:underline">{en ? "All versions" : "Tutte le versioni"} →</a>
             </div>
             <p className="text-zinc-400 text-sm mt-1 max-w-2xl">{s.exe_desc}</p>
-            <a href={AGENT_EXE_URL} target="_blank" rel="noreferrer" data-testid="exe-download-btn"
+            <a href={AGENT_EXE_URL} target="_blank" rel="noreferrer" data-testid="exe-download-btn" onClick={() => trackConversion("agent_download")}
               className="mt-3 inline-flex items-center gap-2 bg-[#00E0FF] text-black font-bold px-5 py-2.5 text-sm uppercase tracking-wide hover:bg-[#33e8ff] transition-colors">
               <Download size={16} /> {s.exe_btn}
             </a>
@@ -207,10 +225,41 @@ export default function DesktopAgent() {
               <span className="text-zinc-500">{s.exe_sha}:</span>
               <code className="text-zinc-300 break-all" data-testid="exe-sha256">{AGENT_EXE_SHA256}</code>
             </div>
+            <a href={`https://www.virustotal.com/gui/file/${AGENT_EXE_SHA256}`} target="_blank" rel="noreferrer" data-testid="exe-virustotal"
+              className="inline-flex items-center gap-1.5 mt-2 text-xs text-[#00FF66] hover:underline">
+              <ShieldCheck size={13} /> {s.exe_vt} <ExternalLink size={10} />
+            </a>
             <div className="mt-3">
               <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">{s.exe_run}</div>
-              <CmdRow label="" cmd={`forgefps-agent.exe --token ${token || "IL_TUO_TOKEN"} --mode optimize`} testid="exe-run" accent="text-[#E5FF00]" />
+              <CmdRow label="" cmd={exeCmd} testid="exe-run" accent="text-[#E5FF00]" />
             </div>
+
+            {/* Backend / token mismatch notice */}
+            <div className={`mt-3 border p-3.5 ${isProd ? "border-[#00FF66]/30 bg-[#00FF66]/5" : "border-[#FFAA00]/40 bg-[#FFAA00]/5"}`} data-testid="exe-backend-notice">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle size={16} className={`shrink-0 mt-0.5 ${isProd ? "text-[#00FF66]" : "text-[#FFAA00]"}`} />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-zinc-200">{s.warn_title}</div>
+                  <p className="text-xs text-zinc-400 leading-relaxed mt-1">
+                    {s.warn_desc_a} <code className="text-[#00E0FF]">{AGENT_DEFAULT_BACKEND}</code> {s.warn_desc_b}
+                  </p>
+                  <p className={`text-xs leading-relaxed mt-2 ${isProd ? "text-[#00FF66]" : "text-[#FFAA00]"}`}>
+                    {isProd ? s.warn_prod : s.warn_test}
+                  </p>
+                  {!isProd && (
+                    <div className="mt-2">
+                      <CmdRow label="" cmd={exeCmd} testid="exe-backend-cmd" accent="text-[#FFAA00]" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Antivirus false-positive note */}
+            <p className="mt-3 text-xs text-zinc-500 leading-relaxed flex items-start gap-2" data-testid="exe-av-note">
+              <ShieldCheck size={13} className="text-[#00FF66] shrink-0 mt-0.5" />
+              <span>{s.av_note}</span>
+            </p>
           </div>
         </div>
       </div>
@@ -264,7 +313,7 @@ export default function DesktopAgent() {
               <CmdRow key={rm.m} label={en ? rm.en : rm.it} cmd={run(rm.m)} testid={`run-${rm.m}`} accent="text-zinc-500" />
             ))}
             <div className="flex flex-wrap gap-3 mt-4 border-t border-[#1A1A24] pt-4">
-              <a data-testid="download-agent-btn" href={`${API}/desktop-agent/download`}
+              <a data-testid="download-agent-btn" href={`${API}/desktop-agent/download`} onClick={() => trackConversion("agent_download")}
                 className="inline-flex items-center gap-2 border border-[#2A2A35] px-5 py-2.5 text-sm hover:border-[#E5FF00] transition-colors">
                 <Download size={16} /> {t("desktop.download_py")}
               </a>

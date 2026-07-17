@@ -113,3 +113,47 @@ export function HealthRing({ score = 0, size = 128, label }) {
     </div>
   );
 }
+
+
+export function PageContainer({ children, className = "" }) {
+  return <div className={`max-w-7xl mx-auto w-full space-y-8 ${className}`}>{children}</div>;
+}
+
+export function Section({ title, hint, actions, children, className = "" }) {
+  return (
+    <section className={`space-y-4 ${className}`}>
+      {(title || actions) && (
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            {title && <h2 className="font-display font-bold text-lg tracking-tight text-zinc-100">{title}</h2>}
+            {hint && <p className="text-xs text-zinc-500 mt-0.5">{hint}</p>}
+          </div>
+          {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+export function HUDCard({ children, className = "", featured = false, testid }) {
+  return (
+    <div data-testid={testid}
+      className={`relative overflow-hidden bg-[#0F0F12] border border-[#2A2A35] p-5 flex flex-col ${className}`}>
+      {featured && <span className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-[#E5FF00]/60 to-transparent" />}
+      {children}
+    </div>
+  );
+}
+
+export function DataMetric({ label, value, unit, accent = "text-zinc-100", testid }) {
+  return (
+    <div data-testid={testid} className="flex flex-col gap-1 p-4 bg-[#0A0A0C] border border-[#2A2A35]">
+      <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-[0.2em]">{label}</span>
+      <div className="flex items-baseline gap-1.5">
+        <span className={`text-2xl font-display font-black tabular-nums ${accent}`}>{value ?? "--"}</span>
+        {unit && value != null && <span className="text-xs text-zinc-500 font-mono">{unit}</span>}
+      </div>
+    </div>
+  );
+}
