@@ -421,28 +421,75 @@ function Run-Benchmark {
   $buf = New-Object byte[] $size; $dst = New-Object byte[] $size
   $sw.Restart(); for ($i = 0; $i -lt 5; $i++) { [Array]::Copy($buf, $dst, $size) }; $sw.Stop()
   $r.ram_mbps = [int]([math]::Round((5 * $size / 1MB) / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+  # Disco: scrittura sequenziale REALE (WriteThrough bypassa la cache, 256MB)
   $tmp = Join-Path $env:TEMP 'boostpc_bench.bin'
-  $data = New-Object byte[] (64MB); (New-Object Random).NextBytes($data)
-  $sw.Restart(); [System.IO.File]::WriteAllBytes($tmp, $data); $sw.Stop()
-  $r.disk_write_mbps = [int]([math]::Round(64 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
-  $sw.Restart(); $null = [System.IO.File]::ReadAllBytes($tmp); $sw.Stop()
-  $r.disk_read_mbps = [int]([math]::Round(64 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+  try {
+    $chunk = New-Object byte[] (8MB); (New-Object Random).NextBytes($chunk)
+    $fs = New-Object System.IO.FileStream($tmp, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None, 1MB, [System.IO.FileOptions]::WriteThrough)
+    $sw.Restart(); for ($i = 0; $i -lt 32; $i++) { $fs.Write($chunk, 0, $chunk.Length) }; $fs.Flush($true); $sw.Stop(); $fs.Close()
+    $r.disk_write_mbps = [int]([math]::Round(256 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+    $sw.Restart(); $null = [System.IO.File]::ReadAllBytes($tmp); $sw.Stop()
+    $r.disk_read_mbps = [int]([math]::Round(256 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+    $b4 = New-Object byte[] 4096; $rnd = New-Object Random
+    $fs2 = New-Object System.IO.FileStream($tmp, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None, 4096, [System.IO.FileOptions]::WriteThrough)
+    $ops = 200
+    $sw.Restart()
+    for ($i = 0; $i -lt $ops; $i++) { $fs2.Position = 4096 * $rnd.Next(0, 65536); $fs2.Write($b4, 0, 4096) }
+    $fs2.Flush($true); $sw.Stop(); $fs2.Close()
+    $r.iops_4k = [int]([math]::Round($ops / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+  } catch { if (-not $r.ContainsKey('disk_write_mbps')) { $r.disk_write_mbps = 0 }; if (-not $r.ContainsKey('disk_read_mbps')) { $r.disk_read_mbps = 0 }; $r.iops_4k = 0 }
   Remove-Item $tmp -ErrorAction SilentlyContinue
+  # Latenza scheduler/DPC (proxy): oversleep p95 su 150 sleep da 1ms
+  $lat = New-Object System.Collections.Generic.List[double]
+  $sw2 = [System.Diagnostics.Stopwatch]::StartNew()
+  $prev = $sw2.Elapsed.TotalMilliseconds
+  for ($i = 0; $i -lt 150; $i++) {
+    Start-Sleep -Milliseconds 1
+    $nowMs = $sw2.Elapsed.TotalMilliseconds
+    $lat.Add([math]::Max(0, $nowMs - $prev - 1)); $prev = $nowMs
+  }
+  $sorted = @($lat | Sort-Object)
+  $r.dpc_ms = [math]::Round($sorted[[int][math]::Floor($sorted.Count * 0.95)], 1)
+  # Rete: ping medio + jitter su 10 campioni
   try {
     $png = New-Object System.Net.NetworkInformation.Ping
-    $tot = 0; $n = 0
-    for ($i = 0; $i -lt 4; $i++) { $res = $png.Send('1.1.1.1', 2000); if ($res.Status -eq 'Success') { $tot += $res.RoundtripTime; $n++ } }
-    $r.ping_ms = if ($n -gt 0) { [int]([math]::Round($tot / $n)) } else { 0 }
-  } catch { $r.ping_ms = 0 }
+    $rtts = New-Object System.Collections.Generic.List[double]
+    for ($i = 0; $i -lt 10; $i++) { $res = $png.Send('1.1.1.1', 2000); if ($res.Status -eq 'Success') { $rtts.Add([double]$res.RoundtripTime) } }
+    if ($rtts.Count -gt 0) {
+      $avg = ($rtts | Measure-Object -Average).Average
+      $r.ping_ms = [int]([math]::Round($avg))
+      $var = 0.0; foreach ($v in $rtts) { $var += [math]::Pow($v - $avg, 2) }
+      $r.jitter_ms = [math]::Round([math]::Sqrt($var / $rtts.Count), 1)
+    } else { $r.ping_ms = 0; $r.jitter_ms = 0 }
+  } catch { $r.ping_ms = 0; $r.jitter_ms = 0 }
+  # Tempo di avvio Windows (event log Diagnostics-Performance 100)
+  try {
+    $ev = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 100 } -MaxEvents 1 -ErrorAction SilentlyContinue
+    if ($ev) {
+      $x = [xml]$ev.ToXml()
+      $bt = ($x.Event.EventData.Data | Where-Object { $_.Name -eq 'BootTime' }).'#text'
+      if ($bt) { $r.boot_s = [math]::Round([double]$bt / 1000, 1) }
+    }
+  } catch {}
   $o = Get-CimInstance Win32_OperatingSystem
   $r.free_ram_pct = [int]([math]::Round($o.FreePhysicalMemory / $o.TotalVisibleMemorySize * 100))
+  # SCORE 0-100 pesato (confrontabile nel tempo)
+  $cpuN = [math]::Min(100, $r.cpu_score / 100.0)
+  $ramN = [math]::Min(100, $r.ram_mbps / 200.0)
+  $dwN = [math]::Min(100, $r.disk_write_mbps / 20.0)
+  $drN = [math]::Min(100, $r.disk_read_mbps / 30.0)
+  $ioN = [math]::Min(100, $r.iops_4k / 50.0)
+  $dpcN = [math]::Max(0, 100 - $r.dpc_ms * 20)
+  $pingN = [math]::Max(0, 100 - $r.ping_ms)
+  $jitN = [math]::Max(0, 100 - $r.jitter_ms * 10)
+  $r.score = [int]([math]::Round($cpuN * 0.20 + $ramN * 0.10 + $dwN * 0.15 + $drN * 0.10 + $ioN * 0.10 + $dpcN * 0.15 + $pingN * 0.15 + $jitN * 0.05))
   $r.overall = [int]([math]::Round($r.cpu_score + $r.ram_mbps/50.0 + $r.disk_write_mbps/50.0 + $r.disk_read_mbps/50.0 + [math]::Max(0, 120 - $r.ping_ms) + $r.free_ram_pct))
   return $r
 }
 function Show-Bench($r, $title) {
   Say "`n   [$title]" 'Cyan'
-  Say ("   CPU {0} | RAM {1} MB/s | Disco W/R {2}/{3} MB/s | Ping {4} ms | PUNTEGGIO {5}" -f `
-    $r.cpu_score, $r.ram_mbps, $r.disk_write_mbps, $r.disk_read_mbps, $r.ping_ms, $r.overall) 'Yellow'
+  Say ("   CPU {0} | RAM {1} MB/s | Disco W/R {2}/{3} MB/s | 4K {4} IOPS" -f $r.cpu_score, $r.ram_mbps, $r.disk_write_mbps, $r.disk_read_mbps, $r.iops_4k) 'Yellow'
+  Say ("   DPC {0} ms | Ping {1} ms (jitter {2} ms){3} | SCORE {4}/100" -f $r.dpc_ms, $r.ping_ms, $r.jitter_ms, $(if($r.ContainsKey('boot_s')){" | Avvio $($r.boot_s)s"}else{''}), $r.score) 'Yellow'
 }
 
 # ---------------- Reporting ----------------
@@ -1656,6 +1703,126 @@ if ($MODE -eq 'prematch') {
     else { powercfg /setactive scheme_balanced 2>$null; Say "   [OK] Piano energetico bilanciato ripristinato." 'Green' }
   }
   Say "`n[FATTO] Le app chiuse puoi riaprirle normalmente. A presto!" 'Cyan'
+  return
+}
+
+if ($MODE -eq 'booster') {
+  Say "`n== FrameForge - GAME BOOSTER ==" 'Cyan'
+  Say '   Sorveglio i giochi in avvio: quando ne rilevo uno ti propongo il boost con 5 secondi per annullare.' 'Gray'
+  Say '   NIENTE parte in automatico al 100%: hai sempre la scelta. A fine partita ripristino tutto. Ctrl+C per uscire.' 'Gray'
+  try { Add-Type -AssemblyName System.Windows.Forms } catch {}
+  $doPower = __BOOSTER_POWER__
+  $doPriority = __BOOSTER_PRIORITY__
+  $doPurge = __BOOSTER_PURGE__
+  $apps = @(__BOOSTER_APPS__)
+  Say ("   Azioni configurate (FrameForge -> Games): priorita={0} energia={1} purgeRAM={2} appDaChiudere={3}" -f $doPriority, $doPower, $doPurge, $apps.Count) 'DarkGray'
+  if (-not (Test-Admin)) { Say '   [i] Senza Amministratore rilevo il gioco dalla finestra a schermo intero (niente conteggio FPS).' 'DarkYellow' }
+  if (-not ('FFWin' -as [type])) {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class FFWin {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L; public int T; public int R; public int B; }
+}
+"@ 2>$null
+  }
+  function Test-KeyCancel { try { if ([Console]::KeyAvailable) { [void][Console]::ReadKey($true); return $true } } catch {}; return $false }
+  function Get-FullscreenGame {
+    try {
+      $h = [FFWin]::GetForegroundWindow()
+      if ($h -eq [IntPtr]::Zero) { return $null }
+      $rc = New-Object FFWin+RECT
+      [void][FFWin]::GetWindowRect($h, [ref]$rc)
+      $mw = [System.Windows.Forms.SystemInformation]::PrimaryMonitorSize.Width
+      $mh = [System.Windows.Forms.SystemInformation]::PrimaryMonitorSize.Height
+      if (($rc.R - $rc.L) -lt ($mw - 2) -or ($rc.B - $rc.T) -lt ($mh - 2)) { return $null }
+      $gp = [uint32]0; [void][FFWin]::GetWindowThreadProcessId($h, [ref]$gp)
+      $p = Get-Process -Id $gp -ErrorAction SilentlyContinue
+      if (-not $p) { return $null }
+      $skipRe = 'explorer|dwm|powershell|pwsh|WindowsTerminal|cmd|chrome|msedge|firefox|opera|brave|Code|devenv|obs64|obs32|Taskmgr|SearchHost|ShellExperienceHost|ApplicationFrameHost|LockApp|vlc|Photos|Netflix|Spotify'
+      if ($p.Name -match $skipRe) { return $null }
+      return $p
+    } catch { return $null }
+  }
+  if (Test-Admin) { Start-Fps }
+  $boosted = $false; $skipUntilExit = $false; $bGame = ''; $bStart = $null; $prevPlan = ''
+  $curName = ''; $detCount = 0; $lostCount = 0; $script:BACTS = @()
+  Say "`n[SORVEGLIANZA ATTIVA] Avvia pure il tuo gioco quando vuoi." 'Green'
+  try {
+    while ($true) {
+      $name = ''; $gpid = 0
+      $f = Get-Fps
+      if ($f -and $f.fps -ge 15) { $name = $f.game }
+      if (-not $name) { $p = Get-FullscreenGame; if ($p) { $name = $p.Name; $gpid = $p.Id } }
+      if ($name) {
+        if ($name -eq $curName) { $detCount++ } else { $curName = $name; $detCount = 1 }
+        $lostCount = 0
+      } else {
+        $lostCount++
+        if ($lostCount -ge 8 -and -not $boosted -and -not $skipUntilExit) { $curName = ''; $detCount = 0 }
+      }
+      if (-not $boosted -and -not $skipUntilExit -and $curName -and $detCount -eq 3) {
+        Say ("`n[GIOCO RILEVATO] {0}" -f $curName) 'Yellow'
+        Say '   Boost tra 5 secondi... premi un tasto QUALSIASI per ANNULLARE il boost di questa sessione.' 'Yellow'
+        while (Test-KeyCancel) {}
+        $cancel = $false
+        for ($i = 5; $i -ge 1; $i--) {
+          Write-Host ("   {0}..." -f $i) -ForegroundColor DarkGray
+          $t0 = Get-Date
+          while (((Get-Date) - $t0).TotalMilliseconds -lt 1000) {
+            if (Test-KeyCancel) { $cancel = $true; break }
+            Start-Sleep -Milliseconds 100
+          }
+          if ($cancel) { break }
+        }
+        if ($cancel) {
+          Say '   Boost ANNULLATO: nessuna modifica. Riprendo la sorveglianza a fine partita.' 'DarkYellow'
+          $skipUntilExit = $true
+        } else {
+          $acts = New-Object System.Collections.Generic.List[string]
+          if ($doPriority) {
+            if (-not $gpid) { $pp = Get-Process -Name ($curName -replace '\.exe$', '') -ErrorAction SilentlyContinue | Select-Object -First 1; if ($pp) { $gpid = $pp.Id } }
+            if ($gpid) { try { (Get-Process -Id $gpid).PriorityClass = 'High'; $acts.Add('priorita_high'); Say '   [OK] Priorita CPU del gioco: HIGH.' 'Green' } catch {} }
+          }
+          if ($doPower) {
+            $out = powercfg /getactivescheme
+            $prevPlan = ([regex]::Match($out, '([0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})')).Value
+            powercfg /setactive scheme_min 2>$null
+            $acts.Add('piano_energetico'); Say '   [OK] Piano Prestazioni elevate attivo (solo durante il gioco).' 'Green'
+          }
+          if ($apps.Count -gt 0) {
+            $closed = 0
+            foreach ($a in $apps) { $pr = Get-Process -Name $a -ErrorAction SilentlyContinue; if ($pr) { Stop-Process -InputObject $pr -Force -ErrorAction SilentlyContinue; $closed++ } }
+            if ($closed -gt 0) { $acts.Add("app_chiuse_$closed"); Say ("   [OK] App in background chiuse: {0}." -f $closed) 'Green' }
+          }
+          if ($doPurge) { Clear-StandbyList; $acts.Add('purge_ram'); Say '   [OK] RAM standby svuotata.' 'Green' }
+          $boosted = $true; $bGame = $curName; $bStart = Get-Date; $script:BACTS = @($acts)
+          Say ("`n[BOOST ATTIVO] Buona partita! Ripristino tutto quando esci da {0}." -f ($curName -replace '\.exe$', '')) 'Yellow'
+        }
+      }
+      if (($boosted -or $skipUntilExit) -and $lostCount -ge 8) {
+        if ($boosted) {
+          Say ("`n[FINE PARTITA] {0}: ripristino..." -f ($bGame -replace '\.exe$', '')) 'Cyan'
+          if ($doPower) { if ($prevPlan) { powercfg /setactive $prevPlan 2>$null } else { powercfg /setactive scheme_balanced 2>$null }; Say '   [OK] Piano energetico ripristinato.' 'Green' }
+          $dur = [int]((Get-Date) - $bStart).TotalSeconds
+          $body = @{ boost_session = @{ game = ($bGame -replace '\.exe$', ''); duration_s = $dur; actions = @($script:BACTS); ended_at = (Get-Date).ToString('o') } } | ConvertTo-Json -Depth 4 -Compress
+          try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+          Say ("   Sessione registrata ({0} min). Torno in sorveglianza." -f [math]::Round($dur / 60, 1)) 'DarkGray'
+        } else {
+          Say "`n[i] Partita finita (boost annullato). Torno in sorveglianza." 'DarkGray'
+        }
+        $boosted = $false; $skipUntilExit = $false; $bGame = ''; $prevPlan = ''; $curName = ''; $detCount = 0
+      }
+      Start-Sleep -Milliseconds 2000
+    }
+  } finally {
+    Stop-Fps
+    if ($boosted -and $doPower) { if ($prevPlan) { powercfg /setactive $prevPlan 2>$null } else { powercfg /setactive scheme_balanced 2>$null } }
+    Say "`n[STOP] Game Booster fermato. Tutto ripristinato." 'Cyan'
+  }
   return
 }
 

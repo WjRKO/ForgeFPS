@@ -320,7 +320,7 @@ def _ping_ms():
 
 
 def run_benchmark():
-    print("    Benchmark in corso (CPU / RAM / Disco / Rete)...")
+    print("    Benchmark in corso (CPU / RAM / Disco / DPC / Rete)...")
     r = {}
     t = time.perf_counter()
     acc = 0.0
@@ -339,31 +339,95 @@ def run_benchmark():
     r["ram_mbps"] = int(round((5 * size / (1024 * 1024)) / el))
 
     tmp = os.path.join(tempfile.gettempdir(), "boostpc_bench.bin")
-    data = os.urandom(64 * 1024 * 1024)
+    chunk = os.urandom(8 * 1024 * 1024)
     t = time.perf_counter()
     with open(tmp, "wb") as f:
-        f.write(data)
-        f.flush()
-        os.fsync(f.fileno())
+        for _ in range(32):
+            f.write(chunk)
+            f.flush()
+            os.fsync(f.fileno())
     el = max(time.perf_counter() - t, 0.001)
-    r["disk_write_mbps"] = int(round(64 / el))
+    r["disk_write_mbps"] = int(round(256 / el))
     t = time.perf_counter()
     with open(tmp, "rb") as f:
         f.read()
     el = max(time.perf_counter() - t, 0.001)
-    r["disk_read_mbps"] = int(round(64 / el))
+    r["disk_read_mbps"] = int(round(256 / el))
+    try:
+        import random as _rnd
+        b4 = b"\0" * 4096
+        ops = 200
+        t = time.perf_counter()
+        with open(tmp, "r+b") as f:
+            for _ in range(ops):
+                f.seek(4096 * _rnd.randint(0, 65535))
+                f.write(b4)
+                f.flush()
+                os.fsync(f.fileno())
+        el = max(time.perf_counter() - t, 0.001)
+        r["iops_4k"] = int(round(ops / el))
+    except Exception:
+        r["iops_4k"] = 0
     try:
         os.remove(tmp)
     except Exception:
         pass
 
-    r["ping_ms"] = _ping_ms()
+    lat = []
+    prev = time.perf_counter()
+    for _ in range(150):
+        time.sleep(0.001)
+        now = time.perf_counter()
+        lat.append(max(0.0, (now - prev) * 1000 - 1))
+        prev = now
+    lat.sort()
+    r["dpc_ms"] = round(lat[int(len(lat) * 0.95)], 1)
+
+    times = []
+    for _ in range(10):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(2)
+            t = time.perf_counter()
+            s.connect(("1.1.1.1", 443))
+            times.append((time.perf_counter() - t) * 1000)
+            s.close()
+        except Exception:
+            pass
+    if times:
+        avg = sum(times) / len(times)
+        r["ping_ms"] = int(round(avg))
+        r["jitter_ms"] = round((sum((x - avg) ** 2 for x in times) / len(times)) ** 0.5, 1)
+    else:
+        r["ping_ms"] = 0
+        r["jitter_ms"] = 0
+
+    try:
+        bt = ps("$ev=Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Diagnostics-Performance/Operational';Id=100} "
+                "-MaxEvents 1 -ErrorAction SilentlyContinue; if($ev){ $x=[xml]$ev.ToXml(); "
+                "($x.Event.EventData.Data | Where-Object {$_.Name -eq 'BootTime'}).'#text' }")
+        if bt and bt.strip().isdigit():
+            r["boot_s"] = round(int(bt.strip()) / 1000, 1)
+    except Exception:
+        pass
+
     try:
         fr = ps("$o=Get-CimInstance Win32_OperatingSystem; "
                 "[math]::round($o.FreePhysicalMemory/$o.TotalVisibleMemorySize*100,0)")
         r["free_ram_pct"] = int(fr)
     except Exception:
         r["free_ram_pct"] = 0
+
+    cpu_n = min(100, r["cpu_score"] / 100.0)
+    ram_n = min(100, r["ram_mbps"] / 200.0)
+    dw_n = min(100, r["disk_write_mbps"] / 20.0)
+    dr_n = min(100, r["disk_read_mbps"] / 30.0)
+    io_n = min(100, r["iops_4k"] / 50.0)
+    dpc_n = max(0, 100 - r["dpc_ms"] * 20)
+    ping_n = max(0, 100 - r["ping_ms"])
+    jit_n = max(0, 100 - r["jitter_ms"] * 10)
+    r["score"] = int(round(cpu_n * 0.20 + ram_n * 0.10 + dw_n * 0.15 + dr_n * 0.10 +
+                           io_n * 0.10 + dpc_n * 0.15 + ping_n * 0.15 + jit_n * 0.05))
     r["overall"] = int(round(r["cpu_score"] + r["ram_mbps"] / 50.0 + r["disk_write_mbps"] / 50.0 +
                              r["disk_read_mbps"] / 50.0 + max(0, 120 - r["ping_ms"]) + r["free_ram_pct"]))
     return r
@@ -373,11 +437,15 @@ def show_bench(r, title):
     print(f"\n    [{title}]")
     print(f"    CPU score      : {r['cpu_score']}")
     print(f"    RAM bandwidth  : {r['ram_mbps']} MB/s")
-    print(f"    Disco scrittura: {r['disk_write_mbps']} MB/s")
+    print(f"    Disco scrittura: {r['disk_write_mbps']} MB/s (reale, no cache)")
     print(f"    Disco lettura  : {r['disk_read_mbps']} MB/s")
-    print(f"    Ping (1.1.1.1) : {r['ping_ms']} ms")
+    print(f"    Disco 4K       : {r.get('iops_4k', 0)} IOPS")
+    print(f"    Latenza DPC    : {r.get('dpc_ms', 0)} ms (p95)")
+    print(f"    Ping (1.1.1.1) : {r['ping_ms']} ms (jitter {r.get('jitter_ms', 0)} ms)")
+    if r.get("boot_s"):
+        print(f"    Avvio Windows  : {r['boot_s']} s")
     print(f"    RAM libera     : {r['free_ram_pct']} %")
-    print(f"    PUNTEGGIO      : {r['overall']}")
+    print(f"    SCORE          : {r.get('score', 0)}/100")
 
 
 def show_compare(b, a):
@@ -386,9 +454,12 @@ def show_compare(b, a):
             ("RAM MB/s", b["ram_mbps"], a["ram_mbps"], True),
             ("Disco scritt.", b["disk_write_mbps"], a["disk_write_mbps"], True),
             ("Disco lett.", b["disk_read_mbps"], a["disk_read_mbps"], True),
+            ("Disco 4K IOPS", b.get("iops_4k", 0), a.get("iops_4k", 0), True),
+            ("DPC ms", b.get("dpc_ms", 0), a.get("dpc_ms", 0), False),
             ("Ping ms", b["ping_ms"], a["ping_ms"], False),
+            ("Jitter ms", b.get("jitter_ms", 0), a.get("jitter_ms", 0), False),
             ("RAM libera %", b["free_ram_pct"], a["free_ram_pct"], True),
-            ("PUNTEGGIO", b["overall"], a["overall"], True)]
+            ("SCORE /100", b.get("score", 0), a.get("score", 0), True)]
     print(f"    {'METRICA':<14}{'PRIMA':>10}{'DOPO':>10}{'VAR':>9}")
     for name, bv, av, hb in rows:
         delta = round((av - bv) / bv * 100) if bv else 0

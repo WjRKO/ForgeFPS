@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Gauge, Loader2, Swords, Rocket, MonitorDown, Search, Sparkles, RefreshCw, Settings2, Save } from "lucide-react";
+import { Gauge, Loader2, Swords, Rocket, MonitorDown, Search, Sparkles, RefreshCw, Settings2, Save, Zap } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
@@ -39,6 +39,12 @@ export default function Games() {
   const [templates, setTemplates] = useState([]);
   const [catalog, setCatalog] = useState([]);
 
+  const [showBoostCfg, setShowBoostCfg] = useState(false);
+  const [boostGroups, setBoostGroups] = useState(() => Object.fromEntries(APP_GROUPS.map((g) => [g.id, false])));
+  const [boostCfg, setBoostCfg] = useState({ set_power: true, boost_priority: true, purge_ram: true });
+  const [savingBoost, setSavingBoost] = useState(false);
+  const [boostSessions, setBoostSessions] = useState([]);
+
   const loadGames = async () => {
     try { const { data } = await api.get("/games"); setGames(data.games || []); } catch {}
   };
@@ -58,7 +64,21 @@ export default function Games() {
     api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {});
     api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
     api.get("/profiles/templates").then(({ data }) => { setTemplates(data.templates || []); setCatalog(data.catalog || []); }).catch(() => {});
+    api.get("/booster").then(({ data }) => {
+      setBoostCfg({ set_power: data.set_power !== false, boost_priority: data.boost_priority !== false, purge_ram: data.purge_ram !== false });
+      const apps = data.close_apps || [];
+      setBoostGroups(Object.fromEntries(APP_GROUPS.map((g) => [g.id, g.procs.every((p) => apps.includes(p)) && g.procs.length > 0])));
+    }).catch(() => {});
+    api.get("/booster/sessions").then(({ data }) => setBoostSessions(data.sessions || [])).catch(() => {});
   }, []);
+
+  const saveBoostConfig = async () => {
+    setSavingBoost(true);
+    const close_apps = APP_GROUPS.filter((g) => boostGroups[g.id]).flatMap((g) => g.procs);
+    try { await api.put("/booster", { close_apps, ...boostCfg }); toast.success(t("games.save_ok")); }
+    catch { toast.error(t("games.save_err")); }
+    finally { setSavingBoost(false); }
+  };
 
   const recTpl = useMemo(() => {
     const g = game.trim().toLowerCase();
@@ -146,6 +166,64 @@ export default function Games() {
               className="mt-3 inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2 text-sm hover:bg-[#D4EC00] transition-colors disabled:opacity-60">
               {savingCfg ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {t("games.save_settings")}
             </button>
+          </div>
+        )}
+      </div>
+
+      {/* Game Booster */}
+      <div className="bg-gradient-to-br from-[#00E0FF]/10 to-transparent border border-[#00E0FF]/40 p-5 mb-5" data-testid="booster-card">
+        <div className="flex items-center gap-2 text-sm font-bold mb-1 text-[#00E0FF]"><Zap size={16} /> {t("games.booster_title")}</div>
+        <p className="text-xs text-zinc-400 mb-3 leading-relaxed">{t("games.booster_desc")}</p>
+        <SecureRunBlock token={token} mode="booster" testid="booster-run-cmd" />
+
+        <button onClick={() => setShowBoostCfg((v) => !v)} data-testid="booster-config-toggle"
+          className="mt-3 inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-[#00E0FF] transition-colors">
+          <Settings2 size={13} /> {showBoostCfg ? t("games.hide_customize") : t("games.customize")}
+        </button>
+
+        {showBoostCfg && (
+          <div className="mt-3 bg-black/50 border border-[#2A2A35] p-4" data-testid="booster-config">
+            <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer select-none mb-2" data-testid="booster-priority-toggle">
+              <input type="checkbox" checked={boostCfg.boost_priority} onChange={(e) => setBoostCfg((s) => ({ ...s, boost_priority: e.target.checked }))} className="accent-[#00E0FF] w-4 h-4" />
+              {t("games.booster_priority")}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer select-none mb-2" data-testid="booster-power-toggle">
+              <input type="checkbox" checked={boostCfg.set_power} onChange={(e) => setBoostCfg((s) => ({ ...s, set_power: e.target.checked }))} className="accent-[#00E0FF] w-4 h-4" />
+              {t("games.booster_power_toggle")}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer select-none mb-3" data-testid="booster-purge-toggle">
+              <input type="checkbox" checked={boostCfg.purge_ram} onChange={(e) => setBoostCfg((s) => ({ ...s, purge_ram: e.target.checked }))} className="accent-[#00E0FF] w-4 h-4" />
+              {t("games.booster_purge")}
+            </label>
+            <div className="text-xs text-zinc-500 mb-2 border-t border-[#2A2A35] pt-3">{t("games.booster_close")}</div>
+            <div className="grid sm:grid-cols-2 gap-2 mb-3">
+              {APP_GROUPS.map((g) => (
+                <label key={g.id} data-testid={`booster-group-${g.id}`}
+                  className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer select-none">
+                  <input type="checkbox" checked={!!boostGroups[g.id]} onChange={(e) => setBoostGroups((s) => ({ ...s, [g.id]: e.target.checked }))}
+                    className="accent-[#00E0FF] w-4 h-4" />
+                  <span>{t(`grp.${g.id}`)}</span>
+                </label>
+              ))}
+            </div>
+            <button onClick={saveBoostConfig} disabled={savingBoost} data-testid="booster-save"
+              className="inline-flex items-center gap-2 bg-[#00E0FF] text-black font-bold px-4 py-2 text-sm hover:bg-[#00C8E0] transition-colors disabled:opacity-60">
+              {savingBoost ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {t("games.save_settings")}
+            </button>
+          </div>
+        )}
+
+        {boostSessions.length > 0 && (
+          <div className="mt-3 border-t border-[#2A2A35] pt-3" data-testid="booster-sessions">
+            <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{t("games.booster_sessions")}</div>
+            <div className="space-y-1">
+              {boostSessions.slice(0, 5).map((s, i) => (
+                <div key={i} className="flex items-center justify-between text-xs bg-black/40 border border-[#1A1A24] px-3 py-1.5" data-testid={`booster-session-${i}`}>
+                  <span className="text-zinc-200 font-semibold">{s.game}</span>
+                  <span className="text-zinc-500">{Math.round((s.duration_s || 0) / 60)} {t("games.booster_min")} · {(s.actions || []).length} {t("games.booster_actions")}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
