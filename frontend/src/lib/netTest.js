@@ -75,7 +75,7 @@ export function gradeBufferbloat(increaseMs) {
 }
 
 // Returns { idleMs, loadedMs, bufferbloatMs, grade, downloadMbps } or null if the test can't run.
-export async function runNetTest() {
+async function _runNetTest() {
   const idle = await idleLatency();
   if (idle == null) return null;
   const loaded = await loadedLatency();
@@ -87,4 +87,12 @@ export async function runNetTest() {
     grade: gradeBufferbloat(inc),
     downloadMbps: loaded.mbps != null ? Math.round(loaded.mbps) : null,
   };
+}
+
+// Overall guard: on very slow/blocked links, resolve to null (graceful fallback) within maxMs.
+export function runNetTest(maxMs = 15000) {
+  return Promise.race([
+    _runNetTest().catch(() => null),
+    new Promise((resolve) => setTimeout(() => resolve(null), maxMs)),
+  ]);
 }
