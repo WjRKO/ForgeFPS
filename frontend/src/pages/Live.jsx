@@ -38,6 +38,15 @@ function Stat({ icon: Icon, label, value, unit, accent, testid }) {
   );
 }
 
+function MetricGroup({ title, children }) {
+  return (
+    <div className="mb-6">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-bold mb-2">{title}</div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{children}</div>
+    </div>
+  );
+}
+
 export default function Live() {
   const { t } = useTranslation();
   const [data, setData] = useState({ samples: [], live: false });
@@ -112,17 +121,23 @@ export default function Live() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <MetricGroup title={t("live.grp_perf")}>
         <Stat icon={Gamepad2} label={last.game ? `FPS · ${last.game}` : "FPS"} value={last.fps} unit="" accent="text-[#00FF66]" testid="stat-fps" />
         <Stat icon={Cpu} label="CPU" value={last.cpu_util} unit="%" accent="text-[#E5FF00]" testid="stat-cpu" />
         <Stat icon={Gauge} label="GPU" value={last.gpu_util} unit="%" accent="text-[#00E0FF]" testid="stat-gpu" />
+        <Stat icon={Zap} label={t("live.st_gpu_power")} value={last.gpu_power} unit="W" accent="text-[#E5FF00]" testid="stat-gpu-power" />
+      </MetricGroup>
+
+      <MetricGroup title={t("live.grp_temp")}>
         <Stat icon={Thermometer} label={t("live.st_cpu_temp")} value={last.cpu_temp} unit="°C" accent="text-[#FF6B00]" testid="stat-cpu-temp" />
         <Stat icon={Thermometer} label={t("live.st_gpu_temp")} value={last.gpu_temp} unit="°C" accent="text-[#FF3B30]" testid="stat-gpu-temp" />
+      </MetricGroup>
+
+      <MetricGroup title={t("live.grp_mem")}>
         <Stat icon={MemoryStick} label={t("live.st_ram")} value={last.ram_used_pct} unit="%" accent="text-[#00FF66]" testid="stat-ram" />
         <Stat icon={MemoryStick} label={t("live.st_vram")} value={last.vram_used_pct} unit="%" accent="text-[#B388FF]" testid="stat-vram" />
-        <Stat icon={Zap} label={t("live.st_gpu_power")} value={last.gpu_power} unit="W" accent="text-[#E5FF00]" testid="stat-gpu-power" />
         <Stat icon={Timer} label={t("live.st_latency")} value={last.latency_ms} unit="ms" accent="text-[#00E0FF]" testid="stat-latency" />
-      </div>
+      </MetricGroup>
 
       {summary && <SessionSummary summary={summary} onReset={resetSession} />}
 
