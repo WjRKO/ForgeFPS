@@ -1,4 +1,5 @@
 /* FrameForge service worker - web push */
+/* global clients */
 self.addEventListener("push", function (event) {
   let data = {};
   try { data = event.data.json(); } catch (e) { data = { title: "FrameForge", body: event.data ? event.data.text() : "" }; }

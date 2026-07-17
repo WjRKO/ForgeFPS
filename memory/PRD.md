@@ -448,3 +448,8 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 #### Report PDF (frontend, testato)
 - Report.jsx: aggiunto textarea "Note per il cliente" + pulsante "Esporta PDF" (jspdf). PDF A4: header FrameForge + titolo/data, immagine della card (html-to-image toPng), note del cliente, footer. Mantiene anche Esporta PNG. Dipendenza: jspdf (yarn).
 - Verificato: screenshot (pulsante EXPORT PDF, note compilate, toast "Report exported!", nessun errore console tranne warning font non bloccante).
+
+### 2026-07-17 (3) - Agent v0.5 .exe collegato (Release pubblica)
+- Utente ha pubblicato forgefps-agent.exe su GitHub Release WjRKO/ForgeFPS tag v0.4.3.5 (repo PUBBLICO, verificato via API con User-Agent; senza UA GitHub restituisce 404 fuorviante).
+- config/agent.js aggiornato: URL v0.4.3.5, SHA256=569dc9e365905c89eda20a41ed9eaf78e3d4432b5142a61dc4e2de333d31d510 (verificato: download 9.04MB + sha256sum COMBACIA), version v0.5.0, date 2026-07-17.
+- Connect PC + SecureInstaller (Landing/security) puntano al file reale. Screenshot Connect PC: badge v0.5.0 + SHA corretto + download attivo.
