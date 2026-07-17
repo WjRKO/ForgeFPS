@@ -1,102 +1,100 @@
 {
-  "project_context": {
-    "name": "ForgeFPS",
-    "type": "AI Performance Command Center",
-    "theme": "Dark Mode Only (Performance Pro / Cyber-Tactical)",
-    "aesthetic": "Monospace/tech 'command console' vibe, near-black, neon accents, sharp edges.",
-    "audience": "Gamers, Streamers, Power Users"
+  "project_context": "FrameForge - A dark, cyber/tech 'HUD' aesthetic for gamers & streamers.",
+  "mission": "Declutter all application pages (EXCEPT Landing Page), strictly maintain existing style/colors, make layouts less chaotic, and ensure lightweight/fast rendering.",
+  "design_strategy": {
+    "chaos_reduction": "Standardize layout rhythm. Stop mixing disparate card sizes. Use a strict grid. Reduce ambient glow and neon border overuse. Make 80% of the UI monochrome zinc/black and reserve Volt Yellow (#E5FF00) strictly for primary actions or active states.",
+    "performance": "Replace heavy JS-driven layout animations with lightweight CSS transitions. Use CSS 'content-visibility' for off-screen heavy components (like charts). Implement simple pulsing CSS skeletons instead of complex loading states.",
+    "consistency": "Use standard layout primitives across all 20+ app pages. Every page must feel like part of the same unified 'OS' terminal."
   },
   "typography": {
-    "headings": "Chakra Petch, Rajdhani, or Space Mono. (Technical, aggressive, sharp).",
-    "body": "Inter or DM Sans (highly readable at small sizes for data).",
-    "mono": "JetBrains Mono or Fira Code for all command console text, eyebrows, metrics, and terminal lines.",
-    "hierarchy": {
-      "h1": "text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight uppercase",
-      "h2": "text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight uppercase",
-      "eyebrow": "font-mono text-sm tracking-[0.2em] uppercase text-[#E5FF00]"
+    "fonts": {
+      "display": "Preserve existing display font (used for headings).",
+      "sans": "Preserve existing sans-serif font (used for body).",
+      "mono": "Preserve existing monospace font (used for metrics, code blocks, eyebrow labels, and numeric data to prevent jitter)."
+    },
+    "rules": {
+      "headings": "font-display uppercase tracking-tight text-zinc-100",
+      "eyebrows": "font-mono text-xs uppercase tracking-[0.2em] text-[#E5FF00] mb-2 block",
+      "metrics": "font-mono tabular-nums",
+      "body": "text-sm text-zinc-400"
     }
   },
   "colors": {
-    "background": {
-      "main": "#050505",
-      "panel": "#0F0F12",
-      "panel_hover": "#1A1A20"
-    },
-    "text": {
-      "primary": "#FFFFFF",
-      "secondary": "#A1A1AA",
-      "muted": "#71717A"
-    },
-    "accent": {
-      "volt": "#E5FF00",
-      "neon_green": "#00FF66",
-      "cyan": "#00E0FF",
-      "red": "#FF3B30"
+    "backgrounds": {
+      "base": "#09090B",
+      "surface_1": "#0F0F12",
+      "surface_2": "#0A0A0C",
+      "glass": "bg-[#09090B]/95 backdrop-blur-md"
     },
     "borders": {
-      "default": "#27272A",
+      "default": "#2A2A35",
       "focus": "#E5FF00",
-      "glow": "rgba(229, 255, 0, 0.2)"
+      "subtle": "#1A1A24"
+    },
+    "accents": {
+      "primary": "#E5FF00",
+      "success": "#00FF66",
+      "info": "#00E0FF",
+      "danger": "#FF3B30"
+    },
+    "declutter_rules": [
+      "No full-screen gradients.",
+      "Remove unnecessary glowing drop-shadows on standard cards.",
+      "Limit the number of active accent colors on screen. If a section is informational, rely on Zinc/White/Black. Save neon for alerts or primary CTAs."
+    ]
+  },
+  "grids_and_layouts": {
+    "page_container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full",
+    "vertical_rhythm": "space-y-8 or gap-8 between major sections. Use gap-4 or space-y-4 inside cards.",
+    "bento_density": "For dense data (Live, MyPc): Use grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4. Keep heights consistent using 'h-full flex flex-col'."
+  },
+  "component_primitives": {
+    "PageHeader": {
+      "description": "Standardized header for every app page.",
+      "structure": "<div className=\"mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4\">\n  <div>\n    <span className=\"font-mono text-[#E5FF00] text-xs uppercase tracking-widest\">// {eyebrow}</span>\n    <h1 className=\"text-3xl font-display text-white uppercase tracking-tight mt-1\">{title}</h1>\n    {subtitle && <p className=\"text-zinc-400 text-sm mt-2 max-w-2xl\">{subtitle}</p>}\n  </div>\n  {actions && <div className=\"flex items-center gap-3\">{actions}</div>}\n</div>"
+    },
+    "HUDCard": {
+      "description": "Standard container replacing random div styles. Strict sharp edges.",
+      "classes": "bg-[#0F0F12] border border-[#2A2A35] rounded-none p-5 relative overflow-hidden flex flex-col",
+      "optional_accent": "Add a absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-[#E5FF00]/50 to-transparent for active/featured cards."
+    },
+    "DataMetric": {
+      "description": "For Live telemetry and MyPc hardware stats. Group logically.",
+      "structure": "<div className=\"flex flex-col gap-1 p-4 bg-[#0A0A0C] border border-[#2A2A35]\">\n  <span className=\"text-xs text-zinc-500 font-mono uppercase\">{label}</span>\n  <div className=\"flex items-baseline gap-2\">\n    <span className=\"text-2xl font-mono text-zinc-100 tabular-nums\">{value}</span>\n    <span className=\"text-sm text-zinc-500 font-mono\">{unit}</span>\n  </div>\n</div>"
     }
   },
-  "visual_enhancers": {
-    "grids": "Use a subtle grid background: bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]",
-    "surfaces": "Sharp edges (rounded-none). Panels MUST have a 1px solid border (border-[#27272A]). Avoid glassmorphism blur unless for sticky headers. No soft drop shadows.",
-    "shadows": "Replace soft shadows with 'Inner Glow' highlights (shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]) or sharp 1px solid drop shadows.",
-    "decorations": "Use `//` prefix for eyebrows (e.g., `// SYSTEM STATUS`). Use brackets for badges `[ OK ]`."
+  "page_specific_guidance": {
+    "Live_and_MyPc": "High-density telemetry. Strip away decorative graphics that cause reflows. Use the `DataMetric` pattern inside a strict 4-column grid. Ensure all numbers use `tabular-nums` to prevent horizontal jitter during rapid updates.",
+    "Tracker": "Amazon-style product cards must be unified. Use the `HUDCard` primitive. Align product image, strict 2-line truncated title, and price. Remove nested borders to reduce visual noise.",
+    "Advisor_and_BuildGenerator": "Step-by-step layout. Use a single central column (max-w-4xl) for form inputs rather than wide stretching fields. Group sections with subtle `border-b border-[#2A2A35] pb-6`.",
+    "Auth_Account_Security": "Forms must use standard Shadcn/UI inputs styled with square corners (`rounded-none`), `#09090B` backgrounds, and `#2A2A35` borders. Focus state must strictly use `#E5FF00` ring.",
+    "DesktopAgent": "Clearly separate the instructions. Use a distinct `#0A0A0C` terminal block for the .ps1 script with a subtle copy button. Emphasize the token securely."
   },
-  "layouts": {
-    "general": "High-density, modular grid layouts resembling a command center or terminal. Padding should be generous within main containers (p-8 to p-12) but internal components can be dense.",
-    "bento": "Use bento grid protocol (High Density) for data dashboards and features. gap-4 or gap-6.",
-    "alignment": "Content inside should be left-aligned and structured. Never center-align paragraphs. Hero text left-aligned."
+  "performance_and_motion": {
+    "loading_states": "Do not use heavy Lottie/JS loaders. Use CSS skeletons: `<div className=\"animate-pulse bg-[#2A2A35] h-full w-full\" />`",
+    "transitions": "Limit to simple CSS transitions on interactive elements: `transition-colors duration-200` or `transition-opacity`. Avoid animating width/height or layout properties to prevent jank.",
+    "charts": "If using Recharts, disable heavy animation on mount for the 'Live' page to ensure immediate render."
   },
-  "motion": {
-    "hover": "Slight fast scale or border color shift to Volt Yellow. No bouncy springs.",
-    "scan_demo": "Simulate console logs using framer-motion stagger. Use a 'laser sweep' animation (a vertical line scanning down the panel) for the 'scanning' state.",
-    "transitions": "Fast, precise. transition-colors duration-150 ease-out."
+  "accessibility_and_ux": {
+    "contrast": "Ensure text meets APCA/WCAG standards. Do not use dark gray text on black backgrounds for critical info (minimum text-zinc-400).",
+    "focus": "All interactive elements must have a visible focus state: `focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#E5FF00] focus-visible:border-[#E5FF00]`",
+    "overlays": "CRITICAL: Do not use fully transparent backgrounds in headers, overlays, dropdowns, or modals. Always use `bg-[#09090B]/95 backdrop-blur-md`."
   },
-  "components": {
-    "buttons": {
-      "primary": "Sharp edges (rounded-none), flat background. bg-[#E5FF00] text-black font-semibold uppercase tracking-wide hover:bg-[#D4E800].",
-      "secondary": "bg-transparent border border-[#27272A] text-white uppercase hover:border-[#E5FF00] hover:text-[#E5FF00]."
-    },
-    "console_window": "A terminal-like panel with a header. Content is mono-spaced with glowing text highlights for metrics.",
-    "trust_badges": "Minimalist mono text with checkmarks. e.g., `[ ✓ ] SHA-256 VERIFIED`. text-sm font-mono text-[#00FF66].",
-    "cards": "border border-[#27272A] bg-[#0F0F12] p-6 hover:border-[#404040] transition-colors rounded-none"
+  "instructions_to_main_agent": {
+    "target_files": "This project uses .js files, NOT .tsx. Output pure React JS.",
+    "landing_page": "CRITICAL: Do NOT touch, modify, or rewrite the Landing Page. It is perfect as is.",
+    "theme": "Do NOT invent new colors, themes, or gradients. Stick strictly to the #09090B / #E5FF00 HUD aesthetic.",
+    "data_testid": "ALL interactive and key informational elements MUST include a `data-testid` attribute (kebab-case, role-based) to facilitate automated testing.",
+    "execution_mode": "Go file by file through the dashboard pages. Replace chaotic, nested divs with the streamlined `HUDCard` and `PageContainer` standard primitives. Remove redundant visual noise."
   },
-  "pages": {
-    "homepage": {
-      "hero": "Technical hero: 'Find FPS bottlenecks. Optimize latency. Improve gaming performance safely.' CTA: 'Run Free Scan'. Left aligned.",
-      "secure_installer": "Replace old terminal block with Secure Installer Card. Show download button, version, and Trust Badges (Signed by ForgeFPS, SHA256 verified, Secure installer, Transparent updates).",
-      "interactive_demo": "Terminal UI simulating a scan. User clicks 'Scan'. Shows RTX 4070 + Ryzen 7 5800X. Animates scanning state. Results: ⚠ Background processes, ⚠ NVIDIA latency settings, ⚠ OBS config. Improvement: +12-18 FPS, -8ms latency. CTA: 'Analyze my PC'."
-    },
-    "security": {
-      "layout": "Technical documentation style. Architecture diagram showing Windows Agent -> Encrypted API -> AI Analysis. Bento grid for Trust Badges (Local-first, No password collection, No telemetry selling, Signed binaries, Transparent changelog)."
-    },
-    "privacy_telemetry": {
-      "layout": "Two columns: 'COLLECTED' (Green checks) vs 'NEVER COLLECTED' (Red crosses). Section explaining 'LOCAL ONLY' mode. Tiering comparison (Free, Cloud AI, Pro)."
-    },
-    "changelog": {
-      "layout": "Timeline view. Version & Date on left. Added, Fixed, Changed with distinct color tags on right."
-    },
-    "pricing": {
-      "layout": "3 tiers (FREE, PRO €9.99/mo, CREATOR €19.99/mo). Highlight PRO with Volt border. Feature lists with monospace ticks."
-    }
-  },
-  "bilingual_guidelines": {
-    "instructions": "Implement a simple dictionary-based i18n for IT/EN. Ensure UI handles longer Italian strings without breaking grid layouts."
-  },
-  "instructions_to_main_agent": [
-    "DO NOT install Shadcn components if they use heavy rounded corners. If you do, override rounded-md/lg to rounded-none.",
-    "Focus on building the 6 specified pages/sections with Framer Motion for the Interactive Demo Scan.",
-    "Use Phosphor Icons or Lucide for precise, technical icons.",
-    "No remote installer scripts (no irm/iex). Implement the Secure Installer presentation card."
-  ],
-  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
-    "You MUST NOT apply universal transition. Eg: transition: all. Always add transitions for specific interactive elements.",
-    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file.",
-    "All interactive and key informational elements MUST include a data-testid attribute to facilitate robust automated testing.",
-    "NEVER use fully transparent backgrounds for headers or overlays that have content underneath.",
-    "Preserve the 'Command Console' vibe: uppercase monospace eyebrows, sharp edges, dark backgrounds with high-contrast neon accents."
-  ]
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": {
+    "1": "You tend to converge toward generic, 'on distribution' outputs. Avoid 'AI slop'. Make creative, distinctive frontends that surprise and delight, while adhering strictly to the FrameForge HUD theme.",
+    "2": "Create depth through layered design elements with z-index hierarchy, but keep borders and backgrounds flat/matte (cyberpunk style) rather than bubbly/soft.",
+    "3": "You MUST NOT apply universal transition (e.g., transition: all). Always add transitions for specific properties (colors, opacity).",
+    "4": "You MUST NOT center align the app container. Do not add `.App { text-align: center; }`.",
+    "5": "Always use sharp-edged modern button styles matching the theme, with interaction animations & color relevant to the app style.",
+    "6": "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons. Use standard icon libraries (e.g., Lucide).",
+    "7": "Use `sonner` for toasts. Sonner components are located in `/app/src/components/ui/sonner.js`.",
+    "8": "Prioritize using pre-existing components from src/components/ui when applicable."
+  }
 }
