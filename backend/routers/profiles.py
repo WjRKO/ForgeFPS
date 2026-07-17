@@ -33,15 +33,27 @@ TWEAK_CATALOG = [
     {"id": "gamebar_rec", "name": "Xbox Game Bar recording OFF", "cat": "system"},
     {"id": "debloat", "name": "Debloat app superflue (UWP)", "cat": "system"},
     {"id": "search_index", "name": "Windows Search indexing OFF", "cat": "system"},
+    {"id": "fse", "name": "Fullscreen Optimizations OFF", "cat": "gaming"},
+    {"id": "power_throttling", "name": "Power throttling CPU OFF", "cat": "gaming"},
+    {"id": "standby_clear", "name": "Svuota RAM standby (istantaneo)", "cat": "gaming"},
+    {"id": "nic_power", "name": "Scheda di rete a piena potenza", "cat": "network"},
+    {"id": "paging_exec", "name": "Kernel sempre in RAM (16GB+)", "cat": "system"},
+    {"id": "sysmain", "name": "SysMain/Superfetch OFF (solo SSD)", "cat": "system"},
+    {"id": "trim", "name": "Verifica TRIM SSD attivo", "cat": "system"},
+    {"id": "ntfs", "name": "NTFS: last-access timestamp OFF", "cat": "system"},
+    {"id": "edge_preload", "name": "Edge preload/background OFF", "cat": "system"},
 ]
 
 _FPS_COMP = ["power", "gaming", "priority", "mpo", "gpu_msi", "amd_ulps", "nvidia_tel", "hibernate",
-             "mouse", "timer", "usb", "stickykeys", "network", "qos", "bgapps", "gamebar_rec"]
-_AAA = ["power", "gaming", "priority", "mpo", "gpu_msi", "nvidia_tel", "hibernate", "visual", "clean", "bgapps", "search_index"]
-_MOBA = ["power", "gaming", "priority", "mouse", "timer", "network", "dns", "qos", "bgapps"]
+             "mouse", "timer", "usb", "stickykeys", "network", "qos", "bgapps", "gamebar_rec",
+             "fse", "power_throttling", "standby_clear", "nic_power", "paging_exec", "ntfs"]
+_AAA = ["power", "gaming", "priority", "mpo", "gpu_msi", "nvidia_tel", "hibernate", "visual", "clean", "bgapps", "search_index",
+        "fse", "power_throttling", "paging_exec", "sysmain", "trim"]
+_MOBA = ["power", "gaming", "priority", "mouse", "timer", "network", "dns", "qos", "bgapps", "fse", "nic_power"]
 _STREAM = ["power", "gaming", "priority", "mpo", "gpu_msi", "network", "dns", "qos",
-           "deliveryopt", "obs_priority", "telemetry", "bgapps", "gamebar_rec"]
-_BALANCED = ["power", "gaming", "priority", "mpo", "gpu_msi", "clean", "bgapps"]
+           "deliveryopt", "obs_priority", "telemetry", "bgapps", "gamebar_rec",
+           "fse", "nic_power", "edge_preload", "paging_exec"]
+_BALANCED = ["power", "gaming", "priority", "mpo", "gpu_msi", "clean", "bgapps", "fse"]
 
 TEMPLATES = [
     {"id": "tpl_comp", "game_name": "Competitive FPS", "template": True, "preset_label": "Esports",

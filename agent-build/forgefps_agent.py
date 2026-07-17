@@ -26,7 +26,7 @@ _args, _ = _parser.parse_known_args()
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.5.0"
+AGENT_VERSION = "0.6.0"
 BACKUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "boostpc_backup.json")
 
 if not AGENT_TOKEN or AGENT_TOKEN.startswith("__"):
@@ -463,19 +463,32 @@ def _cleanup():
 
 def apply_all_tweaks():
     bk = _load_backup()
-    print("\n[*] Applico ottimizzazioni profonde (con backup)...")
+    ct = ps("(Get-CimInstance Win32_SystemEnclosure).ChassisTypes -join ','")
+    is_laptop = any(x in (ct or "").split(",") for x in ["8", "9", "10", "14", "30", "31", "32"])
+    try:
+        ram_gb = int(ps("[math]::round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,0)") or 0)
+    except Exception:
+        ram_gb = 0
+    is_ssd = "SSD" in (ps("(Get-Partition -DriveLetter C -ErrorAction SilentlyContinue | Get-Disk | Get-PhysicalDisk).MediaType") or "")
+    print("\n[*] Profilo hardware: %s, RAM %d GB, disco %s -> tweak adattati." %
+          ("Laptop" if is_laptop else "Desktop", ram_gb, "SSD" if is_ssd else "HDD"))
+    print("[*] Applico ottimizzazioni profonde (con backup)...")
     _cleanup()
 
     cur = ps("(powercfg /getactivescheme)")
     m = re.search(r"([0-9a-fA-F-]{36})", cur or "")
     if m and "power_plan" not in bk:
         bk["power_plan"] = m.group(1)
-    ultimate = "e9a42b02-d5df-448d-aa00-03f14749eb61"
-    run(f"powercfg -duplicatescheme {ultimate}")
-    if "0x0" not in (run(f"powercfg -setactive {ultimate}") or "").lower():
-        pass
-    run("powercfg -setactive e9a42b02-d5df-448d-aa00-03f14749eb61")
-    print("    Piano energetico: prestazioni massime.")
+    if is_laptop:
+        run("powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c")
+        print("    Piano energetico: High Performance (adattivo: laptop, protetta batteria/temperature).")
+    else:
+        ultimate = "e9a42b02-d5df-448d-aa00-03f14749eb61"
+        run(f"powercfg -duplicatescheme {ultimate}")
+        if "0x0" not in (run(f"powercfg -setactive {ultimate}") or "").lower():
+            pass
+        run("powercfg -setactive e9a42b02-d5df-448d-aa00-03f14749eb61")
+        print("    Piano energetico: prestazioni massime.")
 
     set_reg(bk, r"HKCU:\Software\Microsoft\GameBar", "AllowAutoGameMode", "DWord", 1)
     set_reg(bk, r"HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode", "DWord", 2)
@@ -545,6 +558,37 @@ def apply_all_tweaks():
         if out.strip() == "ok":
             removed += 1
     print(f"    Debloat: rimosse {removed} app superflue (reinstallabili dallo Store).")
+
+    gcs = r"HKCU:\System\GameConfigStore"
+    set_reg(bk, gcs, "GameDVR_FSEBehaviorMode", "DWord", 2)
+    set_reg(bk, gcs, "GameDVR_HonorUserFSEBehaviorMode", "DWord", 1)
+    set_reg(bk, gcs, "GameDVR_DXGIHonorFSEWindowsCompatible", "DWord", 1)
+    print("    Fullscreen Optimizations disattivate (fullscreen esclusivo reale).")
+
+    set_reg(bk, r"HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched", "NonBestEffortLimit", "DWord", 0)
+    print("    Banda riservata QoS (20%) rimossa.")
+
+    if not is_laptop:
+        set_reg(bk, r"HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff", "DWord", 1)
+        print("    Power throttling CPU disattivato (adattivo: desktop).")
+
+    if ram_gb >= 16:
+        set_reg(bk, r"HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
+                "DisablePagingExecutive", "DWord", 1)
+        print(f"    Kernel tenuto in RAM (adattivo: {ram_gb} GB rilevati).")
+
+    if is_ssd:
+        st_sm = _clean(ps("(Get-Service SysMain -ErrorAction SilentlyContinue).StartType"))
+        if st_sm and "svc::SysMain" not in bk:
+            bk["svc::SysMain"] = st_sm
+            run("net stop SysMain")
+            run("sc config SysMain start= disabled")
+        run("fsutil behavior set DisableDeleteNotify 0")
+        print("    Adattivo SSD: SysMain/Superfetch off + TRIM verificato.")
+
+    set_reg(bk, r"HKLM:\SOFTWARE\Policies\Microsoft\Edge", "StartupBoostEnabled", "DWord", 0)
+    set_reg(bk, r"HKLM:\SOFTWARE\Policies\Microsoft\Edge", "BackgroundModeEnabled", "DWord", 0)
+    print("    Edge preload/background disattivato.")
 
     _save_backup(bk)
     print("\n    Ottimizzazioni applicate. Riavvio consigliato. Per annullare: opzione 8 (Ripristina).")

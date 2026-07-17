@@ -6,7 +6,7 @@ import pytest
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://stream-gear-monitor.preview.emergentagent.com").rstrip("/")
 ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASS = "admin123"
+ADMIN_PASS = "4zWK4o_xSw5prU-2b7w9dQ"
 
 
 @pytest.fixture(scope="module")
@@ -111,7 +111,7 @@ class TestAgentScriptMonitor:
         assert "function Get-Fps" in body
         assert "function Stop-Fps" in body
         # v1.10.0 URL
-        assert "PresentMon-1.10.0-x64.exe" in body
+        assert "PresentMon-2.4.1-x64.exe" in body
         # monitor branch with try/finally
         assert "$MODE -eq 'monitor'" in body
         assert "try {" in body

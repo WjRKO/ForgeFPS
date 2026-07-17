@@ -5,7 +5,7 @@ import hashlib
 import requests
 import pytest
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://stream-gear-monitor.preview.emergentagent.com').rstrip('/')
 ADMIN_EMAIL = "admin@boostpc.io"
 ADMIN_PASSWORD = "4zWK4o_xSw5prU-2b7w9dQ"
 

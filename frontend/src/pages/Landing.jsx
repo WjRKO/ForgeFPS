@@ -124,7 +124,7 @@ function HeroMockup() {
           animate={{ y: [0, 8, 0] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
           className="absolute -bottom-5 -left-5 bg-[#E5FF00] text-black px-4 py-2 hidden sm:block shadow-[0_8px_30px_rgba(229,255,0,0.25)]">
           <div className="text-[10px] font-mono uppercase tracking-widest">tweaks applied</div>
-          <div className="font-display font-black text-lg leading-none">26 / 26</div>
+          <div className="font-display font-black text-lg leading-none">35 / 35</div>
         </motion.div>
       </motion.div>
     </motion.div>
@@ -237,7 +237,7 @@ function TerminalMockup() {
         <div className="text-zinc-400 mt-2">[<span className="text-[#00FF66]">✓</span>] SHA256 verified · signed installer</div>
         <div className="text-zinc-400">[<span className="text-[#00FF66]">✓</span>] Hardware detected · RTX 3070</div>
         <div className="text-zinc-400">[<span className="text-[#00FF66]">✓</span>] Power plan · Ultimate</div>
-        <div className="text-zinc-400">[<span className="text-[#00FF66]">✓</span>] 26 tweaks applied · reversible</div>
+        <div className="text-zinc-400">[<span className="text-[#00FF66]">✓</span>] 35 adaptive tweaks applied · reversible</div>
         <div className="text-[#00FF66] mt-1">Done. <span className="cursor-blink">▊</span></div>
       </div>
     </div>

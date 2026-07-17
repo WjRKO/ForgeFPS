@@ -5,7 +5,7 @@ import pytest
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://stream-gear-monitor.preview.emergentagent.com').rstrip('/')
 ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASSWORD = "admin123"
+ADMIN_PASSWORD = "4zWK4o_xSw5prU-2b7w9dQ"
 
 
 @pytest.fixture(scope="module")
@@ -57,8 +57,9 @@ class TestOptimizeScript:
 
     def test_token_and_mode_substituted(self, agent_token):
         r = requests.get(f"{BASE_URL}/api/agent/script", params={"t": agent_token, "mode": "optimize"})
-        assert f"'{agent_token}'" in r.text
-        assert "$MODE    = 'optimize'" in r.text
+        # Token and mode are now passed via CLI params (-Token/-Mode), not embedded
+        assert "Param([string]$Token" in r.text
+        assert "$MODE    = $Mode" in r.text
 
 
 # --- Regression: other modes ---
@@ -68,7 +69,7 @@ class TestOtherModes:
         r = requests.get(f"{BASE_URL}/api/agent/script", params={"t": agent_token, "mode": mode})
         assert r.status_code == 200
         assert len(r.text) > 500
-        assert f"$MODE    = '{mode}'" in r.text
+        assert "$MODE    = $Mode" in r.text
         assert "__MODE__" not in r.text
 
     def test_invalid_token(self):
