@@ -11,7 +11,7 @@ from database import db, now_iso
 from helpers import specs_to_text, compute_health, get_or_create_agent_token, grade_bufferbloat
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
-from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput
+from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput
 from routers.profiles import resolve_tweak_ids
 
 # Default background processes closed by "Prima del match" (must stay in sync with frontend groups)
@@ -103,6 +103,65 @@ def build(get_current_user):
         doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "benchmark": 1})
         history = await db.benchmarks.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(10)
         return {"latest": (doc or {}).get("benchmark"), "history": history}
+
+    async def _gather_snapshot(uid: str) -> dict:
+        """Snapshot the current key performance metrics for a Before/After report."""
+        snap = {"captured_at": now_iso(), "health_score": None, "health_grade": None,
+                "bufferbloat_ms": None, "bufferbloat_grade": None,
+                "fps_avg": None, "bench_overall": None}
+        specs = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "health": 1, "benchmark": 1})
+        if specs:
+            if specs.get("health"):
+                h = compute_health(specs["health"])
+                snap["health_score"] = h.get("score")
+                snap["health_grade"] = h.get("grade")
+            bench = specs.get("benchmark") or {}
+            snap["bench_overall"] = bench.get("overall") or (bench.get("after") or {}).get("overall")
+        net = await db.net_results.find_one({"user_id": uid}, {"_id": 0, "result": 1})
+        if net and net.get("result"):
+            snap["bufferbloat_ms"] = net["result"].get("bufferbloat_ms")
+            snap["bufferbloat_grade"] = net["result"].get("grade")
+        tel = await db.pc_telemetry.find_one({"user_id": uid}, {"_id": 0, "samples": 1})
+        if tel and tel.get("samples"):
+            fps_vals = [s.get("fps") for s in tel["samples"] if isinstance(s.get("fps"), (int, float)) and s.get("fps") > 0]
+            if fps_vals:
+                snap["fps_avg"] = round(sum(fps_vals) / len(fps_vals))
+        return snap
+
+    def _report_deltas(before: dict, after: dict) -> dict:
+        d = {}
+        if before and after:
+            for k in ("health_score", "fps_avg", "bench_overall"):
+                if before.get(k) is not None and after.get(k) is not None:
+                    d[k] = after[k] - before[k]
+            if before.get("bufferbloat_ms") is not None and after.get("bufferbloat_ms") is not None:
+                d["bufferbloat_ms"] = after["bufferbloat_ms"] - before["bufferbloat_ms"]  # negative = better
+        return d
+
+    @r.post("/report/snapshot")
+    async def report_snapshot(payload: ReportPhaseInput, user: dict = Depends(get_current_user)):
+        uid = str(user["_id"])
+        snap = await _gather_snapshot(uid)
+        await db.boost_reports.update_one(
+            {"user_id": uid},
+            {"$set": {"user_id": uid, payload.phase: snap, "updated_at": now_iso()}},
+            upsert=True)
+        return {"ok": True, "phase": payload.phase, "snapshot": snap}
+
+    @r.get("/report")
+    async def get_report(user: dict = Depends(get_current_user)):
+        uid = str(user["_id"])
+        doc = await db.boost_reports.find_one({"user_id": uid}, {"_id": 0})
+        if not doc:
+            return {"before": None, "after": None, "deltas": {}, "updated_at": None}
+        before = doc.get("before"); after = doc.get("after")
+        return {"before": before, "after": after,
+                "deltas": _report_deltas(before, after), "updated_at": doc.get("updated_at")}
+
+    @r.delete("/report")
+    async def reset_report(user: dict = Depends(get_current_user)):
+        await db.boost_reports.delete_one({"user_id": str(user["_id"])})
+        return {"ok": True}
 
     @r.post("/agent/telemetry")
     async def agent_telemetry(payload: TelemetryInput, x_agent_token: str = Header(default="")):

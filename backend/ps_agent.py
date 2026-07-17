@@ -48,10 +48,34 @@ function Backup-Reg($path, $name, $type) {
   $cur = (Get-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue).$name
   if ($null -eq $cur) { $script:BK[$key] = '__ABSENT__' } else { $script:BK[$key] = "$type|$cur" }
 }
+# ---------------- SECURITY GUARDRAILS ----------------
+# FrameForge non tocca MAI Windows Defender / Firewall / servizi di sicurezza.
+$script:FORBIDDEN_SVC = @('WinDefend','WdNisSvc','WdFilter','WdBoot','Sense','SecurityHealthService',
+  'wscsvc','mpssvc','MpsSvc','SgrmBroker','SgrmAgent','webthreatdefsvc','webthreatdefusersvc')
+$script:FORBIDDEN_REG = @('Windows Defender','WinDefend','Microsoft\Security Center',
+  'SecurityHealthService','Microsoft\Windows Security Health','Microsoft\Windows Defender')
+
+function Test-ForbiddenReg($path) {
+  foreach ($p in $script:FORBIDDEN_REG) { if ($path -like "*$p*") { return $true } }
+  return $false
+}
+function Test-ForbiddenSvc($name) { return ($script:FORBIDDEN_SVC -contains $name) }
+
 function Set-Reg($path, $name, $type, $value) {
+  if (Test-ForbiddenReg $path) { Write-Host "[SICUREZZA] Modifica bloccata (area protetta): $path" -ForegroundColor Yellow; return }
   Backup-Reg $path $name $type
   if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
   New-ItemProperty -Path $path -Name $name -PropertyType $type -Value $value -Force | Out-Null
+}
+function Disable-ServiceSafe($name) {
+  if (Test-ForbiddenSvc $name) { Write-Host "[SICUREZZA] Servizio protetto, non modificato: $name" -ForegroundColor Yellow; return $false }
+  $svc = Get-Service $name -ErrorAction SilentlyContinue
+  if ($svc -and $svc.Status -eq 'Running' -and -not $script:BK.ContainsKey("svc::$name")) {
+    $script:BK["svc::$name"] = "$($svc.StartType)"
+    Stop-Service $name -Force 2>$null
+    Set-Service $name -StartupType Disabled 2>$null
+  }
+  return $true
 }
 function Save-Backup { $script:BK | ConvertTo-Json -Depth 6 | Set-Content $BACKUP }
 
@@ -736,8 +760,7 @@ function Do-ObsPriority {
   foreach ($exe in 'obs64.exe','obs32.exe') { $p = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\$exe\PerfOptions"; Set-Reg $p 'CpuPriorityClass' 'DWord' 3 }
 }
 function Do-Telemetry {
-  $svc = Get-Service DiagTrack -ErrorAction SilentlyContinue
-  if ($svc -and -not $script:BK.ContainsKey('svc::DiagTrack')) { $script:BK['svc::DiagTrack'] = "$($svc.StartType)"; Stop-Service DiagTrack -Force 2>$null; Set-Service DiagTrack -StartupType Disabled 2>$null }
+  Disable-ServiceSafe 'DiagTrack' | Out-Null
 }
 function Do-Ads {
   $cdm = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
@@ -754,8 +777,7 @@ function Do-GamebarRec {
   Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled' 'DWord' 0
 }
 function Do-SearchIndex {
-  $svc = Get-Service WSearch -ErrorAction SilentlyContinue
-  if ($svc -and -not $script:BK.ContainsKey('svc::WSearch')) { $script:BK['svc::WSearch'] = "$($svc.StartType)"; Stop-Service WSearch -Force 2>$null; Set-Service WSearch -StartupType Disabled 2>$null }
+  Disable-ServiceSafe 'WSearch' | Out-Null
 }
 $script:BLOAT = @('Microsoft.549981C3F5F10','Microsoft.BingNews','Microsoft.BingWeather','Microsoft.GetHelp',
   'Microsoft.Getstarted','Microsoft.WindowsFeedbackHub','Microsoft.MicrosoftSolitaireCollection',
@@ -766,60 +788,190 @@ function Do-Debloat { foreach ($pkg in $script:BLOAT) { $app = Get-AppxPackage -
 # ---------------- Tweak catalogue (cat / id / name / desc / state / apply) ----------------
 $script:TWEAKS = @(
   # GAMING & FPS
-  @{ cat='gaming'; id='power'; name='Piano energetico prestazioni massime'; desc='Ultimate Performance + core parking off, processore 100%, USB suspend/PCIe ASPM off.';
+  @{ cat='gaming'; id='power'; name='Piano energetico prestazioni massime';
+     problem='Windows usa un piano energetico bilanciato che rallenta CPU/GPU e parcheggia i core per risparmiare.';
+     reason='Con il core parking e il throttling la CPU non gira mai al 100% quando serve, causando cali di FPS e stutter.';
+     desc='Attiva Ultimate/High Performance, disattiva core parking, processore al 100%, USB suspend e PCIe ASPM off.';
+     impact='+3-8% FPS medi e 1% low piu stabili, meno micro-stutter. Consuma piu energia (irrilevante su desktop).';
+     risk='safe';
      state={ $p=(powercfg /getactivescheme); if($p -match 'high|ultimate|prestazioni elevate'){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Power } }
-  @{ cat='gaming'; id='gaming'; name='Boost gaming (Game Mode, HAGS, Game DVR off)'; desc='Game Mode + GPU Scheduling on, Game DVR off (piu FPS in game).';
+  @{ cat='gaming'; id='gaming'; name='Boost gaming (Game Mode, HAGS, Game DVR off)';
+     problem='Game DVR registra in background e la GPU scheduling hardware potrebbe essere disattivata.';
+     reason='Il Game DVR ruba CPU/GPU durante il gioco; HAGS riduce la latenza di pianificazione dei frame.';
+     desc='Attiva Game Mode + Hardware GPU Scheduling, disattiva Game DVR/registrazione in background.';
+     impact='+2-5% FPS e frametime piu costante, meno overhead durante il gioco.';
+     risk='safe';
      state={ if((Get-RegVal 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode') -eq 1){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Gaming } }
-  @{ cat='gaming'; id='priority'; name='Priorita GPU/CPU ai giochi (MMCSS)'; desc='Piu risorse ai giochi in primo piano + responsiveness al massimo.';
+  @{ cat='gaming'; id='priority'; name='Priorita GPU/CPU ai giochi (MMCSS)';
+     problem='Windows assegna le stesse risorse ai processi in background e al gioco in primo piano.';
+     reason='MMCSS/SystemResponsiveness a 0 da priorita reale ai task multimediali e ai giochi attivi.';
+     desc='Imposta SystemResponsiveness=0 e priorita GPU/CPU ai giochi in primo piano.';
+     impact='Frametime piu regolare, meno spike quando ci sono app in background.';
+     risk='safe';
      state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' 'SystemResponsiveness') -eq 0){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Priority } }
-  @{ cat='gaming'; id='mpo'; name='Disabilita MPO (Multi-Plane Overlay)'; desc='Risolve stutter/flickering e lo SCHERMO NERO in OBS Game Capture.';
+  @{ cat='gaming'; id='mpo'; name='Disabilita MPO (Multi-Plane Overlay)';
+     problem='Il Multi-Plane Overlay causa flickering, stutter e SCHERMO NERO in OBS Game Capture.';
+     reason='MPO ha bug noti con molti driver: interferisce con la cattura schermo e il DWM.';
+     desc='Imposta OverlayTestMode=5 per disattivare MPO nel Desktop Window Manager.';
+     impact='Elimina flickering/schermo nero in OBS, meno stutter sul desktop. Richiede riavvio.';
+     risk='safe';
      state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows\Dwm' 'OverlayTestMode') -eq 5){'Disabilitato'}else{'Attivo (da disabilitare)'} }; apply={ Do-Mpo } }
-  @{ cat='gaming'; id='gpu_msi'; name='GPU: MSI mode ON (latenza DPC)'; desc='Message Signaled Interrupts sulla GPU: riduce la latenza DPC (NVIDIA/AMD).';
+  @{ cat='gaming'; id='gpu_msi'; name='GPU: MSI mode ON (latenza DPC)';
+     problem='La GPU usa interrupt line-based, che aumentano la latenza DPC e causano micro-stutter.';
+     reason='I Message Signaled Interrupts (MSI) riducono la latenza di interrupt della GPU.';
+     desc='Attiva MSISupported=1 nel ramo Interrupt Management della GPU (NVIDIA/AMD).';
+     impact='Latenza DPC piu bassa, input piu reattivo. Richiede riavvio.';
+     risk='safe';
      state={ $pnp=Get-GpuPnp; if($pnp){ $v=Get-RegVal "HKLM:\SYSTEM\CurrentControlSet\Enum\$pnp\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties" 'MSISupported'; if($v -eq 1){'Attivo'}else{'Da attivare'} }else{'n/d'} }; apply={ Do-GpuMsi } }
-  @{ cat='gaming'; id='amd_ulps'; name='AMD: disabilita ULPS'; desc='Ultra Low Power State off sulle Radeon: meno stutter/latenza (solo GPU AMD).';
+  @{ cat='gaming'; id='amd_ulps'; name='AMD: disabilita ULPS';
+     problem='Le Radeon abbassano troppo il clock in idle (Ultra Low Power State), causando stutter.';
+     reason='ULPS mette la GPU in stato a bassissimo consumo, con risvegli lenti che generano scatti.';
+     desc='Disattiva ULPS nelle chiavi di registro AMD (solo GPU AMD).';
+     impact='Meno stutter e latenza su schede AMD, clock piu stabile.';
+     risk='safe';
      state={ if((Get-GpuVendor) -eq 'AMD'){'GPU AMD: applicabile'}else{'Solo GPU AMD'} }; apply={ Do-AmdUlps } }
-  @{ cat='gaming'; id='nvidia_tel'; name='NVIDIA: disabilita telemetria'; desc='Disattiva task/servizio di telemetria NVIDIA: meno background (solo GPU NVIDIA).';
+  @{ cat='gaming'; id='nvidia_tel'; name='NVIDIA: disabilita telemetria';
+     problem='I driver NVIDIA installano task/servizi di telemetria che girano in background.';
+     reason='La telemetria consuma CPU e rete senza alcun beneficio per il gaming.';
+     desc='Disattiva i task pianificati e il servizio di telemetria NVIDIA (solo GPU NVIDIA).';
+     impact='Meno processi in background, CPU leggermente piu libera.';
+     risk='safe';
      state={ if((Get-GpuVendor) -eq 'NVIDIA'){'GPU NVIDIA: applicabile'}else{'Solo GPU NVIDIA'} }; apply={ Do-NvidiaTel } }
-  @{ cat='gaming'; id='hibernate'; name='Disabilita ibernazione'; desc='Rimuove hiberfil.sys: libera diversi GB su disco.';
+  @{ cat='gaming'; id='hibernate'; name='Disabilita ibernazione';
+     problem='Il file hiberfil.sys occupa diversi GB di disco anche se non usi mai la sospensione.';
+     reason='Su desktop l ibernazione e raramente usata; il file pesa quanto la RAM installata.';
+     desc='Esegue powercfg -h off per rimuovere hiberfil.sys (reversibile con -h on).';
+     impact='Libera 4-32 GB su disco. Perdi la sospensione ibrida/avvio rapido.';
+     risk='caution';
      state={ 'Applica per liberare spazio' }; apply={ Do-Hibernate } }
   # LATENZA & INPUT
-  @{ cat='input'; id='mouse'; name='Accelerazione mouse OFF (raw input)'; desc='Mira piu precisa e costante: disattiva la enhance pointer precision.';
+  @{ cat='input'; id='mouse'; name='Accelerazione mouse OFF (raw input)';
+     problem='L Enhance Pointer Precision di Windows accelera il mouse in modo imprevedibile.';
+     reason='L accelerazione rende la mira incoerente: lo stesso movimento fisico da spostamenti diversi.';
+     desc='Disattiva MouseSpeed/Threshold per un input 1:1 (raw).';
+     impact='Mira piu precisa e costante negli sparatutto. Nessun rischio.';
+     risk='safe';
      state={ if("$(Get-RegVal 'HKCU:\Control Panel\Mouse' 'MouseSpeed')" -eq '0'){'Gia disattivata'}else{'Attiva (da disattivare)'} }; apply={ Do-Mouse } }
-  @{ cat='input'; id='timer'; name='Timer resolution globale'; desc='Richieste timer resolution globali (Win11): scheduling piu costante nei giochi.';
+  @{ cat='input'; id='timer'; name='Timer resolution globale';
+     problem='Su Windows 11 la timer resolution puo essere variabile, con scheduling meno preciso.';
+     reason='Una timer resolution alta e costante rende piu regolari i frametime e la latenza.';
+     desc='Attiva GlobalTimerResolutionRequests=1 (richiesta timer globale).';
+     impact='Frametime piu costante, meno stutter. Richiede riavvio.';
+     risk='safe';
      state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel' 'GlobalTimerResolutionRequests') -eq 1){'Attivo'}else{'Da attivare'} }; apply={ Do-Timer } }
-  @{ cat='input'; id='usb'; name='USB power management OFF'; desc='Evita cali di polling di mouse/tastiera (input drop).';
+  @{ cat='input'; id='usb'; name='USB power management OFF';
+     problem='Windows sospende le porte USB per risparmiare energia, causando cali di polling.';
+     reason='Se il mouse/tastiera vanno in standby, si hanno input drop e micro-freeze.';
+     desc='Disattiva il risparmio energetico sui controller USB.';
+     impact='Input di mouse/tastiera piu stabile, niente drop. Nessun rischio.';
+     risk='safe';
      state={ 'Applica per input stabile' }; apply={ Do-Usb } }
-  @{ cat='input'; id='stickykeys'; name='Sticky/Filter/Toggle Keys OFF'; desc='Niente popup che ti buttano fuori dal gioco premendo Shift ripetuto.';
+  @{ cat='input'; id='stickykeys'; name='Sticky/Filter/Toggle Keys OFF';
+     problem='Premendo Shift ripetutamente compare il popup delle Sticky Keys che ti butta fuori dal gioco.';
+     reason='Le funzioni di accessibilita tastiera si attivano per errore durante il gioco.';
+     desc='Disattiva Sticky/Filter/Toggle Keys.';
+     impact='Niente piu popup che rubano il focus in game. Nessun rischio.';
+     risk='safe';
      state={ if("$(Get-RegVal 'HKCU:\Control Panel\Accessibility\StickyKeys' 'Flags')" -eq '506'){'Disattivati'}else{'Attivi (da disattivare)'} }; apply={ Do-StickyKeys } }
-  @{ cat='input'; id='startupdelay'; name='Startup delay app ridotto'; desc='Le app all avvio partono subito, niente ritardo artificiale.';
+  @{ cat='input'; id='startupdelay'; name='Startup delay app ridotto';
+     problem='Windows ritarda artificialmente l avvio delle app in autostart.';
+     reason='Il delay serve a non sovraccaricare l avvio, ma rallenta l accesso al desktop utile.';
+     desc='Imposta StartupDelayInMSec=0 per avviare subito le app.';
+     impact='Desktop e app pronti prima dopo l accensione. Nessun rischio.';
+     risk='safe';
      state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize' 'StartupDelayInMSec') -eq 0){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-StartupDelay } }
   # RETE & STREAMING
-  @{ cat='network'; id='network'; name='Rete: Nagle OFF + TCP tuning'; desc='Riduce la latenza online (Nagle off, autotuning/ECN/RSS).';
+  @{ cat='network'; id='network'; name='Rete: Nagle OFF + TCP tuning';
+     problem='L algoritmo di Nagle accumula piccoli pacchetti, aggiungendo latenza nei giochi online.';
+     reason='I giochi inviano tanti pacchetti piccoli: Nagle li ritarda, aumentando il ping percepito.';
+     desc='Disattiva Nagle sulla scheda attiva e regola autotuning/ECN/RSS.';
+     impact='Ping piu basso e stabile online. Reversibile con Ripristina.';
+     risk='safe';
      state={ 'Applica per meno lag online' }; apply={ Do-Network } }
-  @{ cat='network'; id='dns'; name='DNS veloci (Cloudflare 1.1.1.1)'; desc='DNS 1.1.1.1/1.0.0.1 sulla scheda attiva (reversibile a DHCP).';
+  @{ cat='network'; id='dns'; name='DNS veloci (Cloudflare 1.1.1.1)';
+     problem='I DNS del provider sono spesso lenti e possono rallentare la risoluzione dei domini.';
+     reason='DNS piu veloci riducono i tempi di connessione a server di gioco e matchmaking.';
+     desc='Imposta 1.1.1.1 / 1.0.0.1 sulla scheda attiva (reversibile a DHCP).';
+     impact='Connessioni piu rapide. Reversibile in un click.';
+     risk='safe';
      state={ $a=Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1; if($a){ $d=(Get-DnsClientServerAddress -InterfaceAlias $a.Name -AddressFamily IPv4).ServerAddresses -join ','; if($d -match '1.1.1.1'){'Gia Cloudflare'}else{"Attuale: $d"} }else{'n/d'} }; apply={ Do-Dns } }
-  @{ cat='network'; id='qos'; name='Rimuovi 20% banda riservata QoS'; desc='NonBestEffortLimit=0: recupera la banda riservata da Windows.';
+  @{ cat='network'; id='qos'; name='Rimuovi 20% banda riservata QoS';
+     problem='Windows riserva fino al 20% della banda per il QoS di sistema.';
+     reason='Recuperando quella banda hai piu throughput reale per download e streaming.';
+     desc='Imposta NonBestEffortLimit=0.';
+     impact='Piu banda disponibile per gioco/stream. Nessun rischio.';
+     risk='safe';
      state={ if((Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit') -eq 0){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Qos } }
-  @{ cat='network'; id='deliveryopt'; name='Delivery Optimization P2P OFF'; desc='Windows non usa piu la tua banda in upload per distribuire aggiornamenti: stream piu stabile.';
+  @{ cat='network'; id='deliveryopt'; name='Delivery Optimization P2P OFF';
+     problem='Windows usa la tua banda in upload per distribuire aggiornamenti ad altri PC (P2P).';
+     reason='Durante lo streaming quell upload occupa banda e destabilizza il bitrate.';
+     desc='Imposta DODownloadMode=0 (nessun P2P).';
+     impact='Upload piu libero, stream piu stabile. Nessun rischio.';
+     risk='safe';
      state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode') -eq 0){'Disattivato'}else{'Attivo (da disattivare)'} }; apply={ Do-DeliveryOpt } }
-  @{ cat='network'; id='obs_priority'; name='OBS ad alta priorita'; desc='obs64/obs32.exe partono con priorita CPU alta: encoding piu fluido durante lo stream.';
+  @{ cat='network'; id='obs_priority'; name='OBS ad alta priorita';
+     problem='OBS gira a priorita normale e puo perdere frame in encoding sotto carico.';
+     reason='Alzando la priorita CPU di OBS l encoding resta fluido anche con la CPU occupata dal gioco.';
+     desc='Imposta CpuPriorityClass alta per obs64/obs32.exe (via Image File Execution Options).';
+     impact='Meno frame persi in registrazione/stream. Nessun rischio.';
+     risk='safe';
      state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\obs64.exe\PerfOptions' 'CpuPriorityClass') -eq 3){'Attivo'}else{'Da attivare'} }; apply={ Do-ObsPriority } }
   # SISTEMA & DEBLOAT
-  @{ cat='system'; id='clean'; name='Pulizia temp + cache Windows Update'; desc='Rimuove file temporanei, cache aggiornamenti e svuota il DNS.';
+  @{ cat='system'; id='clean'; name='Pulizia temp + cache Windows Update';
+     problem='File temporanei e cache degli aggiornamenti si accumulano e occupano spazio.';
+     reason='Ripulire libera disco e puo velocizzare alcune operazioni di sistema.';
+     desc='Rimuove temp utente/sistema, cache Windows Update e svuota il DNS.';
+     impact='Libera spazio su disco. Nessun file personale toccato.';
+     risk='safe';
      state={ $mb=0; Get-ChildItem $env:TEMP -Recurse -File -Force 2>$null | ForEach-Object { $mb+=$_.Length }; "$([math]::Round($mb/1MB)) MB da pulire" }; apply={ Do-Cleanup } }
-  @{ cat='system'; id='visual'; name='Effetti visivi: modalita prestazioni'; desc='Riduce animazioni/trasparenze per una UI piu reattiva.';
+  @{ cat='system'; id='visual'; name='Effetti visivi: modalita prestazioni';
+     problem='Animazioni e trasparenze consumano GPU/CPU e rendono la UI meno reattiva.';
+     reason='In modalita prestazioni Windows disattiva gli effetti superflui.';
+     desc='Imposta VisualFXSetting=2 (prestazioni).';
+     impact='UI piu snella e reattiva. Estetica leggermente piu spartana.';
+     risk='safe';
      state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' 'VisualFXSetting') -eq 2){'Prestazioni'}else{'Da ottimizzare'} }; apply={ Do-Visual } }
-  @{ cat='system'; id='telemetry'; name='Telemetria (DiagTrack) OFF'; desc='Disattiva il servizio di telemetria: meno CPU e rete in background.';
+  @{ cat='system'; id='telemetry'; name='Telemetria (DiagTrack) OFF';
+     problem='Il servizio DiagTrack invia dati di diagnostica e gira sempre in background.';
+     reason='Disattivarlo riduce l uso di CPU e rete senza impatti sulle funzioni essenziali.';
+     desc='Ferma e disabilita il servizio DiagTrack (Connected User Experiences).';
+     impact='Meno CPU/rete in background. NON tocca Defender ne la sicurezza.';
+     risk='caution';
      state={ $s=Get-Service DiagTrack -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){'Attiva (da disattivare)'}else{'Disattivata'} }; apply={ Do-Telemetry } }
-  @{ cat='system'; id='ads'; name='Suggerimenti/ads di Windows OFF'; desc='Disattiva app suggerite e contenuti promozionali nel menu Start.';
+  @{ cat='system'; id='ads'; name='Suggerimenti/ads di Windows OFF';
+     problem='Windows mostra app suggerite e contenuti promozionali nel menu Start e altrove.';
+     reason='Sono distrazioni e consumano risorse per scaricare i contenuti suggeriti.';
+     desc='Disattiva SilentInstalledApps, suggerimenti e Consumer Features.';
+     impact='Start piu pulito, niente app installate a sorpresa. Nessun rischio.';
+     risk='safe';
      state={ 'Applica per rimuovere ads' }; apply={ Do-Ads } }
-  @{ cat='system'; id='bgapps'; name='App in background OFF (globale)'; desc='Blocca le app UWP in background: meno consumo di CPU/RAM.';
+  @{ cat='system'; id='bgapps'; name='App in background OFF (globale)';
+     problem='Le app UWP restano attive in background consumando CPU/RAM e rete.';
+     reason='Bloccarle libera risorse per il gioco senza disinstallare nulla.';
+     desc='Imposta GlobalUserDisabled=1 e LetAppsRunInBackground.';
+     impact='Meno consumo di CPU/RAM in background. Alcune notifiche UWP potrebbero ritardare.';
+     risk='safe';
      state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' 'GlobalUserDisabled') -eq 1){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-BgApps } }
-  @{ cat='system'; id='gamebar_rec'; name='Xbox Game Bar recording OFF'; desc='Disattiva la registrazione in background della Game Bar.';
+  @{ cat='system'; id='gamebar_rec'; name='Xbox Game Bar recording OFF';
+     problem='La Game Bar registra in background per la funzione clip, usando risorse.';
+     reason='Se non usi le clip Xbox, la registrazione continua e uno spreco di CPU/GPU.';
+     desc='Disattiva GameDVR_Enabled e AppCaptureEnabled.';
+     impact='Meno overhead in game. Perdi la registrazione automatica Xbox.';
+     risk='safe';
      state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled') -eq 0){'Disattivato'}else{'Attivo (da disattivare)'} }; apply={ Do-GamebarRec } }
-  @{ cat='system'; id='debloat'; name='Debloat app superflue (UWP)'; desc='Rimuove Xbox/Bing/Solitaire/Candy Crush ecc. (reinstallabili dallo Store).';
+  @{ cat='system'; id='debloat'; name='Debloat app superflue (UWP)';
+     problem='Windows preinstalla app come Candy Crush, Solitaire, Bing, 3D Builder che non usi.';
+     reason='Occupano spazio e alcune girano in background inutilmente.';
+     desc='Rimuove una lista curata di app UWP (reinstallabili dallo Store).';
+     impact='Sistema piu pulito. Puoi reinstallarle in qualsiasi momento dallo Store.';
+     risk='caution';
      state={ $n=0; foreach($p in $script:BLOAT){ if(Get-AppxPackage -Name $p -ErrorAction SilentlyContinue){$n++} }; "$n app rimovibili" }; apply={ Do-Debloat } }
-  @{ cat='system'; id='search_index'; name='Windows Search indexing OFF (invasivo)'; desc='Meno carico disco/CPU, ma disattiva l indicizzazione della ricerca file.';
+  @{ cat='system'; id='search_index'; name='Windows Search indexing OFF (invasivo)';
+     problem='Il servizio di indicizzazione della ricerca puo generare carico su disco/CPU.';
+     reason='Su alcuni PC l indicizzazione rallenta il sistema, ma serve alla ricerca file veloce.';
+     desc='Ferma e disabilita il servizio WSearch.';
+     impact='Meno carico su disco/CPU, MA la ricerca file diventa piu lenta. Reversibile.';
+     risk='caution';
      state={ $s=Get-Service WSearch -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){'Attivo'}else{'Disattivato'} }; apply={ Do-SearchIndex } }
 )
 
@@ -866,38 +1018,72 @@ function Show-Gui {
   try { Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing } catch { return $false }
   [System.Windows.Forms.Application]::EnableVisualStyles()
   $isAdmin = Test-Admin
-  $bg   = [System.Drawing.Color]::FromArgb(15,15,18)
-  $bg2  = [System.Drawing.Color]::FromArgb(10,10,12)
-  $acc  = [System.Drawing.Color]::FromArgb(229,255,0)
-  $gray = [System.Drawing.Color]::FromArgb(150,150,160)
+
+  $bg     = [System.Drawing.Color]::FromArgb(9,9,11)
+  $bg2    = [System.Drawing.Color]::FromArgb(13,13,16)
+  $cardBg = [System.Drawing.Color]::FromArgb(18,18,22)
+  $acc    = [System.Drawing.Color]::FromArgb(229,255,0)
+  $green  = [System.Drawing.Color]::FromArgb(0,255,102)
+  $red    = [System.Drawing.Color]::FromArgb(255,59,48)
+  $orange = [System.Drawing.Color]::FromArgb(255,170,0)
+  $blue   = [System.Drawing.Color]::FromArgb(0,224,255)
+  $gray   = [System.Drawing.Color]::FromArgb(150,150,160)
+  $light  = [System.Drawing.Color]::FromArgb(220,220,225)
+  $white  = [System.Drawing.Color]::White
+
+  $script:TWMAP = @{}
+  foreach ($t in $script:TWEAKS) { $script:TWMAP[$t.id] = $t }
+  $script:CHECKS = @{}
+  $script:STATUS = @{}
 
   $form = New-Object System.Windows.Forms.Form
-  $form.Text = 'FrameForge - Ottimizzazioni'
-  $form.Size = New-Object System.Drawing.Size(700, 860)
+  $form.Text = 'FrameForge - Ottimizzazioni sicure'
+  $form.Size = New-Object System.Drawing.Size(800, 940)
   $form.StartPosition = 'CenterScreen'
-  $form.BackColor = $bg; $form.ForeColor = [System.Drawing.Color]::White
+  $form.BackColor = $bg; $form.ForeColor = $white
   $form.Font = New-Object System.Drawing.Font('Segoe UI', 9)
 
-  $title = New-Object System.Windows.Forms.Label
-  $title.Text = 'FrameForge  -  Ottimizzazioni per streamer & gamer'
-  $title.ForeColor = $acc; $title.Font = New-Object System.Drawing.Font('Segoe UI', 13, [System.Drawing.FontStyle]::Bold)
-  $title.Location = New-Object System.Drawing.Point(16, 12); $title.AutoSize = $true
-  $form.Controls.Add($title)
+  # ---- Header ----
+  $head = New-Object System.Windows.Forms.Panel
+  $head.Location = New-Object System.Drawing.Point(0, 0); $head.Size = New-Object System.Drawing.Size(800, 128); $head.BackColor = $bg2
+  $form.Controls.Add($head)
+
+  $bolt = New-Object System.Windows.Forms.Label
+  $bolt.Text = 'FRAMEFORGE'; $bolt.ForeColor = $acc
+  $bolt.Font = New-Object System.Drawing.Font('Segoe UI', 16, [System.Drawing.FontStyle]::Bold)
+  $bolt.Location = New-Object System.Drawing.Point(18, 12); $bolt.AutoSize = $true
+  $head.Controls.Add($bolt)
+
+  $sub = New-Object System.Windows.Forms.Label
+  $sub.Text = 'Ottimizzazioni trasparenti per streamer & gamer'; $sub.ForeColor = $gray
+  $sub.Location = New-Object System.Drawing.Point(20, 46); $sub.AutoSize = $true
+  $head.Controls.Add($sub)
+
+  $sec = New-Object System.Windows.Forms.Label
+  $sec.Text = "SICUREZZA GARANTITA  -  Non tocchiamo MAI Windows Defender, Firewall o servizi di sicurezza. Ogni modifica ha un backup automatico ed e reversibile."
+  $sec.ForeColor = $green; $sec.Location = New-Object System.Drawing.Point(20, 70)
+  $sec.MaximumSize = New-Object System.Drawing.Size(760, 0); $sec.AutoSize = $true
+  $head.Controls.Add($sec)
 
   $adminLbl = New-Object System.Windows.Forms.Label
-  $adminLbl.Location = New-Object System.Drawing.Point(18, 44); $adminLbl.AutoSize = $true
-  if ($isAdmin) { $adminLbl.Text = 'Amministratore: SI - tutte le ottimizzazioni disponibili.'; $adminLbl.ForeColor = [System.Drawing.Color]::FromArgb(0,255,102) }
-  else { $adminLbl.Text = 'Amministratore: NO - alcune opzioni non verranno applicate. Usa il pulsante in basso.'; $adminLbl.ForeColor = [System.Drawing.Color]::FromArgb(255,59,48) }
-  $form.Controls.Add($adminLbl)
+  $adminLbl.Location = New-Object System.Drawing.Point(20, 102); $adminLbl.AutoSize = $true
+  if ($isAdmin) { $adminLbl.Text = 'Amministratore: SI - tutte le ottimizzazioni disponibili.'; $adminLbl.ForeColor = $green }
+  else { $adminLbl.Text = 'Amministratore: NO - alcune opzioni non verranno applicate. Usa "Riavvia come Amministratore" in basso.'; $adminLbl.ForeColor = $red }
+  $head.Controls.Add($adminLbl)
 
-  # Preset buttons
+  $bkLbl = New-Object System.Windows.Forms.Label
+  $bkLbl.ForeColor = $blue; $bkLbl.Location = New-Object System.Drawing.Point(470, 102); $bkLbl.AutoSize = $true
+  $head.Controls.Add($bkLbl); $script:BKLBL = $bkLbl
+
+  # ---- Preset row ----
   $presetLbl = New-Object System.Windows.Forms.Label
-  $presetLbl.Text = 'Preset:'; $presetLbl.Location = New-Object System.Drawing.Point(18, 70); $presetLbl.AutoSize = $true; $presetLbl.ForeColor = $gray
+  $presetLbl.Text = 'Preset rapidi:'; $presetLbl.Location = New-Object System.Drawing.Point(18, 138); $presetLbl.AutoSize = $true; $presetLbl.ForeColor = $gray
   $form.Controls.Add($presetLbl)
   function New-Preset($text, $x, $key) {
     $b = New-Object System.Windows.Forms.Button
-    $b.Text = $text; $b.Location = New-Object System.Drawing.Point($x, 66); $b.Size = New-Object System.Drawing.Size(150, 30)
-    $b.FlatStyle = 'Flat'; $b.ForeColor = [System.Drawing.Color]::White; $b.BackColor = [System.Drawing.Color]::FromArgb(30,30,38)
+    $b.Text = $text; $b.Location = New-Object System.Drawing.Point($x, 158); $b.Size = New-Object System.Drawing.Size(170, 32)
+    $b.FlatStyle = 'Flat'; $b.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(42,42,53)
+    $b.ForeColor = $white; $b.BackColor = [System.Drawing.Color]::FromArgb(28,28,36)
     $b.Tag = $key
     $b.Add_Click({
       $k = $this.Tag
@@ -908,58 +1094,129 @@ function Show-Gui {
     })
     $form.Controls.Add($b)
   }
-  New-Preset '🏆 Competitivo' 70 'competitivo'
-  New-Preset '🎥 Streaming' 226 'streaming'
-  New-Preset '🧰 Completo' 382 'completo'
+  New-Preset 'Competitivo' 120 'competitivo'
+  New-Preset 'Streaming' 300 'streaming'
+  New-Preset 'Completo' 480 'completo'
 
-  # Tabs by category
-  $tc = New-Object System.Windows.Forms.TabControl
-  $tc.Location = New-Object System.Drawing.Point(14, 104); $tc.Size = New-Object System.Drawing.Size(660, 400)
-  $cats = @(
-    @{ key='gaming';  title='🎮 Gaming & FPS' },
-    @{ key='input';   title='⚡ Latenza & Input' },
-    @{ key='network'; title='🌐 Rete & Streaming' },
-    @{ key='system';  title='🧹 Sistema & Debloat' }
-  )
-  $script:CHECKS = @{}
-  foreach ($c in $cats) {
-    $tp = New-Object System.Windows.Forms.TabPage; $tp.Text = $c.title; $tp.BackColor = $bg2
-    $panel = New-Object System.Windows.Forms.Panel; $panel.Dock = 'Fill'; $panel.AutoScroll = $true; $panel.BackColor = $bg2
-    $y = 8
-    foreach ($t in $script:TWEAKS) {
-      if ($t.cat -ne $c.key) { continue }
-      $cb = New-Object System.Windows.Forms.CheckBox
-      if ($script:PROFILE.Count -gt 0) { $cb.Checked = ($script:PROFILE -contains $t.id) }
-      else { $cb.Checked = ($t.id -ne 'search_index') }
-      $cb.ForeColor = [System.Drawing.Color]::White
-      $cb.Font = New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
-      $cb.Location = New-Object System.Drawing.Point(10, $y); $cb.AutoSize = $true
-      $cb.Text = ("{0}    [{1}]" -f $t.name, (& $t.state))
-      $panel.Controls.Add($cb); $script:CHECKS[$t.id] = $cb; $y += 22
-      $d = New-Object System.Windows.Forms.Label; $d.Text = $t.desc; $d.ForeColor = $gray
-      $d.Location = New-Object System.Drawing.Point(30, $y); $d.MaximumSize = New-Object System.Drawing.Size(600, 0); $d.AutoSize = $true
-      $panel.Controls.Add($d); $y += 34
-    }
-    $tp.Controls.Add($panel); $tc.TabPages.Add($tp)
-  }
-  $form.Controls.Add($tc)
-
-  $benchCb = New-Object System.Windows.Forms.CheckBox
-  $benchCb.Text = 'Esegui benchmark PRIMA/DOPO per misurare il guadagno reale'
-  $benchCb.Checked = $true; $benchCb.ForeColor = [System.Drawing.Color]::FromArgb(0,224,255)
-  $benchCb.Location = New-Object System.Drawing.Point(18, 512); $benchCb.AutoSize = $true
-  $form.Controls.Add($benchCb); $script:BENCHCB = $benchCb
-
+  # ---- log (defined early so GuiLog works in handlers) ----
   $out = New-Object System.Windows.Forms.TextBox
   $out.Multiline = $true; $out.ReadOnly = $true; $out.ScrollBars = 'Vertical'
-  $out.Location = New-Object System.Drawing.Point(14, 540); $out.Size = New-Object System.Drawing.Size(660, 200)
-  $out.BackColor = [System.Drawing.Color]::Black; $out.ForeColor = [System.Drawing.Color]::FromArgb(0,255,102)
-  $out.Font = New-Object System.Drawing.Font('Consolas', 9)
+  $out.Location = New-Object System.Drawing.Point(16, 636); $out.Size = New-Object System.Drawing.Size(760, 150)
+  $out.BackColor = [System.Drawing.Color]::Black; $out.ForeColor = $green
+  $out.Font = New-Object System.Drawing.Font('Consolas', 9); $out.BorderStyle = 'FixedSingle'
   $form.Controls.Add($out); $script:OUT = $out
   function GuiLog($m) { $script:OUT.AppendText("$m`r`n"); [System.Windows.Forms.Application]::DoEvents() }
 
+  function Set-Stat($id) {
+    $t = $script:TWMAP[$id]; if (-not $t) { return }
+    $s = & $t.state
+    $lbl = $script:STATUS[$id]; if (-not $lbl) { return }
+    $lbl.Text = "Stato attuale: $s"
+    if ($s -like '*(da *') { $lbl.ForeColor = $script:C_ACC }
+    elseif ($s -match 'Attivo|Disabilit|Disattivat|Gia|Prestazioni') { $lbl.ForeColor = $script:C_GREEN }
+    else { $lbl.ForeColor = $script:C_ACC }
+  }
+  function Refresh-Status {
+    foreach ($id in @($script:STATUS.Keys)) { Set-Stat $id }
+    if ($script:BKLBL) { $script:BKLBL.Text = ("Backup: {0} modifiche reversibili" -f $script:BK.Count) }
+  }
+  $script:C_ACC = $acc; $script:C_GREEN = $green
+
+  # ---- Tabs with cards ----
+  $tc = New-Object System.Windows.Forms.TabControl
+  $tc.Location = New-Object System.Drawing.Point(14, 200); $tc.Size = New-Object System.Drawing.Size(766, 396)
+  $cats = @(
+    @{ key='gaming';  title='Gaming & FPS' },
+    @{ key='input';   title='Latenza & Input' },
+    @{ key='network'; title='Rete & Streaming' },
+    @{ key='system';  title='Sistema & Debloat' }
+  )
+
+  function New-TweakCard($t, $flow) {
+    $card = New-Object System.Windows.Forms.Panel
+    $card.Size = New-Object System.Drawing.Size(710, 176)
+    $card.Margin = New-Object System.Windows.Forms.Padding(4, 4, 4, 8)
+    $card.BackColor = $script:C_CARD
+
+    $bar = New-Object System.Windows.Forms.Panel
+    $bar.Location = New-Object System.Drawing.Point(0, 0); $bar.Size = New-Object System.Drawing.Size(4, 176)
+    if ($t.risk -eq 'caution') { $bar.BackColor = $script:C_ORANGE } else { $bar.BackColor = $script:C_ACC }
+    $card.Controls.Add($bar)
+
+    $cb = New-Object System.Windows.Forms.CheckBox
+    if ($script:PROFILE.Count -gt 0) { $cb.Checked = ($script:PROFILE -contains $t.id) }
+    else { $cb.Checked = ($t.risk -ne 'caution') }
+    $cb.Text = $t.name; $cb.ForeColor = $script:C_WHITE
+    $cb.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
+    $cb.Location = New-Object System.Drawing.Point(14, 10); $cb.AutoSize = $true
+    $card.Controls.Add($cb); $script:CHECKS[$t.id] = $cb
+
+    if ($t.risk -eq 'caution') {
+      $rb = New-Object System.Windows.Forms.Label
+      $rb.Text = 'CAUTELA'; $rb.ForeColor = $script:C_ORANGE
+      $rb.Font = New-Object System.Drawing.Font('Segoe UI', 8, [System.Drawing.FontStyle]::Bold)
+      $rb.Location = New-Object System.Drawing.Point(560, 12); $rb.AutoSize = $true
+      $card.Controls.Add($rb)
+    }
+
+    $st = New-Object System.Windows.Forms.Label
+    $st.ForeColor = $script:C_ACC; $st.Location = New-Object System.Drawing.Point(32, 34); $st.AutoSize = $true
+    $st.Font = New-Object System.Drawing.Font('Segoe UI', 8, [System.Drawing.FontStyle]::Bold)
+    $card.Controls.Add($st); $script:STATUS[$t.id] = $st
+
+    function New-Line($prefix, $text, $y, $col) {
+      $l = New-Object System.Windows.Forms.Label
+      $l.Text = "$prefix  $text"; $l.ForeColor = $col
+      $l.Location = New-Object System.Drawing.Point(32, $y); $l.MaximumSize = New-Object System.Drawing.Size(660, 0); $l.AutoSize = $true
+      return $l
+    }
+    $card.Controls.Add((New-Line 'Problema:' $t.problem 56 $script:C_ORANGE))
+    $card.Controls.Add((New-Line 'Motivo:'   $t.reason  84 $script:C_GRAY))
+    $card.Controls.Add((New-Line 'Modifica:' $t.desc    112 $script:C_LIGHT))
+    $card.Controls.Add((New-Line 'Impatto:'  $t.impact  140 $script:C_GREEN))
+
+    $ab = New-Object System.Windows.Forms.Button
+    $ab.Text = 'Applica'; $ab.Tag = $t.id
+    $ab.Location = New-Object System.Drawing.Point(576, 34); $ab.Size = New-Object System.Drawing.Size(118, 32)
+    $ab.FlatStyle = 'Flat'; $ab.BackColor = $script:C_ACC; $ab.ForeColor = [System.Drawing.Color]::Black
+    $ab.Font = New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
+    $ab.Add_Click({
+      $id = $this.Tag; $tw = $script:TWMAP[$id]; if (-not $tw) { return }
+      GuiLog ("-> Applico: {0}" -f $tw.name)
+      & $tw.apply
+      Save-Backup
+      Refresh-Status
+      GuiLog ("   OK - backup aggiornato ({0} modifiche reversibili)." -f $script:BK.Count)
+    })
+    $card.Controls.Add($ab)
+
+    $flow.Controls.Add($card)
+  }
+
+  $script:C_CARD = $cardBg; $script:C_WHITE = $white; $script:C_ORANGE = $orange
+  $script:C_GRAY = $gray; $script:C_LIGHT = $light
+
+  foreach ($c in $cats) {
+    $tp = New-Object System.Windows.Forms.TabPage; $tp.Text = $c.title; $tp.BackColor = $bg2
+    $flow = New-Object System.Windows.Forms.FlowLayoutPanel
+    $flow.Dock = 'Fill'; $flow.FlowDirection = 'TopDown'; $flow.WrapContents = $false
+    $flow.AutoScroll = $true; $flow.BackColor = $bg2; $flow.Padding = New-Object System.Windows.Forms.Padding(6)
+    foreach ($t in $script:TWEAKS) { if ($t.cat -eq $c.key) { New-TweakCard $t $flow } }
+    $tp.Controls.Add($flow); $tc.TabPages.Add($tp)
+  }
+  $form.Controls.Add($tc)
+  Refresh-Status
+
+  # ---- benchmark toggle ----
+  $benchCb = New-Object System.Windows.Forms.CheckBox
+  $benchCb.Text = 'Esegui benchmark PRIMA/DOPO per misurare il guadagno reale'
+  $benchCb.Checked = $true; $benchCb.ForeColor = $blue
+  $benchCb.Location = New-Object System.Drawing.Point(18, 606); $benchCb.AutoSize = $true
+  $form.Controls.Add($benchCb); $script:BENCHCB = $benchCb
+
+  # ---- action buttons ----
   $applyBtn = New-Object System.Windows.Forms.Button
-  $applyBtn.Text = 'APPLICA SELEZIONATI'; $applyBtn.Location = New-Object System.Drawing.Point(14, 752); $applyBtn.Size = New-Object System.Drawing.Size(200, 42)
+  $applyBtn.Text = 'APPLICA SELEZIONATI'; $applyBtn.Location = New-Object System.Drawing.Point(16, 800); $applyBtn.Size = New-Object System.Drawing.Size(240, 46)
   $applyBtn.FlatStyle = 'Flat'; $applyBtn.BackColor = $acc; $applyBtn.ForeColor = [System.Drawing.Color]::Black
   $applyBtn.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
   $form.Controls.Add($applyBtn); $script:APPLYBTN = $applyBtn
@@ -975,22 +1232,23 @@ function Show-Gui {
       GuiLog ("  Punteggio DOPO: {0}  (variazione {1}%)" -f $after.overall, $pct)
       Send-Benchmark @{ before = $before; after = $after; ts = (Get-Date).ToString('o') }
     }
-    foreach ($t in $script:TWEAKS) { $script:CHECKS[$t.id].Text = ("{0}    [{1}]" -f $t.name, (& $t.state)) }
+    Refresh-Status
     Send-Data (Get-Specs) (Get-Health) (Get-StartupList)
     GuiLog 'FATTO. Dati inviati a FrameForge. Riavvio consigliato.'
     $script:APPLYBTN.Enabled = $true
   })
 
   $restoreBtn = New-Object System.Windows.Forms.Button
-  $restoreBtn.Text = 'RIPRISTINA'; $restoreBtn.Location = New-Object System.Drawing.Point(224, 752); $restoreBtn.Size = New-Object System.Drawing.Size(140, 42)
-  $restoreBtn.FlatStyle = 'Flat'; $restoreBtn.ForeColor = [System.Drawing.Color]::FromArgb(255,59,48)
-  $restoreBtn.Add_Click({ GuiLog 'Ripristino dal backup...'; GuiLog ('  ' + (Invoke-Restore)); foreach ($t in $script:TWEAKS) { $script:CHECKS[$t.id].Text = ("{0}    [{1}]" -f $t.name, (& $t.state)) } })
+  $restoreBtn.Text = 'RIPRISTINA TUTTO'; $restoreBtn.Location = New-Object System.Drawing.Point(266, 800); $restoreBtn.Size = New-Object System.Drawing.Size(180, 46)
+  $restoreBtn.FlatStyle = 'Flat'; $restoreBtn.FlatAppearance.BorderColor = $red; $restoreBtn.ForeColor = $red
+  $restoreBtn.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
+  $restoreBtn.Add_Click({ GuiLog 'Ripristino dal backup...'; GuiLog ('  ' + (Invoke-Restore)); Refresh-Status })
   $form.Controls.Add($restoreBtn)
 
   if (-not $isAdmin) {
     $elevBtn = New-Object System.Windows.Forms.Button
-    $elevBtn.Text = 'Riavvia come Amministratore'; $elevBtn.Location = New-Object System.Drawing.Point(374, 752); $elevBtn.Size = New-Object System.Drawing.Size(220, 42)
-    $elevBtn.FlatStyle = 'Flat'; $elevBtn.ForeColor = [System.Drawing.Color]::White
+    $elevBtn.Text = 'Riavvia come Amministratore'; $elevBtn.Location = New-Object System.Drawing.Point(456, 800); $elevBtn.Size = New-Object System.Drawing.Size(224, 46)
+    $elevBtn.FlatStyle = 'Flat'; $elevBtn.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(42,42,53); $elevBtn.ForeColor = $white
     $elevBtn.Add_Click({
       if ($PSCommandPath) {
         Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',$PSCommandPath,'-Token',$TOKEN,'-Mode','optimize' 2>$null

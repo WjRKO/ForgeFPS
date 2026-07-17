@@ -95,3 +95,7 @@ class AlertInput(BaseModel):
 class PrematchInput(BaseModel):
     close_apps: list = []
     set_power: bool = True
+
+
+class ReportPhaseInput(BaseModel):
+    phase: str = Field(pattern="^(before|after)$")
