@@ -270,8 +270,8 @@ export default function Commands() {
     api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {});
   }, []);
 
-  const data = specs?.data || {};
-  const gpuBrand = useMemo(() => detectGpu(data.gpu), [specs]);
+  const data = useMemo(() => specs?.data || {}, [specs]);
+  const gpuBrand = useMemo(() => detectGpu(data.gpu), [data.gpu]);
 
   const cats = useMemo(() => {
     const list = [...CATS];
