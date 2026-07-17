@@ -1,0 +1,39 @@
+name: build-and-sign
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build-sign:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip pyinstaller
+      - run: pyinstaller --onefile --name forgefps-agent --console --noupx --clean --version-file version_info.txt forgefps_agent.py
+      - id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: forgefps-agent-unsigned
+          path: dist/forgefps-agent.exe
+      - uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: 'forgefps-agent'
+          signing-policy-slug: 'release-signing'
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: 'signed'
+      - shell: pwsh
+        run: |
+          $h = (Get-FileHash signed/forgefps-agent.exe -Algorithm SHA256).Hash.ToLower()
+          echo "SHA256=$h" >> $env:GITHUB_STEP_SUMMARY
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: signed/forgefps-agent.exe
+          generate_release_notes: true
