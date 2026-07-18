@@ -1465,6 +1465,19 @@ function Show-WebGui {
     font-weight: 700; text-transform: uppercase;
     background: var(--warn); color: #000;
   }
+  .ok-pill {
+    font-size: 9px; padding: 2px 8px; letter-spacing: 1px;
+    font-weight: 700; text-transform: uppercase;
+    background: transparent; color: var(--ok);
+    border: 1px solid var(--ok);
+  }
+  .applied-note {
+    font-size: 10px; color: var(--dim);
+    font-style: italic; letter-spacing: 0.4px;
+  }
+  .card.applied { opacity: 0.72; }
+  .card.applied::before { background: var(--ok); }
+  .card.applied:hover { opacity: 1; }
   .state {
     font-size: 11px; margin-top: 6px; padding-left: 28px;
     color: var(--accent); font-family: "Consolas", monospace;
@@ -1637,15 +1650,21 @@ function Show-WebGui {
   }
   function stateClass(s) {
     const x = String(s || "");
-    if (/attivo|disabilit|disattivat|gia|prestazioni/i.test(x)) return "ok";
+    if (/attivo|disabilit|disattivat|gia|prestazioni|nessun/i.test(x)) return "ok";
     return "";
+  }
+  function isApplied(t) {
+    if (t.fit.skip) return false;
+    return stateClass(t.state) === "ok";
   }
 
   function renderTabs() {
     const el = document.getElementById("tabs");
     el.innerHTML = CATS.map(c => {
-      const n = state.tweaks.filter(t => t.cat === c.key && !t.fit.skip).length;
-      return `<button class="tab ${c.key === activeCat ? "active" : ""}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${n}</span></button>`;
+      const inCat = state.tweaks.filter(t => t.cat === c.key && !t.fit.skip);
+      const todo = inCat.filter(t => !isApplied(t)).length;
+      const total = inCat.length;
+      return `<button class="tab ${c.key === activeCat ? "active" : ""}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${todo}/${total}</span></button>`;
     }).join("");
     [...el.querySelectorAll(".tab")].forEach(b => b.onclick = () => { activeCat = b.dataset.cat; renderTabs(); renderCards(); });
   }
@@ -1659,8 +1678,11 @@ function Show-WebGui {
     });
     if (!items.length) { el.innerHTML = `<div class="empty">Nessun tweak in questa categoria.</div>`; return; }
     el.innerHTML = items.map(t => {
+      const applied = isApplied(t);
+      t.applied = applied;
       const sel = selected.has(t.id);
       const skipCls = t.fit.skip ? " skip" : "";
+      const appliedCls = applied ? " applied" : "";
       const riskCls = t.risk === "caution" ? " risk-caution" : "";
       const selCls = sel ? " selected" : "";
       const stCls = stateClass(t.state);
@@ -1670,10 +1692,11 @@ function Show-WebGui {
       else if (t.fit.warn) hint = `<div class="hint">Attenzione: ${esc(t.fit.hint)}</div>`;
       else if (t.fit.note) hint = `<div class="hint">Nota: ${esc(t.fit.hint)}</div>`;
       return `
-        <div class="card${skipCls}${riskCls}${selCls}" data-id="${t.id}" data-testid="card-${t.id}">
+        <div class="card${skipCls}${riskCls}${selCls}${appliedCls}" data-id="${t.id}" data-testid="card-${t.id}">
           <div class="card-head">
             <input type="checkbox" class="cb" data-id="${t.id}" ${sel?"checked":""} ${t.fit.skip?"disabled":""} data-testid="cb-${t.id}" />
             <div class="name">${esc(t.name)}</div>
+            ${applied ? `<span class="ok-pill" data-testid="applied-${t.id}">GIA ATTIVO</span>` : ""}
             ${riskPill}
           </div>
           <div class="state ${stCls}">Stato: ${esc(t.state)}</div>
@@ -1685,7 +1708,9 @@ function Show-WebGui {
           </div>
           ${hint}
           <div class="actions">
-            <button class="btn-apply-one" data-apply="${t.id}" ${t.fit.skip?"disabled":""} data-testid="apply-one-${t.id}">Applica</button>
+            ${applied
+              ? `<span class="applied-note">Nessuna azione necessaria</span>`
+              : `<button class="btn-apply-one" data-apply="${t.id}" ${t.fit.skip?"disabled":""} data-testid="apply-one-${t.id}">Applica</button>`}
           </div>
         </div>`;
     }).join("");
@@ -1721,10 +1746,10 @@ function Show-WebGui {
     selected.clear();
     if (key === "none") { renderCards(); updateSelCount(); return; }
     const list = key === "complete"
-      ? state.tweaks.filter(t => !t.fit.skip).map(t => t.id)
+      ? state.tweaks.filter(t => !t.fit.skip && !isApplied(t)).map(t => t.id)
       : (state.presets[key] || []).filter(id => {
           const t = state.tweaks.find(x => x.id === id);
-          return t && !t.fit.skip;
+          return t && !t.fit.skip && !isApplied(t);
         });
     list.forEach(id => selected.add(id));
     renderCards(); updateSelCount();
