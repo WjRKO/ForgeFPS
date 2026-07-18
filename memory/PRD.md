@@ -595,3 +595,25 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - P2: Report PDF completo (grafici storici + checklist); condivisione SCORE benchmark sui social.
 - P3: Stripe billing, conversioni avanzate Google Ads, testimonianze + stelle GitHub.
 - Possibile: telemetria opt-in sulla nuova WebGui per capire quale % di utenti usa Edge vs WinForms fallback.
+
+### 2026-07-18 (19) - Task A+B: Guida in-app + Tour interattivo onboarding
+- **Pagina /guida** (Guide.jsx, ~230 righe): 5 walkthrough (Primo boost, Gaming competitivo, Streaming OBS, Benchmark, Ripristino) con badge Sul sito/Sul PC, blocco codice copiabile PowerShell (CopyBtn), TOC iniziale, Tips per guida, CTA login/agent. Bilingue IT/EN. Route `/guida` (canonical) + `/guide` (redirect EN). Link "Guida"/"Guide" aggiunto in MarketingChrome NAV.
+- **Tour onboarding** (react-joyride v3.2.0, named import `{ Joyride }`): OnboardingTour.jsx montato in Layout.jsx. 8 step su sidebar (My PC, Advisor, Network, Desktop agent, Gaming, Notifications, Account). Auto-start su `/app` la prima volta (localStorage `ff_tour_done_v1`). Personalizzato con palette FrameForge (accent #E5FF00, tooltip dark). Skippabile, no close X. Handler window event `ff:tour:start` per riavvio.
+- **Card "Rifai il tour"** aggiunta in Account.jsx sotto la MFA (icona HelpCircle, testid `restart-tour-btn`, rimuove flag + dispatch evento).
+- **i18n**: nuova chiave `tour.*` con 24 stringhe IT+EN (welcome, per ogni step titolo/contenuto, back/next/last/skip/close/restart).
+- **Changelog pubblico** aggiornato con v0.6.1 (2026-07-18).
+- **CHANGELOG.md** interno: sezione Unreleased estesa con nuove feature.
+- Bug incontrato e risolto: `react-joyride@3.2.0` non ha default export, va importato come `{ Joyride }`.
+- Validazione: webpack "Compiled successfully!" dopo il fix; ESBuild OK su tutti i 7 file modificati.
+
+## FILE MODIFICATI/CREATI (sessione 19)
+- CREATO: `/app/frontend/src/pages/Guide.jsx`
+- CREATO: `/app/frontend/src/components/OnboardingTour.jsx`
+- MOD: `/app/frontend/src/App.js` (route + lazy import)
+- MOD: `/app/frontend/src/components/MarketingChrome.jsx` (nav item)
+- MOD: `/app/frontend/src/components/Layout.jsx` (mount tour)
+- MOD: `/app/frontend/src/pages/Account.jsx` (restart-tour card)
+- MOD: `/app/frontend/src/pages/Changelog.jsx` (v0.6.1 entry)
+- MOD: `/app/frontend/src/i18n.js` (tour.* strings IT+EN)
+- MOD: `/app/frontend/package.json` + yarn.lock (react-joyride)
+- MOD: `/app/CHANGELOG.md`, `/app/memory/PRD.md`

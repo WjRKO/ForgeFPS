@@ -8,6 +8,18 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 ## [Unreleased] — 2026-07-18
 
 ### Added
+- **Pagina Guida in-app (`/guida`, `/guide` → redirect)** — 5 walkthrough step-by-step con:
+  - Primo boost in 3 minuti · Setup gaming competitivo · Setup streaming OBS · Leggere il benchmark 0-100 · Se qualcosa va storto
+  - Ogni step marcato con badge "Sul sito" / "Sul PC" e comando PowerShell copiabile con feedback visivo
+  - TOC iniziale, sezione Tips per guida, CTA finale verso login / download agent, tempo stimato in minuti
+  - Bilingue IT/EN via i18n
+  - Aggiunto link "Guida" nella `MarketingNav` e route lazy in `App.js`
+- **Tour interattivo di onboarding (react-joyride v3.2.0)**:
+  - 8 step: Il mio PC, Advisor, Rete, Agent desktop, Giochi, Notifiche, chiusura
+  - Auto-start al primo atterraggio su `/app` (localStorage flag `ff_tour_done_v1`)
+  - Skippabile, personalizzato con palette FrameForge (accent `#E5FF00`, tooltip dark `#0F0F12`)
+  - Pulsante "Rifammi il tour" nella pagina Account (`data-testid="restart-tour-btn"`) che azzera il flag e dispatcha evento globale `ff:tour:start`
+  - Stringhe i18n IT/EN dedicate (chiave `tour.*`)
 - **GUI moderna via Edge WebView (Option C)** — nuovo pannello ottimizzazioni in HTML/CSS/JS servito localmente:
   - Server HTTP locale su `127.0.0.1` con **porta random** e **session token da 48 caratteri** per ogni request
   - Lancio di `msedge.exe --app=` in modalità chromeless (finestra pulita, no barra Edge)

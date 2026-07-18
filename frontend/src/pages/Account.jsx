@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { User, KeyRound, SlidersHorizontal, ShieldAlert, Loader2, Server, Mail, Save, Trash2, ShieldCheck, QrCode } from "lucide-react";
+import { User, KeyRound, SlidersHorizontal, ShieldAlert, Loader2, Server, Mail, Save, Trash2, ShieldCheck, QrCode, HelpCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api, { formatApiErrorDetail } from "@/lib/api";
 
@@ -167,7 +167,7 @@ const MfaCard = ({ c }) => {
 
 export default function Account() {
   const { user, setUser, logout } = useAuth();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const lang = (i18n.language || "it").startsWith("en") ? "en" : "it";
   const c = T[lang];
@@ -235,6 +235,26 @@ export default function Account() {
         </Card>
 
         <MfaCard c={c} />
+
+        <Card icon={HelpCircle} title={t("tour.restart")} accent="#E5FF00" testid="account-tour">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="text-sm text-zinc-400 max-w-md">
+              {t("tour.welcome_c")}
+            </div>
+            <button
+              onClick={() => {
+                try {
+                  window.localStorage.removeItem("ff_tour_done_v1");
+                  window.localStorage.setItem("ff_show_tour_pending", "1");
+                } catch {}
+                window.dispatchEvent(new Event("ff:tour:start"));
+              }}
+              data-testid="restart-tour-btn"
+              className="inline-flex items-center gap-2 border border-[#E5FF00] text-[#E5FF00] px-5 py-2.5 hover:bg-[#E5FF00] hover:text-black transition-colors text-sm uppercase tracking-wide font-bold">
+              <HelpCircle size={15} /> {t("tour.restart")}
+            </button>
+          </div>
+        </Card>
 
         <Card icon={SlidersHorizontal} title={c.prefs} accent="#00FF66" testid="account-prefs">
           <div className="space-y-4">

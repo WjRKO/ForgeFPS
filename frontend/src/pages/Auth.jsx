@@ -31,7 +31,12 @@ export default function Auth({ mode }) {
       if (isLogin) {
         const res = await login(email, password, code || undefined);
         if (res && res.mfa_required) { setMfaRequired(true); setLoading(false); return; }
-      } else { await register(name, email, password); trackConversion("signup"); }
+      } else {
+        await register(name, email, password);
+        trackConversion("signup");
+        // Attiva il tour di onboarding solo per i neo-registrati (una tantum)
+        try { window.localStorage.setItem("ff_show_tour_pending", "1"); } catch {}
+      }
       navigate("/app");
     } catch (err) {
       setError(formatApiErrorDetail(err.response?.data?.detail) || err.message);
