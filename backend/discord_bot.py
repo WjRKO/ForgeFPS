@@ -90,48 +90,62 @@ def _user_plan(user_doc: dict) -> str:
     return (user_doc.get("plan") or "free").strip().lower()
 
 
-async def _sync_pro_role_for_member(guild: discord.Guild, member: discord.Member, user_doc: dict | None) -> str:
-    """Allinea il ruolo Pro sul membro Discord in base al campo `plan` nel DB.
-    Ritorna una stringa di stato per logging: 'added' | 'removed' | 'noop' | 'skip'."""
-    if not ROLE_PRO_ID:
+async def _sync_role(member: discord.Member, role_id: str, should_have: bool, reason: str) -> str:
+    """Aggiunge/rimuove un ruolo Discord sul membro in modo idempotente.
+    Ritorna: 'added' | 'removed' | 'noop' | 'skip'."""
+    if not role_id:
         return "skip"
-    role = guild.get_role(int(ROLE_PRO_ID))
+    role = member.guild.get_role(int(role_id))
     if not role:
-        logger.warning("Ruolo Pro %s non trovato nel guild", ROLE_PRO_ID)
+        logger.warning("Ruolo %s non trovato nel guild", role_id)
         return "skip"
-    is_pro = bool(user_doc) and _user_plan(user_doc) in PRO_PLANS
     has_role = role in member.roles
-    if is_pro and not has_role:
-        try:
-            await member.add_roles(role, reason=f"Pro auto-sync (plan={_user_plan(user_doc)})")
+    try:
+        if should_have and not has_role:
+            await member.add_roles(role, reason=reason)
             return "added"
-        except Exception as e:
-            logger.warning("add Pro role fallito per %s: %s", member.id, e)
-            return "skip"
-    if (not is_pro) and has_role:
-        try:
-            await member.remove_roles(role, reason="Pro auto-sync (plan decaduto)")
+        if (not should_have) and has_role:
+            await member.remove_roles(role, reason=reason)
             return "removed"
-        except Exception as e:
-            logger.warning("remove Pro role fallito per %s: %s", member.id, e)
-            return "skip"
+    except discord.Forbidden as e:
+        logger.warning("Permessi insufficienti per ruolo %s su %s: %s", role_id, member.id, e)
+        return "skip"
+    except Exception as e:
+        logger.warning("Sync ruolo %s per %s fallito: %s", role_id, member.id, e)
+        return "skip"
     return "noop"
 
 
+async def _sync_pro_role_for_member(guild: discord.Guild, member: discord.Member, user_doc: dict | None) -> str:
+    """Wrapper legacy per la sync del ruolo Pro (mantenuto per /set-plan)."""
+    is_pro = bool(user_doc) and _user_plan(user_doc) in PRO_PLANS
+    return await _sync_role(member, ROLE_PRO_ID, is_pro, f"Pro auto-sync (plan={_user_plan(user_doc or {})})")
+
+
+async def _sync_all_roles_for_member(member: discord.Member, user_doc: dict | None) -> dict:
+    """Allinea tutti i ruoli auto (Boosted PC + Pro) sul membro."""
+    is_linked = bool(user_doc)
+    is_pro = is_linked and _user_plan(user_doc) in PRO_PLANS
+    return {
+        "boosted": await _sync_role(member, ROLE_BOOSTED_ID, is_linked, "Boosted PC auto-sync (account collegato)"),
+        "pro": await _sync_role(member, ROLE_PRO_ID, is_pro, f"Pro auto-sync (plan={_user_plan(user_doc or {})})"),
+    }
+
+
 async def _pro_sync_loop():
-    """Task background: ogni PRO_SYNC_INTERVAL secondi allinea il ruolo Pro
+    """Task background: ogni PRO_SYNC_INTERVAL secondi allinea i ruoli Boosted PC + Pro
     a tutti gli utenti che hanno Discord linkato. Idempotente."""
     await client.wait_until_ready()
-    if not ROLE_PRO_ID:
-        logger.info("Pro sync loop: DISCORD_ROLE_PRO non impostato, skip")
+    if not (ROLE_PRO_ID or ROLE_BOOSTED_ID):
+        logger.info("Role sync loop: nessun ROLE_ID impostato, skip")
         return
     guild = client.get_guild(int(GUILD_ID))
     if not guild:
-        logger.warning("Pro sync loop: guild %s non trovato, skip", GUILD_ID)
+        logger.warning("Role sync loop: guild %s non trovato, skip", GUILD_ID)
         return
     while not client.is_closed():
         try:
-            counts = {"added": 0, "removed": 0, "noop": 0, "skip": 0}
+            counts = {"boosted_added": 0, "boosted_removed": 0, "pro_added": 0, "pro_removed": 0, "skip": 0}
             cursor = db.users.find(
                 {"discord_user_id": {"$exists": True, "$nin": [None, ""]}},
                 {"discord_user_id": 1, "plan": 1, "email": 1},
@@ -146,14 +160,19 @@ async def _pro_sync_loop():
                         member = await guild.fetch_member(int(did))
                     except Exception:
                         continue
-                result = await _sync_pro_role_for_member(guild, member, udoc)
-                counts[result] = counts.get(result, 0) + 1
+                res = await _sync_all_roles_for_member(member, udoc)
+                for role_name, result in res.items():
+                    if result in ("added", "removed"):
+                        counts[f"{role_name}_{result}"] = counts.get(f"{role_name}_{result}", 0) + 1
+                    elif result == "skip":
+                        counts["skip"] += 1
             logger.info(
-                "Pro sync completato: +%d, -%d, invariati=%d, skip=%d",
-                counts["added"], counts["removed"], counts["noop"], counts["skip"],
+                "Role sync: boosted +%d/-%d, pro +%d/-%d, skip=%d",
+                counts["boosted_added"], counts["boosted_removed"],
+                counts["pro_added"], counts["pro_removed"], counts["skip"],
             )
         except Exception as e:
-            logger.exception("Pro sync loop errore: %s", e)
+            logger.exception("Role sync loop errore: %s", e)
         await asyncio.sleep(PRO_SYNC_INTERVAL)
 
 
