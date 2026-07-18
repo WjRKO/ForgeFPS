@@ -7,6 +7,7 @@ import { AGENT_EXE_URL, AGENT_EXE_SHA256, AGENT_EXE_VERSION, AGENT_EXE_DATE, AGE
 import { toast } from "sonner";
 import api, { API } from "@/lib/api";
 import { trackConversion } from "@/lib/gtag";
+import AgentPreview from "@/components/AgentPreview";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const isEn = () => i18n.language?.startsWith("en");
@@ -196,147 +197,168 @@ export default function DesktopAgent() {
   const run = (mode) => `powershell -ExecutionPolicy Bypass -File "$HOME\\Downloads\\forgefps.ps1" -Token ${tk} -Mode ${mode}`;
 
   return (
-    <div className="max-w-5xl mx-auto fade-up">
+    <div className="max-w-6xl mx-auto fade-up">
       <div className="mb-6">
         <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("desktop.eyebrow")}</div>
         <h1 className="font-display font-black text-3xl tracking-tighter">{t("desktop.title")}</h1>
+        <p className="text-zinc-500 text-sm mt-2 max-w-2xl">{s.exe_desc}</p>
       </div>
 
-      {/* One-click .exe */}
-      <div className="bg-[#0F0F12] border border-[#00E0FF]/40 p-6 mb-4" data-testid="exe-teaser">
-        <div className="flex items-start gap-4">
-          <div className="w-11 h-11 border border-[#00E0FF]/40 flex items-center justify-center shrink-0"><MonitorDown size={22} className="text-[#00E0FF]" /></div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="font-display font-bold text-lg">{s.exe_title}</h2>
-              <span className="text-[10px] font-mono uppercase tracking-widest bg-[#00E0FF]/15 text-[#00E0FF] border border-[#00E0FF]/30 px-2 py-0.5">{AGENT_EXE_VERSION}</span>
-            </div>
-            <div className="flex items-center gap-3 mt-1 text-[11px] font-mono text-zinc-500">
-              <span className="inline-flex items-center gap-1"><History size={11} /> {en ? "Updated" : "Aggiornato"} {AGENT_EXE_DATE}</span>
-              <a href={AGENT_RELEASES_URL} target="_blank" rel="noreferrer" data-testid="exe-releases-link" className="text-[#00E0FF] hover:underline">{en ? "All versions" : "Tutte le versioni"} →</a>
-            </div>
-            <p className="text-zinc-400 text-sm mt-1 max-w-2xl">{s.exe_desc}</p>
-            <a href={AGENT_EXE_URL} target="_blank" rel="noreferrer" data-testid="exe-download-btn" onClick={() => trackConversion("agent_download")}
-              className="mt-3 inline-flex items-center gap-2 bg-[#00E0FF] text-black font-bold px-5 py-2.5 text-sm uppercase tracking-wide hover:bg-[#33e8ff] transition-colors">
-              <Download size={16} /> {s.exe_btn}
-            </a>
-            <div className="flex items-center gap-2 mt-3 text-xs">
-              <FileCheck2 size={13} className="text-[#00FF66] shrink-0" />
-              <span className="text-zinc-500">{s.exe_sha}:</span>
-              <code className="text-zinc-300 break-all" data-testid="exe-sha256">{AGENT_EXE_SHA256}</code>
-            </div>
-            <a href={`https://www.virustotal.com/gui/file/${AGENT_EXE_SHA256}`} target="_blank" rel="noreferrer" data-testid="exe-virustotal"
-              className="inline-flex items-center gap-1.5 mt-2 text-xs text-[#00FF66] hover:underline">
-              <ShieldCheck size={13} /> {s.exe_vt} <ExternalLink size={10} />
-            </a>
-            <div className="mt-3">
-              <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">{s.exe_run}</div>
-              <CmdRow label="" cmd={exeCmd} testid="exe-run" accent="text-[#E5FF00]" />
-            </div>
+      <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start">
+        {/* LEFT: content (scrolls) */}
+        <div className="min-w-0 space-y-6">
 
-            {/* Backend / token mismatch notice */}
-            <div className={`mt-3 border p-3.5 ${isProd ? "border-[#00FF66]/30 bg-[#00FF66]/5" : "border-[#FFAA00]/40 bg-[#FFAA00]/5"}`} data-testid="exe-backend-notice">
+          {/* Backend notice — mostrato solo se NON in prod */}
+          {!isProd && (
+            <div className="border border-[#FFAA00]/40 bg-[#FFAA00]/5 p-4" data-testid="exe-backend-notice">
               <div className="flex items-start gap-2.5">
-                <AlertTriangle size={16} className={`shrink-0 mt-0.5 ${isProd ? "text-[#00FF66]" : "text-[#FFAA00]"}`} />
-                <div className="min-w-0">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5 text-[#FFAA00]" />
+                <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold text-zinc-200">{s.warn_title}</div>
                   <p className="text-xs text-zinc-400 leading-relaxed mt-1">
                     {s.warn_desc_a} <code className="text-[#00E0FF]">{AGENT_DEFAULT_BACKEND}</code> {s.warn_desc_b}
                   </p>
-                  <p className={`text-xs leading-relaxed mt-2 ${isProd ? "text-[#00FF66]" : "text-[#FFAA00]"}`}>
-                    {isProd ? s.warn_prod : s.warn_test}
-                  </p>
-                  {!isProd && (
-                    <div className="mt-2">
-                      <CmdRow label="" cmd={exeCmd} testid="exe-backend-cmd" accent="text-[#FFAA00]" />
-                    </div>
-                  )}
+                  <p className="text-xs text-[#FFAA00] leading-relaxed mt-2">{s.warn_test}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Feature grid: cosa fa l'app */}
+          <div>
+            <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-3">{en ? "// what it does" : "// cosa fa"}</div>
+            <div className="grid sm:grid-cols-2 gap-px bg-[#2A2A35] border border-[#2A2A35] stagger">
+              {ACTIONS.map((a, i) => (
+                <div key={i} className="bg-[#0F0F12] p-5 tile-hover">
+                  <a.icon size={20} className="text-[#E5FF00] mb-3 icon-pop" />
+                  <h3 className="font-display font-semibold text-base mb-1">{en ? a.title_en : a.title}</h3>
+                  <p className="text-zinc-500 text-xs leading-relaxed">{en ? a.desc_en : a.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Antivirus note */}
+          <div className="border border-[#00FF66]/25 bg-[#00FF66]/5 p-4 flex items-start gap-2.5" data-testid="exe-av-note">
+            <ShieldCheck size={16} className="text-[#00FF66] shrink-0 mt-0.5" />
+            <p className="text-xs text-zinc-400 leading-relaxed">{s.av_note}</p>
+          </div>
+
+          {/* GPU Guide */}
+          <GpuGuide vendor={gpuVendor} />
+
+          {/* Secure PowerShell method — accordion collapsed */}
+          <div className="bg-[#0F0F12] border border-[#E5FF00]/30" id="powershell-method">
+            <button onClick={() => setAdvOpen((v) => !v)} data-testid="secure-toggle"
+              className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-[#141420] transition-colors">
+              <span className="flex items-center gap-2.5">
+                <ShieldCheck size={16} className="text-[#E5FF00]" />
+                <span className="text-sm font-semibold text-zinc-200">{s.secure_title}</span>
+                <span className="text-[10px] font-mono uppercase tracking-widest text-[#E5FF00] border border-[#E5FF00]/40 px-1.5 py-0.5">.ps1</span>
+              </span>
+              <ChevronDown size={18} className={`text-zinc-500 transition-transform ${advOpen ? "rotate-180" : ""}`} />
+            </button>
+            {advOpen && (
+              <div className="px-5 pb-5 border-t border-[#1A1A24]" data-testid="secure-method">
+                <p className="text-zinc-400 text-sm my-4 max-w-2xl">{s.secure_desc}</p>
+                <CmdRow label={s.token_label} cmd={token || "…"} testid="agent-token" accent="text-[#00E0FF]" />
+                <CmdRow label={s.s1} cmd={dl} testid="secure-download" accent="text-[#00FF66]" />
+                <div className="mb-3">
+                  <div className="text-xs uppercase tracking-widest mb-1 text-[#00E0FF]">{s.s2}</div>
+                  <div className="flex items-stretch gap-2">
+                    <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-xs text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="secure-verify-cmd">{verify}</code>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2 text-xs">
+                    <FileCheck2 size={13} className="text-[#00FF66] shrink-0" />
+                    <span className="text-zinc-500">{s.expected}:</span>
+                    <code className="text-zinc-300 break-all" data-testid="expected-sha256">{sha || "…"}</code>
+                  </div>
+                </div>
+                <CmdRow label={s.s3} cmd={run("optimize")} testid="secure-run" accent="text-[#E5FF00]" />
+
+                <div className="mt-5 border-t border-[#1A1A24] pt-4">
+                  <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{s.modes_label}</div>
+                  {RUN_MODES.map((rm) => (
+                    <CmdRow key={rm.m} label={en ? rm.en : rm.it} cmd={run(rm.m)} testid={`run-${rm.m}`} accent="text-zinc-500" />
+                  ))}
+                </div>
+
+                <div className="mt-4 border-t border-[#1A1A24] pt-4 flex items-start gap-3">
+                  <Lock size={16} className="text-zinc-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="text-sm text-zinc-200 font-semibold">{s.why_title}</div>
+                    <p className="text-xs text-zinc-500 max-w-2xl leading-relaxed mt-0.5">{s.why_desc}</p>
+                    <Link to="/security" data-testid="why-security-link" className="text-xs text-[#E5FF00] hover:underline mt-1 inline-block">{s.why_link} →</Link>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3 mt-4 border-t border-[#1A1A24] pt-4">
+                  <a data-testid="download-agent-btn" href={`${API}/desktop-agent/download`} onClick={() => trackConversion("agent_download")}
+                    className="inline-flex items-center gap-2 border border-[#2A2A35] px-4 py-2 text-sm hover:border-[#E5FF00] transition-colors">
+                    <Download size={16} /> {t("desktop.download_py")}
+                  </a>
+                  <Link to="/app/pc" data-testid="to-mypc-btn"
+                    className="inline-flex items-center gap-2 border border-[#2A2A35] px-4 py-2 text-sm hover:border-[#E5FF00] transition-colors">
+                    <Activity size={16} /> {t("desktop.see_mypc")}
+                  </Link>
+                </div>
+                <p className="text-xs text-zinc-600 mt-3">{s.exec_note}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT: sticky action panel */}
+        <aside className="lg:sticky lg:top-6 lg:self-start" data-testid="exe-teaser">
+          <div className="bg-gradient-to-br from-[#00E0FF]/15 to-[#0F0F12] border border-[#00E0FF]/40 p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-10 h-10 border border-[#00E0FF]/40 flex items-center justify-center shrink-0"><MonitorDown size={20} className="text-[#00E0FF]" /></div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-[#00E0FF]">FrameForge Agent</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-white">{AGENT_EXE_VERSION}</span>
+                  <span className="text-[10px] text-zinc-500">·</span>
+                  <span className="text-[10px] text-zinc-500 font-mono">{AGENT_EXE_DATE}</span>
                 </div>
               </div>
             </div>
 
-            {/* Antivirus false-positive note */}
-            <p className="mt-3 text-xs text-zinc-500 leading-relaxed flex items-start gap-2" data-testid="exe-av-note">
-              <ShieldCheck size={13} className="text-[#00FF66] shrink-0 mt-0.5" />
-              <span>{s.av_note}</span>
-            </p>
-          </div>
-        </div>
-      </div>
+            {/* Preview GUI Edge (video/gif reale se presente, altrimenti mock animato) */}
+            <AgentPreview label={en ? "Live GUI preview" : "Anteprima GUI live"} />
 
-      {/* Secure method */}
-      <div className="bg-[#0F0F12] border border-[#E5FF00]/40 p-6 mb-4" data-testid="secure-method">
-        <div className="flex items-start gap-4 mb-4">
-          <div className="w-11 h-11 bg-[#E5FF00] flex items-center justify-center shrink-0"><ShieldCheck size={22} className="text-black" /></div>
-          <div>
-            <h2 className="font-display font-bold text-lg">{s.secure_title}</h2>
-            <p className="text-zinc-400 text-sm mt-1 max-w-2xl">{s.secure_desc}</p>
-          </div>
-        </div>
+            <a href={AGENT_EXE_URL} target="_blank" rel="noreferrer" data-testid="exe-download-btn" onClick={() => trackConversion("agent_download")}
+              className="flex items-center justify-center gap-2 bg-[#00E0FF] text-black font-bold py-3 text-sm uppercase tracking-wide hover:bg-[#33e8ff] transition-colors w-full">
+              <Download size={16} /> {s.exe_btn}
+            </a>
 
-        <CmdRow label={s.token_label} cmd={token || "…"} testid="agent-token" accent="text-[#00E0FF]" />
-        <CmdRow label={s.s1} cmd={dl} testid="secure-download" accent="text-[#00FF66]" />
-        <div className="mb-3">
-          <div className="text-xs uppercase tracking-widest mb-1 text-[#00E0FF]">{s.s2}</div>
-          <div className="flex items-stretch gap-2">
-            <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-xs text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="secure-verify-cmd">{verify}</code>
-          </div>
-          <div className="flex items-center gap-2 mt-2 text-xs">
-            <FileCheck2 size={13} className="text-[#00FF66] shrink-0" />
-            <span className="text-zinc-500">{s.expected}:</span>
-            <code className="text-zinc-300 break-all" data-testid="expected-sha256">{sha || "…"}</code>
-          </div>
-        </div>
-        <CmdRow label={s.s3} cmd={run("optimize")} testid="secure-run" accent="text-[#E5FF00]" />
+            <a href={AGENT_RELEASES_URL} target="_blank" rel="noreferrer" data-testid="exe-releases-link"
+              className="mt-2 flex items-center justify-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-[#00E0FF] transition-colors">
+              <History size={11} /> {en ? "All versions" : "Tutte le versioni"} <ExternalLink size={9} />
+            </a>
 
-        <div className="mt-4 border-t border-[#1A1A24] pt-4 flex items-start gap-3">
-          <Lock size={16} className="text-zinc-400 shrink-0 mt-0.5" />
-          <div>
-            <div className="text-sm text-zinc-200 font-semibold">{s.why_title}</div>
-            <p className="text-xs text-zinc-500 max-w-2xl leading-relaxed mt-0.5">{s.why_desc}</p>
-            <Link to="/security" data-testid="why-security-link" className="text-xs text-[#E5FF00] hover:underline mt-1 inline-block">{s.why_link} →</Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Advanced (collapsed) */}
-      <div className="bg-[#0F0F12] border border-[#2A2A35] mb-6">
-        <button onClick={() => setAdvOpen((v) => !v)} data-testid="advanced-toggle"
-          className="w-full flex items-center justify-between px-6 py-4 text-left">
-          <span className="flex items-center gap-2 text-sm font-semibold text-zinc-300"><Terminal size={16} className="text-zinc-500" /> {s.adv}</span>
-          <ChevronDown size={18} className={`text-zinc-500 transition-transform ${advOpen ? "rotate-180" : ""}`} />
-        </button>
-        {advOpen && (
-          <div className="px-6 pb-6" data-testid="advanced-content">
-            <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{s.modes_label}</div>
-            {RUN_MODES.map((rm) => (
-              <CmdRow key={rm.m} label={en ? rm.en : rm.it} cmd={run(rm.m)} testid={`run-${rm.m}`} accent="text-zinc-500" />
-            ))}
-            <div className="flex flex-wrap gap-3 mt-4 border-t border-[#1A1A24] pt-4">
-              <a data-testid="download-agent-btn" href={`${API}/desktop-agent/download`} onClick={() => trackConversion("agent_download")}
-                className="inline-flex items-center gap-2 border border-[#2A2A35] px-5 py-2.5 text-sm hover:border-[#E5FF00] transition-colors">
-                <Download size={16} /> {t("desktop.download_py")}
+            <div className="mt-4 pt-3 border-t border-[#2A2A35]">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-1.5 flex items-center gap-1.5">
+                <FileCheck2 size={11} className="text-[#00FF66]" /> {s.exe_sha}
+              </div>
+              <code className="block text-[10px] text-zinc-400 font-mono break-all leading-relaxed" data-testid="exe-sha256">{AGENT_EXE_SHA256}</code>
+              <a href={`https://www.virustotal.com/gui/file/${AGENT_EXE_SHA256}`} target="_blank" rel="noreferrer" data-testid="exe-virustotal"
+                className="inline-flex items-center gap-1 mt-1.5 text-[11px] text-[#00FF66] hover:underline">
+                <ShieldCheck size={12} /> {s.exe_vt} <ExternalLink size={9} />
               </a>
-              <Link to="/app/pc" data-testid="to-mypc-btn"
-                className="inline-flex items-center gap-2 border border-[#2A2A35] px-5 py-2.5 text-sm hover:border-[#E5FF00] transition-colors">
-                <Activity size={16} /> {t("desktop.see_mypc")}
-              </Link>
             </div>
-            <p className="text-xs text-zinc-600 mt-3">{s.exec_note}</p>
-          </div>
-        )}
-      </div>
 
-      <GpuGuide vendor={gpuVendor} />
+            <div className="mt-4 pt-3 border-t border-[#2A2A35]">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-1.5">{s.exe_run}</div>
+              <CmdRow label="" cmd={exeCmd} testid="exe-run" accent="text-[#E5FF00]" />
+            </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-[#2A2A35] border border-[#2A2A35] stagger">
-        {ACTIONS.map((a, i) => (
-          <div key={i} className="bg-[#0F0F12] p-6 tile-hover">
-            <a.icon size={20} className="text-[#E5FF00] mb-3 icon-pop" />
-            <h3 className="font-display font-semibold text-base mb-1">{isEn() ? a.title_en : a.title}</h3>
-            <p className="text-zinc-500 text-xs leading-relaxed">{isEn() ? a.desc_en : a.desc}</p>
+            <a href="#powershell-method" onClick={() => setAdvOpen(true)}
+              data-testid="jump-to-secure"
+              className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-zinc-500 hover:text-[#E5FF00] transition-colors border-t border-[#2A2A35] pt-3">
+              <ShieldCheck size={12} /> {en ? "Or use the secure PowerShell method" : "Oppure usa il metodo sicuro PowerShell"} ↓
+            </a>
           </div>
-        ))}
+        </aside>
       </div>
     </div>
   );

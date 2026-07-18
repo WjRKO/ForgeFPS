@@ -617,3 +617,47 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - MOD: `/app/frontend/src/i18n.js` (tour.* strings IT+EN)
 - MOD: `/app/frontend/package.json` + yarn.lock (react-joyride)
 - MOD: `/app/CHANGELOG.md`, `/app/memory/PRD.md`
+
+### 2026-07-18 (20) - Integrazione Discord completa (A+B+C)
+- **A) Template community**: /app/docs/DISCORD_SERVER_SETUP.md con 20 canali, 6 ruoli, permessi @everyone, testi welcome/rules, server onboarding, bot moderazione, obiettivi Server Boost.
+- **B) Bot persistente discord.py 2.7.1**: /app/backend/discord_bot.py come processo supervisor separato (`/etc/supervisor/conf.d/discord-bot.conf`). Connesso come `FrameForge#0798` id 1528010986928214156. 5 slash commands sincronizzati nel guild 1528014742386376735: /mypc /benchmark /leaderboard /link /help. Handler on_member_join con welcome DM + auto-role.
+- **B2) OAuth account linking**: /app/backend/routers/discord.py con /connect /callback /status /disconnect. Scope `identify guilds.join`, state CSRF 10min TTL in `discord_oauth_states`. Salva `discord_user_id/username/avatar/linked_at` nel user. Chiama `PUT /guilds/{id}/members/{user_id}` per aggiungerlo al server + role opzionale. Idempotente su re-link.
+- **C) Webhooks outbound**: /app/backend/services/discord_webhooks.py con post_release/post_price_drop/post_milestone. Testati: 204 su entrambi (#changelog-automatico + #price-drops).
+- **Frontend**: card Discord in Account.jsx con stato dinamico (linked/unlinked). i18n IT/EN sezione `account.discord_*` (12 stringhe).
+- **Deps**: aggiunto discord.py 2.7.1 in requirements.txt.
+- **Configurazione**: DISCORD_ROLE_BOOSTED_ID lasciato vuoto in .env - assegnazione ruolo skippata se non impostato (utente completera' dopo aver creato ruolo con hierarchy corretta).
+
+## FILE MODIFICATI/CREATI (sessione 20)
+- CREATO: /app/backend/routers/discord.py
+- CREATO: /app/backend/services/__init__.py
+- CREATO: /app/backend/services/discord_webhooks.py
+- CREATO: /app/backend/discord_bot.py
+- CREATO: /etc/supervisor/conf.d/discord-bot.conf
+- CREATO: /app/docs/DISCORD_SERVER_SETUP.md
+- MOD: /app/backend/.env (aggiunte 10 DISCORD_* env)
+- MOD: /app/backend/requirements.txt (discord.py)
+- MOD: /app/backend/server.py (include router discord)
+- MOD: /app/frontend/src/pages/Account.jsx (card Discord)
+- MOD: /app/frontend/src/i18n.js (account.discord_* IT/EN)
+- MOD: /app/CHANGELOG.md, /app/memory/PRD.md
+
+## CREDENZIALI DISCORD LEAKED IN CHAT (da rigenerare)
+User ha postato secrets pubblici (CLIENT_SECRET, BOT_TOKEN, WEBHOOK URLs). Deve rigenerarli tutti dopo il testing.
+
+
+### 2026-07-18 (21) - Preview GUI Edge nella sticky card Desktop Agent
+- **AgentPreview.jsx** (`/app/frontend/src/components/AgentPreview.jsx`): componente riutilizzabile che mostra la preview della GUI live sopra il pulsante "Scarica FrameForge (.exe)" nella sticky card di `/app/desktop`.
+- **Fallback a 3 livelli**:
+  1. `<video autoPlay muted loop playsInline>` → `/assets/agent-preview.mp4` (timeout 1.5s se non parte)
+  2. `<img>` → `/assets/agent-preview.gif`
+  3. Mock CSS animato (finestra "FrameForge Agent" con title bar macOS-style, tab sidebar Gaming/Latenza/Rete/Sistema, 6 tweak che appaiono uno alla volta con badge "GIÀ ATTIVO", progress bar arcobaleno)
+- Badge overlay "LIVE GUI PREVIEW" con dot pulsante top-left, aspect 16:10, testid `agent-preview-card` / `agent-preview-video` / `agent-preview-gif` / `agent-preview-mock`.
+- Creata `/app/frontend/public/assets/` con `README.md` che spiega come registrare la GUI reale (ffmpeg one-liner: H.264 800x-2, fps 24, crf 28, muted → ~2MB per 8s).
+- **MOD**: `/app/frontend/src/pages/DesktopAgent.jsx` — import + `<AgentPreview>` inserito nella sticky panel appena prima del bottone `[data-testid="exe-download-btn"]`.
+- Verificato tramite screenshot Playwright login → `/app/desktop`: card presente, stage `mock` che rende la finestra animata con progress bar e tweak "GIÀ ATTIVO" a cascata.
+
+## FILE MODIFICATI/CREATI (sessione 21)
+- CREATO: /app/frontend/src/components/AgentPreview.jsx
+- CREATO: /app/frontend/public/assets/README.md
+- MOD: /app/frontend/src/pages/DesktopAgent.jsx (import + mount AgentPreview)
+- MOD: /app/memory/PRD.md

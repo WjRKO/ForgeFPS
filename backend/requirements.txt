@@ -19,6 +19,7 @@ cffi==2.0.0
 charset-normalizer==3.4.7
 click==8.4.2
 cryptography==49.0.0
+discord.py==2.7.1
 distro==1.9.0
 dnspython==2.8.0
 ecdsa==0.19.2

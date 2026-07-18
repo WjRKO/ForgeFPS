@@ -10,7 +10,7 @@ from database import db, client
 from auth import build_auth_router, seed_admin
 from helpers import refresh_product_price
 from settings import get_cors_origins
-from routers import advisor, builds, products, pc, push_routes, admin, profiles
+from routers import advisor, builds, products, pc, push_routes, admin, profiles, discord as discord_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("boostpc")
@@ -20,7 +20,7 @@ auth_router, get_current_user = build_auth_router(db)
 scheduler = AsyncIOScheduler()
 
 app.include_router(auth_router)
-for module in (advisor, builds, products, pc, push_routes, admin, profiles):
+for module in (advisor, builds, products, pc, push_routes, admin, profiles, discord_router):
     app.include_router(module.build(get_current_user))
 
 
@@ -96,6 +96,14 @@ async def startup():
     _write_test_credentials()
     scheduler.add_job(scheduled_price_check, "interval", minutes=45, id="price_check", replace_existing=True)
     scheduler.start()
+    # Discord: annuncia release nuove (non-blocking se webhook non configurato)
+    try:
+        from services.release_announcer import announce_new_releases
+        posted = await announce_new_releases()
+        if posted:
+            logger.info("Discord: announced %d new release(s)", posted)
+    except Exception as e:
+        logger.warning("Release announcer failed: %s", e)
     logger.info("FrameForge started")
 
 

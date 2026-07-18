@@ -8,6 +8,18 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 ## [Unreleased] — 2026-07-18
 
 ### Added
+- **Redesign coerente `/app/commands` e `/app/bios-restore`** con lo stesso pattern sticky panel di DesktopAgent:
+  - **Comandi Utili**: barra di ricerca fuzzy in tempo reale, filter chips (`Solo sicuri` / `Solo admin` / `Solo avanzati`), contatore "visibili/totali", hardware rilevato compact, jump-to categorie con badge count. Empty state se filtri non producono match.
+  - **BIOS e Ripristino**: tabs BIOS/Restore spostati nel panel destro, hardware detected compatto, jump-to sezioni con pallino colorato + count, box "regola d'oro" compatto sempre visibile.
+  - Layout `grid lg:grid-cols-[1fr_320px]`: contenuto scrollabile a sinistra, panel sticky a destra su desktop, stacking verticale su mobile.
+- **Layout sticky action panel** in `/app/agent`: pannello destro con download button + versione + SHA256 + comando exe sempre visibili anche scrollando. Feature grid spostata in cima come value proposition. Metodo PowerShell ora in accordion collassato. Backend notice mostrato solo su preview (nascosto in prod). Su mobile il layout stacka in verticale (nessun impatto UX).
+- **Integrazione Discord completa (A + B + C)**:
+  - **A) Server community template**: `docs/DISCORD_SERVER_SETUP.md` con struttura 7 categorie/20 canali, 6 ruoli, testi regole/welcome, config bot moderazione (Dyno/YAGPDB), server onboarding con 3 domande, obiettivi Server Boost e Vanity URL.
+  - **B) Bot Discord persistente (`discord.py 2.7.1`)**: worker `backend/discord_bot.py` gestito da supervisor come processo separato dal FastAPI. 5 slash commands sincronizzati nel guild: `/mypc` (Health Score), `/benchmark` (ultimo bench), `/leaderboard` (top 10), `/link` (istruzioni collegamento), `/help`. Handler `on_member_join` con welcome DM + auto-role Boosted PC.
+  - **B2) OAuth2 account linking (`identify guilds.join`)**: `backend/routers/discord.py` con `/connect` (redirect Discord), `/callback` (state CSRF con TTL 10 min, exchange code, guilds.join, assign role opzionale), `/status`, `/disconnect`. Salva `discord_user_id`, `discord_username`, `discord_avatar`, `discord_linked_at` nel documento utente.
+  - **C) Outbound webhooks**: `backend/services/discord_webhooks.py` con `post_release(version, notes_md)`, `post_price_drop(product, old, new)`, `post_milestone(text, subtitle)`, `post_raw()`. Colori brand FrameForge (`#E5FF00`, `#00E0FF`, `#00FF66`).
+  - **Frontend**: nuova card "Discord" in `/app/account` con stato collegato/scollegato, avatar + username, pulsanti "Collega Discord" (colore Discord `#5865F2`) e "Scollega". Success banner al ritorno dal callback OAuth. Stringhe i18n IT/EN dedicate (chiave `account.discord_*`).
+  - **Supervisor**: nuovo program `discord-bot` in `/etc/supervisor/conf.d/discord-bot.conf` (autostart, autorestart, log dedicati).
 - **Pagina Guida in-app (`/guida`, `/guide` → redirect)** — 5 walkthrough step-by-step con:
   - Primo boost in 3 minuti · Setup gaming competitivo · Setup streaming OBS · Leggere il benchmark 0-100 · Se qualcosa va storto
   - Ogni step marcato con badge "Sul sito" / "Sul PC" e comando PowerShell copiabile con feedback visivo
