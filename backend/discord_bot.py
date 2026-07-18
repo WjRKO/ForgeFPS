@@ -39,6 +39,9 @@ logger = logging.getLogger("frameforge.bot")
 BOT_TOKEN = (os.environ.get("DISCORD_BOT_TOKEN") or "").strip()
 GUILD_ID = (os.environ.get("DISCORD_GUILD_ID") or "").strip()
 ROLE_BOOSTED_ID = (os.environ.get("DISCORD_ROLE_BOOSTED_ID") or "").strip()
+ROLE_PRO_ID = (os.environ.get("DISCORD_ROLE_PRO") or "").strip()
+PRO_PLANS = {"pro", "creator"}  # piani che ottengono il ruolo Pro
+PRO_SYNC_INTERVAL = int(os.environ.get("DISCORD_PRO_SYNC_INTERVAL", "300"))  # 5 min
 MONGO_URL = (os.environ.get("MONGO_URL") or "").strip()
 DB_NAME = (os.environ.get("DB_NAME") or "test_database").strip()
 FRONTEND_URL = (os.environ.get("FRONTEND_URL") or "https://forgefps.dev").strip().rstrip("/")
@@ -80,6 +83,78 @@ async def _last_benchmark(user_doc: dict) -> dict | None:
     uid = str(user_doc.get("_id") or user_doc.get("id") or "")
     bench = await db.benchmarks.find_one({"user_id": uid}, sort=[("timestamp", -1)])
     return bench
+
+
+def _user_plan(user_doc: dict) -> str:
+    """Ritorna il piano dell'utente (default: free). Normalizzato lowercase."""
+    return (user_doc.get("plan") or "free").strip().lower()
+
+
+async def _sync_pro_role_for_member(guild: discord.Guild, member: discord.Member, user_doc: dict | None) -> str:
+    """Allinea il ruolo Pro sul membro Discord in base al campo `plan` nel DB.
+    Ritorna una stringa di stato per logging: 'added' | 'removed' | 'noop' | 'skip'."""
+    if not ROLE_PRO_ID:
+        return "skip"
+    role = guild.get_role(int(ROLE_PRO_ID))
+    if not role:
+        logger.warning("Ruolo Pro %s non trovato nel guild", ROLE_PRO_ID)
+        return "skip"
+    is_pro = bool(user_doc) and _user_plan(user_doc) in PRO_PLANS
+    has_role = role in member.roles
+    if is_pro and not has_role:
+        try:
+            await member.add_roles(role, reason=f"Pro auto-sync (plan={_user_plan(user_doc)})")
+            return "added"
+        except Exception as e:
+            logger.warning("add Pro role fallito per %s: %s", member.id, e)
+            return "skip"
+    if (not is_pro) and has_role:
+        try:
+            await member.remove_roles(role, reason="Pro auto-sync (plan decaduto)")
+            return "removed"
+        except Exception as e:
+            logger.warning("remove Pro role fallito per %s: %s", member.id, e)
+            return "skip"
+    return "noop"
+
+
+async def _pro_sync_loop():
+    """Task background: ogni PRO_SYNC_INTERVAL secondi allinea il ruolo Pro
+    a tutti gli utenti che hanno Discord linkato. Idempotente."""
+    await client.wait_until_ready()
+    if not ROLE_PRO_ID:
+        logger.info("Pro sync loop: DISCORD_ROLE_PRO non impostato, skip")
+        return
+    guild = client.get_guild(int(GUILD_ID))
+    if not guild:
+        logger.warning("Pro sync loop: guild %s non trovato, skip", GUILD_ID)
+        return
+    while not client.is_closed():
+        try:
+            counts = {"added": 0, "removed": 0, "noop": 0, "skip": 0}
+            cursor = db.users.find(
+                {"discord_user_id": {"$exists": True, "$nin": [None, ""]}},
+                {"discord_user_id": 1, "plan": 1, "email": 1},
+            )
+            async for udoc in cursor:
+                did = str(udoc.get("discord_user_id") or "")
+                if not did:
+                    continue
+                member = guild.get_member(int(did))
+                if not member:
+                    try:
+                        member = await guild.fetch_member(int(did))
+                    except Exception:
+                        continue
+                result = await _sync_pro_role_for_member(guild, member, udoc)
+                counts[result] = counts.get(result, 0) + 1
+            logger.info(
+                "Pro sync completato: +%d, -%d, invariati=%d, skip=%d",
+                counts["added"], counts["removed"], counts["noop"], counts["skip"],
+            )
+        except Exception as e:
+            logger.exception("Pro sync loop errore: %s", e)
+        await asyncio.sleep(PRO_SYNC_INTERVAL)
 
 
 def _link_hint_embed() -> discord.Embed:
@@ -173,6 +248,55 @@ async def cmd_help(interaction: discord.Interaction):
     await interaction.response.send_message(embed=emb, ephemeral=True)
 
 
+@tree.command(
+    name="set-plan",
+    description="[ADMIN] Cambia il piano di un utente collegato (free/pro/creator)",
+    guild=GUILD,
+)
+@app_commands.describe(user="Membro Discord (deve aver linkato l'account)", plan="Piano da assegnare")
+@app_commands.choices(plan=[
+    app_commands.Choice(name="free", value="free"),
+    app_commands.Choice(name="pro", value="pro"),
+    app_commands.Choice(name="creator", value="creator"),
+])
+async def cmd_set_plan(
+    interaction: discord.Interaction,
+    user: discord.Member,
+    plan: app_commands.Choice[str],
+):
+    # Permesso: solo Administrator del server
+    if not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message(
+            "Solo gli Amministratori del server possono usare questo comando.",
+            ephemeral=True,
+        )
+    doc = await _find_user_by_discord_id(str(user.id))
+    if not doc:
+        return await interaction.response.send_message(
+            f"{user.mention} non ha ancora collegato l'account FrameForge. "
+            f"Chiedigli di fare `/link` o di visitare {FRONTEND_URL}/app/account.",
+            ephemeral=True,
+        )
+    new_plan = plan.value.strip().lower()
+    await db.users.update_one(
+        {"_id": doc["_id"]},
+        {"$set": {"plan": new_plan, "plan_updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    # sync ruolo immediato
+    doc["plan"] = new_plan
+    result = await _sync_pro_role_for_member(interaction.guild, user, doc)
+    role_msg = {
+        "added": "\u2705 Ruolo Pro aggiunto.",
+        "removed": "\u2705 Ruolo Pro rimosso.",
+        "noop": "Nessuna modifica al ruolo (gi\u00e0 corretto).",
+        "skip": "\u26a0\ufe0f Sync ruolo saltato (controlla logs).",
+    }.get(result, result)
+    await interaction.response.send_message(
+        f"Piano di {user.mention} aggiornato a **{new_plan}**. {role_msg}",
+        ephemeral=True,
+    )
+
+
 # --------- Eventi ---------
 @client.event
 async def on_ready():
@@ -182,6 +306,11 @@ async def on_ready():
         logger.info("Slash commands sincronizzati (%d) nel guild %s", len(synced), GUILD_ID)
     except Exception as e:
         logger.warning("Sync commands fallito: %s", e)
+    # avvia task periodico Pro sync (solo una volta)
+    if ROLE_PRO_ID and not getattr(client, "_pro_sync_started", False):
+        client._pro_sync_started = True
+        client.loop.create_task(_pro_sync_loop())
+        logger.info("Pro sync loop avviato (intervallo=%ds)", PRO_SYNC_INTERVAL)
 
 
 @client.event
@@ -195,17 +324,18 @@ async def on_member_join(member: discord.Member):
         )
     except discord.Forbidden:
         pass
-    # se ha gia' l'account collegato -> assegna ruolo
-    if not ROLE_BOOSTED_ID:
-        return
+    # se ha gia' l'account collegato -> assegna ruoli
     doc = await _find_user_by_discord_id(str(member.id))
-    if doc:
+    if ROLE_BOOSTED_ID and doc:
         role = member.guild.get_role(int(ROLE_BOOSTED_ID))
         if role:
             try:
                 await member.add_roles(role, reason="Boosted PC (account collegato)")
             except Exception as e:
-                logger.warning("add_roles fallito per %s: %s", member.id, e)
+                logger.warning("add_roles Boosted fallito per %s: %s", member.id, e)
+    # sync ruolo Pro (in base a `plan` DB)
+    if doc:
+        await _sync_pro_role_for_member(member.guild, member, doc)
 
 
 def main():

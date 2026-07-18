@@ -99,16 +99,21 @@ async def _fetch_discord_user(access_token: str) -> dict:
         return r.json()
 
 
-async def _add_to_guild(discord_user_id: str, access_token: str) -> None:
+async def _add_to_guild(discord_user_id: str, access_token: str, user_plan: str = "free") -> None:
     guild_id = _env("DISCORD_GUILD_ID")
     bot_token = _env("DISCORD_BOT_TOKEN")
     role_id = _env("DISCORD_ROLE_BOOSTED_ID")
+    role_pro_id = _env("DISCORD_ROLE_PRO")
     if not (guild_id and bot_token):
         logger.info("Guild add skipped: missing DISCORD_GUILD_ID or DISCORD_BOT_TOKEN")
         return
-    payload = {"access_token": access_token}
-    if role_id:
-        payload["roles"] = [role_id]
+    # Ruoli da assegnare al join: Boosted PC sempre; Pro se piano compatibile
+    roles_to_add = [r for r in [role_id] if r]
+    if role_pro_id and (user_plan or "").strip().lower() in ("pro", "creator"):
+        roles_to_add.append(role_pro_id)
+    payload: dict = {"access_token": access_token}
+    if roles_to_add:
+        payload["roles"] = roles_to_add
     headers = {
         "Authorization": f"Bot {bot_token}",
         "Content-Type": "application/json",
@@ -120,12 +125,13 @@ async def _add_to_guild(discord_user_id: str, access_token: str) -> None:
         if r.status_code not in (201, 204):
             logger.warning("Discord guild add returned %s: %s", r.status_code, r.text)
             return
-        # Idempotente: se gia' era nel guild, assegno il ruolo
-        if role_id and r.status_code == 204:
-            role_url = f"{DISCORD_API}/guilds/{guild_id}/members/{discord_user_id}/roles/{role_id}"
-            rr = await client.put(role_url, headers={"Authorization": f"Bot {bot_token}"})
-            if rr.status_code not in (204, 200):
-                logger.warning("Discord role assign returned %s: %s", rr.status_code, rr.text)
+        # Idempotente: se era gia' nel guild, assegno singolarmente i ruoli
+        if r.status_code == 204:
+            for rid in roles_to_add:
+                role_url = f"{DISCORD_API}/guilds/{guild_id}/members/{discord_user_id}/roles/{rid}"
+                rr = await client.put(role_url, headers={"Authorization": f"Bot {bot_token}"})
+                if rr.status_code not in (204, 200):
+                    logger.warning("Discord role %s assign returned %s: %s", rid, rr.status_code, rr.text)
 
 
 def build(get_current_user):
@@ -220,7 +226,8 @@ def build(get_current_user):
         )
 
         try:
-            await _add_to_guild(me["id"], token["access_token"])
+            user_plan = (user.get("plan") or "free")
+            await _add_to_guild(me["id"], token["access_token"], user_plan=user_plan)
         except Exception as e:
             logger.warning("Guild add failed but link saved: %s", e)
 
