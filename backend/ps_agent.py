@@ -1220,7 +1220,699 @@ function Invoke-Restore {
   return 'Impostazioni ripristinate ai valori precedenti.'
 }
 
-# ---------------- GUI ----------------
+# ---------------- Modern Web GUI (Edge --app + local HTTP server) ----------------
+function Show-WebGui {
+  # Trova msedge
+  $edgePaths = @(
+    "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
+    "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+  )
+  $edgeExe = $edgePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if (-not $edgeExe) { return $false }
+
+  $isAdmin = Test-Admin
+
+  # Prepara mappe tweak / fit
+  $script:TWMAP = @{}
+  foreach ($t in $script:TWEAKS) { $script:TWMAP[$t.id] = $t }
+  $script:FITMAP = @{}
+  foreach ($t in $script:TWEAKS) { $f = 'ok'; if ($t.fit) { $f = & $t.fit }; if (-not $f) { $f = 'ok' }; $script:FITMAP[$t.id] = $f }
+  $script:WEBLOG = New-Object System.Collections.ArrayList
+  $script:APPLYING = $false
+
+  # Session token random per gli endpoint locali
+  $chars = [char[]](([byte][char]"A"..[byte][char]"Z") + ([byte][char]"a"..[byte][char]"z") + ([byte][char]"0"..[byte][char]"9"))
+  $sessionToken = -join (1..48 | ForEach-Object { $chars | Get-Random })
+
+  # Trova porta libera su localhost
+  $probe = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, 0)
+  $probe.Start(); $port = ($probe.LocalEndpoint).Port; $probe.Stop()
+
+  # Avvia listener SOLO su 127.0.0.1
+  $listener = New-Object System.Net.HttpListener
+  $listener.Prefixes.Add("http://127.0.0.1:$port/")
+  try { $listener.Start() } catch { return $false }
+
+  function WebLog($m) { [void]$script:WEBLOG.Add(@{ ts=(Get-Date).ToString("HH:mm:ss"); msg=$m }) }
+  function Send-Json { param($ctx, $obj, [int]$status=200)
+    $json = $obj | ConvertTo-Json -Depth 8 -Compress
+    $bytes = [Text.Encoding]::UTF8.GetBytes($json)
+    $ctx.Response.StatusCode = $status
+    $ctx.Response.ContentType = "application/json; charset=utf-8"
+    $ctx.Response.Headers.Add("Cache-Control","no-store")
+    $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+    $ctx.Response.OutputStream.Close()
+  }
+  function Send-Html { param($ctx, $html)
+    $bytes = [Text.Encoding]::UTF8.GetBytes($html)
+    $ctx.Response.StatusCode = 200
+    $ctx.Response.ContentType = "text/html; charset=utf-8"
+    $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+    $ctx.Response.OutputStream.Close()
+  }
+  function Read-Body($ctx) {
+    $sr = New-Object System.IO.StreamReader($ctx.Request.InputStream, [Text.Encoding]::UTF8)
+    $body = $sr.ReadToEnd(); $sr.Close(); return $body
+  }
+  function Check-Auth($ctx, $sess) {
+    $tk = $ctx.Request.QueryString["tk"]
+    if (-not $tk) { $tk = $ctx.Request.Headers["X-FF-Token"] }
+    return ($tk -eq $sess)
+  }
+  function Get-TweakDto {
+    $arr = @()
+    foreach ($t in $script:TWEAKS) {
+      $fit = $script:FITMAP[$t.id]
+      $skip = $fit -like "skip:*"; $warn = $fit -like "warn:*"; $note = $fit -like "note:*"
+      $hint = ""; if ($skip -or $warn -or $note) { $hint = ($fit -split ":", 2)[1] }
+      $st = & $t.state
+      $arr += @{
+        id = $t.id; cat = $t.cat; name = $t.name; problem = $t.problem
+        reason = $t.reason; desc = $t.desc; impact = $t.impact; risk = $t.risk
+        state = $st; fit = @{ ok = (-not $skip); warn = [bool]$warn; note = [bool]$note; skip = [bool]$skip; hint = $hint }
+      }
+    }
+    return $arr
+  }
+
+  # HTML della GUI (in singola-quote here-string: nessuna $-expansion PS; JS usa " e backtick)
+  $html = @'
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>FrameForge - Ottimizzazioni sicure</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #12121a;
+    --card: #14141c;
+    --card-hi: #1a1a24;
+    --border: #23232e;
+    --accent: #E5FF00;
+    --ok: #00FF66;
+    --warn: #FFAA00;
+    --danger: #FF3355;
+    --info: #00E0FF;
+    --text: #e6e6ec;
+    --muted: #7d7d8a;
+    --dim: #4a4a55;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI Variable", "Segoe UI", -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 0; }
+  ::-webkit-scrollbar-thumb:hover { background: #33333e; }
+
+  header {
+    padding: 20px 28px 16px;
+    background: linear-gradient(180deg, var(--bg2) 0%, var(--bg) 100%);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .brand-row { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+  .brand {
+    font-size: 22px; font-weight: 800; letter-spacing: 2px;
+    color: var(--accent);
+    text-shadow: 0 0 24px rgba(229,255,0,0.25);
+  }
+  .brand-sub { font-size: 12px; color: var(--muted); }
+  .ver-pill {
+    font-size: 10px; padding: 2px 8px; border: 1px solid var(--info);
+    color: var(--info); font-family: "Consolas", monospace;
+  }
+  .safety {
+    color: var(--ok); font-size: 12px; margin-top: 4px; letter-spacing: 0.2px;
+  }
+  .safety strong { color: var(--ok); }
+  .meta-row {
+    display: grid; grid-template-columns: 1fr auto; align-items: end;
+    gap: 12px; margin-top: 12px;
+  }
+  .hw-line { font-size: 12px; color: var(--info); font-family: "Consolas", monospace; }
+  .hw-line b { color: var(--accent); font-weight: 600; }
+  .admin-line { font-size: 12px; margin-top: 4px; }
+  .admin-line.ok { color: var(--ok); }
+  .admin-line.no { color: var(--danger); }
+  .backup-badge {
+    font-size: 11px; padding: 6px 12px; border: 1px solid var(--info);
+    color: var(--info); font-family: "Consolas", monospace;
+  }
+
+  .preset-bar {
+    padding: 14px 28px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+    flex-shrink: 0;
+  }
+  .preset-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 2px; margin-right: 6px; }
+  .preset-btn {
+    background: var(--card); color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 20px; font-size: 13px; font-weight: 600;
+    cursor: pointer; letter-spacing: 0.4px;
+    transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease;
+    font-family: inherit;
+  }
+  .preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .preset-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+  .preset-btn:active { transform: scale(0.97); }
+  .preset-spacer { flex: 1; }
+  .search {
+    background: var(--card); color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 14px; width: 220px; font-size: 12px;
+    font-family: inherit; outline: none;
+    transition: border-color 120ms ease;
+  }
+  .search:focus { border-color: var(--accent); }
+
+  .tabs {
+    display: flex; gap: 4px; padding: 0 28px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    flex-shrink: 0;
+  }
+  .tab {
+    background: transparent; border: none; color: var(--muted);
+    padding: 12px 20px; font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: inherit; letter-spacing: 0.3px;
+    border-bottom: 2px solid transparent;
+    transition: color 120ms ease, border-color 120ms ease;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab .count { color: var(--dim); font-size: 11px; margin-left: 6px; }
+  .tab.active .count { color: var(--accent); }
+
+  main {
+    flex: 1; overflow-y: auto;
+    padding: 20px 28px 12px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 14px;
+    align-content: start;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    padding: 16px 18px; position: relative;
+    transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+    animation: fadeUp 260ms cubic-bezier(.22,1,.36,1) both;
+  }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none;} }
+  .card:hover { border-color: #3a3a48; background: var(--card-hi); }
+  .card.selected { border-color: var(--accent); }
+  .card.skip { opacity: 0.45; }
+  .card::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--accent);
+  }
+  .card.risk-caution::before { background: var(--warn); }
+  .card.skip::before { background: var(--dim); }
+
+  .card-head { display: flex; align-items: flex-start; gap: 10px; }
+  .cb {
+    appearance: none; width: 18px; height: 18px; margin: 2px 0 0;
+    border: 1px solid var(--border); background: var(--bg2);
+    cursor: pointer; flex-shrink: 0; position: relative;
+    transition: border-color 120ms ease, background 120ms ease;
+  }
+  .cb:hover { border-color: var(--accent); }
+  .cb:checked { background: var(--accent); border-color: var(--accent); }
+  .cb:checked::after {
+    content: ""; position: absolute;
+    left: 5px; top: 1px; width: 4px; height: 10px;
+    border: solid #000; border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  .cb:disabled { opacity: 0.4; cursor: not-allowed; }
+  .name { flex: 1; font-weight: 700; font-size: 14px; color: var(--text); }
+  .risk-pill {
+    font-size: 9px; padding: 2px 6px; letter-spacing: 1px;
+    font-weight: 700; text-transform: uppercase;
+    background: var(--warn); color: #000;
+  }
+  .state {
+    font-size: 11px; margin-top: 6px; padding-left: 28px;
+    color: var(--accent); font-family: "Consolas", monospace;
+  }
+  .state.ok { color: var(--ok); }
+  .desc-block {
+    margin-top: 12px; padding-left: 28px;
+    font-size: 12px; line-height: 1.65;
+  }
+  .desc-block .row { display: flex; gap: 8px; margin-bottom: 4px; }
+  .desc-block .row .k {
+    color: var(--warn); font-weight: 700; flex-shrink: 0; min-width: 68px;
+  }
+  .desc-block .row .k.motivo { color: var(--muted); }
+  .desc-block .row .k.mod { color: var(--muted); }
+  .desc-block .row .k.impatto { color: var(--ok); }
+  .desc-block .row .v { color: var(--text); }
+  .desc-block .row .v.impatto { color: var(--ok); }
+  .actions { margin-top: 12px; padding-left: 28px; display: flex; gap: 8px; }
+  .btn-apply-one {
+    background: transparent; color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 6px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.2px; cursor: pointer; font-family: inherit;
+    transition: background 120ms ease, color 120ms ease;
+  }
+  .btn-apply-one:hover { background: var(--accent); color: #000; }
+  .btn-apply-one:disabled { opacity: 0.4; cursor: not-allowed; }
+  .hint {
+    margin-top: 8px; padding: 8px 12px 8px 28px;
+    font-size: 11px; color: var(--muted);
+    border-left: 2px solid var(--warn); background: rgba(255,170,0,0.06);
+  }
+  .hint.skip { border-left-color: var(--dim); color: var(--dim); }
+
+  footer {
+    background: var(--bg2); border-top: 1px solid var(--border);
+    padding: 12px 28px 14px; flex-shrink: 0;
+    display: grid; grid-template-columns: 1fr auto; gap: 16px;
+    align-items: end;
+  }
+  .log {
+    background: #000; border: 1px solid var(--border);
+    height: 140px; overflow-y: auto;
+    font-family: "Consolas", monospace; font-size: 12px;
+    padding: 8px 12px; color: var(--ok);
+  }
+  .log .ts { color: var(--dim); margin-right: 8px; }
+  .btn-bar { display: flex; flex-direction: column; gap: 8px; }
+  .bench-toggle {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--info); cursor: pointer;
+    user-select: none;
+  }
+  .btn-primary {
+    background: var(--accent); color: #000; border: none;
+    padding: 14px 32px; font-size: 13px; font-weight: 800; letter-spacing: 1.4px;
+    text-transform: uppercase; cursor: pointer; font-family: inherit;
+    transition: filter 120ms ease, transform 120ms ease;
+  }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-danger {
+    background: transparent; color: var(--danger); border: 1px solid var(--danger);
+    padding: 10px 20px; font-size: 12px; font-weight: 700; letter-spacing: 1.2px;
+    text-transform: uppercase; cursor: pointer; font-family: inherit;
+    transition: background 120ms ease, color 120ms ease;
+  }
+  .btn-danger:hover { background: var(--danger); color: #000; }
+
+  .selection-count {
+    font-size: 11px; color: var(--muted); text-align: right;
+    letter-spacing: 0.5px;
+  }
+  .selection-count b { color: var(--accent); }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--card); border: 1px solid var(--ok); color: var(--ok);
+    padding: 10px 22px; font-size: 13px; font-weight: 600;
+    opacity: 0; transition: opacity 220ms ease;
+    z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+
+  .empty {
+    grid-column: 1 / -1;
+    text-align: center; color: var(--muted); padding: 60px 20px;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand-row">
+      <div class="brand">FRAMEFORGE</div>
+      <div class="brand-sub">Ottimizzazioni trasparenti per streamer &amp; gamer</div>
+      <div class="ver-pill">GUI v2</div>
+    </div>
+    <div class="safety">
+      <strong>SICUREZZA GARANTITA</strong> - Non tocchiamo MAI Windows Defender, Firewall o servizi di sicurezza. Ogni modifica ha backup automatico ed e reversibile.
+    </div>
+    <div class="meta-row">
+      <div>
+        <div class="hw-line" id="hwLine">PC: rilevamento in corso...</div>
+        <div class="admin-line" id="adminLine"></div>
+      </div>
+      <div class="backup-badge" id="backupBadge">Backup: 0</div>
+    </div>
+  </header>
+
+  <div class="preset-bar">
+    <div class="preset-label">Preset:</div>
+    <button class="preset-btn" data-preset="competitive" data-testid="preset-competitive">Competitivo</button>
+    <button class="preset-btn" data-preset="streaming" data-testid="preset-streaming">Streaming</button>
+    <button class="preset-btn" data-preset="complete" data-testid="preset-complete">Completo</button>
+    <button class="preset-btn" data-preset="none" data-testid="preset-none">Nessuno</button>
+    <div class="preset-spacer"></div>
+    <input type="text" class="search" id="searchBox" placeholder="Cerca tweak..." data-testid="search-input" />
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <main id="cards"></main>
+
+  <footer>
+    <div class="log" id="log"></div>
+    <div class="btn-bar">
+      <div class="selection-count" id="selCount">0 tweak selezionati</div>
+      <label class="bench-toggle">
+        <input type="checkbox" id="benchToggle" checked /> Benchmark PRIMA/DOPO
+      </label>
+      <button class="btn-primary" id="applyBtn" data-testid="apply-selected-btn">Applica selezionati</button>
+      <button class="btn-danger" id="restoreBtn" data-testid="restore-all-btn">Ripristina tutto</button>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const TOKEN = "__TOKEN__";
+  const CATS = [
+    { key: "gaming",  label: "Gaming & FPS" },
+    { key: "input",   label: "Latenza & Input" },
+    { key: "network", label: "Rete & Streaming" },
+    { key: "system",  label: "Sistema & Debloat" }
+  ];
+  let state = { tweaks: [], hw: {}, admin: false, backup: 0, presets: {} };
+  let selected = new Set();
+  let activeCat = "gaming";
+  let searchQ = "";
+  let logSince = 0;
+  let applying = false;
+
+  function api(path, opts) {
+    opts = opts || {};
+    const url = path + (path.indexOf("?") >= 0 ? "&" : "?") + "tk=" + encodeURIComponent(TOKEN);
+    return fetch(url, opts).then(r => r.json());
+  }
+  function toast(msg, cls) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = "toast show" + (cls ? " " + cls : "");
+    clearTimeout(t._h); t._h = setTimeout(() => t.className = "toast", 2400);
+  }
+  function esc(s) {
+    return String(s || "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  }
+  function stateClass(s) {
+    const x = String(s || "");
+    if (/attivo|disabilit|disattivat|gia|prestazioni/i.test(x)) return "ok";
+    return "";
+  }
+
+  function renderTabs() {
+    const el = document.getElementById("tabs");
+    el.innerHTML = CATS.map(c => {
+      const n = state.tweaks.filter(t => t.cat === c.key && !t.fit.skip).length;
+      return `<button class="tab ${c.key === activeCat ? "active" : ""}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${n}</span></button>`;
+    }).join("");
+    [...el.querySelectorAll(".tab")].forEach(b => b.onclick = () => { activeCat = b.dataset.cat; renderTabs(); renderCards(); });
+  }
+
+  function renderCards() {
+    const el = document.getElementById("cards");
+    const items = state.tweaks.filter(t => t.cat === activeCat).filter(t => {
+      if (!searchQ) return true;
+      const q = searchQ.toLowerCase();
+      return (t.name + " " + (t.problem||"") + " " + (t.impact||"")).toLowerCase().includes(q);
+    });
+    if (!items.length) { el.innerHTML = `<div class="empty">Nessun tweak in questa categoria.</div>`; return; }
+    el.innerHTML = items.map(t => {
+      const sel = selected.has(t.id);
+      const skipCls = t.fit.skip ? " skip" : "";
+      const riskCls = t.risk === "caution" ? " risk-caution" : "";
+      const selCls = sel ? " selected" : "";
+      const stCls = stateClass(t.state);
+      const riskPill = t.risk === "caution" ? `<span class="risk-pill">Cautela</span>` : "";
+      let hint = "";
+      if (t.fit.skip) hint = `<div class="hint skip">Non applicabile: ${esc(t.fit.hint)}</div>`;
+      else if (t.fit.warn) hint = `<div class="hint">Attenzione: ${esc(t.fit.hint)}</div>`;
+      else if (t.fit.note) hint = `<div class="hint">Nota: ${esc(t.fit.hint)}</div>`;
+      return `
+        <div class="card${skipCls}${riskCls}${selCls}" data-id="${t.id}" data-testid="card-${t.id}">
+          <div class="card-head">
+            <input type="checkbox" class="cb" data-id="${t.id}" ${sel?"checked":""} ${t.fit.skip?"disabled":""} data-testid="cb-${t.id}" />
+            <div class="name">${esc(t.name)}</div>
+            ${riskPill}
+          </div>
+          <div class="state ${stCls}">Stato: ${esc(t.state)}</div>
+          <div class="desc-block">
+            <div class="row"><div class="k">Problema</div><div class="v">${esc(t.problem)}</div></div>
+            <div class="row"><div class="k motivo">Motivo</div><div class="v">${esc(t.reason)}</div></div>
+            <div class="row"><div class="k mod">Modifica</div><div class="v">${esc(t.desc)}</div></div>
+            <div class="row"><div class="k impatto">Impatto</div><div class="v impatto">${esc(t.impact)}</div></div>
+          </div>
+          ${hint}
+          <div class="actions">
+            <button class="btn-apply-one" data-apply="${t.id}" ${t.fit.skip?"disabled":""} data-testid="apply-one-${t.id}">Applica</button>
+          </div>
+        </div>`;
+    }).join("");
+    el.querySelectorAll(".cb").forEach(cb => cb.onchange = e => {
+      const id = e.target.dataset.id;
+      if (e.target.checked) selected.add(id); else selected.delete(id);
+      updateSelCount();
+      const card = e.target.closest(".card");
+      if (card) card.classList.toggle("selected", e.target.checked);
+    });
+    el.querySelectorAll(".btn-apply-one").forEach(b => b.onclick = () => applyOne(b.dataset.apply));
+  }
+
+  function updateSelCount() {
+    document.getElementById("selCount").innerHTML = `<b>${selected.size}</b> tweak selezionati`;
+  }
+  function renderHeader() {
+    const hw = state.hw || {};
+    const gpuTxt = hw.gpu || "?";
+    const chassis = hw.laptop ? "Laptop" : "Desktop";
+    const disk = hw.ssd ? "SSD" : "HDD";
+    const win11 = hw.win11 ? " | Win 11" : "";
+    document.getElementById("hwLine").innerHTML =
+      `PC: <b>${chassis}</b> | GPU <b>${esc(gpuTxt)}</b> | RAM <b>${hw.ram||"?"} GB</b> | <b>${disk}</b>${win11} -> tweak adattati automaticamente`;
+    const adm = document.getElementById("adminLine");
+    if (state.admin) { adm.className = "admin-line ok"; adm.textContent = "Amministratore: SI - tutte le ottimizzazioni disponibili."; }
+    else { adm.className = "admin-line no"; adm.textContent = "Amministratore: NO - alcune opzioni non verranno applicate."; }
+    document.getElementById("backupBadge").textContent = `Backup: ${state.backup} modifiche reversibili`;
+  }
+
+  function applyPreset(key) {
+    document.querySelectorAll(".preset-btn").forEach(b => b.classList.toggle("active", b.dataset.preset === key));
+    selected.clear();
+    if (key === "none") { renderCards(); updateSelCount(); return; }
+    const list = key === "complete"
+      ? state.tweaks.filter(t => !t.fit.skip).map(t => t.id)
+      : (state.presets[key] || []).filter(id => {
+          const t = state.tweaks.find(x => x.id === id);
+          return t && !t.fit.skip;
+        });
+    list.forEach(id => selected.add(id));
+    renderCards(); updateSelCount();
+  }
+
+  function pollLog() {
+    fetch(`/api/log?tk=${encodeURIComponent(TOKEN)}&since=${logSince}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.logs && d.logs.length) {
+          const el = document.getElementById("log");
+          d.logs.forEach(l => {
+            const div = document.createElement("div");
+            div.innerHTML = `<span class="ts">${l.ts}</span>${esc(l.msg)}`;
+            el.appendChild(div);
+          });
+          el.scrollTop = el.scrollHeight;
+          logSince = d.total;
+        }
+        if (typeof d.applying === "boolean") setApplying(d.applying);
+      }).catch(()=>{});
+  }
+  function setApplying(v) {
+    applying = v;
+    document.getElementById("applyBtn").disabled = v;
+    document.getElementById("restoreBtn").disabled = v;
+  }
+
+  async function refreshState(showToast) {
+    const d = await api("/api/state");
+    state.tweaks = d.tweaks || [];
+    state.hw = d.hw || {}; state.admin = !!d.admin;
+    state.backup = d.backup || 0; state.presets = d.presets || {};
+    renderHeader(); renderTabs(); renderCards();
+    if (showToast) toast("Aggiornato", "ok");
+  }
+
+  async function applySelected() {
+    if (!selected.size) { toast("Seleziona almeno un tweak"); return; }
+    setApplying(true);
+    const bench = document.getElementById("benchToggle").checked;
+    const d = await api("/api/apply", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ ids: Array.from(selected), benchmark: bench }) });
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; renderHeader(); renderCards(); }
+    setApplying(false);
+    toast("Ottimizzazioni applicate", "ok");
+  }
+  async function applyOne(id) {
+    setApplying(true);
+    const d = await api("/api/apply-one", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ id }) });
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; renderHeader(); renderCards(); }
+    setApplying(false);
+    toast("Applicato");
+  }
+  async function doRestore() {
+    if (!confirm("Ripristinare TUTTE le modifiche dal backup?")) return;
+    setApplying(true);
+    const d = await api("/api/restore", { method: "POST", headers:{"X-FF-Token":TOKEN} });
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = 0; renderHeader(); renderCards(); }
+    setApplying(false);
+    toast("Ripristino completato", "ok");
+  }
+
+  // events
+  document.querySelectorAll(".preset-btn").forEach(b => b.onclick = () => applyPreset(b.dataset.preset));
+  document.getElementById("applyBtn").onclick = applySelected;
+  document.getElementById("restoreBtn").onclick = doRestore;
+  document.getElementById("searchBox").oninput = e => { searchQ = e.target.value; renderCards(); };
+  window.addEventListener("beforeunload", () => {
+    try { navigator.sendBeacon(`/api/close?tk=${encodeURIComponent(TOKEN)}`, ""); } catch(e){}
+  });
+
+  refreshState();
+  setInterval(pollLog, 400);
+})();
+</script>
+</body>
+</html>
+'@
+  $html = $html.Replace('__TOKEN__', $sessionToken)
+
+  # Directory temp per il profilo Edge (isolato)
+  $tmpDir = Join-Path $env:TEMP "forgefps-gui"
+  if (-not (Test-Path $tmpDir)) { New-Item -ItemType Directory -Path $tmpDir | Out-Null }
+  $profileDir = Join-Path $tmpDir 'edge-profile'
+
+  # Lancia Edge in modalita app (chromeless)
+  $edgeArgs = @(
+    "--app=http://127.0.0.1:$port/?tk=$sessionToken",
+    "--user-data-dir=`"$profileDir`"",
+    "--window-size=1280,860",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-features=Translate,BackForwardCache"
+  )
+  try {
+    $edge = Start-Process -FilePath $edgeExe -ArgumentList $edgeArgs -PassThru
+  } catch { try { $listener.Stop() } catch {}; return $false }
+
+  # Loop richieste (async con timeout per rilevare chiusura Edge)
+  $ar = $listener.BeginGetContext($null, $null)
+  while (($edge -and -not $edge.HasExited) -and $listener.IsListening) {
+    if ($ar.AsyncWaitHandle.WaitOne(180)) {
+      try {
+        $ctx = $listener.EndGetContext($ar)
+      } catch { break }
+      $ar = $listener.BeginGetContext($null, $null)
+      $req = $ctx.Request
+      $path = $req.Url.AbsolutePath
+      $method = $req.HttpMethod
+      try {
+        if ($path -eq '/' -or $path -eq '/index.html') {
+          Send-Html $ctx $html
+        }
+        elseif (-not (Check-Auth $ctx $sessionToken)) {
+          Send-Json $ctx @{ err = 'auth' } 401
+        }
+        elseif ($path -eq '/api/state' -and $method -eq 'GET') {
+          $dto = @{
+            hw = $script:HW; admin = $isAdmin; backup = $script:BK.Count
+            tweaks = Get-TweakDto
+            presets = @{
+              competitive = @($script:PRESETS.competitivo)
+              streaming   = @($script:PRESETS.streaming)
+              complete    = @($script:TWEAKS | ForEach-Object { $_.id })
+            }
+          }
+          Send-Json $ctx $dto
+        }
+        elseif ($path -eq '/api/log' -and $method -eq 'GET') {
+          $since = 0; try { $since = [int]$req.QueryString['since'] } catch {}
+          $slice = @()
+          if ($script:WEBLOG.Count -gt $since) {
+            $slice = @($script:WEBLOG.GetRange($since, $script:WEBLOG.Count - $since))
+          }
+          Send-Json $ctx @{ logs = $slice; total = $script:WEBLOG.Count; applying = $script:APPLYING }
+        }
+        elseif ($path -eq '/api/apply' -and $method -eq 'POST') {
+          $body = Read-Body $ctx | ConvertFrom-Json
+          $script:APPLYING = $true
+          $ids = @($body.ids)
+          $bench = [bool]$body.benchmark
+          $before = $null; $after = $null
+          if ($bench) { WebLog 'Benchmark PRIMA in corso...'; $before = Run-Benchmark; WebLog ("  Punteggio PRIMA: {0}" -f $before.overall) }
+          foreach ($id in $ids) {
+            $t = $script:TWMAP[$id]; if (-not $t) { continue }
+            WebLog ("-> {0}" -f $t.name); & $t.apply
+          }
+          Save-Backup
+          if ($bench) {
+            WebLog 'Benchmark DOPO in corso...'; $after = Run-Benchmark
+            $pct = 0; if ($before.overall) { $pct = [math]::Round(($after.overall - $before.overall) / $before.overall * 100) }
+            WebLog ("  Punteggio DOPO: {0}  (variazione {1}%)" -f $after.overall, $pct)
+            Send-Benchmark @{ before = $before; after = $after; ts = (Get-Date).ToString('o') }
+          }
+          Send-Data (Get-Specs) (Get-Health) (Get-StartupList)
+          WebLog 'FATTO. Dati inviati a FrameForge. Riavvio consigliato.'
+          $script:APPLYING = $false
+          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; before = $before; after = $after }
+        }
+        elseif ($path -eq '/api/apply-one' -and $method -eq 'POST') {
+          $body = Read-Body $ctx | ConvertFrom-Json
+          $t = $script:TWMAP[$body.id]
+          if ($t) { WebLog ("-> {0}" -f $t.name); & $t.apply; Save-Backup }
+          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count }
+        }
+        elseif ($path -eq '/api/restore' -and $method -eq 'POST') {
+          WebLog 'Ripristino dal backup...'; $msg = Invoke-Restore; WebLog ('  ' + $msg)
+          Send-Json $ctx @{ ok = $true; message = $msg; tweaks = Get-TweakDto; backup = $script:BK.Count }
+        }
+        elseif ($path -eq '/api/close') {
+          Send-Json $ctx @{ ok = $true }
+          try { if ($edge -and -not $edge.HasExited) { $edge.CloseMainWindow() | Out-Null } } catch {}
+          break
+        }
+        else {
+          $ctx.Response.StatusCode = 404; $ctx.Response.Close()
+        }
+      } catch {
+        try { Send-Json $ctx @{ err = $_.ToString() } 500 } catch {}
+      }
+    }
+  }
+  try { $listener.Stop() } catch {}
+  try { $listener.Close() } catch {}
+  return $true
+}
+
+# ---------------- GUI (legacy WinForms fallback) ----------------
 function Show-Gui {
   try { Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing } catch { return $false }
   [System.Windows.Forms.Application]::EnableVisualStyles()
@@ -1511,7 +2203,12 @@ if ($MODE -eq 'benchmark') {
 
 if ($MODE -eq 'optimize') {
   Say "`n[*] Apro il pannello ottimizzazioni..." 'Cyan'
-  $ok = Show-Gui
+  $ok = $false
+  try { $ok = Show-WebGui } catch { $ok = $false }
+  if (-not $ok) {
+    Say '[!] Interfaccia web non disponibile, uso la GUI classica...' 'Yellow'
+    $ok = Show-Gui
+  }
   if (-not $ok) {
     Say '[!] Interfaccia grafica non disponibile. Applico i preset Completo...' 'Yellow'
     $before = Run-Benchmark; Show-Bench $before 'PRIMA'

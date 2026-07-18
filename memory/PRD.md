@@ -571,3 +571,27 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - README.md agent-build: sezione "Novita v0.6" (boost adattivo + benchmark v2).
 - NUOVO /app/agent-build/REBUILD_v0.6.0.md: checklist 5 passi (build.bat -> test -> release GitHub v0.6.0 -> aggiornare frontend/src/config/agent.js con URL+SHA256+versione+data -> VirusTotal/segnalazione FP).
 - Da fare DALL'UTENTE dopo la build: aggiornare config/agent.js con lo SHA256 reale e fare Deploy. --onedir rimandato (P1 backlog).
+
+### 2026-07-18 (18) - v0.6.0 released + GUI moderna via Edge --app (Option C) + fix mismatch UI
+- **Rebuild v0.6.0 completato dall'utente**: build.bat/version_info.txt/forgefps_agent.py forniti in chat (mancanti nel repo locale per push GitHub bloccato). Release pubblicata: https://github.com/WjRKO/ForgeFPS/releases/tag/v0.6.0, SHA256 `18645e38ef463cb7a1e9afff40e2194416518589be080840654b4dc9aed45a1c`, size ~9 MB. Testata OK.
+- **frontend/src/config/agent.js aggiornato**: URL/SHA256/VERSION/DATE su v0.6.0 (2026-07-18). Verificato HTTP 302 -> 200 su download.
+- **Fix mismatch UI /landing**: `trust_tweaks_v` in i18n.js (IT+EN) era 26 -> aggiornato a **35** per allinearlo al catalogo `ps_agent.py $script:TWEAKS` (35) e `routers/profiles.py TWEAK_CATALOG` (35). DesktopAgent.jsx e Landing.jsx L240 gia' corretti.
+- **Diagnosticato falso allarme `getaddrinfo failed`**: era glitch DNS transitorio sul PC utente. Il UA `FrameForge-Agent` gia' passa Cloudflare (verificato); default `Python-urllib` invece e' bloccato con 403. Nessuna modifica al codice necessaria.
+- **NUOVA GUI moderna (Option C, ps_agent.py)**:
+  - `function Show-WebGui`: HTTP listener locale su `127.0.0.1` con **porta random** + **session token 48-char**, ogni endpoint richiede `?tk=` o header `X-FF-Token`. Bind SOLO su loopback.
+  - Lancia `msedge.exe --app=http://127.0.0.1:PORTA/?tk=TOKEN` in modalita chromeless (profilo Edge isolato in %TEMP%\forgefps-gui\edge-profile).
+  - HTML/CSS/JS embedded (~29 KB): dark theme allineato al sito web (`#0a0a0f` bg, `#e5ff00` accent), layout responsive con grid auto-fill (min 360px card), tab per categoria, ricerca full-text, preset chip (Competitivo/Streaming/Completo/Nessuno), animazioni CSS.
+  - Endpoint locali: GET /, /api/state, /api/log?since=N; POST /api/apply {ids,benchmark}, /api/apply-one {id}, /api/restore, /api/close.
+  - Log console con polling 400 ms, indicatore "applying", toast di conferma, backup badge live.
+  - **Fallback automatico** a `Show-Gui` (WinForms legacy) se msedge.exe non presente.
+  - Branch `optimize` prova prima Show-WebGui poi Show-Gui poi headless.
+- **CHANGELOG.md creato** in /app/CHANGELOG.md (Keep a Changelog format) con storico v0.5 -> v0.6.0 -> Unreleased.
+- **workflow senza SignPath creato**: /app/agent-build/github-workflow-build-nosign.yml (per quando SignPath Foundation e' in attesa di approvazione).
+
+## PROSSIMI PASSI
+- Utente deve rigenerare token PC (leaked in chat) e ridiploiare frontend per pubblicare i valori v0.6.0 in produzione.
+- P0: PyInstaller --onedir (falsi positivi AV Defender "dropper") + testi false-positive vendor.
+- P1: Alert storico salute (notifica quando score sotto soglia).
+- P2: Report PDF completo (grafici storici + checklist); condivisione SCORE benchmark sui social.
+- P3: Stripe billing, conversioni avanzate Google Ads, testimonianze + stelle GitHub.
+- Possibile: telemetria opt-in sulla nuova WebGui per capire quale % di utenti usa Edge vs WinForms fallback.
