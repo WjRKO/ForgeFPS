@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Zap, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { FooterCommunity, FooterLegal } from "@/components/FooterExtras";
 
 export const useLang = () => {
   const { i18n } = useTranslation();
@@ -46,23 +47,38 @@ export const MarketingNav = () => {
 
 export const MarketingFooter = () => {
   const lang = useLang();
+  const { t } = useTranslation();
   return (
-    <footer className="bg-[#050505] border-t border-[#1A1A24] px-6 py-12" data-testid="marketing-footer">
-      <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-[#E5FF00] flex items-center justify-center"><Zap size={15} className="text-black" /></div>
-          <span className="font-display font-black tracking-tighter">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
+    <footer className="bg-[#050505] border-t border-[#1A1A24] px-6 py-14" data-testid="marketing-footer">
+      <div className="max-w-6xl mx-auto grid md:grid-cols-4 gap-10">
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 bg-[#E5FF00] flex items-center justify-center"><Zap size={15} className="text-black" /></div>
+            <span className="font-display font-black tracking-tighter">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
+          </div>
+          <p className="text-zinc-500 text-sm leading-relaxed">{t("landing.footer_bio")}</p>
+          <div className="flex items-center gap-2 mt-4 text-xs font-mono text-[#00FF66]">
+            <ShieldCheck size={13} /> {t("landing.footer_status")}
+          </div>
         </div>
-        <nav className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-zinc-400">
-          {NAV.map((n) => (
-            <Link key={n.to} to={n.to} className="hover:text-[#E5FF00] transition-colors">{n[lang]}</Link>
-          ))}
-        </nav>
-        <div className="flex items-center gap-2 text-xs font-mono text-[#00FF66]"><ShieldCheck size={13} /> {lang === "en" ? "Security-first · Local-first" : "Security-first · Local-first"}</div>
+        <div>
+          <div className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">{t("landing.footer_product")}</div>
+          <ul className="space-y-2 text-sm text-zinc-400">
+            {NAV.map((n) => (
+              <li key={n.to}><Link to={n.to} className="hover:text-[#E5FF00] transition-colors">{n[lang]}</Link></li>
+            ))}
+          </ul>
+        </div>
+        <FooterCommunity t={t} />
+        <div>
+          <div className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">{t("landing.footer_account")}</div>
+          <ul className="space-y-2 text-sm text-zinc-400">
+            <li><Link to="/login" className="hover:text-[#E5FF00] transition-colors">{lang === "en" ? "Sign in" : "Accedi"}</Link></li>
+            <li><Link to="/register" className="hover:text-[#E5FF00] transition-colors">{lang === "en" ? "Get started" : "Inizia ora"}</Link></li>
+          </ul>
+        </div>
       </div>
-      <div className="max-w-6xl mx-auto mt-8 pt-6 border-t border-[#1A1A24] text-center text-zinc-600 text-xs font-mono">
-        FrameForge · Performance Command Center
-      </div>
+      <FooterLegal t={t} />
     </footer>
   );
 };

@@ -12,6 +12,7 @@ import { usePageMeta } from "@/hooks/usePageMeta";
 import { DemoScan } from "@/components/DemoScan";
 import { TrustBar } from "@/components/TrustBar";
 import { SecureInstaller } from "@/components/SecureInstaller";
+import { FooterCommunity, FooterLegal } from "@/components/FooterExtras";
 
 const EASE = [0.16, 1, 0.3, 1];
 const fadeUp = {
@@ -426,7 +427,7 @@ export default function Landing() {
 
       {/* FOOTER */}
       <footer className="bg-[#050505] border-t border-[#1A1A24] px-6 py-14">
-        <div className="max-w-6xl mx-auto grid md:grid-cols-4 gap-10">
+        <div className="max-w-6xl mx-auto grid md:grid-cols-5 gap-10">
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-7 h-7 bg-[#E5FF00] flex items-center justify-center"><Zap size={15} className="text-black" /></div>
@@ -439,10 +440,12 @@ export default function Landing() {
             <ul className="space-y-2 text-sm text-zinc-400">
               <li><Link to="/security" className="hover:text-[#E5FF00] transition-colors">{t("landing.nav_security")}</Link></li>
               <li><Link to="/privacy-telemetry" className="hover:text-[#E5FF00] transition-colors">{t("landing.nav_privacy")}</Link></li>
+              <li><Link to="/guida" className="hover:text-[#E5FF00] transition-colors">{t("landing.nav_guide")}</Link></li>
               <li><Link to="/changelog" className="hover:text-[#E5FF00] transition-colors">{t("landing.nav_changelog")}</Link></li>
               <li><Link to="/pricing" className="hover:text-[#E5FF00] transition-colors">{t("landing.nav_pricing")}</Link></li>
             </ul>
           </div>
+          <FooterCommunity t={t} />
           <div>
             <div className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">{t("landing.footer_account")}</div>
             <ul className="space-y-2 text-sm text-zinc-400">
@@ -452,9 +455,7 @@ export default function Landing() {
             <div className="flex items-center gap-2 mt-5 text-xs text-[#00FF66]"><ShieldCheck size={13} /> {t("landing.footer_status")}</div>
           </div>
         </div>
-        <div className="max-w-6xl mx-auto border-t border-[#1A1A24] mt-10 pt-6 text-center text-zinc-600 text-xs font-mono">
-          {t("landing.footer")}
-        </div>
+        <FooterLegal t={t} />
       </footer>
     </div>
   );

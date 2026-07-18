@@ -131,6 +131,48 @@ async def _add_to_guild(discord_user_id: str, access_token: str) -> None:
 def build(get_current_user):
     router = APIRouter(prefix="/api/discord", tags=["discord"])
 
+    # Cache in-memory per ridurre chiamate all'API Discord (5 min)
+    _live_cache = {"data": None, "at": 0.0}
+
+    @router.get("/live-stats")
+    async def discord_live_stats():
+        """Statistiche live del server Discord (endpoint pubblico, no auth).
+        Fonte primaria: widget.json (richiede widget abilitato in Discord).
+        Ritorna sempre 200: se widget non abilitato/errore, restituisce enabled=false.
+        Cache 5 min in-memory.
+        """
+        import time
+        now = time.time()
+        if _live_cache["data"] and (now - _live_cache["at"]) < 300:
+            return _live_cache["data"]
+
+        guild_id = _env("DISCORD_GUILD_ID")
+        invite = _env("DISCORD_INVITE_URL")
+        result = {"enabled": False, "presence_count": 0, "invite_url": invite}
+        if guild_id:
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    r = await client.get(f"https://discord.com/api/guilds/{guild_id}/widget.json")
+                if r.status_code == 200:
+                    data = r.json()
+                    result = {
+                        "enabled": True,
+                        "presence_count": data.get("presence_count", 0),
+                        "instant_invite": data.get("instant_invite") or invite,
+                        "invite_url": invite or data.get("instant_invite"),
+                        "name": data.get("name", ""),
+                    }
+                else:
+                    logger.info("Discord widget.json returned %s (widget likely disabled)", r.status_code)
+            except Exception as e:
+                logger.warning("Discord live-stats fetch failed: %s", e)
+
+        _live_cache["data"] = result
+        _live_cache["at"] = now
+        return result
+
+
+
     @router.get("/connect")
     async def connect_discord(request: Request, user: dict = Depends(get_current_user)):
         if not _env("DISCORD_CLIENT_ID"):
