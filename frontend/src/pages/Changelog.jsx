@@ -35,6 +35,36 @@ const ROADMAP = {
 
 const RELEASES = [
   {
+    version: "0.6.3", date: "2026-07-18",
+    added: {
+      it: [
+        "Footer ridisegnato con nuova colonna \u00abCommunity\u00bb: Discord con contatore live (\u00abXX online adesso\u00bb tramite widget del server), GitHub, Segnala un bug, email di contatto",
+        "Nuova pagina \u00abTermini di servizio\u00bb (/terms): 9 sezioni chiare su cos'\u00e8 FrameForge, uso dell'agent, contenuti AI, prezzi, limitazione di responsabilit\u00e0 (IT + EN)",
+        "Legal row nel footer: copyright, cookie policy, termini di servizio, privacy — tutto sempre a portata di click",
+        "Firma \u00abCostruito con \u2764\ufe0f da un gamer per gamer\u00bb per una nota umana in fondo alla pagina",
+        "Link \u00abGuida\u00bb nella colonna Prodotto del footer: rende scoperta la nuova pagina di onboarding",
+      ],
+      en: [
+        "Redesigned footer with new \u00abCommunity\u00bb column: Discord with live counter (\u00abXX online now\u00bb via server widget), GitHub, Report a bug, contact email",
+        "New \u00abTerms of service\u00bb page (/terms): 9 clear sections on what FrameForge is, agent usage, AI content, pricing, liability (IT + EN)",
+        "Legal row in the footer: copyright, cookie policy, terms of service, privacy — always one click away",
+        "\u00abBuilt with \u2764\ufe0f by a gamer for gamers\u00bb signature for a human touch at the bottom of the page",
+        "\u00abGuide\u00bb link in the footer Product column: makes the new onboarding page discoverable",
+      ],
+    },
+    fixed: {
+      it: [
+        "Pulsante \u00abApri il server\u00bb nella Dashboard: ora punta all'invito Discord reale (era un placeholder non valido)",
+        "Annunci changelog duplicati su Discord: attivati controlli anti-duplicato con env var dedicata (l'annuncio parte solo dalla produzione)",
+      ],
+      en: [
+        "\u00abOpen the server\u00bb button in the Dashboard: now points to the real Discord invite (was an invalid placeholder)",
+        "Duplicate changelog announcements on Discord: added anti-duplicate controls via dedicated env var (only production announces)",
+      ],
+    },
+    changed: { it: [], en: [] },
+  },
+  {
     version: "0.6.2", date: "2026-07-18",
     added: {
       it: [

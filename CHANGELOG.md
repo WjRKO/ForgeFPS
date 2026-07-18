@@ -8,7 +8,32 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 ## [Unreleased] — 2026-07-18
 
 ### Added
-- **Dashboard "Command Center" ridisegnata completamente** (`/app`):
+- **Footer allargato con colonna "Community"**:
+  - Nuovo componente riutilizzabile `FooterExtras.jsx` (`FooterCommunity` + `FooterLegal`) usato sia in `Landing.jsx` (5 colonne: Brand · Product · Community · Account · con legal row) sia in `MarketingChrome.jsx` (4 colonne).
+  - **Discord** con badge live "🟢 XX online adesso" — dot verde pulsante — via `GET /api/discord/live-stats` (cache in-memory 5 min, fallback silenzioso se widget server non abilitato).
+  - **GitHub** repo link + **Report a bug** (deep-link a `/issues/new/choose`) + email `hello@forgefps.dev`.
+  - **Guida** aggiunta alla colonna Product (era invisibile).
+- **Endpoint `GET /api/discord/live-stats` (pubblico, no auth)** in `backend/routers/discord.py`:
+  - Chiama `https://discord.com/api/guilds/{DISCORD_GUILD_ID}/widget.json`.
+  - Cache in-memory 5 min per limitare rate-limit.
+  - Ritorna sempre 200: `{enabled, presence_count, invite_url, instant_invite, name}` — `enabled=false` se widget non attivo.
+- **Nuova pagina `/terms`** (`Terms.jsx`): Termini di servizio con 9 sezioni bilingue IT/EN (Cos'è FrameForge, Account & sicurezza, Uso agent, Contenuti AI, Uso accettabile, Prezzi, Limitazione responsabilità, Modifiche termini, Contatti). Route lazy in `App.js`.
+- **Legal row nel footer**:
+  - Copyright "© 2026 FrameForge — Tutti i diritti riservati"
+  - Link a Cookie policy (`/privacy-telemetry#cookies`), Terms of service (`/terms`), Privacy (`/privacy-telemetry`)
+  - Firma discreta "Costruito con ❤️ da un gamer per gamer" (bilingue).
+- **Env var `DISCORD_INVITE_URL`** letta da `/api/discord/status` e restituita al frontend → il bottone "Apri il server" nella Dashboard usa ora il link reale.
+- **Feature flag `RELEASE_ANNOUNCER_ENABLED`** in `services/release_announcer.py`: default OFF in preview per evitare duplicati Discord tra preview e produzione. In prod si abilita via Custom Keys del pannello Deployments Emergent.
+- **Chiave i18n `landing.nav_guide`** (IT: "Guida" / EN: "Guide") — mancava nonostante la route /guida esistesse.
+
+### Fixed
+- **Dashboard → "Apri il server" invito Discord non valido**: il link era hardcoded a `discord.gg/frameforge` (placeholder). Ora `Dashboard.jsx` legge `discord.invite_url` dallo status endpoint con fallback al vero invito permanente.
+- **Duplicati changelog Discord**: preview e produzione avevano lo stesso `DISCORD_WEBHOOK_CHANGELOG` ma DB Mongo separati → l'idempotency `announced_releases` non copriva l'altro ambiente. Fix: flag `RELEASE_ANNOUNCER_ENABLED` con default OFF; solo la produzione (che imposta `=true` via Custom Keys) annuncerà.
+
+### Changed
+- **Rimozione hardcode `RELEASE_ANNOUNCER_ENABLED` dal `.env`**: il file `.env` è shared tra preview e prod, quindi il flag va gestito solo via Custom Keys del pannello Deployments (prod-only).
+
+## [0.6.2] — 2026-07-18
   - Layout 2 colonne (main + sticky panel), coerente con `/app/desktop` e le altre tool pages.
   - **PC Hero card**: HealthRing grande con score 0-100 e grade colorato (verde/giallo/rosso), badge hardware CPU/GPU/RAM, contatori issue/warn, CTA "Ottimizza ora" con colore adattivo (rossa se score<55, gialla altrimenti). Se PC non connesso → empty state con CTA "Connetti il PC →".
   - **Benchmark card**: score latest, delta % vs precedente (verde/rosso), `Sparkline` degli ultimi 8 benchmark, bottone "Condividi su Discord" attivo solo se Discord linkato (chiama `POST /api/discord/share-score`).
