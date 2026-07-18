@@ -270,31 +270,37 @@ async def cmd_set_plan(
             "Solo gli Amministratori del server possono usare questo comando.",
             ephemeral=True,
         )
-    doc = await _find_user_by_discord_id(str(user.id))
-    if not doc:
-        return await interaction.response.send_message(
-            f"{user.mention} non ha ancora collegato l'account FrameForge. "
-            f"Chiedigli di fare `/link` o di visitare {FRONTEND_URL}/app/account.",
+    # Defer subito: DB + role update superano il timeout di 3s di Discord
+    await interaction.response.defer(ephemeral=True)
+    try:
+        doc = await _find_user_by_discord_id(str(user.id))
+        if not doc:
+            return await interaction.followup.send(
+                f"{user.mention} non ha ancora collegato l'account FrameForge. "
+                f"Chiedigli di fare `/link` o di visitare {FRONTEND_URL}/app/account.",
+                ephemeral=True,
+            )
+        new_plan = plan.value.strip().lower()
+        await db.users.update_one(
+            {"_id": doc["_id"]},
+            {"$set": {"plan": new_plan, "plan_updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        # sync ruolo immediato
+        doc["plan"] = new_plan
+        result = await _sync_pro_role_for_member(interaction.guild, user, doc)
+        role_msg = {
+            "added": "\u2705 Ruolo Pro aggiunto.",
+            "removed": "\u2705 Ruolo Pro rimosso.",
+            "noop": "Nessuna modifica al ruolo (gi\u00e0 corretto).",
+            "skip": "\u26a0\ufe0f Sync ruolo saltato (bot senza permesso o ruolo pi\u00f9 in alto nella gerarchia).",
+        }.get(result, result)
+        await interaction.followup.send(
+            f"Piano di {user.mention} aggiornato a **{new_plan}**. {role_msg}",
             ephemeral=True,
         )
-    new_plan = plan.value.strip().lower()
-    await db.users.update_one(
-        {"_id": doc["_id"]},
-        {"$set": {"plan": new_plan, "plan_updated_at": datetime.now(timezone.utc).isoformat()}},
-    )
-    # sync ruolo immediato
-    doc["plan"] = new_plan
-    result = await _sync_pro_role_for_member(interaction.guild, user, doc)
-    role_msg = {
-        "added": "\u2705 Ruolo Pro aggiunto.",
-        "removed": "\u2705 Ruolo Pro rimosso.",
-        "noop": "Nessuna modifica al ruolo (gi\u00e0 corretto).",
-        "skip": "\u26a0\ufe0f Sync ruolo saltato (controlla logs).",
-    }.get(result, result)
-    await interaction.response.send_message(
-        f"Piano di {user.mention} aggiornato a **{new_plan}**. {role_msg}",
-        ephemeral=True,
-    )
+    except Exception as e:
+        logger.exception("/set-plan errore: %s", e)
+        await interaction.followup.send(f"Errore: {e}", ephemeral=True)
 
 
 # --------- Eventi ---------
