@@ -187,9 +187,10 @@ def build(get_current_user):
 
     @router.get("/status")
     async def discord_status(user: dict = Depends(get_current_user)):
+        invite = _env("DISCORD_INVITE_URL")
         doc = await db.users.find_one({"_id": user["_id"]}, {"discord_user_id": 1, "discord_username": 1, "discord_avatar": 1, "discord_linked_at": 1})
         if not doc or not doc.get("discord_user_id"):
-            return {"linked": False, "configured": bool(_env("DISCORD_CLIENT_ID"))}
+            return {"linked": False, "configured": bool(_env("DISCORD_CLIENT_ID")), "invite_url": invite}
         return {
             "linked": True,
             "configured": True,
@@ -197,6 +198,7 @@ def build(get_current_user):
             "username": doc.get("discord_username", ""),
             "avatar": doc.get("discord_avatar", ""),
             "linked_at": doc.get("discord_linked_at", ""),
+            "invite_url": invite,
         }
 
     @router.delete("/disconnect")

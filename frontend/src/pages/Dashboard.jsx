@@ -18,7 +18,7 @@ import {
 import { AGENT_EXE_URL, AGENT_EXE_VERSION, AGENT_RELEASES_URL } from "@/config/agent";
 import { trackConversion } from "@/lib/gtag";
 
-const DISCORD_INVITE = "https://discord.gg/frameforge";
+const DEFAULT_DISCORD_INVITE = "https://discord.gg/KU3m9YFFnm";
 const AGENT_SEEN_KEY = `ff_agent_seen_${AGENT_EXE_VERSION}`;
 
 /* ---------------------------------- helpers --------------------------------- */
@@ -364,7 +364,7 @@ function DiscordCard({ discord, user, t }) {
             </div>
           </div>
           <a
-            href={DISCORD_INVITE}
+            href={discord.invite_url || DEFAULT_DISCORD_INVITE}
             target="_blank"
             rel="noreferrer"
             data-testid="discord-open"

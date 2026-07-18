@@ -5,6 +5,7 @@ Marca ogni release come "annunciata" in `announced_releases` (idempotente).
 """
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +19,11 @@ MANIFEST = Path("/app/data/releases.json")
 
 async def announce_new_releases() -> int:
     """Ritorna il numero di release annunciate in questo run."""
+    # Ambiente-safe: nel preview lasciamo l'announcer disabilitato per evitare
+    # duplicati (prod e preview userebbero lo stesso webhook con DB Mongo distinti).
+    if os.environ.get("RELEASE_ANNOUNCER_ENABLED", "true").strip().lower() in ("0", "false", "no", "off"):
+        logger.info("Release announcer disabled via RELEASE_ANNOUNCER_ENABLED, skip")
+        return 0
     if not MANIFEST.exists():
         logger.info("Release manifest not found at %s, skip", MANIFEST)
         return 0
