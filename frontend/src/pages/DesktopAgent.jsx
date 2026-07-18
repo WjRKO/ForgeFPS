@@ -7,6 +7,7 @@ import { AGENT_EXE_URL, AGENT_EXE_SHA256, AGENT_EXE_VERSION, AGENT_EXE_DATE, AGE
 import { toast } from "sonner";
 import api, { API } from "@/lib/api";
 import { trackConversion } from "@/lib/gtag";
+import AgentPreview from "@/components/AgentPreview";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const isEn = () => i18n.language?.startsWith("en");
@@ -321,6 +322,9 @@ export default function DesktopAgent() {
                 </div>
               </div>
             </div>
+
+            {/* Preview GUI Edge (video/gif reale se presente, altrimenti mock animato) */}
+            <AgentPreview label={en ? "Live GUI preview" : "Anteprima GUI live"} />
 
             <a href={AGENT_EXE_URL} target="_blank" rel="noreferrer" data-testid="exe-download-btn" onClick={() => trackConversion("agent_download")}
               className="flex items-center justify-center gap-2 bg-[#00E0FF] text-black font-bold py-3 text-sm uppercase tracking-wide hover:bg-[#33e8ff] transition-colors w-full">

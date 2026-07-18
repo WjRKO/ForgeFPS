@@ -643,3 +643,21 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 
 ## CREDENZIALI DISCORD LEAKED IN CHAT (da rigenerare)
 User ha postato secrets pubblici (CLIENT_SECRET, BOT_TOKEN, WEBHOOK URLs). Deve rigenerarli tutti dopo il testing.
+
+
+### 2026-07-18 (21) - Preview GUI Edge nella sticky card Desktop Agent
+- **AgentPreview.jsx** (`/app/frontend/src/components/AgentPreview.jsx`): componente riutilizzabile che mostra la preview della GUI live sopra il pulsante "Scarica FrameForge (.exe)" nella sticky card di `/app/desktop`.
+- **Fallback a 3 livelli**:
+  1. `<video autoPlay muted loop playsInline>` → `/assets/agent-preview.mp4` (timeout 1.5s se non parte)
+  2. `<img>` → `/assets/agent-preview.gif`
+  3. Mock CSS animato (finestra "FrameForge Agent" con title bar macOS-style, tab sidebar Gaming/Latenza/Rete/Sistema, 6 tweak che appaiono uno alla volta con badge "GIÀ ATTIVO", progress bar arcobaleno)
+- Badge overlay "LIVE GUI PREVIEW" con dot pulsante top-left, aspect 16:10, testid `agent-preview-card` / `agent-preview-video` / `agent-preview-gif` / `agent-preview-mock`.
+- Creata `/app/frontend/public/assets/` con `README.md` che spiega come registrare la GUI reale (ffmpeg one-liner: H.264 800x-2, fps 24, crf 28, muted → ~2MB per 8s).
+- **MOD**: `/app/frontend/src/pages/DesktopAgent.jsx` — import + `<AgentPreview>` inserito nella sticky panel appena prima del bottone `[data-testid="exe-download-btn"]`.
+- Verificato tramite screenshot Playwright login → `/app/desktop`: card presente, stage `mock` che rende la finestra animata con progress bar e tweak "GIÀ ATTIVO" a cascata.
+
+## FILE MODIFICATI/CREATI (sessione 21)
+- CREATO: /app/frontend/src/components/AgentPreview.jsx
+- CREATO: /app/frontend/public/assets/README.md
+- MOD: /app/frontend/src/pages/DesktopAgent.jsx (import + mount AgentPreview)
+- MOD: /app/memory/PRD.md
