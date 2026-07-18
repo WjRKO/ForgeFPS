@@ -54,6 +54,7 @@
     "react-dom": "19.0.0",
     "react-hook-form": "7.56.2",
     "react-i18next": "^17.0.8",
+    "react-joyride": "^3.2.0",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "3.0.1",
     "react-router-dom": "7.15.0",

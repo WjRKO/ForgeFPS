@@ -35,6 +35,23 @@ const ROADMAP = {
 
 const RELEASES = [
   {
+    version: "0.6.1", date: "2026-07-18",
+    added: {
+      it: [
+        "Nuova pagina Guida (/guida): 5 tutorial passo-passo per primo boost, setup gaming, streaming OBS, benchmark e ripristino",
+        "Tour interattivo di benvenuto: al primo accesso ti facciamo un giro guidato di 60 secondi sulle sezioni principali",
+        "Pulsante \u00abRifai il tour\u00bb nella pagina Account per riavviarlo quando vuoi",
+      ],
+      en: [
+        "New Guide page (/guide): 5 step-by-step tutorials for first boost, gaming setup, OBS streaming, benchmark and restore",
+        "Interactive onboarding tour: on first login we give you a 60-second guided walkthrough of the main sections",
+        "\u00abRestart tour\u00bb button on the Account page to relaunch it anytime",
+      ],
+    },
+    fixed: { it: [], en: [] },
+    changed: { it: [], en: [] },
+  },
+  {
     version: "0.6.0", date: "2026-07-18",
     added: {
       it: [

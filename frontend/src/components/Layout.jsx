@@ -5,6 +5,7 @@ import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import OnboardingTour from "@/components/OnboardingTour";
 import api from "@/lib/api";
 import { pushSupported, getPushState, enablePush, disablePush } from "@/lib/push";
 
@@ -188,6 +189,7 @@ export default function Layout() {
           </div>
         </main>
       </div>
+      <OnboardingTour />
     </div>
   );
 }

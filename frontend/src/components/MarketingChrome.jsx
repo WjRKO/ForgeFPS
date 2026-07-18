@@ -11,6 +11,7 @@ export const useLang = () => {
 const NAV = [
   { to: "/security", it: "Sicurezza", en: "Security" },
   { to: "/privacy-telemetry", it: "Privacy", en: "Privacy" },
+  { to: "/guida", it: "Guida", en: "Guide" },
   { to: "/changelog", it: "Changelog", en: "Changelog" },
   { to: "/pricing", it: "Prezzi", en: "Pricing" },
 ];
