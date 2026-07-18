@@ -661,3 +661,27 @@ User ha postato secrets pubblici (CLIENT_SECRET, BOT_TOKEN, WEBHOOK URLs). Deve 
 - CREATO: /app/frontend/public/assets/README.md
 - MOD: /app/frontend/src/pages/DesktopAgent.jsx (import + mount AgentPreview)
 - MOD: /app/memory/PRD.md
+
+### 2026-07-18 (22) - Redesign Dashboard "Command Center" completo
+- **Dashboard.jsx** completamente riscritto (120 → 743 righe): layout 2 colonne con sticky panel a destra, coerente con `/app/desktop`.
+- **Greeting contestuale**: mostra health score se PC connesso, altrimenti risparmio totale, altrimenti fallback "Pronto a boostare?".
+- **LEFT (main)**: 
+  - `PcHeroCard` con `HealthRing` grande, badge hardware CPU/GPU/RAM, contatori issue/warn colorati, CTA "Ottimizza ora" con colore adattivo (rosso se score<55, giallo altrimenti). Se PC non connesso → EmptyState con CTA "Connetti il PC".
+  - `BenchmarkCard` con score latest, delta % vs precedente, `Sparkline` ultimi 8 benchmark, bottone "Condividi su Discord" (attivo solo se Discord linkato, usa `/api/discord/share-score`).
+  - `ActivityFeed` unificato: merge cronologico di price drops (`/api/notifications`), ultimo benchmark, nuova release agent (mostrato solo se `localStorage.ff_agent_seen_v0.6.0` è false). Ordinato desc, top 6.
+  - `RecentProductsCard` compatto con empty state migliorato.
+- **RIGHT (sticky)**:
+  - `OnboardingChecklist` dinamico: 5 step (Connect PC, First benchmark, Track a product, Link Discord, Enable 2FA), con checkmark verde, strikethrough sui completati, progress bar animata a gradient. Si nasconde a 5/5.
+  - `QuickActionsCard`: griglia 2×3 con Advisor/Agent/Games/Tracker/Builds/Network.
+  - `DiscordCard`: linked → avatar + username + link server, unlinked → CTA "Link account (30s)".
+  - `AgentCard`: mostrato solo se l'utente non ha ancora cliccato il download di questa versione (badge "NEW", CTA Download, marca `ff_agent_seen_v0.6.0` in localStorage on click).
+- **Empty states migliorati**: `HeroEmpty` giant CTA card (3 azioni numerate) mostrato solo se l'utente è brand new (no specs, no products, no builds, no chat sessions). Nasconde stat card generici.
+- **i18n**: aggiunte 40+ chiavi nuove sotto `dashboard.*` (IT + EN): greet_health/greet_saved/greet_ready, pc_no_specs_*, bench_*, onboard_*, discord_*, agent_*, feed_*, hero_empty_*, cta_*.
+- **APIs consumate**: `/api/stats`, `/api/products`, `/api/pc-specs`, `/api/pc-health`, `/api/pc-benchmark`, `/api/discord/status`, `/api/notifications`, `POST /api/discord/share-score`.
+- Verificato con Playwright (login admin + `/app`): tutti i 7 testid principali presenti, zero console errors, screenshot mostra Health Ring 38/CRITICO in rosso con CTA rossa adattiva, benchmark 650 pts con sparkline, feed attività funzionante, onboarding 3/5 con progress bar, Discord unlinked CTA visibile, Agent NEW badge visibile.
+
+## FILE MODIFICATI/CREATI (sessione 22)
+- REWRITE: /app/frontend/src/pages/Dashboard.jsx (120 → 743 righe)
+- MOD: /app/frontend/src/i18n.js (dashboard.* IT+EN, +40 chiavi)
+- MOD: /app/memory/PRD.md
+
