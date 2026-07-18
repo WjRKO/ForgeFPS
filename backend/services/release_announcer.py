@@ -19,11 +19,21 @@ MANIFEST = Path("/app/data/releases.json")
 
 async def announce_new_releases() -> int:
     """Ritorna il numero di release annunciate in questo run."""
-    # Ambiente-safe: l'announcer resta disabilitato per default. Per attivarlo
-    # (es. solo in produzione) impostare RELEASE_ANNOUNCER_ENABLED=true nell'env.
-    if os.environ.get("RELEASE_ANNOUNCER_ENABLED", "false").strip().lower() not in ("1", "true", "yes", "on"):
-        logger.info("Release announcer disabled (set RELEASE_ANNOUNCER_ENABLED=true to enable), skip")
+    # Auto-detect preview: la pod di preview su Emergent ha HOSTNAME che inizia
+    # con "agent-env-" (es. agent-env-7dc8dffb-...). In produzione il pattern
+    # e' diverso, quindi l'announcer parte solo li'. Override manuale:
+    # - RELEASE_ANNOUNCER_ENABLED=true  -> forza ON (utile per test in preview)
+    # - RELEASE_ANNOUNCER_ENABLED=false -> forza OFF ovunque
+    manual = os.environ.get("RELEASE_ANNOUNCER_ENABLED", "").strip().lower()
+    if manual in ("0", "false", "no", "off"):
+        logger.info("Release announcer forzato OFF via RELEASE_ANNOUNCER_ENABLED, skip")
         return 0
+    if manual not in ("1", "true", "yes", "on"):
+        # Nessun override esplicito: usa auto-detect
+        hostname = os.environ.get("HOSTNAME", "")
+        if hostname.startswith("agent-env-"):
+            logger.info("Release announcer disabilitato in preview (HOSTNAME=%s), skip", hostname)
+            return 0
     if not MANIFEST.exists():
         logger.info("Release manifest not found at %s, skip", MANIFEST)
         return 0
