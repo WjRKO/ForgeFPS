@@ -17,7 +17,19 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
   - Log console live via polling (400 ms), toast di conferma, indicatore backup real-time
   - Fallback automatico a **WinForms GUI** (legacy) se Edge non installato
   - Isolation: profilo Edge dedicato in `%TEMP%\forgefps-gui\edge-profile`
+- **UX "GIÀ ATTIVO" per tweak già ottimizzati**:
+  - Card con barra verde e opacità ridotta (72% → 100% al hover)
+  - Pill outline verde "GIÀ ATTIVO" nell'header della card
+  - Pulsante "Applica" sostituito da "*Nessuna azione necessaria*"
+  - Tab counter mostra `da_fare/totali` (es. `Gaming 3/10`)
+  - Preset (Competitivo/Streaming/Completo) saltano automaticamente i tweak già attivi
 - Workflow GitHub Actions **senza SignPath** (`agent-build/github-workflow-build-nosign.yml`) — build + release automatica dell'exe unsigned finché SignPath Foundation non è approvata.
+
+### Fixed
+- **Edge process detection**: il launcher `msedge.exe` esce subito se c'è già un'istanza Edge attiva → `-PassThru` restituiva un process già terminato → listener chiuso prima che Edge caricasse la pagina (`ERR_CONNECTION_REFUSED`). Fix: recupero del process reale via WMI `Win32_Process` filtrando per `--user-data-dir` custom.
+- **Safety net inactivity timeout**: se il process Edge non è rilevabile, uscita automatica dopo 30s di inattività.
+- **URL locale stampato in console** prima di lanciare Edge: se la finestra non si apre l'utente può incollare l'URL in qualunque browser.
+- **Regex `stateClass`**: aggiunto pattern "nessun" per riconoscere anche stati tipo "Nessuna app in avvio".
 
 ### Changed
 - Landing page — KPI "tweak reali" allineato al catalogo effettivo: **26 → 35** (IT + EN).
