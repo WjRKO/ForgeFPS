@@ -15,7 +15,7 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 
 from database import db
@@ -32,30 +32,52 @@ def _env(name: str, default: str = "") -> str:
     return (os.environ.get(name) or default).strip()
 
 
+def _redirect_uri_for(request) -> str:
+    """Ritorna il redirect_uri da usare nel flow OAuth.
+    Priorita': env var esplicita (per test/backend headless) -> host del request (auto-detect).
+    Forza https:// perche' dietro proxy Emergent il traffico interno arriva su http.
+    """
+    env_uri = _env("DISCORD_REDIRECT_URI")
+    if env_uri:
+        return env_uri
+    scheme = request.headers.get("x-forwarded-proto") or "https"
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.hostname
+    return f"{scheme}://{host}/api/discord/callback"
+
+
+def _frontend_url_for(request) -> str:
+    env_url = _env("FRONTEND_URL")
+    if env_url:
+        return env_url.rstrip("/")
+    scheme = request.headers.get("x-forwarded-proto") or "https"
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.hostname
+    return f"{scheme}://{host}"
+
+
 def _frontend_url() -> str:
     return _env("FRONTEND_URL", "https://forgefps.dev").rstrip("/")
 
 
-def _authorize_url(state: str) -> str:
+def _authorize_url(state: str, redirect_uri: str) -> str:
     params = {
         "response_type": "code",
         "client_id": _env("DISCORD_CLIENT_ID"),
         "scope": "identify guilds.join",
         "state": state,
-        "redirect_uri": _env("DISCORD_REDIRECT_URI"),
+        "redirect_uri": redirect_uri,
         "prompt": "consent",
     }
     return f"{DISCORD_AUTH_URL}?{urllib.parse.urlencode(params)}"
 
 
-async def _exchange_code(code: str) -> dict:
+async def _exchange_code(code: str, redirect_uri: str) -> dict:
     cid = _env("DISCORD_CLIENT_ID")
     csecret = _env("DISCORD_CLIENT_SECRET")
     basic = base64.b64encode(f"{cid}:{csecret}".encode()).decode()
     data = {
         "grant_type": "authorization_code",
         "code": code,
-        "redirect_uri": _env("DISCORD_REDIRECT_URI"),
+        "redirect_uri": redirect_uri,
     }
     headers = {
         "Authorization": f"Basic {basic}",
@@ -110,24 +132,26 @@ def build(get_current_user):
     router = APIRouter(prefix="/api/discord", tags=["discord"])
 
     @router.get("/connect")
-    async def connect_discord(user: dict = Depends(get_current_user)):
+    async def connect_discord(request: Request, user: dict = Depends(get_current_user)):
         if not _env("DISCORD_CLIENT_ID"):
             raise HTTPException(503, detail="Discord integration not configured")
         state = secrets.token_urlsafe(32)
+        redirect_uri = _redirect_uri_for(request)
         await db.discord_oauth_states.insert_one({
             "_id": state,
             "user_id": str(user["_id"]),
+            "redirect_uri": redirect_uri,
             "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
         })
-        return RedirectResponse(_authorize_url(state), status_code=307)
+        return RedirectResponse(_authorize_url(state, redirect_uri), status_code=307)
 
     @router.get("/callback")
     async def discord_callback(
+        request: Request,
         code: str = Query(...),
         state: str = Query(...),
         user: dict = Depends(get_current_user),
     ):
-        # Ensure TTL index (idempotente, no-op se gia' presente)
         try:
             await db.discord_oauth_states.create_index("expires_at", expireAfterSeconds=0)
         except Exception:
@@ -138,10 +162,11 @@ def build(get_current_user):
         if not state_doc:
             raise HTTPException(400, detail="Invalid or expired state")
 
-        token = await _exchange_code(code)
+        # Ri-usa lo stesso redirect_uri usato nel /connect (OAuth requirement)
+        redirect_uri = state_doc.get("redirect_uri") or _redirect_uri_for(request)
+        token = await _exchange_code(code, redirect_uri)
         me = await _fetch_discord_user(token["access_token"])
 
-        # Salva legame nel documento utente
         await db.users.update_one(
             {"_id": user["_id"]},
             {"$set": {
@@ -152,14 +177,13 @@ def build(get_current_user):
             }}
         )
 
-        # Aggiungi al guild + eventuale ruolo (best-effort)
         try:
             await _add_to_guild(me["id"], token["access_token"])
         except Exception as e:
             logger.warning("Guild add failed but link saved: %s", e)
 
-        # Redirect al frontend con banner successo
-        return RedirectResponse(f"{_frontend_url()}/app/account?discord=linked", status_code=307)
+        frontend = _frontend_url_for(request)
+        return RedirectResponse(f"{frontend}/app/account?discord=linked", status_code=307)
 
     @router.get("/status")
     async def discord_status(user: dict = Depends(get_current_user)):
