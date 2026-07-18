@@ -35,6 +35,34 @@ const ROADMAP = {
 
 const RELEASES = [
   {
+    version: "0.6.2", date: "2026-07-18",
+    added: {
+      it: [
+        "Dashboard \u00abCommand Center\u00bb ridisegnata: Health Score del PC in evidenza, trend benchmark con mini-grafico e delta % vs precedente, feed attivit\u00e0 unificato (cali di prezzo + benchmark + nuove versioni agent)",
+        "Checklist di onboarding sempre visibile nella Dashboard: 5 step (collega PC, primo benchmark, traccia prodotto, collega Discord, attiva 2FA) con barra di progresso animata che si nasconde quando completi tutto",
+        "Preview video/GIF della GUI dell'agent nella pagina Desktop Agent: vedi l'app in azione prima di scaricarla, con fallback automatico a mock animato",
+        "Empty state migliorati in Dashboard: nuovi utenti vedono 3 CTA giganti (Fai il primo scan, Genera una build, Traccia un prodotto) invece di card vuote",
+        "Saluto contestuale in Dashboard: mostra il tuo health score o il totale risparmiato non appena hai dati",
+      ],
+      en: [
+        "Redesigned \u00abCommand Center\u00bb Dashboard: PC Health Score front and center, benchmark trend with sparkline and % delta vs previous, unified activity feed (price drops + benchmarks + new agent releases)",
+        "Always-visible onboarding checklist in the Dashboard: 5 steps (connect PC, first benchmark, track a product, link Discord, enable 2FA) with animated progress bar that hides once complete",
+        "Live GIF/video preview of the agent GUI on the Desktop Agent page: see the app in action before downloading, with automatic fallback to an animated mock",
+        "Improved Dashboard empty states: new users see 3 giant CTAs (Run first scan, Generate a build, Track a product) instead of empty cards",
+        "Context-aware greeting on the Dashboard: shows your health score or total savings as soon as data is available",
+      ],
+    },
+    fixed: { it: [], en: [] },
+    changed: {
+      it: [
+        "Discord: bottone \u00abCondividi score\u00bb ora accessibile direttamente dalla Dashboard (prima solo dalla pagina Il mio PC)",
+      ],
+      en: [
+        "Discord: \u00abShare score\u00bb button now accessible directly from the Dashboard (previously only from the My PC page)",
+      ],
+    },
+  },
+  {
     version: "0.6.1", date: "2026-07-18",
     added: {
       it: [
