@@ -1810,9 +1810,13 @@ function Show-WebGui {
   if (-not (Test-Path $tmpDir)) { New-Item -ItemType Directory -Path $tmpDir | Out-Null }
   $profileDir = Join-Path $tmpDir 'edge-profile'
 
+  $localUrl = "http://127.0.0.1:$port/?tk=$sessionToken"
+  Say "[*] GUI locale su $localUrl" 'Cyan'
+  Say "    (se la finestra non si apre, incolla l'URL sopra in un browser)" 'DarkGray'
+
   # Lancia Edge in modalita app (chromeless)
   $edgeArgs = @(
-    "--app=http://127.0.0.1:$port/?tk=$sessionToken",
+    "--app=$localUrl",
     "--user-data-dir=`"$profileDir`"",
     "--window-size=1280,860",
     "--no-first-run",
@@ -1823,14 +1827,35 @@ function Show-WebGui {
     $edge = Start-Process -FilePath $edgeExe -ArgumentList $edgeArgs -PassThru
   } catch { try { $listener.Stop() } catch {}; return $false }
 
+  # Il launcher msedge.exe fa "hop and exit" se c'e' gia' un'istanza Edge attiva.
+  # Cerco il process reale (quello con il nostro user-data-dir) dopo un breve wait.
+  Start-Sleep -Milliseconds 1800
+  $realEdge = $null
+  try {
+    $procs = Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" -ErrorAction SilentlyContinue
+    foreach ($p in $procs) {
+      if ($p.CommandLine -and $p.CommandLine -like "*$profileDir*") {
+        $realEdge = Get-Process -Id $p.ProcessId -ErrorAction SilentlyContinue
+        break
+      }
+    }
+  } catch {}
+  if (-not $realEdge -and $edge -and -not $edge.HasExited) { $realEdge = $edge }
+  # Se ancora non c'e' un process vivo, uso un inactivity timeout come safety net.
+
   # Loop richieste (async con timeout per rilevare chiusura Edge)
   $ar = $listener.BeginGetContext($null, $null)
-  while (($edge -and -not $edge.HasExited) -and $listener.IsListening) {
+  $lastActivity = Get-Date
+  while ($listener.IsListening) {
+    # Uscita: se ho un process reale e non e' piu' attivo, oppure inattivita' > 30s
+    $edgeAlive = if ($realEdge) { -not $realEdge.HasExited } else { ((Get-Date) - $lastActivity).TotalSeconds -lt 30 }
+    if (-not $edgeAlive) { break }
     if ($ar.AsyncWaitHandle.WaitOne(180)) {
       try {
         $ctx = $listener.EndGetContext($ar)
       } catch { break }
       $ar = $listener.BeginGetContext($null, $null)
+      $lastActivity = Get-Date
       $req = $ctx.Request
       $path = $req.Url.AbsolutePath
       $method = $req.HttpMethod
@@ -1896,7 +1921,7 @@ function Show-WebGui {
         }
         elseif ($path -eq '/api/close') {
           Send-Json $ctx @{ ok = $true }
-          try { if ($edge -and -not $edge.HasExited) { $edge.CloseMainWindow() | Out-Null } } catch {}
+          try { if ($realEdge -and -not $realEdge.HasExited) { $realEdge.CloseMainWindow() | Out-Null } } catch {}
           break
         }
         else {
