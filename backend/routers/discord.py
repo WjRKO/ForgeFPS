@@ -209,4 +209,59 @@ def build(get_current_user):
         )
         return {"ok": True}
 
+    @router.post("/share-score")
+    async def share_score(payload: dict, user: dict = Depends(get_current_user)):
+        """Posta il proprio Health Score / benchmark su Discord.
+        Body: { kind: 'health' | 'benchmark', score: int, metrics?: dict, note?: str }
+        """
+        from services.discord_webhooks import post_bot_message
+        channel_id = _env("DISCORD_CHANNEL_SCORES")
+        if not channel_id:
+            raise HTTPException(503, detail="Share channel not configured")
+        # Serve account Discord collegato
+        udoc = await db.users.find_one({"_id": user["_id"]}, {"discord_user_id": 1, "discord_username": 1, "discord_avatar": 1, "name": 1, "email": 1})
+        if not udoc or not udoc.get("discord_user_id"):
+            raise HTTPException(400, detail="Discord not linked")
+
+        kind = (payload.get("kind") or "health").lower()
+        score = int(payload.get("score") or 0)
+        note = (payload.get("note") or "").strip()[:200]
+        metrics = payload.get("metrics") or {}
+
+        display_name = udoc.get("discord_username") or udoc.get("name") or (udoc.get("email", "").split("@")[0]) or "un gamer"
+        avatar_hash = udoc.get("discord_avatar")
+        avatar_url = None
+        if avatar_hash:
+            avatar_url = f"https://cdn.discordapp.com/avatars/{udoc['discord_user_id']}/{avatar_hash}.png?size=128"
+
+        color = 0x00FF66 if score >= 75 else (0xFFAA00 if score >= 50 else 0xFF3355)
+        if kind == "benchmark":
+            title = f"{display_name}: benchmark {score}/100"
+            desc = "e il tuo PC quanto fa?"
+            fields = []
+            if metrics.get("dpc_us"): fields.append({"name": "DPC latency", "value": f"{metrics['dpc_us']} μs", "inline": True})
+            if metrics.get("iops"): fields.append({"name": "Disk IOPS", "value": str(metrics["iops"]), "inline": True})
+            if metrics.get("jitter_ms"): fields.append({"name": "Jitter", "value": f"{metrics['jitter_ms']} ms", "inline": True})
+        else:
+            title = f"{display_name}: Health Score {score}/100"
+            desc = "boost fatto con FrameForge - e il tuo PC?"
+            fields = []
+
+        embed = {
+            "title": title,
+            "description": (note + "\n\n" + desc) if note else desc,
+            "color": color,
+            "url": "https://forgefps.dev",
+            "footer": {"text": "forgefps.dev - misuralo anche tu"},
+        }
+        if fields:
+            embed["fields"] = fields
+        if avatar_url:
+            embed["thumbnail"] = {"url": avatar_url}
+
+        ok = await post_bot_message(channel_id, embed)
+        if not ok:
+            raise HTTPException(500, detail="Failed to post on Discord")
+        return {"ok": True}
+
     return router

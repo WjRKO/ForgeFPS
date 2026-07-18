@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket, Pencil, Gauge, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket, Pencil, Gauge, TrendingUp, TrendingDown, Minus, Share2 } from "lucide-react";
+import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import api, { formatApiErrorDetail } from "@/lib/api";
@@ -97,11 +98,35 @@ function BenchmarkCard({ bench }) {
   const [explaining, setExplaining] = useState(false);
   const [explanation, setExplanation] = useState("");
   const [explainErr, setExplainErr] = useState("");
+  const [sharing, setSharing] = useState(false);
+  const [shared, setShared] = useState(false);
   const latest = bench?.latest;
   if (!latest) return null;
   const before = latest.before;
   const after = latest.after || latest;
   const hasCompare = !!before;
+
+  const shareOnDiscord = async () => {
+    setSharing(true);
+    try {
+      await api.post("/discord/share-score", {
+        kind: "benchmark",
+        score: after?.score || after?.overall || 0,
+        metrics: {
+          dpc_us: after?.dpc_us,
+          iops: after?.iops,
+          jitter_ms: after?.jitter_ms,
+        },
+      });
+      setShared(true);
+      toast.success(t("mypcpage.share_ok"));
+    } catch (e) {
+      const msg = e.response?.data?.detail || "";
+      if (msg === "Discord not linked") toast.error(t("mypcpage.share_link_first"));
+      else if (msg === "Share channel not configured") toast.error(t("mypcpage.share_not_configured"));
+      else toast.error(formatApiErrorDetail(msg) || t("mypcpage.share_err"));
+    } finally { setSharing(false); }
+  };
 
   const explain = async () => {
     setExplaining(true); setExplainErr("");
@@ -157,13 +182,20 @@ function BenchmarkCard({ bench }) {
       </div>
       <ScoreSparkline history={bench?.history} />
       <div className="mt-4 border-t border-[#1A1A24] pt-3">
-        {!explanation && (
-          <button onClick={explain} disabled={explaining} data-testid="bench-explain-btn"
-            className="inline-flex items-center gap-2 bg-[#00E0FF]/10 border border-[#00E0FF]/50 text-[#00E0FF] px-4 py-2 text-xs font-bold hover:bg-[#00E0FF]/20 transition-colors disabled:opacity-60">
-            {explaining ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-            {explaining ? t("mypcpage.bench_explaining") : t("mypcpage.bench_explain")}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {!explanation && (
+            <button onClick={explain} disabled={explaining} data-testid="bench-explain-btn"
+              className="inline-flex items-center gap-2 bg-[#00E0FF]/10 border border-[#00E0FF]/50 text-[#00E0FF] px-4 py-2 text-xs font-bold hover:bg-[#00E0FF]/20 transition-colors disabled:opacity-60">
+              {explaining ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              {explaining ? t("mypcpage.bench_explaining") : t("mypcpage.bench_explain")}
+            </button>
+          )}
+          <button onClick={shareOnDiscord} disabled={sharing || shared} data-testid="bench-share-btn"
+            className={`inline-flex items-center gap-2 border px-4 py-2 text-xs font-bold transition-colors disabled:opacity-60 ${shared ? "bg-[#00FF66]/10 border-[#00FF66]/50 text-[#00FF66]" : "bg-[#5865F2]/10 border-[#5865F2]/50 text-[#5865F2] hover:bg-[#5865F2]/20"}`}>
+            {sharing ? <Loader2 size={14} className="animate-spin" /> : shared ? <CheckCircle2 size={14} /> : <Share2 size={14} />}
+            {sharing ? t("mypcpage.share_sending") : shared ? t("mypcpage.share_done") : t("mypcpage.share_discord")}
           </button>
-        )}
+        </div>
         {explainErr && <div className="text-xs text-[#FF3B30] mt-2" data-testid="bench-explain-err">{explainErr}</div>}
         {explanation && (
           <div className="bg-black border border-[#00E0FF]/30 p-4 mt-1" data-testid="bench-explanation">

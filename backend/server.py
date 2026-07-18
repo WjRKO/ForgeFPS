@@ -96,6 +96,14 @@ async def startup():
     _write_test_credentials()
     scheduler.add_job(scheduled_price_check, "interval", minutes=45, id="price_check", replace_existing=True)
     scheduler.start()
+    # Discord: annuncia release nuove (non-blocking se webhook non configurato)
+    try:
+        from services.release_announcer import announce_new_releases
+        posted = await announce_new_releases()
+        if posted:
+            logger.info("Discord: announced %d new release(s)", posted)
+    except Exception as e:
+        logger.warning("Release announcer failed: %s", e)
     logger.info("FrameForge started")
 
 

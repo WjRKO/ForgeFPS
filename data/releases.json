@@ -1,0 +1,16 @@
+[
+  {
+    "version": "0.6.1",
+    "date": "2026-07-18",
+    "title": "Nuova pagina Guida + Tour interattivo",
+    "notes_md": "- **Pagina Guida in-app** (`/guida`, `/guide`) con 5 walkthrough step-by-step per il primo boost, setup gaming/streaming, benchmark e ripristino\n- **Tour interattivo di benvenuto** al primo login: 60 secondi guidati sulle sezioni principali\n- Pulsante **\"Rifai il tour\"** nella pagina Account\n- **Wizard di scelta** boost gaming: modalita' Automatico (Game Booster) vs Manuale (Pre-match)\n- **Card \"GIA' ATTIVO\"** sui tweak gia' ottimizzati - nessuna azione inutile",
+    "url": "https://forgefps.dev/changelog"
+  },
+  {
+    "version": "0.6.0",
+    "date": "2026-07-18",
+    "title": "GUI moderna dell'agent + benchmark AI",
+    "notes_md": "- **Nuova interfaccia moderna** dell'agent Windows: si apre in una finestra Edge dedicata (dark theme, ricerca tweak, animazioni fluide)\n- **Motore boost ADATTIVO**: 35 ottimizzazioni che si adattano al tuo hardware (laptop vs desktop, SSD/HDD, RAM, GPU)\n- **Benchmark avanzato con punteggio 0-100** (DPC latency, IOPS disco, jitter di rete) + spiegazione AI dei risultati\n- **Game Booster real-time OPT-IN**: sospende le app pesanti quando lanci un gioco, ripristina alla chiusura\n- Metadati exe firmati per ridurre i falsi positivi antivirus",
+    "url": "https://forgefps.dev/changelog"
+  }
+]

@@ -20,6 +20,32 @@ COLOR_OK = 0x00FF66
 COLOR_WARN = 0xFFAA00
 
 
+async def post_bot_message(channel_id: str, embed: dict, content: str = "") -> bool:
+    """Posta un messaggio nel canale specificato usando il bot token.
+    Piu' pulito dei webhook perche' appare come messaggio del bot ufficiale (con avatar/username).
+    """
+    bot_token = _env("DISCORD_BOT_TOKEN")
+    if not (channel_id and bot_token):
+        return False
+    payload = {"embeds": [embed]}
+    if content:
+        payload["content"] = content[:2000]
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                f"https://discord.com/api/v10/channels/{channel_id}/messages",
+                json=payload,
+                headers={"Authorization": f"Bot {bot_token}"},
+            )
+            if r.status_code >= 400:
+                logger.warning("post_bot_message %s -> %s: %s", channel_id, r.status_code, r.text[:200])
+                return False
+            return True
+    except Exception as e:
+        logger.warning("post_bot_message failed: %s", e)
+        return False
+
+
 def _env(name: str) -> str:
     return (os.environ.get(name) or "").strip()
 
