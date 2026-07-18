@@ -617,3 +617,29 @@ Agente AI per PC (gamer/streamer): ottimizzazione PC (consigli AI + azioni reali
 - MOD: `/app/frontend/src/i18n.js` (tour.* strings IT+EN)
 - MOD: `/app/frontend/package.json` + yarn.lock (react-joyride)
 - MOD: `/app/CHANGELOG.md`, `/app/memory/PRD.md`
+
+### 2026-07-18 (20) - Integrazione Discord completa (A+B+C)
+- **A) Template community**: /app/docs/DISCORD_SERVER_SETUP.md con 20 canali, 6 ruoli, permessi @everyone, testi welcome/rules, server onboarding, bot moderazione, obiettivi Server Boost.
+- **B) Bot persistente discord.py 2.7.1**: /app/backend/discord_bot.py come processo supervisor separato (`/etc/supervisor/conf.d/discord-bot.conf`). Connesso come `FrameForge#0798` id 1528010986928214156. 5 slash commands sincronizzati nel guild 1528014742386376735: /mypc /benchmark /leaderboard /link /help. Handler on_member_join con welcome DM + auto-role.
+- **B2) OAuth account linking**: /app/backend/routers/discord.py con /connect /callback /status /disconnect. Scope `identify guilds.join`, state CSRF 10min TTL in `discord_oauth_states`. Salva `discord_user_id/username/avatar/linked_at` nel user. Chiama `PUT /guilds/{id}/members/{user_id}` per aggiungerlo al server + role opzionale. Idempotente su re-link.
+- **C) Webhooks outbound**: /app/backend/services/discord_webhooks.py con post_release/post_price_drop/post_milestone. Testati: 204 su entrambi (#changelog-automatico + #price-drops).
+- **Frontend**: card Discord in Account.jsx con stato dinamico (linked/unlinked). i18n IT/EN sezione `account.discord_*` (12 stringhe).
+- **Deps**: aggiunto discord.py 2.7.1 in requirements.txt.
+- **Configurazione**: DISCORD_ROLE_BOOSTED_ID lasciato vuoto in .env - assegnazione ruolo skippata se non impostato (utente completera' dopo aver creato ruolo con hierarchy corretta).
+
+## FILE MODIFICATI/CREATI (sessione 20)
+- CREATO: /app/backend/routers/discord.py
+- CREATO: /app/backend/services/__init__.py
+- CREATO: /app/backend/services/discord_webhooks.py
+- CREATO: /app/backend/discord_bot.py
+- CREATO: /etc/supervisor/conf.d/discord-bot.conf
+- CREATO: /app/docs/DISCORD_SERVER_SETUP.md
+- MOD: /app/backend/.env (aggiunte 10 DISCORD_* env)
+- MOD: /app/backend/requirements.txt (discord.py)
+- MOD: /app/backend/server.py (include router discord)
+- MOD: /app/frontend/src/pages/Account.jsx (card Discord)
+- MOD: /app/frontend/src/i18n.js (account.discord_* IT/EN)
+- MOD: /app/CHANGELOG.md, /app/memory/PRD.md
+
+## CREDENZIALI DISCORD LEAKED IN CHAT (da rigenerare)
+User ha postato secrets pubblici (CLIENT_SECRET, BOT_TOKEN, WEBHOOK URLs). Deve rigenerarli tutti dopo il testing.

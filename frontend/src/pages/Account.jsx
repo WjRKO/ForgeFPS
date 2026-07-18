@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { User, KeyRound, SlidersHorizontal, ShieldAlert, Loader2, Server, Mail, Save, Trash2, ShieldCheck, QrCode, HelpCircle } from "lucide-react";
+import { User, KeyRound, SlidersHorizontal, ShieldAlert, Loader2, Server, Mail, Save, Trash2, ShieldCheck, QrCode, HelpCircle, MessageCircle, Check, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api, { formatApiErrorDetail } from "@/lib/api";
 
@@ -201,6 +201,30 @@ export default function Account() {
     catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); } finally { setBusy(""); }
   };
 
+  // Discord linking state
+  const [discord, setDiscord] = useState({ linked: false, configured: false, username: "", linked_at: "" });
+  useEffect(() => {
+    api.get("/discord/status").then(({ data }) => setDiscord(data)).catch(() => {});
+    // Success banner al ritorno dal callback OAuth
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("discord") === "linked") {
+      toast.success(t("account.discord_linked_ok"));
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+  const connectDiscord = () => {
+    const base = process.env.REACT_APP_BACKEND_URL || "";
+    window.location.href = `${base}/api/discord/connect`;
+  };
+  const disconnectDiscord = async () => {
+    if (!window.confirm(t("account.discord_disconnect_confirm"))) return;
+    try {
+      await api.delete("/discord/disconnect");
+      setDiscord({ ...discord, linked: false, username: "", linked_at: "" });
+      toast.success(t("account.discord_disconnected"));
+    } catch (e) { toast.error(formatApiErrorDetail(e.response?.data?.detail)); }
+  };
+
   return (
     <div className="max-w-3xl mx-auto fade-up" data-testid="account-page">
       <div className="mb-6">
@@ -235,6 +259,50 @@ export default function Account() {
         </Card>
 
         <MfaCard c={c} />
+
+        {discord.configured && (
+          <Card icon={MessageCircle} title={t("account.discord_title")} accent="#5865F2" testid="account-discord">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex-1 min-w-0">
+                {discord.linked ? (
+                  <>
+                    <div className="flex items-center gap-2 mb-1 text-[#00FF66] text-sm font-bold">
+                      <Check size={15} /> {t("account.discord_linked")}
+                    </div>
+                    <div className="text-sm text-zinc-300" data-testid="discord-username">
+                      {discord.username || t("account.discord_no_username")}
+                    </div>
+                    {discord.linked_at && (
+                      <div className="text-xs text-zinc-500 mt-1">
+                        {t("account.discord_linked_at")}: {new Date(discord.linked_at).toLocaleDateString(lang === "it" ? "it-IT" : "en-US")}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="text-sm text-zinc-300 mb-1">{t("account.discord_desc")}</div>
+                    <div className="text-xs text-zinc-500">{t("account.discord_perks")}</div>
+                  </>
+                )}
+              </div>
+              {discord.linked ? (
+                <button
+                  onClick={disconnectDiscord}
+                  data-testid="discord-disconnect-btn"
+                  className="inline-flex items-center gap-2 border border-[#FF3355] text-[#FF3355] px-4 py-2 hover:bg-[#FF3355] hover:text-black transition-colors text-sm uppercase tracking-wide font-bold">
+                  <X size={15} /> {t("account.discord_disconnect")}
+                </button>
+              ) : (
+                <button
+                  onClick={connectDiscord}
+                  data-testid="discord-connect-btn"
+                  className="inline-flex items-center gap-2 bg-[#5865F2] text-white px-5 py-2.5 hover:bg-[#4752c4] transition-colors text-sm uppercase tracking-wide font-bold">
+                  <MessageCircle size={15} /> {t("account.discord_connect")}
+                </button>
+              )}
+            </div>
+          </Card>
+        )}
 
         <Card icon={HelpCircle} title={t("tour.restart")} accent="#E5FF00" testid="account-tour">
           <div className="flex items-center justify-between gap-4 flex-wrap">
