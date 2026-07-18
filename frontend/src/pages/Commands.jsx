@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
-import { Terminal, Copy, Check, ShieldAlert, MessageSquareCode, Trash2, Wrench, Wifi, Zap, Package, Search, MonitorPlay, Rocket, Power, HeartPulse, AlertTriangle, Undo2, Download, CalendarClock, Sparkles } from "lucide-react";
+import { Terminal, Copy, Check, ShieldAlert, MessageSquareCode, Trash2, Wrench, Wifi, Zap, Package, Search, MonitorPlay, Rocket, Power, HeartPulse, AlertTriangle, Undo2, Download, CalendarClock, Sparkles, Cpu, Filter, X } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { PageHeader } from "@/components/hud";
@@ -264,6 +264,9 @@ function CmdRow({ item, onAsk }) {
 export default function Commands() {
   const { t } = useTranslation();
   const [specs, setSpecs] = useState(null);
+  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState({ safe: false, admin: false, warn: false });
+  const [activeCat, setActiveCat] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -273,7 +276,7 @@ export default function Commands() {
   const data = useMemo(() => specs?.data || {}, [specs]);
   const gpuBrand = useMemo(() => detectGpu(data.gpu), [data.gpu]);
 
-  const cats = useMemo(() => {
+  const catsRaw = useMemo(() => {
     const list = [...CATS];
     const g = gpuBrand && GPU_CMD[gpuBrand];
     if (g) {
@@ -285,6 +288,34 @@ export default function Commands() {
     return list;
   }, [gpuBrand]);
 
+  // Applica search + filter chips
+  const cats = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const anyFilter = filters.safe || filters.admin || filters.warn;
+    return catsRaw.map((cat) => {
+      const items = cat.items.filter((it) => {
+        if (q) {
+          const hay = `${it.cmd} ${it.desc || ""} ${it.de || ""}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        if (anyFilter) {
+          const okAdmin = filters.admin && it.admin;
+          const okWarn = filters.warn && it.warn;
+          const okSafe = filters.safe && !it.admin && !it.warn;
+          if (!(okAdmin || okWarn || okSafe)) return false;
+        }
+        return true;
+      });
+      return { ...cat, items };
+    }).filter((cat) => cat.items.length > 0);
+  }, [catsRaw, query, filters]);
+
+  const totalVisible = useMemo(() => cats.reduce((n, c) => n + c.items.length, 0), [cats]);
+  const totalAll = useMemo(() => catsRaw.reduce((n, c) => n + c.items.length, 0), [catsRaw]);
+  const hasFilter = !!query || filters.safe || filters.admin || filters.warn;
+
+  const clearFilters = () => { setQuery(""); setFilters({ safe: false, admin: false, warn: false }); };
+
   const askAI = (item) => {
     const sys = [data.cpu?.trim(), data.gpu, data.os].filter(Boolean).join(", ");
     const q = `Spiegami in modo semplice cosa fa il comando "${item.cmd}" su Windows, quando conviene usarlo e se comporta rischi.${sys ? ` Il mio sistema: ${sys}.` : ""}`;
@@ -292,27 +323,124 @@ export default function Commands() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto fade-up" data-testid="commands-page">
+    <div className="max-w-6xl mx-auto fade-up" data-testid="commands-page">
       <PageHeader eyebrow={t("commands.eyebrow")} title={t("commands.title")} subtitle={t("commands.subtitle")} />
 
-      <div className="bg-black border border-[#2A2A35] p-4 flex gap-3 items-start mb-5">
-        <Terminal size={16} className="text-[#00E0FF] shrink-0 mt-0.5" />
-        <p className="text-xs text-zinc-400 leading-relaxed">{t("commands.admin_hint")}</p>
-      </div>
-
-      <MaintenanceCard />
-
-      <div className="space-y-4">
-        {cats.map((cat) => (
-          <div key={cat.id} className="bg-[#0F0F12] border border-[#2A2A35] panel-hover" data-testid={`cmd-cat-${cat.id}`}>
-            <div className="flex items-center gap-2 px-5 py-3 border-b border-[#2A2A35]">
-              <cat.icon size={16} style={{ color: cat.color }} className="icon-pop" />
-              <span className="text-sm font-bold text-zinc-100">{cat.id === "gpu" ? `${t("commands.cat.gpu")} (${GPU_CMD[gpuBrand]?.label})` : t(`commands.cat.${cat.id}`)}</span>
-            </div>
-            <div>{cat.items.map((it, i) => <CmdRow key={i} item={it} onAsk={askAI} />)}</div>
+      <div className="grid lg:grid-cols-[1fr_320px] gap-6 items-start mt-6">
+        {/* LEFT: content */}
+        <div className="min-w-0 space-y-4">
+          <div className="bg-black border border-[#2A2A35] p-4 flex gap-3 items-start">
+            <Terminal size={16} className="text-[#00E0FF] shrink-0 mt-0.5" />
+            <p className="text-xs text-zinc-400 leading-relaxed">{t("commands.admin_hint")}</p>
           </div>
-        ))}
+
+          <MaintenanceCard />
+
+          {cats.length === 0 ? (
+            <div className="bg-[#0F0F12] border border-[#2A2A35] p-10 text-center" data-testid="commands-empty">
+              <Search size={28} className="text-zinc-600 mx-auto mb-3" />
+              <div className="text-sm text-zinc-400 mb-3">{t("commands.no_results")}</div>
+              <button onClick={clearFilters} data-testid="commands-clear-filters"
+                className="text-xs text-[#E5FF00] hover:underline">{t("commands.clear_filters")}</button>
+            </div>
+          ) : (
+            cats.map((cat) => (
+              <div key={cat.id} id={`cmd-cat-${cat.id}`} className="bg-[#0F0F12] border border-[#2A2A35] panel-hover scroll-mt-24" data-testid={`cmd-cat-${cat.id}`}>
+                <div className="flex items-center justify-between px-5 py-3 border-b border-[#2A2A35]">
+                  <span className="flex items-center gap-2">
+                    <cat.icon size={16} style={{ color: cat.color }} className="icon-pop" />
+                    <span className="text-sm font-bold text-zinc-100">{cat.id === "gpu" ? `${t("commands.cat.gpu")} (${GPU_CMD[gpuBrand]?.label})` : t(`commands.cat.${cat.id}`)}</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-zinc-500">{cat.items.length}</span>
+                </div>
+                <div>{cat.items.map((it, i) => <CmdRow key={i} item={it} onAsk={askAI} />)}</div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* RIGHT: sticky search + filters panel */}
+        <aside className="lg:sticky lg:top-6 lg:self-start space-y-4" data-testid="commands-panel">
+          {/* Search */}
+          <div className="bg-[#0F0F12] border border-[#2A2A35] p-4">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-[#E5FF00] mb-2 flex items-center gap-1.5">
+              <Search size={11} /> {t("commands.search_label")}
+            </div>
+            <div className="relative">
+              <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+                placeholder={t("commands.search_placeholder")} data-testid="commands-search-input"
+                className="w-full bg-black border border-[#2A2A35] px-3 py-2.5 pr-8 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-[#E5FF00] font-mono" />
+              {query && (
+                <button onClick={() => setQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-[#E5FF00]" data-testid="commands-search-clear">
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            <div className="mt-2 text-[10px] font-mono text-zinc-500">
+              <span className="text-[#E5FF00]">{totalVisible}</span> / {totalAll} {t("commands.commands_visible")}
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="bg-[#0F0F12] border border-[#2A2A35] p-4">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5">
+              <Filter size={11} /> {t("commands.filters_label")}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <FilterChip label={t("commands.filter_safe")} color="#00FF66" active={filters.safe} onClick={() => setFilters((f) => ({ ...f, safe: !f.safe }))} testid="filter-safe" />
+              <FilterChip label={t("commands.filter_admin")} color="#FF3B30" active={filters.admin} onClick={() => setFilters((f) => ({ ...f, admin: !f.admin }))} testid="filter-admin" />
+              <FilterChip label={t("commands.filter_warn")} color="#E5FF00" active={filters.warn} onClick={() => setFilters((f) => ({ ...f, warn: !f.warn }))} testid="filter-warn" />
+            </div>
+            {hasFilter && (
+              <button onClick={clearFilters} data-testid="commands-clear-all"
+                className="mt-3 text-[10px] font-mono uppercase tracking-widest text-zinc-500 hover:text-[#E5FF00] transition-colors">
+                {t("commands.clear_filters")} →
+              </button>
+            )}
+          </div>
+
+          {/* Hardware detected */}
+          {(data.cpu || data.gpu || data.ram) && (
+            <div className="bg-[#0F0F12] border border-[#2A2A35] p-4" data-testid="commands-hw">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5">
+                <Cpu size={11} /> {t("commands.hw_label")}
+              </div>
+              <div className="space-y-1 text-[11px] text-zinc-400">
+                {data.cpu && <div className="truncate" title={data.cpu}><span className="text-[#E5FF00]">CPU</span> {data.cpu}</div>}
+                {data.gpu && <div className="truncate" title={data.gpu}><span className="text-[#00FF66]">GPU</span> {data.gpu}</div>}
+                {data.ram && <div><span className="text-[#00E0FF]">RAM</span> {data.ram}</div>}
+              </div>
+            </div>
+          )}
+
+          {/* Categories nav */}
+          <div className="bg-[#0F0F12] border border-[#2A2A35] p-4">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{t("commands.jump_to")}</div>
+            <div className="space-y-1">
+              {cats.map((cat) => (
+                <a key={cat.id} href={`#cmd-cat-${cat.id}`} data-testid={`cmd-jump-${cat.id}`}
+                  className="flex items-center justify-between gap-2 px-2 py-1.5 text-[11px] hover:bg-[#141420] transition-colors">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <cat.icon size={12} style={{ color: cat.color }} className="shrink-0" />
+                    <span className="text-zinc-300 truncate">{cat.id === "gpu" ? t("commands.cat.gpu") : t(`commands.cat.${cat.id}`)}</span>
+                  </span>
+                  <span className="text-zinc-500 font-mono">{cat.items.length}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
+  );
+}
+
+function FilterChip({ label, color, active, onClick, testid }) {
+  return (
+    <button onClick={onClick} data-testid={testid}
+      style={{ borderColor: active ? color : "#2A2A35", color: active ? "#000" : color, backgroundColor: active ? color : "transparent" }}
+      className="text-[10px] font-bold uppercase tracking-widest border px-2 py-1 transition-colors hover:opacity-90">
+      {label}
+    </button>
   );
 }

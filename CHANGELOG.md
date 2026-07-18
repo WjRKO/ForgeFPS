@@ -8,6 +8,10 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 ## [Unreleased] — 2026-07-18
 
 ### Added
+- **Redesign coerente `/app/commands` e `/app/bios-restore`** con lo stesso pattern sticky panel di DesktopAgent:
+  - **Comandi Utili**: barra di ricerca fuzzy in tempo reale, filter chips (`Solo sicuri` / `Solo admin` / `Solo avanzati`), contatore "visibili/totali", hardware rilevato compact, jump-to categorie con badge count. Empty state se filtri non producono match.
+  - **BIOS e Ripristino**: tabs BIOS/Restore spostati nel panel destro, hardware detected compatto, jump-to sezioni con pallino colorato + count, box "regola d'oro" compatto sempre visibile.
+  - Layout `grid lg:grid-cols-[1fr_320px]`: contenuto scrollabile a sinistra, panel sticky a destra su desktop, stacking verticale su mobile.
 - **Layout sticky action panel** in `/app/agent`: pannello destro con download button + versione + SHA256 + comando exe sempre visibili anche scrollando. Feature grid spostata in cima come value proposition. Metodo PowerShell ora in accordion collassato. Backend notice mostrato solo su preview (nascosto in prod). Su mobile il layout stacka in verticale (nessun impatto UX).
 - **Integrazione Discord completa (A + B + C)**:
   - **A) Server community template**: `docs/DISCORD_SERVER_SETUP.md` con struttura 7 categorie/20 canali, 6 ruoli, testi regole/welcome, config bot moderazione (Dyno/YAGPDB), server onboarding con 3 domande, obiettivi Server Boost e Vanity URL.
