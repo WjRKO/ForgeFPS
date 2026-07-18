@@ -8,6 +8,7 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 ## [Unreleased] — 2026-07-18
 
 ### Added
+- **Layout sticky action panel** in `/app/agent`: pannello destro con download button + versione + SHA256 + comando exe sempre visibili anche scrollando. Feature grid spostata in cima come value proposition. Metodo PowerShell ora in accordion collassato. Backend notice mostrato solo su preview (nascosto in prod). Su mobile il layout stacka in verticale (nessun impatto UX).
 - **Integrazione Discord completa (A + B + C)**:
   - **A) Server community template**: `docs/DISCORD_SERVER_SETUP.md` con struttura 7 categorie/20 canali, 6 ruoli, testi regole/welcome, config bot moderazione (Dyno/YAGPDB), server onboarding con 3 domande, obiettivi Server Boost e Vanity URL.
   - **B) Bot Discord persistente (`discord.py 2.7.1`)**: worker `backend/discord_bot.py` gestito da supervisor come processo separato dal FastAPI. 5 slash commands sincronizzati nel guild: `/mypc` (Health Score), `/benchmark` (ultimo bench), `/leaderboard` (top 10), `/link` (istruzioni collegamento), `/help`. Handler `on_member_join` con welcome DM + auto-role Boosted PC.
