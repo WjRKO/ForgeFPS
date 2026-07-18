@@ -1,5 +1,19 @@
 [
   {
+    "version": "0.6.3",
+    "date": "2026-07-18",
+    "title": "Footer, community e link Discord invito",
+    "notes_md": "- **Footer ridisegnato** con nuova colonna **Community** (Discord con contatore live \"XX online adesso\", GitHub, Segnala un bug, email di contatto)\n- **Nuova pagina Termini di servizio** (`/terms`) con 9 sezioni bilingue\n- **Legal row** in fondo: cookie policy, termini, privacy sempre a portata di click\n- Firma **\"Costruito con \u2764\ufe0f da un gamer per gamer\"**\n- Link **Guida** aggiunto al footer (era invisibile)\n- **Fix**: pulsante \"Apri il server\" nella Dashboard ora punta all'invito Discord reale (era placeholder)\n- **Fix**: controlli anti-duplicato per gli annunci changelog automatici su Discord (auto-detect preview vs produzione)",
+    "url": "https://forgefps.dev/changelog"
+  },
+  {
+    "version": "0.6.2",
+    "date": "2026-07-18",
+    "title": "Dashboard Command Center + preview GUI agent",
+    "notes_md": "- **Dashboard \"Command Center\" ridisegnata**: Health Score del PC in evidenza, trend benchmark con mini-grafico, feed attivit\u00e0 unificato (cali prezzo + benchmark + nuove versioni agent)\n- **Checklist onboarding** sempre visibile: 5 step con progress bar animata che si nasconde quando completi tutto\n- **Preview GIF/video della GUI agent** nella pagina Desktop Agent: vedi l'app in azione prima di scaricarla\n- **Empty state migliorati**: nuovi utenti vedono 3 CTA giganti invece di card vuote\n- **Saluto contestuale**: mostra health score o totale risparmiato appena hai dati\n- Bottone \"Condividi score\" ora accessibile direttamente dalla Dashboard",
+    "url": "https://forgefps.dev/changelog"
+  },
+  {
     "version": "0.6.1",
     "date": "2026-07-18",
     "title": "Nuova pagina Guida + Tour interattivo",
