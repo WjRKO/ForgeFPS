@@ -3,7 +3,8 @@ import { useLocation } from "react-router-dom";
 import { Joyride, STATUS } from "react-joyride";
 import { useTranslation } from "react-i18next";
 
-const TOUR_KEY = "ff_tour_done_v1";
+const TOUR_DONE_KEY = "ff_tour_done_v1";
+const TOUR_PENDING_KEY = "ff_show_tour_pending";
 
 // I passi puntano a data-testid gia' presenti nella UI. Se un elemento non c'e' (utente mobile,
 // tab non montata) Joyride lo skippa in automatico.
@@ -62,22 +63,30 @@ export default function OnboardingTour() {
   const [steps, setSteps] = useState([]);
 
   useEffect(() => {
-    // Auto-start la prima volta che l'utente atterra su /app
+    // Mostra il tour SOLO se:
+    // 1) siamo su /app
+    // 2) esiste un flag "pending" (settato dopo registrazione o click su "Rifai il tour")
+    // 3) NON e' gia' stato completato/skippato in passato
     if (!pathname.startsWith("/app")) return;
-    const done = typeof window !== "undefined" && window.localStorage.getItem(TOUR_KEY);
-    if (!done) {
-      // Delay per lasciar montare la sidebar
-      const to = setTimeout(() => {
-        setSteps(buildSteps(t));
-        setRun(true);
-      }, 800);
-      return () => clearTimeout(to);
-    }
+    if (typeof window === "undefined") return;
+    const done = window.localStorage.getItem(TOUR_DONE_KEY);
+    const pending = window.localStorage.getItem(TOUR_PENDING_KEY);
+    if (done || !pending) return;
+    // Delay per lasciar montare la sidebar
+    const to = setTimeout(() => {
+      setSteps(buildSteps(t));
+      setRun(true);
+    }, 800);
+    return () => clearTimeout(to);
   }, [pathname, i18n.language, t]);
 
   // Espone un handler globale per riavviare il tour da altre parti (es. Account page)
   useEffect(() => {
     const handler = () => {
+      try {
+        window.localStorage.removeItem(TOUR_DONE_KEY);
+        window.localStorage.setItem(TOUR_PENDING_KEY, "1");
+      } catch {}
       setSteps(buildSteps(t));
       setRun(true);
     };
@@ -85,10 +94,15 @@ export default function OnboardingTour() {
     return () => window.removeEventListener("ff:tour:start", handler);
   }, [t]);
 
-  const onCallback = (data) => {
-    const { status } = data;
-    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
-      try { window.localStorage.setItem(TOUR_KEY, "1"); } catch {}
+  // v3: usa il prop `onEvent` (nella v2 era `callback`). Bug: senza questo il flag non veniva mai salvato.
+  const onEvent = (data) => {
+    const status = data && data.status;
+    if (!status) return;
+    if ([STATUS.FINISHED, STATUS.SKIPPED, STATUS.PAUSED].includes(status)) {
+      try {
+        window.localStorage.setItem(TOUR_DONE_KEY, "1");
+        window.localStorage.removeItem(TOUR_PENDING_KEY);
+      } catch {}
       setRun(false);
     }
   };
@@ -104,7 +118,7 @@ export default function OnboardingTour() {
       disableOverlayClose
       hideCloseButton={false}
       spotlightPadding={6}
-      callback={onCallback}
+      onEvent={onEvent}
       locale={{
         back: t("tour.back"),
         close: t("tour.close"),

@@ -242,7 +242,13 @@ export default function Account() {
               {t("tour.welcome_c")}
             </div>
             <button
-              onClick={() => { try { window.localStorage.removeItem("ff_tour_done_v1"); } catch {} window.dispatchEvent(new Event("ff:tour:start")); }}
+              onClick={() => {
+                try {
+                  window.localStorage.removeItem("ff_tour_done_v1");
+                  window.localStorage.setItem("ff_show_tour_pending", "1");
+                } catch {}
+                window.dispatchEvent(new Event("ff:tour:start"));
+              }}
               data-testid="restart-tour-btn"
               className="inline-flex items-center gap-2 border border-[#E5FF00] text-[#E5FF00] px-5 py-2.5 hover:bg-[#E5FF00] hover:text-black transition-colors text-sm uppercase tracking-wide font-bold">
               <HelpCircle size={15} /> {t("tour.restart")}
