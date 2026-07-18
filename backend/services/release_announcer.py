@@ -19,10 +19,10 @@ MANIFEST = Path("/app/data/releases.json")
 
 async def announce_new_releases() -> int:
     """Ritorna il numero di release annunciate in questo run."""
-    # Ambiente-safe: nel preview lasciamo l'announcer disabilitato per evitare
-    # duplicati (prod e preview userebbero lo stesso webhook con DB Mongo distinti).
-    if os.environ.get("RELEASE_ANNOUNCER_ENABLED", "true").strip().lower() in ("0", "false", "no", "off"):
-        logger.info("Release announcer disabled via RELEASE_ANNOUNCER_ENABLED, skip")
+    # Ambiente-safe: l'announcer resta disabilitato per default. Per attivarlo
+    # (es. solo in produzione) impostare RELEASE_ANNOUNCER_ENABLED=true nell'env.
+    if os.environ.get("RELEASE_ANNOUNCER_ENABLED", "false").strip().lower() not in ("1", "true", "yes", "on"):
+        logger.info("Release announcer disabled (set RELEASE_ANNOUNCER_ENABLED=true to enable), skip")
         return 0
     if not MANIFEST.exists():
         logger.info("Release manifest not found at %s, skip", MANIFEST)
