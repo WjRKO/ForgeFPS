@@ -9,7 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from database import db, client
 from auth import build_auth_router, seed_admin
 from helpers import refresh_product_price
-from settings import get_cors_origins
+from settings import get_cors_origins, get_cors_origin_regex
 from routers import advisor, builds, products, pc, push_routes, admin, profiles, discord as discord_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -37,6 +37,7 @@ async def health():
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_cors_origins(),
+    allow_origin_regex=get_cors_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

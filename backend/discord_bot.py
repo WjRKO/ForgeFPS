@@ -322,6 +322,35 @@ async def cmd_set_plan(
         await interaction.followup.send(f"Errore: {e}", ephemeral=True)
 
 
+@tree.command(
+    name="announce-release",
+    description="[ADMIN] Forza l'annuncio di una release sul canale changelog",
+    guild=GUILD,
+)
+@app_commands.describe(
+    version="Versione (es. 0.6.3). Deve essere presente in /app/data/releases.json",
+    force="Se true, ri-annuncia anche se gia' annunciata in passato",
+)
+async def cmd_announce_release(
+    interaction: discord.Interaction, version: str, force: bool = False
+):
+    if not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message(
+            "Solo gli Amministratori del server possono usare questo comando.",
+            ephemeral=True,
+        )
+    await interaction.response.defer(ephemeral=True)
+    try:
+        from services.release_announcer import announce_release_by_version
+        ok, msg = await announce_release_by_version(version.strip(), force=force)
+        emoji = "\u2705" if ok else "\u26a0\ufe0f"
+        await interaction.followup.send(f"{emoji} {msg}", ephemeral=True)
+    except Exception as e:
+        logger.exception("/announce-release errore: %s", e)
+        await interaction.followup.send(f"Errore interno: {e}", ephemeral=True)
+
+
+
 # --------- Eventi ---------
 @client.event
 async def on_ready():
