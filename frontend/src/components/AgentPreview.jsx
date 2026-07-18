@@ -16,10 +16,25 @@ const GIF_SRC = "/assets/agent-preview.gif";
  * (consigliato H.264, 800×500, <2MB, muted, 6-10s in loop) oppure `.gif`.
  */
 export default function AgentPreview({ label = "Anteprima GUI live" }) {
-  const [stage, setStage] = useState("video"); // video → gif → mock
+  const [stage, setStage] = useState("probe"); // probe → video → gif → mock
   const videoRef = useRef(null);
 
-  // Se il video non parte entro 1.5s (file mancante o codec non supportato) → gif
+  // Probe rapido: verifica se esiste un .mp4, altrimenti parte diretto dal .gif
+  useEffect(() => {
+    if (stage !== "probe") return;
+    let cancelled = false;
+    fetch(VIDEO_SRC, { method: "HEAD" })
+      .then((r) => {
+        if (cancelled) return;
+        setStage(r.ok && r.headers.get("content-type")?.includes("video") ? "video" : "gif");
+      })
+      .catch(() => !cancelled && setStage("gif"));
+    return () => {
+      cancelled = true;
+    };
+  }, [stage]);
+
+  // Safety net: se il video non parte entro 1.5s → gif
   useEffect(() => {
     if (stage !== "video") return;
     const t = setTimeout(() => {
@@ -71,6 +86,7 @@ export default function AgentPreview({ label = "Anteprima GUI live" }) {
       )}
 
       {stage === "mock" && <MockGui />}
+      {stage === "probe" && <MockGui />}
     </div>
   );
 }
