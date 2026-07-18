@@ -35,6 +35,39 @@ const ROADMAP = {
 
 const RELEASES = [
   {
+    version: "0.6.0", date: "2026-07-18",
+    added: {
+      it: [
+        "Nuova interfaccia moderna dell'agent Windows: si apre in una finestra Edge dedicata (dark theme, ricerca tweak, animazioni fluide)",
+        "Motore boost ADATTIVO: 35 ottimizzazioni che si adattano al tuo hardware (laptop vs desktop, SSD/HDD, RAM, GPU)",
+        "Benchmark avanzato con punteggio 0-100 (latenza DPC, IOPS disco, jitter di rete) + spiegazione AI dei risultati",
+        "Game Booster real-time OPT-IN: sospende le app pesanti quando lanci un gioco e le ripristina alla chiusura",
+        "Badge \u00abGI\u00c0 ATTIVO\u00bb sui tweak gi\u00e0 ottimizzati: nessuna azione inutile, contatore \u00abda fare / totali\u00bb per categoria",
+      ],
+      en: [
+        "New modern Windows agent interface: opens in a dedicated Edge window (dark theme, tweak search, smooth animations)",
+        "ADAPTIVE boost engine: 35 tweaks that adapt to your hardware (laptop vs desktop, SSD/HDD, RAM, GPU)",
+        "Advanced benchmark with 0-100 score (DPC latency, disk IOPS, network jitter) + AI explanation of results",
+        "Real-time Game Booster (OPT-IN): suspends heavy apps when a game starts and restores them on exit",
+        "\u00abALREADY ACTIVE\u00bb badge on already-optimized tweaks: no wasted actions, \u00abto-do / total\u00bb counter per category",
+      ],
+    },
+    fixed: {
+      it: ["Riconoscimento della finestra Edge quando \u00e8 gi\u00e0 aperto un browser (evita errore di connessione)"],
+      en: ["Edge window detection when a browser is already open (avoids connection error)"],
+    },
+    changed: {
+      it: [
+        "Metadati exe (nome prodotto, editore, versione): riduce i falsi positivi degli antivirus",
+        "Preset (Competitivo/Streaming/Completo) saltano automaticamente le ottimizzazioni gi\u00e0 attive",
+      ],
+      en: [
+        "Exe metadata (product name, publisher, version): reduces antivirus false positives",
+        "Presets (Competitive/Streaming/Complete) automatically skip already-active optimizations",
+      ],
+    },
+  },
+  {
     version: "0.4.5", date: "2026-07-17",
     added: { it: ["Roadmap pubblica e issue tracker collegati", "Scansione demo reale dal browser: hardware + test bufferbloat, senza account né download", "Demo interattiva dell'app in sola lettura", "Badge VirusTotal e trust bar di sicurezza", "Sezione FAQ \"È sicuro?\""], en: ["Public roadmap and issue tracker linked", "Real in-browser demo scan: hardware + bufferbloat test, no account or download", "Read-only interactive app demo", "VirusTotal badge and security trust bar", "\"Is it safe?\" FAQ section"] },
     fixed: { it: ["Consiglio RAM nella scansione rapida"], en: ["RAM tip in the quick scan"] },
