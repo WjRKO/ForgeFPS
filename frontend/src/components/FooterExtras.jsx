@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { toast } from "sonner";
 import { MessagesSquare, Github, Mail, Bug } from "lucide-react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -47,21 +48,37 @@ export function FooterCommunity({ t }) {
         {t("landing.footer_community")}
       </div>
       <ul className="space-y-2 text-sm text-zinc-400">
-        {items.map((it) => (
-          <li key={it.testid}>
-            <a
-              href={it.href}
-              target={it.href.startsWith("mailto:") ? undefined : "_blank"}
-              rel="noreferrer"
-              data-testid={it.testid}
-              className="inline-flex items-center gap-2 hover:text-[#E5FF00] transition-colors"
-            >
-              <it.icon size={13} className="text-zinc-500" />
-              <span>{it.label}</span>
-              {it.extra}
-            </a>
-          </li>
-        ))}
+        {items.map((it) => {
+          const isMail = it.href.startsWith("mailto:");
+          const onMailClick = async (e) => {
+            if (!isMail) return;
+            // Non blocchiamo il default: chi ha un client di posta lo apre lo stesso.
+            // Copiamo comunque negli appunti + toast, cosi' fa qualcosa di visibile
+            // anche per chi usa Gmail web.
+            try {
+              await navigator.clipboard.writeText(CONTACT_EMAIL);
+              toast.success(`Email copiata: ${CONTACT_EMAIL}`, {
+                description: "Se non si apre il tuo client di posta, incolla l'indirizzo nel tuo servizio email preferito.",
+              });
+            } catch {}
+          };
+          return (
+            <li key={it.testid}>
+              <a
+                href={it.href}
+                target={isMail ? undefined : "_blank"}
+                rel="noreferrer"
+                onClick={onMailClick}
+                data-testid={it.testid}
+                className="inline-flex items-center gap-2 hover:text-[#E5FF00] transition-colors"
+              >
+                <it.icon size={13} className="text-zinc-500" />
+                <span>{it.label}</span>
+                {it.extra}
+              </a>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
