@@ -40,8 +40,11 @@ BOT_TOKEN = (os.environ.get("DISCORD_BOT_TOKEN") or "").strip()
 GUILD_ID = (os.environ.get("DISCORD_GUILD_ID") or "").strip()
 ROLE_BOOSTED_ID = (os.environ.get("DISCORD_ROLE_BOOSTED_ID") or "").strip()
 ROLE_PRO_ID = (os.environ.get("DISCORD_ROLE_PRO") or "").strip()
+ROLE_CREATOR_ID = (os.environ.get("DISCORD_ROLE_CREATOR_VERIFIED") or "").strip()
+CHANNEL_CREATOR_REVIEW_ID = (os.environ.get("DISCORD_CHANNEL_CREATOR_REVIEW") or "").strip()
 PRO_PLANS = {"pro", "creator"}  # piani che ottengono il ruolo Pro
 PRO_SYNC_INTERVAL = int(os.environ.get("DISCORD_PRO_SYNC_INTERVAL", "300"))  # 5 min
+CREATOR_REAPPLY_DAYS = int(os.environ.get("DISCORD_CREATOR_REAPPLY_DAYS", "7"))
 MONGO_URL = (os.environ.get("MONGO_URL") or "").strip()
 DB_NAME = (os.environ.get("DB_NAME") or "test_database").strip()
 FRONTEND_URL = (os.environ.get("FRONTEND_URL") or "https://forgefps.dev").strip().rstrip("/")
@@ -351,10 +354,238 @@ async def cmd_announce_release(
 
 
 
+# --------- /apply-creator: richiesta ruolo Creator Verified con approvazione staff ---------
+
+_CREATOR_URL_HOSTS = ("twitch.tv", "youtube.com", "youtu.be", "kick.com")
+
+
+def _is_valid_creator_url(url: str) -> bool:
+    """Valida che sia un link Twitch, YouTube o Kick."""
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
+        return False
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(url).hostname or ""
+        host = host.lower().lstrip("www.")
+        return any(host == h or host.endswith("." + h) for h in _CREATOR_URL_HOSTS)
+    except Exception:
+        return False
+
+
+class CreatorReviewView(discord.ui.View):
+    """View persistente per l'approvazione/rifiuto delle richieste creator.
+    I bottoni hanno custom_id fisso per sopravvivere ai restart del bot."""
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Approva", style=discord.ButtonStyle.success, emoji="\u2705", custom_id="creator_approve")
+    async def approve(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._decide(interaction, approved=True)
+
+    @discord.ui.button(label="Rifiuta", style=discord.ButtonStyle.danger, emoji="\u274c", custom_id="creator_reject")
+    async def reject(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._decide(interaction, approved=False)
+
+    async def _decide(self, interaction: discord.Interaction, approved: bool):
+        # Solo Administrator del server puo' cliccare
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(
+                "Solo gli Amministratori possono approvare/rifiutare le richieste.",
+                ephemeral=True,
+            )
+        await interaction.response.defer(ephemeral=True)
+        msg = interaction.message
+        app_doc = await db.creator_applications.find_one({"message_id": str(msg.id)})
+        if not app_doc:
+            return await interaction.followup.send(
+                "Richiesta non trovata nel database (potrebbe essere gia' stata processata).",
+                ephemeral=True,
+            )
+        if app_doc.get("status") in ("approved", "rejected"):
+            return await interaction.followup.send(
+                f"Richiesta gia' processata (status={app_doc.get('status')}) da {app_doc.get('reviewed_by_name', '?')}.",
+                ephemeral=True,
+            )
+        applicant_id = int(app_doc["discord_user_id"])
+        applicant = interaction.guild.get_member(applicant_id) or await interaction.guild.fetch_member(applicant_id)
+        # Aggiorna DB
+        await db.creator_applications.update_one(
+            {"_id": app_doc["_id"]},
+            {"$set": {
+                "status": "approved" if approved else "rejected",
+                "reviewed_at": datetime.now(timezone.utc).isoformat(),
+                "reviewed_by_id": str(interaction.user.id),
+                "reviewed_by_name": interaction.user.display_name,
+            }},
+        )
+        # Assegna ruolo se approvato
+        role_msg = ""
+        if approved and ROLE_CREATOR_ID and applicant:
+            role = interaction.guild.get_role(int(ROLE_CREATOR_ID))
+            if role:
+                try:
+                    await applicant.add_roles(role, reason=f"Creator Verified approvato da {interaction.user.display_name}")
+                    role_msg = " Ruolo assegnato."
+                except discord.Forbidden:
+                    role_msg = " \u26a0\ufe0f Impossibile assegnare il ruolo (permessi/gerarchia)."
+                except Exception as e:
+                    logger.warning("add creator role failed: %s", e)
+                    role_msg = f" \u26a0\ufe0f Errore assegnazione: {e}"
+        # DM all'utente
+        try:
+            if approved:
+                await applicant.send(
+                    "\ud83c\udf89 **La tua richiesta Creator Verified su FrameForge \u00e8 stata approvata!**\n"
+                    f"Ora hai il ruolo **Creator Verified**. Buon boost e buon lavoro con il tuo canale! \ud83d\ude80\n\n"
+                    f"Link condiviso: {app_doc.get('url', '-')}"
+                )
+            else:
+                await applicant.send(
+                    "\ud83d\ude14 **La tua richiesta Creator Verified su FrameForge \u00e8 stata rifiutata.**\n"
+                    f"Puoi riprovare tra {CREATOR_REAPPLY_DAYS} giorni con `/apply-creator`.\n\n"
+                    f"Link inviato: {app_doc.get('url', '-')}"
+                )
+        except discord.Forbidden:
+            pass  # DM chiusi
+        # Aggiorna embed originale (colore + status)
+        emb = msg.embeds[0] if msg.embeds else discord.Embed()
+        emb.color = 0x00FF66 if approved else 0xFF3B30
+        state = "APPROVATA" if approved else "RIFIUTATA"
+        emb.add_field(name="Decisione", value=f"**{state}** da {interaction.user.mention}", inline=False)
+        # disabilita bottoni
+        new_view = discord.ui.View(timeout=None)
+        try:
+            await msg.edit(embed=emb, view=new_view)
+        except Exception as e:
+            logger.warning("edit review message failed: %s", e)
+        await interaction.followup.send(
+            f"\u2705 Richiesta {state.lower()}.{role_msg}",
+            ephemeral=True,
+        )
+
+
+@tree.command(
+    name="apply-creator",
+    description="Candidati al ruolo Creator Verified. Serve un link Twitch/YouTube/Kick.",
+    guild=GUILD,
+)
+@app_commands.describe(link="Link al tuo canale Twitch, YouTube o Kick")
+async def cmd_apply_creator(interaction: discord.Interaction, link: str):
+    await interaction.response.defer(ephemeral=True)
+    if not ROLE_CREATOR_ID or not CHANNEL_CREATOR_REVIEW_ID:
+        return await interaction.followup.send(
+            "Il flusso Creator Verified non e' configurato. Contatta uno Staff.",
+            ephemeral=True,
+        )
+    link = (link or "").strip()
+    if not _is_valid_creator_url(link):
+        return await interaction.followup.send(
+            "Link non valido. Deve essere un URL Twitch (twitch.tv), YouTube (youtube.com) o Kick (kick.com).",
+            ephemeral=True,
+        )
+    # Deve aver linkato l'account
+    user_doc = await _find_user_by_discord_id(str(interaction.user.id))
+    if not user_doc:
+        return await interaction.followup.send(
+            f"Devi prima collegare il tuo account FrameForge. Vai su {FRONTEND_URL}/app/account "
+            f"o usa `/link`.",
+            ephemeral=True,
+        )
+    # Ha gia' il ruolo?
+    if interaction.guild:
+        role = interaction.guild.get_role(int(ROLE_CREATOR_ID))
+        if role and role in interaction.user.roles:
+            return await interaction.followup.send(
+                "Hai gia' il ruolo **Creator Verified**. Nulla da fare!",
+                ephemeral=True,
+            )
+    # Ha una richiesta pending o rifiutata di recente?
+    pending = await db.creator_applications.find_one({
+        "discord_user_id": str(interaction.user.id),
+        "status": "pending",
+    })
+    if pending:
+        return await interaction.followup.send(
+            "Hai gia' una richiesta in attesa di revisione. Attendi il verdetto dello staff.",
+            ephemeral=True,
+        )
+    recent_reject = await db.creator_applications.find_one({
+        "discord_user_id": str(interaction.user.id),
+        "status": "rejected",
+    }, sort=[("reviewed_at", -1)])
+    if recent_reject and recent_reject.get("reviewed_at"):
+        try:
+            reviewed = datetime.fromisoformat(recent_reject["reviewed_at"].replace("Z", "+00:00"))
+            elapsed_days = (datetime.now(timezone.utc) - reviewed).days
+            if elapsed_days < CREATOR_REAPPLY_DAYS:
+                remain = CREATOR_REAPPLY_DAYS - elapsed_days
+                return await interaction.followup.send(
+                    f"La tua richiesta e' stata rifiutata di recente. Potrai riprovare tra **{remain} giorni**.",
+                    ephemeral=True,
+                )
+        except Exception:
+            pass
+    # Crea embed nel canale staff
+    channel = interaction.guild.get_channel(int(CHANNEL_CREATOR_REVIEW_ID))
+    if not channel:
+        try:
+            channel = await client.fetch_channel(int(CHANNEL_CREATOR_REVIEW_ID))
+        except Exception:
+            return await interaction.followup.send(
+                "Canale review staff non raggiungibile. Contatta un admin.",
+                ephemeral=True,
+            )
+    emb = discord.Embed(
+        title="\ud83c\udfac Richiesta Creator Verified",
+        color=0xE5FF00,
+        timestamp=datetime.now(timezone.utc),
+    )
+    emb.set_author(
+        name=f"{interaction.user.display_name} (@{interaction.user.name})",
+        icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+    )
+    emb.add_field(name="Utente Discord", value=interaction.user.mention, inline=True)
+    emb.add_field(name="Utente FrameForge", value=user_doc.get("email", "-"), inline=True)
+    emb.add_field(name="Piano", value=_user_plan(user_doc), inline=True)
+    emb.add_field(name="Link canale", value=link, inline=False)
+    emb.set_footer(text=f"Discord ID: {interaction.user.id}")
+    try:
+        review_msg = await channel.send(embed=emb, view=CreatorReviewView())
+    except discord.Forbidden:
+        return await interaction.followup.send(
+            "Il bot non ha permessi di scrittura sul canale staff. Contatta un admin.",
+            ephemeral=True,
+        )
+    # Salva in DB
+    await db.creator_applications.insert_one({
+        "discord_user_id": str(interaction.user.id),
+        "discord_username": interaction.user.name,
+        "user_id": str(user_doc.get("_id") or ""),
+        "email": user_doc.get("email", ""),
+        "url": link,
+        "message_id": str(review_msg.id),
+        "channel_id": str(channel.id),
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    await interaction.followup.send(
+        f"\u2705 Richiesta inviata! Lo staff la esaminera' e ti scriver\u00f2 in DM con l'esito.\n"
+        f"Link inviato: {link}",
+        ephemeral=True,
+    )
+
+
+
 # --------- Eventi ---------
 @client.event
 async def on_ready():
     logger.info("Bot connesso come %s (id=%s)", client.user, client.user.id if client.user else "?")
+    # Registra View persistente per approvazione Creator (sopravvive ai restart)
+    try:
+        client.add_view(CreatorReviewView())
+    except Exception as e:
+        logger.warning("add_view CreatorReviewView failed: %s", e)
     try:
         synced = await tree.sync(guild=GUILD)
         logger.info("Slash commands sincronizzati (%d) nel guild %s", len(synced), GUILD_ID)
