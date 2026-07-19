@@ -239,6 +239,24 @@ def pc_context_text(specs: dict) -> str:
     startup = specs.get("startup")
     if startup:
         parts.append(f"\n[AVVIO] {len(startup)} programmi all'avvio: " + ", ".join(startup[:15]))
+    # Benchmark trend history (ultimi 5)
+    hist = specs.get("benchmark_history") or []
+    if hist and len(hist) >= 2:
+        latest = hist[0].get("after", {}).get("overall") or 0
+        oldest = hist[-1].get("after", {}).get("overall") or 0
+        if latest and oldest:
+            delta = round(((latest - oldest) / oldest) * 100, 1)
+            arrow = "in miglioramento" if delta > 0 else ("stabile" if -3 <= delta <= 3 else "in peggioramento")
+            parts.append(
+                f"\n[TREND BENCH] Ultimi {len(hist)} benchmark: {oldest} -> {latest} ({delta:+}%, {arrow})"
+            )
+    # Tracker
+    tp = specs.get("tracker_summary")
+    if tp:
+        parts.append(
+            f"\n[TRACKER] {tp.get('count', 0)} prodotti monitorati, "
+            f"risparmio totale finora {tp.get('total_saved', 0)}€"
+        )
     return "\n".join(p for p in parts if p)
 
 

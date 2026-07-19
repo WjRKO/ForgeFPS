@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import api, { API } from "@/lib/api";
 import { PageHeader } from "@/components/hud";
+import DiagnosePanel from "@/components/DiagnosePanel";
 
 function CodeBlock({ children }) {
   const [copied, setCopied] = useState(false);
@@ -149,6 +150,8 @@ export default function Advisor() {
             <Cpu size={13} /> {t("advisor.personalized")}: {specs.data.cpu}{specs.data.gpu ? ` · ${specs.data.gpu}` : ""}
           </div>
         )} />
+
+      <DiagnosePanel hasSpecs={!!specs?.data?.cpu} />
 
       <div className="grid lg:grid-cols-[240px_1fr] gap-4">
         <div className="bg-[#0F0F12] border border-[#2A2A35] flex flex-col h-[70vh]">

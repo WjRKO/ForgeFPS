@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import uuid
 import asyncio
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 
@@ -77,6 +78,21 @@ async def stream_advisor(session_id: str, history: list, message: str, specs_tex
             yield event.content
         elif isinstance(event, StreamDone):
             break
+
+
+async def one_shot_advisor(prompt: str, specs_text: str = "", lang: str = "it") -> str:
+    """Chiama l'AI advisor una volta con context PC completo (no chat history).
+    Ritorna testo raw. Usato per diagnosi strutturate JSON."""
+    system = ADVISOR_SYSTEM
+    if (lang or "it").startswith("en"):
+        system += "\n\nReply in English."
+    if specs_text:
+        system += (
+            "\n\n[CONTESTO PC DELL'UTENTE - usa questi dati REALI per la diagnosi. "
+            "Fai riferimento a valori concreti quando possibile.]\n" + specs_text
+        )
+    chat = build_chat(str(uuid.uuid4()), system)
+    return await _collect(chat, prompt)
 
 
 BUILD_SYSTEM = (

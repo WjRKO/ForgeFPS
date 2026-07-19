@@ -35,6 +35,32 @@ const ROADMAP = {
 
 const RELEASES = [
   {
+    version: "0.6.4", date: "2026-07-19",
+    added: {
+      it: [
+        "**AI Advisor \u00abDiagnosi PC\u00bb**: un click e l'AI produce 3-5 azioni prioritizzate su misura del tuo hardware, con impatto stimato (+X FPS, -Y ms), difficolt\u00e0 e CTA per applicarle subito con l'agent",
+        "L'AI Advisor ora riceve anche il trend degli ultimi benchmark, i problemi di salute attivi e il numero di prodotti nel tracker: le risposte sono molto pi\u00f9 personali",
+        "Pulsante \u00abSalva per dopo\u00bb sulle azioni AI: crea una lista di todo che ritroverai in Dashboard",
+        "Nuovi slash command Discord: **/help** (rich), **/come-iniziare**, **/ruoli**, **/canali** \u2014 mini-guide interattive per i nuovi membri",
+        "Nuovo comando **/apply-creator** con approvazione staff: candidati al ruolo Creator Verified inviando un link Twitch/YouTube/Kick",
+        "Ruolo **Boosted PC** ora si sincronizza automaticamente anche se colleghi Discord dopo aver linkato l'account",
+      ],
+      en: [
+        "**AI Advisor \u00abPC Diagnosis\u00bb**: one click and the AI produces 3-5 prioritized actions tailored to your hardware, with estimated impact (+X FPS, -Y ms), difficulty and one-tap CTA to apply them with the agent",
+        "AI Advisor now also receives benchmark trend, active health issues and tracker product count: replies are much more personal",
+        "\u00abSave for later\u00bb button on AI actions: creates a todo list you'll find in the Dashboard",
+        "New Discord slash commands: **/help** (rich), **/come-iniziare**, **/ruoli**, **/canali** \u2014 interactive mini-guides for new members",
+        "New **/apply-creator** command with staff approval: apply for Creator Verified role by submitting a Twitch/YouTube/Kick link",
+        "**Boosted PC** role now auto-syncs even if you link Discord after signing up",
+      ],
+    },
+    fixed: {
+      it: ["Email di contatto footer: sostituita con quella ufficiale forgefps.support@gmail.com. Al click ora copia negli appunti + toast, cos\u00ec funziona anche senza client di posta"],
+      en: ["Contact email in footer: replaced with the official forgefps.support@gmail.com. Click now copies to clipboard + toast, so it works even without a mail client"],
+    },
+    changed: { it: [], en: [] },
+  },
+  {
     version: "0.6.3", date: "2026-07-18",
     added: {
       it: [

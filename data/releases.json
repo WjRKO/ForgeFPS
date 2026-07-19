@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.4",
+    "date": "2026-07-19",
+    "title": "AI Advisor \u00abDiagnosi PC\u00bb + community Discord",
+    "notes_md": "- **AI Advisor \u00abDiagnosi PC\u00bb**: un click e l'AI produce 3-5 azioni prioritizzate su misura del tuo hardware, con impatto stimato (+X FPS, -Y ms), difficolt\u00e0 e CTA per applicarle subito con l'agent\n- L'AI Advisor ora riceve anche **trend benchmark**, **health issues attivi** e **tracker summary**: risposte molto pi\u00f9 personalizzate\n- **Salva per dopo** sulle azioni AI: crea una todo list che trovi in Dashboard\n- **Nuovi slash command Discord**: `/help` (rich), `/come-iniziare`, `/ruoli`, `/canali` \u2014 mini-guide per i nuovi membri\n- **`/apply-creator`** con approvazione staff: candidati al ruolo Creator Verified con link Twitch/YouTube/Kick\n- Ruolo **Boosted PC** ora si sincronizza sempre (anche se linki Discord dopo)\n- **Fix**: email contatto footer \u2192 `forgefps.support@gmail.com` con copia negli appunti al click",
+    "url": "https://forgefps.dev/changelog"
+  },
+  {
     "version": "0.6.3",
     "date": "2026-07-18",
     "title": "Footer, community e link Discord invito",
