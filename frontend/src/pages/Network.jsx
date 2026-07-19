@@ -30,7 +30,7 @@ export default function Network() {
   useEffect(() => {
     api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
     const load = async () => {
-      try { const { data } = await api.get("/net-result"); setRes(data.available ? data.result : null); } catch {}
+      try { const { data } = await api.get("/net-result"); setRes(data.available ? data.result : null); } catch (e) { console.error("load net-result failed", e); }
       setLoading(false);
     };
     load();

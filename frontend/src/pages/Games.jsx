@@ -51,18 +51,18 @@ export default function Games() {
     try { return typeof window !== "undefined" ? window.localStorage.getItem(BOOST_MODE_KEY) : null; } catch { return null; }
   });
   const chooseMode = (m) => {
-    try { window.localStorage.setItem(BOOST_MODE_KEY, m); } catch {}
+    try { window.localStorage.setItem(BOOST_MODE_KEY, m); } catch (e) { console.error("boost mode save failed", e); }
     setBoostMode(m);
     if (m === "auto") setShowBoostCfg(true);
     if (m === "manual") setShowConfig(true);
   };
   const resetMode = () => {
-    try { window.localStorage.removeItem(BOOST_MODE_KEY); } catch {}
+    try { window.localStorage.removeItem(BOOST_MODE_KEY); } catch (e) { console.error("boost mode reset failed", e); }
     setBoostMode(null);
   };
 
   const loadGames = async () => {
-    try { const { data } = await api.get("/games"); setGames(data.games || []); } catch {}
+    try { const { data } = await api.get("/games"); setGames(data.games || []); } catch (e) { console.error("loadGames failed", e); }
   };
   const loadPrematch = async () => {
     try {
@@ -72,7 +72,7 @@ export default function Games() {
       setGroups(Object.fromEntries(APP_GROUPS.map((g) => [g.id, g.procs.every((p) => apps.includes(p))])));
       setRunningApps(data.running_apps || []);
       setRunningAt(data.running_at || null);
-    } catch {}
+    } catch (e) { console.error("loadPrematch failed", e); }
   };
   useEffect(() => {
     loadGames();

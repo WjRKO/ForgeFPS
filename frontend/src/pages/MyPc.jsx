@@ -240,9 +240,9 @@ export default function MyPc() {
   const [editing, setEditing] = useState(false);
 
   const load = async () => {
-    try { const { data } = await api.get("/pc-specs"); setSpecs(data); } catch {}
-    try { const { data } = await api.get("/pc-health"); setHealth(data.available ? data : null); } catch {}
-    try { const { data } = await api.get("/pc-benchmark"); setBench(data.latest ? data : null); } catch {}
+    try { const { data } = await api.get("/pc-specs"); setSpecs(data); } catch (e) { console.error("load pc-specs failed", e); }
+    try { const { data } = await api.get("/pc-health"); setHealth(data.available ? data : null); } catch (e) { console.error("load pc-health failed", e); }
+    try { const { data } = await api.get("/pc-benchmark"); setBench(data.latest ? data : null); } catch (e) { console.error("load pc-benchmark failed", e); }
   };
   useEffect(() => { load(); }, []);
 

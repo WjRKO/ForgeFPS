@@ -115,7 +115,7 @@ export default function Tracker() {
   const startEdit = (p) => { setEditing(p.id); setEditTitle(p.title === "Prodotto senza titolo" ? "" : p.title); };
   const saveTitle = async (id) => {
     if (!editTitle.trim()) { setEditing(null); return; }
-    try { await api.put(`/products/${id}/title`, { title: editTitle.trim() }); setEditing(null); await load(); } catch {}
+    try { await api.put(`/products/${id}/title`, { title: editTitle.trim() }); setEditing(null); await load(); } catch (e) { console.error("update title failed", e); }
   };
 
   const track = async (u) => {

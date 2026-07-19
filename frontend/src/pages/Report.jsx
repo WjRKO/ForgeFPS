@@ -127,7 +127,7 @@ export default function Report() {
   const [notes, setNotes] = useState("");
 
   const load = useCallback(async () => {
-    try { const { data } = await api.get("/report"); setReport(data); } catch {}
+    try { const { data } = await api.get("/report"); setReport(data); } catch (e) { console.error("load report failed", e); }
   }, []);
   useEffect(() => { load(); }, [load]);
 
