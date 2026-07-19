@@ -260,13 +260,151 @@ async def cmd_link(interaction: discord.Interaction):
 
 @tree.command(name="help", description="Aiuto e comandi disponibili", guild=GUILD)
 async def cmd_help(interaction: discord.Interaction):
-    emb = discord.Embed(title="FrameForge Bot", color=0xE5FF00)
-    emb.add_field(name="/mypc", value="Il tuo Health Score PC", inline=False)
-    emb.add_field(name="/benchmark", value="Ultimo benchmark salvato", inline=False)
-    emb.add_field(name="/leaderboard", value="Top 10 utenti", inline=False)
-    emb.add_field(name="/link", value="Istruzioni per collegare l'account", inline=False)
-    emb.add_field(name="Sito", value=f"[forgefps.dev]({FRONTEND_URL})", inline=False)
-    emb.add_field(name="Guida", value=f"[/guida]({FRONTEND_URL}/guida)", inline=False)
+    emb = discord.Embed(
+        title="\u26a1 FrameForge Bot \u00b7 Guida ai comandi",
+        description="Il bot ufficiale di **FrameForge**. Ecco cosa puoi fare qui su Discord:",
+        color=0xE5FF00,
+    )
+    emb.add_field(
+        name="\ud83d\udd17 Onboarding",
+        value=(
+            "**/link** \u2014 collega il tuo account FrameForge (obbligatorio per gli altri comandi)\n"
+            "**/come-iniziare** \u2014 guida rapida in 3 step\n"
+            "**/ruoli** \u2014 lista dei ruoli disponibili e come ottenerli\n"
+            "**/canali** \u2014 mappa dei canali chiave"
+        ),
+        inline=False,
+    )
+    emb.add_field(
+        name="\ud83c\udfae Gaming & PC",
+        value=(
+            "**/mypc** \u2014 il tuo Health Score PC (0-100) + hardware\n"
+            "**/benchmark** \u2014 ultimo benchmark salvato\n"
+            "**/leaderboard** \u2014 top 10 utenti per Health Score"
+        ),
+        inline=False,
+    )
+    emb.add_field(
+        name="\ud83c\udfac Creator",
+        value=(
+            "**/apply-creator link:<twitch/youtube/kick>** \u2014 candidati al ruolo **Creator Verified**"
+        ),
+        inline=False,
+    )
+    emb.add_field(
+        name="\ud83d\udee1\ufe0f Admin",
+        value=(
+            "**/set-plan** \u2014 cambia il piano di un utente collegato\n"
+            "**/announce-release** \u2014 annuncia una release sul canale changelog"
+        ),
+        inline=False,
+    )
+    emb.add_field(
+        name="\ud83c\udf10 Link utili",
+        value=(
+            f"[Sito]({FRONTEND_URL}) \u00b7 "
+            f"[Guida completa]({FRONTEND_URL}/guida) \u00b7 "
+            f"[Changelog]({FRONTEND_URL}/changelog) \u00b7 "
+            f"[Scarica agent]({FRONTEND_URL}/app/desktop)"
+        ),
+        inline=False,
+    )
+    emb.set_footer(text="I comandi funzionano solo se hai collegato l'account con /link")
+    await interaction.response.send_message(embed=emb, ephemeral=True)
+
+
+@tree.command(name="come-iniziare", description="Guida rapida in 3 step per i nuovi membri", guild=GUILD)
+async def cmd_come_iniziare(interaction: discord.Interaction):
+    emb = discord.Embed(
+        title="\ud83d\ude80 Come iniziare su FrameForge",
+        description="Benvenuto! Ecco cosa fare nei primi minuti:",
+        color=0x00E0FF,
+    )
+    emb.add_field(
+        name="1\ufe0f\u20e3  Crea un account (30 secondi)",
+        value=f"Vai su {FRONTEND_URL} e clicca **Inizia ora**. Bastano email + password.",
+        inline=False,
+    )
+    emb.add_field(
+        name="2\ufe0f\u20e3  Collega Discord all'account",
+        value=(
+            f"Sulla pagina [Account]({FRONTEND_URL}/app/account) clicca **Collega Discord**.\n"
+            "Oppure fai `/link` qui su Discord e segui le istruzioni.\n"
+            "Otterrai automaticamente il ruolo **Boosted PC**."
+        ),
+        inline=False,
+    )
+    emb.add_field(
+        name="3\ufe0f\u20e3  Scarica il Desktop Agent",
+        value=(
+            f"Dalla pagina [Desktop Agent]({FRONTEND_URL}/app/desktop) scarica `.exe` firmato.\n"
+            "L'agent rileva il tuo hardware, calcola il tuo Health Score e ti suggerisce boost personalizzati.\n"
+            f"Nel dubbio, apri la [Guida completa]({FRONTEND_URL}/guida)."
+        ),
+        inline=False,
+    )
+    emb.add_field(
+        name="\ud83c\udfa4 Sei streamer/creator?",
+        value="Fai `/apply-creator link:<tuo canale>` per candidarti al ruolo **Creator Verified**.",
+        inline=False,
+    )
+    emb.set_footer(text="Serve aiuto? Chiedi in #aiuto o menziona lo staff.")
+    await interaction.response.send_message(embed=emb, ephemeral=True)
+
+
+@tree.command(name="ruoli", description="Lista dei ruoli disponibili e come ottenerli", guild=GUILD)
+async def cmd_ruoli(interaction: discord.Interaction):
+    emb = discord.Embed(
+        title="\ud83c\udfad Ruoli del server",
+        description="Ecco tutti i ruoli disponibili e come ottenerli:",
+        color=0xE5FF00,
+    )
+    emb.add_field(
+        name="\ud83c\udfae Boosted PC \u2014 automatico",
+        value="Assegnato appena colleghi l'account FrameForge con `/link` o dalla pagina Account.",
+        inline=False,
+    )
+    emb.add_field(
+        name="\u2b50 Pro \u2014 automatico",
+        value=(
+            "Assegnato agli utenti con piano **Pro** o **Creator** attivo su FrameForge.\n"
+            "Sincronizzato in tempo reale col database (max 5 min di ritardo)."
+        ),
+        inline=False,
+    )
+    emb.add_field(
+        name="\ud83c\udfac Creator Verified \u2014 su candidatura",
+        value=(
+            "Riservato a streamer e content creator verificati.\n"
+            "Candidati con `/apply-creator link:<twitch/youtube/kick>` \u2014 lo staff revisiona la richiesta."
+        ),
+        inline=False,
+    )
+    emb.add_field(
+        name="\ud83d\udee1\ufe0f Staff \u2014 nomina manuale",
+        value="Assegnato solo dai fondatori a moderatori e collaboratori attivi.",
+        inline=False,
+    )
+    emb.set_footer(text="I ruoli auto vengono sincronizzati ogni 5 minuti.")
+    await interaction.response.send_message(embed=emb, ephemeral=True)
+
+
+@tree.command(name="canali", description="Mappa dei canali del server", guild=GUILD)
+async def cmd_canali(interaction: discord.Interaction):
+    emb = discord.Embed(
+        title="\ud83d\uddfa\ufe0f Mappa dei canali",
+        description="Cosa trovi dove:",
+        color=0x00FF66,
+    )
+    emb.add_field(name="\ud83d\udcdc  #regole", value="Le regole del server. Leggile prima di scrivere.", inline=False)
+    emb.add_field(name="\ud83d\udc4b  #benvenuto / #presentazioni", value="Presentati! Nome, PC, giochi preferiti.", inline=False)
+    emb.add_field(name="\ud83d\udce3  #annunci", value="Novit\u00e0 dal team, roadmap, sondaggi.", inline=False)
+    emb.add_field(name="\ud83d\udcdd  #changelog", value="Annunci automatici delle nuove release FrameForge.", inline=False)
+    emb.add_field(name="\ud83d\udcb0  #price-drops", value="Notifiche automatiche di cali di prezzo dai tracker degli utenti.", inline=False)
+    emb.add_field(name="\ud83c\udfc6  #scores / #showcase", value="Condividi il tuo Health Score e i tuoi setup.", inline=False)
+    emb.add_field(name="\ud83d\udcac  #chat-generale", value="Chiacchiere libere: gaming, hardware, streaming.", inline=False)
+    emb.add_field(name="\ud83c\udd98  #aiuto", value="Bloccato con un tweak? L'AI o lo staff ti aiuta qui.", inline=False)
+    emb.set_footer(text="Il nome esatto dei canali pu\u00f2 variare. Usa la barra laterale per orientarti.")
     await interaction.response.send_message(embed=emb, ephemeral=True)
 
 
