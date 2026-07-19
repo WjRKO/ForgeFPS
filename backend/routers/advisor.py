@@ -179,6 +179,24 @@ def build(get_current_user):
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+    @r.get("/diagnose/latest")
+    async def get_latest_diagnose(user: dict = Depends(get_current_user)):
+        """Ritorna l'ultima diagnosi salvata (o 204 se nessuna). Usato dal frontend
+        per ripristinare il pannello quando l'utente torna sulla pagina Advisor."""
+        uid = str(user["_id"])
+        doc = await db.diagnoses.find_one(
+            {"user_id": uid}, sort=[("created_at", -1)]
+        )
+        if not doc:
+            return {"available": False}
+        return {
+            "available": True,
+            "id": doc.get("id"),
+            "summary": doc.get("summary", ""),
+            "actions": doc.get("actions", []),
+            "created_at": doc.get("created_at"),
+        }
+
     @r.post("/diagnose")
     async def diagnose_pc(user: dict = Depends(get_current_user)):
         """Genera una diagnosi strutturata: 3-5 azioni prioritizzate per il PC dell'utente.

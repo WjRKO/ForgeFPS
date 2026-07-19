@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Sparkles, Stethoscope, ChevronRight, Zap, Wrench, MonitorDown,
-  Bookmark, Check, X, Loader2, Gauge, AlertTriangle,
+  Bookmark, Check, X, Loader2, Gauge, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import api from "@/lib/api";
 
@@ -24,6 +24,17 @@ const KIND_ICONS = {
   manual: Sparkles,
 };
 
+function relTimeIt(iso) {
+  if (!iso) return "";
+  const d = new Date(iso).getTime();
+  const diff = (Date.now() - d) / 1000;
+  if (diff < 60) return "adesso";
+  if (diff < 3600) return `${Math.floor(diff / 60)} min fa`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} h fa`;
+  const days = Math.floor(diff / 86400);
+  return `${days} ${days === 1 ? "giorno" : "giorni"} fa`;
+}
+
 /**
  * Big diagnostic panel for the AI Advisor page.
  * One-click: fetches personalized action plan from /api/advisor/diagnose,
@@ -34,6 +45,22 @@ export default function DiagnosePanel({ hasSpecs }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [savedIds, setSavedIds] = useState(new Set());
+  const [createdAt, setCreatedAt] = useState(null);
+
+  // Al mount: prova a ripescare l'ultima diagnosi salvata dal DB.
+  // Se esiste la mostro subito con badge \"generata Xh fa\", cos\u00ec l'utente
+  // non deve rigenerarla dopo aver cliccato altrove.
+  useEffect(() => {
+    if (!hasSpecs) return;
+    let cancelled = false;
+    api.get("/advisor/diagnose/latest").then(({ data }) => {
+      if (cancelled || !data?.available) return;
+      setResult({ summary: data.summary, actions: data.actions, id: data.id });
+      setCreatedAt(data.created_at);
+      setState("done");
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [hasSpecs]);
 
   const run = async () => {
     setState("loading");
@@ -41,6 +68,8 @@ export default function DiagnosePanel({ hasSpecs }) {
     try {
       const { data } = await api.post("/advisor/diagnose");
       setResult(data);
+      setCreatedAt(new Date().toISOString());
+      setSavedIds(new Set());  // reset saved status
       setState("done");
     } catch (e) {
       setError(e?.response?.data?.detail || "Errore durante la diagnosi");
@@ -174,8 +203,19 @@ export default function DiagnosePanel({ hasSpecs }) {
               <Stethoscope size={18} className="text-[#00E0FF]" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] font-mono uppercase tracking-widest text-[#00E0FF] mb-1">
-                // DIAGNOSI COMPLETATA · {(result.actions || []).length} AZIONI
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <div className="text-[10px] font-mono uppercase tracking-widest text-[#00E0FF]">
+                  // DIAGNOSI · {(result.actions || []).length} AZIONI
+                </div>
+                {createdAt && (
+                  <span
+                    className="text-[10px] font-mono text-zinc-500"
+                    data-testid="diagnose-timestamp"
+                    title={new Date(createdAt).toLocaleString()}
+                  >
+                    · generata {relTimeIt(createdAt)}
+                  </span>
+                )}
               </div>
               <p className="text-sm text-zinc-200 leading-relaxed">
                 {result.summary || "Ecco le azioni consigliate dall'AI per il tuo PC."}
@@ -245,10 +285,10 @@ export default function DiagnosePanel({ hasSpecs }) {
           <div className="p-4 border-t border-[#1A1A24] flex items-center justify-between text-xs">
             <button
               onClick={run}
-              className="text-zinc-500 hover:text-[#E5FF00] font-mono uppercase tracking-widest"
+              className="inline-flex items-center gap-1.5 text-zinc-500 hover:text-[#E5FF00] font-mono uppercase tracking-widest transition-colors"
               data-testid="diagnose-again"
             >
-              ↻ Rigenera
+              <RefreshCw size={11} /> Rigenera
             </button>
             <span className="text-zinc-600 font-mono">Generato da FrameForge AI</span>
           </div>
