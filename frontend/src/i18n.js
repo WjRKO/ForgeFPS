@@ -167,6 +167,38 @@ const resources = {
         thinking: "Sto pensando…", copy_code: "Copia", copied: "Copiato",
         error_conn: "[Errore di connessione all'AI]",
         default_suggestions: ["Come riduco l'input lag per il gaming competitivo?", "Migliori impostazioni OBS per streaming a 1080p60", "Come ottimizzo Windows 11 per FPS massimi?", "Tweak per abbassare le temperature della GPU"],
+        coach_suggestions: {
+          default: [
+            "Analizza il mio PC e dammi le 3 azioni più utili adesso",
+            "Come ottimizzo Windows 11 senza rischiare la stabilità?",
+            "Quali servizi Windows posso disattivare in sicurezza?",
+            "Come tengo il PC pulito e veloce nel tempo?",
+          ],
+          fps: [
+            "Come riduco l'input lag per il gaming competitivo?",
+            "Migliori impostazioni del pannello NVIDIA per il gaming competitivo",
+            "Quali programmi all'avvio posso disabilitare per un boot più veloce?",
+            "Come attivo HAGS, MPO off e Reflex per massimi FPS?",
+          ],
+          streaming: [
+            "Migliori impostazioni OBS per streaming a 1080p60",
+            "Come bilancio bitrate, CPU e qualità per un livestream stabile?",
+            "NVENC vs x264: cosa conviene con il mio hardware?",
+            "Come riduco i frame droppati durante lo stream?",
+          ],
+          troubleshoot: [
+            "Il PC va lento e freeza: da dove parto per diagnosticare?",
+            "Come faccio a capire se ho il collo di bottiglia su CPU o GPU?",
+            "Ho stuttering nei giochi: quali cause e come sistemo?",
+            "Temperature GPU/CPU alte: cosa controllo?",
+          ],
+          build: [
+            "Consigliami una build gaming 1080p sotto 800€",
+            "Consigliami una build streaming 1440p sotto 1500€",
+            "Cosa faccio: upgrade CPU o GPU sul mio PC attuale?",
+            "Quali componenti hanno il miglior rapporto qualità/prezzo adesso?",
+          ],
+        },
       },
       games: {
         eyebrow: "// Giochi", title: "I miei giochi", subtitle: "FPS attesi e impostazioni consigliate per i tuoi giochi, in base al tuo hardware.",
@@ -637,6 +669,38 @@ const resources = {
         thinking: "Thinking…", copy_code: "Copy", copied: "Copied",
         error_conn: "[AI connection error]",
         default_suggestions: ["How do I reduce input lag for competitive gaming?", "Best OBS settings for 1080p60 streaming", "How do I optimize Windows 11 for max FPS?", "Tweaks to lower GPU temperatures"],
+        coach_suggestions: {
+          default: [
+            "Analyze my PC and give me the 3 most useful actions right now",
+            "How do I optimize Windows 11 without risking stability?",
+            "Which Windows services can I safely disable?",
+            "How do I keep my PC clean and fast over time?",
+          ],
+          fps: [
+            "How do I reduce input lag for competitive gaming?",
+            "Best NVIDIA control panel settings for competitive gaming",
+            "Which startup programs can I disable for a faster boot?",
+            "How do I enable HAGS, disable MPO and turn on Reflex for max FPS?",
+          ],
+          streaming: [
+            "Best OBS settings for 1080p60 streaming",
+            "How do I balance bitrate, CPU and quality for a stable livestream?",
+            "NVENC vs x264: which one suits my hardware?",
+            "How do I reduce dropped frames while streaming?",
+          ],
+          troubleshoot: [
+            "My PC is slow and freezes: where do I start diagnosing?",
+            "How can I tell if I have a CPU or GPU bottleneck?",
+            "I have stuttering in games: what are the causes and how do I fix it?",
+            "GPU/CPU temps are high: what should I check?",
+          ],
+          build: [
+            "Suggest a 1080p gaming build under €800",
+            "Suggest a 1440p streaming build under €1500",
+            "Should I upgrade the CPU or the GPU on my current PC?",
+            "Which components have the best price/performance right now?",
+          ],
+        },
       },
       games: {
         eyebrow: "// Games", title: "My games", subtitle: "Expected FPS and recommended settings for your games, based on your hardware.",

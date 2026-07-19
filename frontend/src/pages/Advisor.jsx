@@ -61,8 +61,14 @@ export default function Advisor() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [specs, setSpecs] = useState(null);
-  const [suggestions, setSuggestions] = useState(() => i18n.t("advisor.default_suggestions", { returnObjects: true }));
   const [mode, setMode] = useState(() => (typeof localStorage !== "undefined" && localStorage.getItem("advisor_mode")) || "default");
+  // Personalized suggestions from backend (hardware-aware) — used only for "default" coach
+  const [personalizedDefault, setPersonalizedDefault] = useState(null);
+  // Coach-specific static suggestions, keyed by mode
+  const coachMap = i18n.t("advisor.coach_suggestions", { returnObjects: true }) || {};
+  const suggestions = mode === "default" && personalizedDefault
+    ? personalizedDefault
+    : (coachMap[mode] || coachMap.default || i18n.t("advisor.default_suggestions", { returnObjects: true }));
   const [imageDataUrl, setImageDataUrl] = useState("");
   const [followups, setFollowups] = useState([]);
   const [feedback, setFeedback] = useState({}); // {msgIndex: "up"|"down"}
@@ -80,7 +86,7 @@ export default function Advisor() {
     loadSessions();
     api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {});
     const lng = (i18n.resolvedLanguage || "it").slice(0, 2);
-    api.get(`/advisor/suggestions?lang=${lng}`).then(({ data }) => { if (data?.suggestions?.length) setSuggestions(data.suggestions); }).catch(() => {});
+    api.get(`/advisor/suggestions?lang=${lng}`).then(({ data }) => { if (data?.suggestions?.length) setPersonalizedDefault(data.suggestions); }).catch(() => {});
   }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 

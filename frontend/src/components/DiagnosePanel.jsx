@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  Sparkles, Stethoscope, ChevronRight, Zap, Wrench, MonitorDown,
+  Sparkles, Stethoscope, ChevronRight, ChevronDown, Zap, Wrench, MonitorDown,
   Bookmark, Check, X, Loader2, Gauge, AlertTriangle, RefreshCw,
   ThumbsUp, ThumbsDown, Eye, CheckCircle2,
 } from "lucide-react";
@@ -51,6 +51,18 @@ export default function DiagnosePanel({ hasSpecs }) {
   const [feedback, setFeedback] = useState({}); // {actionTitle: "up"|"down"}
   const [expandedVerify, setExpandedVerify] = useState({});
   const [outcome, setOutcome] = useState(null);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof localStorage === "undefined") return false;
+    return localStorage.getItem("diagnose_collapsed") === "1";
+  });
+
+  const toggleCollapsed = () => {
+    setCollapsed((v) => {
+      const next = !v;
+      try { localStorage.setItem("diagnose_collapsed", next ? "1" : "0"); } catch {}
+      return next;
+    });
+  };
 
   const toSlug = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
 
@@ -247,10 +259,24 @@ export default function DiagnosePanel({ hasSpecs }) {
         <div className="border border-[#00E0FF]/40 bg-gradient-to-br from-[#00E0FF]/5 to-transparent" data-testid="diagnose-result">
           {/* Header */}
           <div className="p-5 border-b border-[#1A1A24] flex items-start gap-3">
-            <div className="w-10 h-10 bg-[#00E0FF]/15 border border-[#00E0FF]/40 flex items-center justify-center shrink-0">
-              <Stethoscope size={18} className="text-[#00E0FF]" />
-            </div>
-            <div className="flex-1 min-w-0">
+            <button
+              onClick={toggleCollapsed}
+              className="w-10 h-10 bg-[#00E0FF]/15 border border-[#00E0FF]/40 flex items-center justify-center shrink-0 hover:bg-[#00E0FF]/25 transition-colors group"
+              data-testid="diagnose-collapse-toggle"
+              aria-label={collapsed ? "Espandi diagnosi" : "Comprimi diagnosi"}
+              aria-expanded={!collapsed}
+              title={collapsed ? "Espandi diagnosi" : "Comprimi diagnosi"}
+            >
+              {collapsed
+                ? <ChevronRight size={18} className="text-[#00E0FF] group-hover:translate-x-0.5 transition-transform" />
+                : <ChevronDown size={18} className="text-[#00E0FF]" />}
+            </button>
+            <button
+              onClick={toggleCollapsed}
+              className="flex-1 min-w-0 text-left"
+              data-testid="diagnose-header-clickable"
+              aria-label={collapsed ? "Espandi diagnosi" : "Comprimi diagnosi"}
+            >
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 <div className="text-[10px] font-mono uppercase tracking-widest text-[#00E0FF]">
                   // DIAGNOSI · {(result.actions || []).length} AZIONI
@@ -262,6 +288,11 @@ export default function DiagnosePanel({ hasSpecs }) {
                     title={new Date(createdAt).toLocaleString()}
                   >
                     · generata {relTimeIt(createdAt)}
+                  </span>
+                )}
+                {collapsed && (
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 border border-[#2A2A35] px-1.5 py-0.5">
+                    Compressa
                   </span>
                 )}
               </div>
@@ -282,7 +313,7 @@ export default function DiagnosePanel({ hasSpecs }) {
                   Dopo l'ultima diagnosi: {outcome.delta > 0 ? "+" : ""}{outcome.delta} punti benchmark
                 </div>
               )}
-            </div>
+            </button>
             <button
               onClick={dismiss}
               className="text-zinc-500 hover:text-white shrink-0"
@@ -293,8 +324,9 @@ export default function DiagnosePanel({ hasSpecs }) {
             </button>
           </div>
 
-          {/* Actions list */}
-          <div className="divide-y divide-[#1A1A24]">
+          {/* Actions list — hidden when collapsed */}
+          {!collapsed && (
+          <div className="divide-y divide-[#1A1A24]" data-testid="diagnose-actions-list">
             {(result.actions || []).map((a, i) => {
               const Icon = KIND_ICONS[a.kind] || Zap;
               const diff = DIFFICULTY_STYLES[(a.difficulty || "").toLowerCase()] || DIFFICULTY_STYLES.facile;
@@ -407,8 +439,10 @@ export default function DiagnosePanel({ hasSpecs }) {
               );
             })}
           </div>
+          )}
 
-          {/* Footer */}
+          {/* Footer — hidden when collapsed */}
+          {!collapsed && (
           <div className="p-4 border-t border-[#1A1A24] flex items-center justify-between text-xs">
             <button
               onClick={run}
@@ -419,6 +453,7 @@ export default function DiagnosePanel({ hasSpecs }) {
             </button>
             <span className="text-zinc-600 font-mono">Generato da FrameForge AI</span>
           </div>
+          )}
         </div>
       )}
     </div>
