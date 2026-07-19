@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 import ai_engine
 from database import db, now_iso
@@ -123,6 +123,9 @@ COACH_PROMPTS = {
 
 
 class ChatMessageInputExt(ChatMessageInput):
+    # Override message to allow empty string when an image is attached.
+    # The endpoint will require at least one of {message, image_data_url}.
+    message: str = Field(default="", max_length=2000)
     mode: str = "default"
     image_data_url: str = ""
 
@@ -223,6 +226,13 @@ def build(get_current_user):
     async def advisor_chat(data: ChatMessageInputExt, user: dict = Depends(get_current_user)):
         uid = str(user["_id"])
         await _check_ai_rate_limit(uid)
+        image_data_url = (data.image_data_url or "").strip()
+        # Require at least one of {message, image}
+        if not (data.message or "").strip() and not image_data_url:
+            raise HTTPException(status_code=422, detail="Serve un messaggio o un'immagine.")
+        # Fallback text if only an image is sent, so history/session title stay meaningful
+        if not (data.message or "").strip():
+            data.message = "Analizza questa immagine e dammi consigli concreti."
         session_id = data.session_id or str(uuid.uuid4())
         if not await db.chat_sessions.find_one({"id": session_id, "user_id": uid}):
             title = data.message[:40] + ("..." if len(data.message) > 40 else "")
@@ -240,7 +250,6 @@ def build(get_current_user):
         specs_text_full = (specs_text or "") + coach_suffix
         # Image (multi-modal): passa come nota aggiuntiva al messaggio se presente
         message_augmented = data.message
-        image_data_url = (data.image_data_url or "").strip()
 
         async def gen():
             yield f"__SESSION__{session_id}__\n"
