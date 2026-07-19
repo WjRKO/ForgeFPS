@@ -8,6 +8,52 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 ## [Unreleased] — 2026-07-18
 
 ### Added
+- **Footer allargato con colonna "Community"**:
+  - Nuovo componente riutilizzabile `FooterExtras.jsx` (`FooterCommunity` + `FooterLegal`) usato sia in `Landing.jsx` (5 colonne: Brand · Product · Community · Account · con legal row) sia in `MarketingChrome.jsx` (4 colonne).
+  - **Discord** con badge live "🟢 XX online adesso" — dot verde pulsante — via `GET /api/discord/live-stats` (cache in-memory 5 min, fallback silenzioso se widget server non abilitato).
+  - **GitHub** repo link + **Report a bug** (deep-link a `/issues/new/choose`) + email `hello@forgefps.dev`.
+  - **Guida** aggiunta alla colonna Product (era invisibile).
+- **Endpoint `GET /api/discord/live-stats` (pubblico, no auth)** in `backend/routers/discord.py`:
+  - Chiama `https://discord.com/api/guilds/{DISCORD_GUILD_ID}/widget.json`.
+  - Cache in-memory 5 min per limitare rate-limit.
+  - Ritorna sempre 200: `{enabled, presence_count, invite_url, instant_invite, name}` — `enabled=false` se widget non attivo.
+- **Nuova pagina `/terms`** (`Terms.jsx`): Termini di servizio con 9 sezioni bilingue IT/EN (Cos'è FrameForge, Account & sicurezza, Uso agent, Contenuti AI, Uso accettabile, Prezzi, Limitazione responsabilità, Modifiche termini, Contatti). Route lazy in `App.js`.
+- **Legal row nel footer**:
+  - Copyright "© 2026 FrameForge — Tutti i diritti riservati"
+  - Link a Cookie policy (`/privacy-telemetry#cookies`), Terms of service (`/terms`), Privacy (`/privacy-telemetry`)
+  - Firma discreta "Costruito con ❤️ da un gamer per gamer" (bilingue).
+- **Env var `DISCORD_INVITE_URL`** letta da `/api/discord/status` e restituita al frontend → il bottone "Apri il server" nella Dashboard usa ora il link reale.
+- **Feature flag `RELEASE_ANNOUNCER_ENABLED`** in `services/release_announcer.py`: default OFF in preview per evitare duplicati Discord tra preview e produzione. In prod si abilita via Custom Keys del pannello Deployments Emergent.
+- **Chiave i18n `landing.nav_guide`** (IT: "Guida" / EN: "Guide") — mancava nonostante la route /guida esistesse.
+
+### Fixed
+- **Dashboard → "Apri il server" invito Discord non valido**: il link era hardcoded a `discord.gg/frameforge` (placeholder). Ora `Dashboard.jsx` legge `discord.invite_url` dallo status endpoint con fallback al vero invito permanente.
+- **Duplicati changelog Discord**: preview e produzione avevano lo stesso `DISCORD_WEBHOOK_CHANGELOG` ma DB Mongo separati → l'idempotency `announced_releases` non copriva l'altro ambiente. Fix: flag `RELEASE_ANNOUNCER_ENABLED` con default OFF; solo la produzione (che imposta `=true` via Custom Keys) annuncerà.
+
+### Changed
+- **Rimozione hardcode `RELEASE_ANNOUNCER_ENABLED` dal `.env`**: il file `.env` è shared tra preview e prod, quindi il flag va gestito solo via Custom Keys del pannello Deployments (prod-only).
+
+## [0.6.2] — 2026-07-18
+  - Layout 2 colonne (main + sticky panel), coerente con `/app/desktop` e le altre tool pages.
+  - **PC Hero card**: HealthRing grande con score 0-100 e grade colorato (verde/giallo/rosso), badge hardware CPU/GPU/RAM, contatori issue/warn, CTA "Ottimizza ora" con colore adattivo (rossa se score<55, gialla altrimenti). Se PC non connesso → empty state con CTA "Connetti il PC →".
+  - **Benchmark card**: score latest, delta % vs precedente (verde/rosso), `Sparkline` degli ultimi 8 benchmark, bottone "Condividi su Discord" attivo solo se Discord linkato (chiama `POST /api/discord/share-score`).
+  - **Activity Feed unificato**: merge cronologico di price drops (`/api/notifications`), ultimo benchmark, nuova release agent (mostrata solo se `localStorage.ff_agent_seen_v0.6.0` è false). Ordinato desc, top 6, con relative time.
+  - **Recent Products** compatto con empty state migliorato.
+  - **Sticky panel a destra**: `OnboardingChecklist` (5 step: Connect PC, First benchmark, Track a product, Link Discord, Enable 2FA — con checkmark verde, strikethrough, progress bar animata gradient volt→green; auto-hide a 5/5), `QuickActionsCard` (griglia 2×3 con Advisor/Agent/Games/Tracker/Builds/Network), `DiscordCard` (linked → avatar + username + link server; unlinked → CTA "Link account (30s)"), `AgentCard` (solo se nuova versione non ancora cliccata: badge NEW + CTA Download).
+  - **Greeting contestuale**: "Ciao, {name} — Il tuo PC è a {score}/100" (se health disponibile), oppure "Hai risparmiato {saved}€" (se total_saved>0), oppure "Pronto a boostare il PC?" (fallback).
+  - **Empty state hero**: `HeroEmpty` con 3 CTA giganti numerate (Fai il primo scan, Genera una build, Traccia un prodotto) mostrato solo se l'utente è brand new (no specs, no products, no builds, no chat sessions).
+  - i18n: aggiunte ~45 chiavi sotto `dashboard.*` (IT + EN).
+- **Preview GUI Edge nella sticky card `/app/desktop`**:
+  - Nuovo componente `AgentPreview.jsx` con fallback a 3 livelli: `<video>` → `<img>` GIF → mock CSS animato.
+  - Probe HEAD iniziale al `.mp4` per evitare flash: se non esiste va diretto al GIF.
+  - GIF reale (1.9MB) caricata in `/app/frontend/public/assets/agent-preview.gif`.
+  - Mock fallback CSS: finestra "FrameForge Agent" con title bar macOS-style, tab sidebar Gaming/Latenza/Rete/Sistema, 6 tweak con badge "GIÀ ATTIVO" a cascata, progress bar arcobaleno.
+  - Badge overlay "LIVE GUI PREVIEW" con dot pulsante top-left, aspect 16:10.
+
+### Changed
+- **`/app/dashboard`**: layout completamente riprogettato (120 → 743 righe di codice). Le vecchie 4 stat card di base (tracked/builds/chats/saved) sono state sostituite dai widget dinamici sopra descritti.
+
+## [0.6.1] — 2026-07-18
 - **Redesign coerente `/app/commands` e `/app/bios-restore`** con lo stesso pattern sticky panel di DesktopAgent:
   - **Comandi Utili**: barra di ricerca fuzzy in tempo reale, filter chips (`Solo sicuri` / `Solo admin` / `Solo avanzati`), contatore "visibili/totali", hardware rilevato compact, jump-to categorie con badge count. Empty state se filtri non producono match.
   - **BIOS e Ripristino**: tabs BIOS/Restore spostati nel panel destro, hardware detected compatto, jump-to sezioni con pallino colorato + count, box "regola d'oro" compatto sempre visibile.

@@ -45,7 +45,8 @@ def build(get_current_user):
         if not p:
             raise HTTPException(status_code=404, detail="Prodotto non trovato")
         p["history"] = await db.price_history.find(
-            {"product_id": product_id}, {"_id": 0}).sort("recorded_at", 1).to_list(1000)
+            {"product_id": product_id}, {"_id": 0}).sort("recorded_at", -1).limit(200).to_list(200)
+        p["history"].reverse()  # ripristina ordine cronologico (ascendente) come atteso dal FE
         return p
 
     @r.post("/products/{product_id}/refresh")
@@ -119,7 +120,10 @@ def build(get_current_user):
     @r.get("/stats")
     async def stats(user: dict = Depends(get_current_user)):
         uid = str(user["_id"])
-        products = await db.products.find({"user_id": uid}, {"_id": 0}).to_list(500)
+        products = await db.products.find(
+            {"user_id": uid},
+            {"_id": 0, "initial_price": 1, "current_price": 1},
+        ).to_list(500)
         total_saved = sum((p["initial_price"] - p["current_price"]) for p in products
                           if p.get("initial_price") and p.get("current_price")
                           and p["current_price"] < p["initial_price"])

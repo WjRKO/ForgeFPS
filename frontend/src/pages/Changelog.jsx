@@ -35,6 +35,64 @@ const ROADMAP = {
 
 const RELEASES = [
   {
+    version: "0.6.3", date: "2026-07-18",
+    added: {
+      it: [
+        "Footer ridisegnato con nuova colonna \u00abCommunity\u00bb: Discord con contatore live (\u00abXX online adesso\u00bb tramite widget del server), GitHub, Segnala un bug, email di contatto",
+        "Nuova pagina \u00abTermini di servizio\u00bb (/terms): 9 sezioni chiare su cos'\u00e8 FrameForge, uso dell'agent, contenuti AI, prezzi, limitazione di responsabilit\u00e0 (IT + EN)",
+        "Legal row nel footer: copyright, cookie policy, termini di servizio, privacy — tutto sempre a portata di click",
+        "Firma \u00abCostruito con \u2764\ufe0f da un gamer per gamer\u00bb per una nota umana in fondo alla pagina",
+        "Link \u00abGuida\u00bb nella colonna Prodotto del footer: rende scoperta la nuova pagina di onboarding",
+      ],
+      en: [
+        "Redesigned footer with new \u00abCommunity\u00bb column: Discord with live counter (\u00abXX online now\u00bb via server widget), GitHub, Report a bug, contact email",
+        "New \u00abTerms of service\u00bb page (/terms): 9 clear sections on what FrameForge is, agent usage, AI content, pricing, liability (IT + EN)",
+        "Legal row in the footer: copyright, cookie policy, terms of service, privacy — always one click away",
+        "\u00abBuilt with \u2764\ufe0f by a gamer for gamers\u00bb signature for a human touch at the bottom of the page",
+        "\u00abGuide\u00bb link in the footer Product column: makes the new onboarding page discoverable",
+      ],
+    },
+    fixed: {
+      it: [
+        "Pulsante \u00abApri il server\u00bb nella Dashboard: ora punta all'invito Discord reale (era un placeholder non valido)",
+        "Annunci changelog duplicati su Discord: attivati controlli anti-duplicato con env var dedicata (l'annuncio parte solo dalla produzione)",
+      ],
+      en: [
+        "\u00abOpen the server\u00bb button in the Dashboard: now points to the real Discord invite (was an invalid placeholder)",
+        "Duplicate changelog announcements on Discord: added anti-duplicate controls via dedicated env var (only production announces)",
+      ],
+    },
+    changed: { it: [], en: [] },
+  },
+  {
+    version: "0.6.2", date: "2026-07-18",
+    added: {
+      it: [
+        "Dashboard \u00abCommand Center\u00bb ridisegnata: Health Score del PC in evidenza, trend benchmark con mini-grafico e delta % vs precedente, feed attivit\u00e0 unificato (cali di prezzo + benchmark + nuove versioni agent)",
+        "Checklist di onboarding sempre visibile nella Dashboard: 5 step (collega PC, primo benchmark, traccia prodotto, collega Discord, attiva 2FA) con barra di progresso animata che si nasconde quando completi tutto",
+        "Preview video/GIF della GUI dell'agent nella pagina Desktop Agent: vedi l'app in azione prima di scaricarla, con fallback automatico a mock animato",
+        "Empty state migliorati in Dashboard: nuovi utenti vedono 3 CTA giganti (Fai il primo scan, Genera una build, Traccia un prodotto) invece di card vuote",
+        "Saluto contestuale in Dashboard: mostra il tuo health score o il totale risparmiato non appena hai dati",
+      ],
+      en: [
+        "Redesigned \u00abCommand Center\u00bb Dashboard: PC Health Score front and center, benchmark trend with sparkline and % delta vs previous, unified activity feed (price drops + benchmarks + new agent releases)",
+        "Always-visible onboarding checklist in the Dashboard: 5 steps (connect PC, first benchmark, track a product, link Discord, enable 2FA) with animated progress bar that hides once complete",
+        "Live GIF/video preview of the agent GUI on the Desktop Agent page: see the app in action before downloading, with automatic fallback to an animated mock",
+        "Improved Dashboard empty states: new users see 3 giant CTAs (Run first scan, Generate a build, Track a product) instead of empty cards",
+        "Context-aware greeting on the Dashboard: shows your health score or total savings as soon as data is available",
+      ],
+    },
+    fixed: { it: [], en: [] },
+    changed: {
+      it: [
+        "Discord: bottone \u00abCondividi score\u00bb ora accessibile direttamente dalla Dashboard (prima solo dalla pagina Il mio PC)",
+      ],
+      en: [
+        "Discord: \u00abShare score\u00bb button now accessible directly from the Dashboard (previously only from the My PC page)",
+      ],
+    },
+  },
+  {
     version: "0.6.1", date: "2026-07-18",
     added: {
       it: [

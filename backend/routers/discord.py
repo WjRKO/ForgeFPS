@@ -99,16 +99,21 @@ async def _fetch_discord_user(access_token: str) -> dict:
         return r.json()
 
 
-async def _add_to_guild(discord_user_id: str, access_token: str) -> None:
+async def _add_to_guild(discord_user_id: str, access_token: str, user_plan: str = "free") -> None:
     guild_id = _env("DISCORD_GUILD_ID")
     bot_token = _env("DISCORD_BOT_TOKEN")
     role_id = _env("DISCORD_ROLE_BOOSTED_ID")
+    role_pro_id = _env("DISCORD_ROLE_PRO")
     if not (guild_id and bot_token):
         logger.info("Guild add skipped: missing DISCORD_GUILD_ID or DISCORD_BOT_TOKEN")
         return
-    payload = {"access_token": access_token}
-    if role_id:
-        payload["roles"] = [role_id]
+    # Ruoli da assegnare al join: Boosted PC sempre; Pro se piano compatibile
+    roles_to_add = [r for r in [role_id] if r]
+    if role_pro_id and (user_plan or "").strip().lower() in ("pro", "creator"):
+        roles_to_add.append(role_pro_id)
+    payload: dict = {"access_token": access_token}
+    if roles_to_add:
+        payload["roles"] = roles_to_add
     headers = {
         "Authorization": f"Bot {bot_token}",
         "Content-Type": "application/json",
@@ -120,16 +125,59 @@ async def _add_to_guild(discord_user_id: str, access_token: str) -> None:
         if r.status_code not in (201, 204):
             logger.warning("Discord guild add returned %s: %s", r.status_code, r.text)
             return
-        # Idempotente: se gia' era nel guild, assegno il ruolo
-        if role_id and r.status_code == 204:
-            role_url = f"{DISCORD_API}/guilds/{guild_id}/members/{discord_user_id}/roles/{role_id}"
-            rr = await client.put(role_url, headers={"Authorization": f"Bot {bot_token}"})
-            if rr.status_code not in (204, 200):
-                logger.warning("Discord role assign returned %s: %s", rr.status_code, rr.text)
+        # Idempotente: se era gia' nel guild, assegno singolarmente i ruoli
+        if r.status_code == 204:
+            for rid in roles_to_add:
+                role_url = f"{DISCORD_API}/guilds/{guild_id}/members/{discord_user_id}/roles/{rid}"
+                rr = await client.put(role_url, headers={"Authorization": f"Bot {bot_token}"})
+                if rr.status_code not in (204, 200):
+                    logger.warning("Discord role %s assign returned %s: %s", rid, rr.status_code, rr.text)
 
 
 def build(get_current_user):
     router = APIRouter(prefix="/api/discord", tags=["discord"])
+
+    # Cache in-memory per ridurre chiamate all'API Discord (5 min)
+    _live_cache = {"data": None, "at": 0.0}
+
+    @router.get("/live-stats")
+    async def discord_live_stats():
+        """Statistiche live del server Discord (endpoint pubblico, no auth).
+        Fonte primaria: widget.json (richiede widget abilitato in Discord).
+        Ritorna sempre 200: se widget non abilitato/errore, restituisce enabled=false.
+        Cache 5 min in-memory.
+        """
+        import time
+        now = time.time()
+        if _live_cache["data"] and (now - _live_cache["at"]) < 300:
+            return _live_cache["data"]
+
+        guild_id = _env("DISCORD_GUILD_ID")
+        invite = _env("DISCORD_INVITE_URL")
+        result = {"enabled": False, "presence_count": 0, "invite_url": invite}
+        if guild_id:
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    r = await client.get(f"https://discord.com/api/guilds/{guild_id}/widget.json")
+                if r.status_code == 200:
+                    data = r.json()
+                    result = {
+                        "enabled": True,
+                        "presence_count": data.get("presence_count", 0),
+                        "instant_invite": data.get("instant_invite") or invite,
+                        "invite_url": invite or data.get("instant_invite"),
+                        "name": data.get("name", ""),
+                    }
+                else:
+                    logger.info("Discord widget.json returned %s (widget likely disabled)", r.status_code)
+            except Exception as e:
+                logger.warning("Discord live-stats fetch failed: %s", e)
+
+        _live_cache["data"] = result
+        _live_cache["at"] = now
+        return result
+
+
 
     @router.get("/connect")
     async def connect_discord(request: Request, user: dict = Depends(get_current_user)):
@@ -178,7 +226,8 @@ def build(get_current_user):
         )
 
         try:
-            await _add_to_guild(me["id"], token["access_token"])
+            user_plan = (user.get("plan") or "free")
+            await _add_to_guild(me["id"], token["access_token"], user_plan=user_plan)
         except Exception as e:
             logger.warning("Guild add failed but link saved: %s", e)
 
@@ -187,9 +236,10 @@ def build(get_current_user):
 
     @router.get("/status")
     async def discord_status(user: dict = Depends(get_current_user)):
+        invite = _env("DISCORD_INVITE_URL")
         doc = await db.users.find_one({"_id": user["_id"]}, {"discord_user_id": 1, "discord_username": 1, "discord_avatar": 1, "discord_linked_at": 1})
         if not doc or not doc.get("discord_user_id"):
-            return {"linked": False, "configured": bool(_env("DISCORD_CLIENT_ID"))}
+            return {"linked": False, "configured": bool(_env("DISCORD_CLIENT_ID")), "invite_url": invite}
         return {
             "linked": True,
             "configured": True,
@@ -197,6 +247,7 @@ def build(get_current_user):
             "username": doc.get("discord_username", ""),
             "avatar": doc.get("discord_avatar", ""),
             "linked_at": doc.get("discord_linked_at", ""),
+            "invite_url": invite,
         }
 
     @router.delete("/disconnect")
