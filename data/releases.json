@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.6.5",
+    "date": "2026-07-19",
+    "title": "AI Advisor che impara + chat multi-modale",
+    "notes_md": "- **La Diagnosi PC si ricorda**: torni sulla pagina Advisor dopo aver cliccato altrove e ritrovi l'ultima diagnosi salvata, con badge \u00abgenerata Xh fa\u00bb\n- **Feedback \ud83d\udc4d/\ud83d\udc4e** su ogni azione della diagnosi e su ogni risposta della chat AI: alimenta il miglioramento continuo del sistema\n- **\u00abGi\u00e0 attivo\u00bb badge sulle diagnosi**: segna un tweak come gi\u00e0 applicato e l'AI non lo riproporr\u00e0 pi\u00f9 nelle prossime diagnosi\n- **Come verificare**: ogni azione della diagnosi ora include una mini-guida espandibile con percorso Windows o comando PowerShell per verificare se \u00e8 gi\u00e0 attiva\n- **Community insights**: l'AI riceve un riassunto dei tweak applicati dagli altri utenti con hardware simile al tuo\n- **Outcome tracking**: badge \u00abDopo l'ultima diagnosi: +7 punti benchmark\u00bb quando l'AI vede miglioramenti misurabili\n- **Chat multi-modale**: allega uno screenshot (Task Manager, MSI Afterburner, BSOD, gioco) e l'AI lo analizza direttamente\n- **Modalit\u00e0 Coach**: 5 personas selezionabili dalla chat (Default, \ud83c\udfae FPS, \ud83c\udfac Streaming, \ud83d\udee0\ufe0f Troubleshoot, \ud83d\udcb0 Build)\n- **Follow-up chips**: 3 suggerimenti cliccabili dopo ogni risposta AI\n- **Rigenera / Copia** su ogni bolla AI",
+    "url": "https://forgefps.dev/changelog"
+  },
+  {
     "version": "0.6.4",
     "date": "2026-07-19",
     "title": "AI Advisor \u00abDiagnosi PC\u00bb + community Discord",

@@ -5,10 +5,28 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 
 ---
 
-## [Unreleased] — 2026-07-19
+## [Unreleased] — 2026-07-19 (0.6.5)
 
 ### Added
-- **AI Advisor "Diagnosi PC" (killer feature)**:
+- **Persistenza diagnosi**: nuovo `GET /api/advisor/diagnose/latest` + `useEffect` mount in `DiagnosePanel` che ripesca l'ultima diagnosi. Badge "generata Xh fa" con timestamp tooltip.
+- **Feedback thumbs 👍/👎** su diagnosi actions + chat messages via `POST /api/advisor/feedback` (target_type/target_id/action_title/rating/comment). Upsert idempotente.
+- **Applied Tweaks (personalization memory)**: `POST /api/advisor/applied-tweaks` toggle + `GET` list. Slug generato dal titolo. `_get_user_profile()` passa la lista all'AI come contesto.
+- **Community insights (RAG-lite)**: `_community_insights()` aggrega top 5 tweak applicati da utenti con hardware CPU/GPU simile (via Counter dei titoli) → iniettati nel prompt come esempi few-shot.
+- **Verify hint**: nuovo campo obbligatorio `verify` in ogni action della diagnosi. Frontend: sezione espandibile "Come verificare se è già attivo" con testo mono-space.
+- **Outcome tracking**: `GET /api/advisor/outcome` calcola delta benchmark tra il momento dell'ultima diagnosi e il primo benchmark successivo. Badge visualizzato nel header della diagnosi.
+- **Chat multi-modale (vision)**: `stream_advisor` accetta `image_data_url` (data URL base64). Se presente → `UserMessage(text=..., file_contents=[ImageContent(image_base64=...)])`. Frontend: paperclip button, preview con X, salvato nella bolla del messaggio user.
+- **Coach modes**: 5 personas (default/fps/streaming/troubleshoot/build) via `COACH_PROMPTS` che appende un suffix al system prompt. Frontend: dropdown in cima chat, preferenza in `localStorage.advisor_mode`.
+- **Follow-up chips**: `POST /api/advisor/followups?session_id=` + `ai_engine.generate_followups()` che chiede all'AI 3 domande brevi contestuali. Frontend: chip cliccabili sotto l'ultima risposta AI.
+- **Message actions**: thumbs, copia (clipboard API + Check animation), rigenera (rimuove ultima bolla AI e re-invia ultima query utente). Compaiono in hover.
+- **Auto-detect release announcer** ora funziona anche in prod: rimosso hardcode env, check `HOSTNAME.startswith("agent-env-")`.
+
+### Fixed
+- **Compilazione DiagnosePanel**: `CheckCircle2` non era stato aggiunto agli import (search_replace fallito silenziosamente). Fix applicato manualmente.
+
+### Changed
+- Nuove collezioni Mongo: `ai_feedback`, `applied_tweaks`, `diagnoses` (già presente).
+
+## [0.6.4] — 2026-07-19
   - Nuovo endpoint `POST /api/advisor/diagnose` che chiama Claude Sonnet in modalità one-shot con schema JSON strutturato → ritorna `{summary, actions: [{title, description, impact, difficulty, kind, cta, priority}]}`.
   - Nuovo modulo `ai_engine.one_shot_advisor()` per invocazioni singole con context PC completo (no chat history).
   - Nuovo helper `_enrich_specs_for_ai()` in `routers/advisor.py`: arricchisce le specs con benchmark_history (ultimi 5) e tracker_summary (count + total_saved). Anche `advisor_chat` beneficia del context arricchito.
