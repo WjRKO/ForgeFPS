@@ -113,6 +113,20 @@ async def _community_insights(uid: str, specs: dict) -> list:
         return []
 
 
+COACH_PROMPTS = {
+    "default": "",
+    "fps": "\n\n[MODALITA' COACH FPS] Tono da coach gaming aggressivo. Focus assoluto su FPS, frametime, latenza, jitter e input lag. Consigli concreti per gaming competitivo (Valorant, CS2, Fortnite). Non perdere tempo su feature 'nice to have'.",
+    "streaming": "\n\n[MODALITA' COACH STREAMING] Focus su OBS Studio, bitrate, encoding (x264/NVENC/AV1), scenes, audio, monitoraggio dropped frames, upload stability. Interpretazione ottimale del canale Twitch/YouTube dell'utente.",
+    "troubleshoot": "\n\n[MODALITA' TROUBLESHOOT] Rispondi in modalita' 'passo dopo passo' guidata: 1 azione per messaggio, chiedi cosa succede dopo, adatta la strategia. Focus su BSOD, crash, driver issues, stutter, freeze.",
+    "build": "\n\n[MODALITA' CONSULENTE BUILD] Focus su acquisti hardware: rapporto prezzo/prestazioni, compatibilita', bottleneck, next upgrade suggerito. Cita modelli concreti disponibili sul mercato IT (Amazon, PCPartPicker) e range di prezzo.",
+}
+
+
+class ChatMessageInputExt(ChatMessageInput):
+    mode: str = "default"
+    image_data_url: str = ""
+
+
 async def _check_ai_rate_limit(uid: str):
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
     used = await db.chat_messages.count_documents(
@@ -206,7 +220,7 @@ def build(get_current_user):
         return {"ok": True}
 
     @r.post("/chat")
-    async def advisor_chat(data: ChatMessageInput, user: dict = Depends(get_current_user)):
+    async def advisor_chat(data: ChatMessageInputExt, user: dict = Depends(get_current_user)):
         uid = str(user["_id"])
         await _check_ai_rate_limit(uid)
         session_id = data.session_id or str(uuid.uuid4())
@@ -221,12 +235,21 @@ def build(get_current_user):
         specs = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0})
         specs = await _enrich_specs_for_ai(uid, specs)
         specs_text = pc_context_text(specs)
+        # Coach mode: aggiunge un suffisso al system prompt
+        coach_suffix = COACH_PROMPTS.get(data.mode or "default", "")
+        specs_text_full = (specs_text or "") + coach_suffix
+        # Image (multi-modal): passa come nota aggiuntiva al messaggio se presente
+        message_augmented = data.message
+        image_data_url = (data.image_data_url or "").strip()
 
         async def gen():
             yield f"__SESSION__{session_id}__\n"
             full = ""
             try:
-                async for chunk in ai_engine.stream_advisor(session_id, history, data.message, specs_text, data.lang or "it"):
+                async for chunk in ai_engine.stream_advisor(
+                    session_id, history, message_augmented, specs_text_full,
+                    data.lang or "it", image_data_url=image_data_url,
+                ):
                     full += chunk
                     yield chunk
             except Exception as e:
@@ -392,6 +415,22 @@ def build(get_current_user):
         if res.deleted_count == 0:
             raise HTTPException(404, "Azione non trovata")
         return {"ok": True}
+
+
+    @r.post("/followups")
+    async def generate_followups(session_id: str, user: dict = Depends(get_current_user)):
+        """Genera 3 follow-up brevi dopo l'ultima risposta AI di una sessione."""
+        uid = str(user["_id"])
+        history = await db.chat_messages.find(
+            {"session_id": session_id, "user_id": uid}, {"_id": 0}
+        ).sort("created_at", 1).to_list(500)
+        if not history:
+            return {"suggestions": []}
+        try:
+            sug = await ai_engine.generate_followups(history, lang="it")
+        except Exception as e:
+            return {"suggestions": [], "error": str(e)[:200]}
+        return {"suggestions": sug}
 
 
     # -------- Fase 1: Feedback thumbs up/down --------
