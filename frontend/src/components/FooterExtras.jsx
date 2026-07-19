@@ -6,7 +6,7 @@ const API = process.env.REACT_APP_BACKEND_URL;
 const DISCORD_INVITE_FALLBACK = "https://discord.gg/KU3m9YFFnm";
 const GITHUB_REPO = "https://github.com/WjRKO/ForgeFPS";
 const GITHUB_ISSUES = `${GITHUB_REPO}/issues/new/choose`;
-const CONTACT_EMAIL = "hello@forgefps.dev";
+const CONTACT_EMAIL = "forgefps.support@gmail.com";
 
 /**
  * Colonna "Community" del footer: Discord (con conteggio live opzionale),
