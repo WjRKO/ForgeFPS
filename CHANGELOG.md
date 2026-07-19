@@ -5,7 +5,11 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 
 ---
 
-## [Unreleased] — 2026-07-19 (0.6.5)
+## [Unreleased]
+
+_Prossime feature in sviluppo — vedi `/app/memory/ROADMAP.md`._
+
+## [0.6.5] — 2026-07-19
 
 ### Added
 - **Persistenza diagnosi**: nuovo `GET /api/advisor/diagnose/latest` + `useEffect` mount in `DiagnosePanel` che ripesca l'ultima diagnosi. Badge "generata Xh fa" con timestamp tooltip.

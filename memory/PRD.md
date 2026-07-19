@@ -685,3 +685,50 @@ User ha postato secrets pubblici (CLIENT_SECRET, BOT_TOKEN, WEBHOOK URLs). Deve 
 - MOD: /app/frontend/src/i18n.js (dashboard.* IT+EN, +40 chiavi)
 - MOD: /app/memory/PRD.md
 
+### 2026-07-19 (23) - v0.6.4 + v0.6.5: AI Diagnostics + Learning Loop + Multi-modal Chat + Discord auto-sync
+#### v0.6.4 - Discord bot: mini-guide, apply-creator flow, sync ruoli automatico
+- `/help` riscritto con embed rich (Onboarding · Gaming · Creator · Admin · Link utili). Nuovi `/come-iniziare`, `/ruoli`, `/canali`.
+- `/apply-creator <url>`: validazione URL (twitch/youtube/kick), persistent `CreatorReviewView` (bottoni ✅Approva / ❌Rifiuta con custom_id fissi che sopravvivono ai restart), cooldown 7 giorni post-rifiuto (env `DISCORD_CREATOR_REAPPLY_DAYS`), anti-doppio-submit (1 pending/utente), DM esito con ruolo Creator Verified assegnato. Env aggiunti: `DISCORD_ROLE_CREATOR_VERIFIED`, `DISCORD_CHANNEL_CREATOR_REVIEW`.
+- **Sync automatico ruolo Boosted PC**: periodic task del bot ora sync sia Pro sia Boosted (retroattivamente se OAuth flow ha fallito). Refactor helper: `_sync_role()` (generico) + `_sync_all_roles_for_member()`.
+- `/set-plan <user> <plan>` admin command con `defer(ephemeral=True)` per evitare timeout Discord 3s.
+- `/announce-release <version> [force]` admin per forzare annuncio release + helper `announce_release_by_version()` in `services/release_announcer.py`.
+- **Auto-detect ambiente release announcer**: check `HOSTNAME.startswith("agent-env-")` → preview skippa automatico, prod parte. Override manuale con `RELEASE_ANNOUNCER_ENABLED=true/false`.
+- **Fix CORS wildcard**: `settings.get_cors_origins()` filtrava `*` producendo lista vuota → nuovo `get_cors_origin_regex()` usa `allow_origin_regex=".*"` compatibile con `allow_credentials=True`.
+- **Fix email footer**: `hello@forgefps.dev` non attiva → `forgefps.support@gmail.com` con click-to-copy Sonner toast.
+- **Query non ottimizzate**: `/api/stats` ora fetcha solo 2 field da products; `/api/products/{id}` limita history a 200 record (era 1000).
+- Nuove collezioni Mongo: `diagnoses` (già preesistente), `planned_actions`, `creator_applications`.
+
+#### v0.6.5 - AI Diagnostics + Learning Loop + Multi-modal Chat
+- **AI Diagnosi PC** (`POST /api/advisor/diagnose`): Claude Sonnet in modalità one-shot con schema JSON strutturato → `{summary, actions:[{title, description, impact, difficulty, kind, cta, priority, verify}]}`. Nuovo `ai_engine.one_shot_advisor()`. Helper `_enrich_specs_for_ai()` in `routers/advisor.py` arricchisce specs con benchmark history (ultimi 5) + tracker summary (count + total_saved).
+- **Persistenza diagnosi**: `GET /api/advisor/diagnose/latest` + refetch on-mount in `DiagnosePanel`. Badge "generata Xh fa".
+- **Feedback thumbs 👍/👎**: `POST /api/advisor/feedback` (target_type/target_id/action_title/rating/comment). Upsert idempotente su diagnose actions + chat messages.
+- **Applied Tweaks (personalization memory)**: `POST /api/advisor/applied-tweaks` toggle + `GET` list. Slug auto dal titolo. `_get_user_profile()` passa la lista all'AI come contesto → non riproporrà mai un tweak "già attivo".
+- **Community insights (RAG-lite)**: `_community_insights()` aggrega top 5 tweak applicati da utenti con hardware CPU/GPU simile (Counter dei titoli) → iniettati nel prompt come few-shot examples.
+- **Outcome tracking**: `GET /api/advisor/outcome` calcola delta benchmark tra ultima diagnosi e primo benchmark successivo. Badge nel header diagnosi.
+- **Verify hint**: campo obbligatorio `verify` in ogni action. Frontend: sezione espandibile "Come verificare se è già attivo" con testo mono-space.
+- **Chat multi-modale (Claude Vision)**: `stream_advisor` accetta `image_data_url` (data URL base64) → `UserMessage(text=..., file_contents=[ImageContent(image_base64=...)])`. Frontend: paperclip button, preview con X, immagine salvata nella bolla user message. Nuovi `/api/advisor/chat` accetta `image` parameter.
+- **Coach modes**: 5 personas (default/fps/streaming/troubleshoot/build) via `COACH_PROMPTS` che appende suffix al system prompt. Frontend: dropdown in cima chat, preferenza salvata in `localStorage.advisor_mode`.
+- **Follow-up chips**: `POST /api/advisor/followups?session_id=` + `ai_engine.generate_followups()` chiede all'AI 3 domande brevi contestuali. Frontend: chip cliccabili sotto ultima risposta AI.
+- **Message actions**: thumbs, copia (clipboard API + Check animation), rigenera (rimuove ultima bolla AI e re-invia ultima query utente). Compaiono in hover.
+- Nuove collezioni Mongo: `ai_feedback`, `applied_tweaks`.
+
+## FILE MODIFICATI/CREATI (sessione 23)
+- MOD: /app/backend/ai_engine.py (`one_shot_advisor`, `generate_followups`, COACH_PROMPTS, `explain_benchmark`, ImageContent support)
+- MOD: /app/backend/routers/advisor.py (diagnose/feedback/outcome/applied-tweaks/followups endpoints, `_enrich_specs_for_ai`, `_community_insights`)
+- MOD: /app/backend/routers/discord.py (webhook release announcer HOSTNAME detection)
+- MOD: /app/backend/discord_bot.py (mini-guide slash commands, apply-creator persistent view, sync ruoli automatico)
+- MOD: /app/backend/services/release_announcer.py (HOSTNAME detection, announce_release_by_version)
+- MOD: /app/backend/settings.py (`get_cors_origin_regex`)
+- MOD: /app/backend/server.py (CORS regex middleware)
+- MOD: /app/frontend/src/pages/Advisor.jsx (chat multi-modal, coach dropdown, chips, message actions)
+- CREATO: /app/frontend/src/components/DiagnosePanel.jsx
+- MOD: /app/frontend/src/i18n.js (advisor.* + coach + feedback)
+- MOD: /app/frontend/src/pages/Landing.jsx + MarketingChrome.jsx (footer extras + live Discord)
+- CREATO: /app/frontend/src/components/FooterExtras.jsx
+- CREATO: /app/frontend/src/pages/Terms.jsx
+- MOD: /app/data/releases.json (v0.6.4, v0.6.5)
+- MOD: /app/frontend/src/pages/Changelog.jsx (entries v0.6.4, v0.6.5)
+- MOD: /app/CHANGELOG.md (Unreleased → 0.6.5 promosso)
+- CREATO: /app/memory/ROADMAP.md (P0/P1/P2/P3 prioritized)
+- MOD: /app/memory/PRD.md (sessione 23)
+
