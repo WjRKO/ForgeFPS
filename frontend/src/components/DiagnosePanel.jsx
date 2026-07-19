@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   Sparkles, Stethoscope, ChevronRight, Zap, Wrench, MonitorDown,
   Bookmark, Check, X, Loader2, Gauge, AlertTriangle, RefreshCw,
+  ThumbsUp, ThumbsDown, Eye, CheckCircle2,
 } from "lucide-react";
 import api from "@/lib/api";
 
@@ -41,24 +42,35 @@ function relTimeIt(iso) {
  * renders each action with impact + difficulty + concrete CTAs.
  */
 export default function DiagnosePanel({ hasSpecs }) {
-  const [state, setState] = useState("idle"); // idle | loading | done | error
+  const [state, setState] = useState("idle");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [savedIds, setSavedIds] = useState(new Set());
   const [createdAt, setCreatedAt] = useState(null);
+  const [appliedSlugs, setAppliedSlugs] = useState(new Set());
+  const [feedback, setFeedback] = useState({}); // {actionTitle: "up"|"down"}
+  const [expandedVerify, setExpandedVerify] = useState({});
+  const [outcome, setOutcome] = useState(null);
 
-  // Al mount: prova a ripescare l'ultima diagnosi salvata dal DB.
-  // Se esiste la mostro subito con badge \"generata Xh fa\", cos\u00ec l'utente
-  // non deve rigenerarla dopo aver cliccato altrove.
+  const toSlug = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+
   useEffect(() => {
     if (!hasSpecs) return;
     let cancelled = false;
-    api.get("/advisor/diagnose/latest").then(({ data }) => {
-      if (cancelled || !data?.available) return;
-      setResult({ summary: data.summary, actions: data.actions, id: data.id });
-      setCreatedAt(data.created_at);
-      setState("done");
-    }).catch(() => {});
+    Promise.all([
+      api.get("/advisor/diagnose/latest").catch(() => ({ data: {} })),
+      api.get("/advisor/applied-tweaks").catch(() => ({ data: [] })),
+      api.get("/advisor/outcome").catch(() => ({ data: {} })),
+    ]).then(([latest, applied, out]) => {
+      if (cancelled) return;
+      if (latest.data?.available) {
+        setResult({ summary: latest.data.summary, actions: latest.data.actions, id: latest.data.id });
+        setCreatedAt(latest.data.created_at);
+        setState("done");
+      }
+      setAppliedSlugs(new Set((applied.data || []).map((a) => a.slug)));
+      if (out.data?.available) setOutcome(out.data);
+    });
     return () => { cancelled = true; };
   }, [hasSpecs]);
 
@@ -69,11 +81,47 @@ export default function DiagnosePanel({ hasSpecs }) {
       const { data } = await api.post("/advisor/diagnose");
       setResult(data);
       setCreatedAt(new Date().toISOString());
-      setSavedIds(new Set());  // reset saved status
+      setSavedIds(new Set());
+      setFeedback({});
       setState("done");
     } catch (e) {
       setError(e?.response?.data?.detail || "Errore durante la diagnosi");
       setState("error");
+    }
+  };
+
+  const toggleApplied = async (action) => {
+    const slug = toSlug(action.title);
+    const isActive = appliedSlugs.has(slug);
+    try {
+      await api.post("/advisor/applied-tweaks", { title: action.title, active: !isActive });
+      setAppliedSlugs((prev) => {
+        const next = new Set(prev);
+        if (isActive) next.delete(slug); else next.add(slug);
+        return next;
+      });
+      toast.success(isActive ? "Segnato come non attivo" : "Segnato come già attivo", {
+        description: isActive ? "" : "L'AI ne terrà conto nelle prossime diagnosi",
+      });
+    } catch {
+      toast.error("Impossibile aggiornare lo stato");
+    }
+  };
+
+  const submitFeedback = async (action, rating) => {
+    const key = action.title;
+    if (feedback[key] === rating) return;
+    try {
+      await api.post("/advisor/feedback", {
+        target_type: "diagnose_action",
+        target_id: result?.id || "unknown",
+        action_title: action.title,
+        rating,
+      });
+      setFeedback((prev) => ({ ...prev, [key]: rating }));
+      toast.success(rating === "up" ? "Feedback registrato 👍" : "Feedback registrato 👎");
+    } catch {
+      toast.error("Feedback fallito");
     }
   };
 
@@ -220,6 +268,20 @@ export default function DiagnosePanel({ hasSpecs }) {
               <p className="text-sm text-zinc-200 leading-relaxed">
                 {result.summary || "Ecco le azioni consigliate dall'AI per il tuo PC."}
               </p>
+              {outcome?.available && outcome.delta !== 0 && (
+                <div
+                  className={`mt-2 inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest border px-2 py-0.5 ${
+                    outcome.delta > 0
+                      ? "border-[#00FF66]/40 bg-[#00FF66]/10 text-[#00FF66]"
+                      : "border-[#FF3B30]/40 bg-[#FF3B30]/10 text-[#FF3B30]"
+                  }`}
+                  data-testid="outcome-badge"
+                  title="Delta benchmark tra prima e dopo l'ultima diagnosi"
+                >
+                  {outcome.delta > 0 ? <ThumbsUp size={10} /> : <ThumbsDown size={10} />}
+                  Dopo l'ultima diagnosi: {outcome.delta > 0 ? "+" : ""}{outcome.delta} punti benchmark
+                </div>
+              )}
             </div>
             <button
               onClick={dismiss}
@@ -237,42 +299,107 @@ export default function DiagnosePanel({ hasSpecs }) {
               const Icon = KIND_ICONS[a.kind] || Zap;
               const diff = DIFFICULTY_STYLES[(a.difficulty || "").toLowerCase()] || DIFFICULTY_STYLES.facile;
               const saved = savedIds.has(a.title);
+              const slug = toSlug(a.title);
+              const isActive = appliedSlugs.has(slug);
+              const fb = feedback[a.title];
+              const verifyOpen = expandedVerify[i];
               return (
-                <div key={i} className="p-5 hover:bg-[#0F0F12] transition-colors" data-testid={`diagnose-action-${i}`}>
+                <div
+                  key={i}
+                  className={`p-5 transition-colors ${isActive ? "bg-[#00FF66]/5" : "hover:bg-[#0F0F12]"}`}
+                  data-testid={`diagnose-action-${i}`}
+                >
                   <div className="flex items-start gap-4">
                     <div className="flex flex-col items-center shrink-0">
-                      <div className="w-8 h-8 border border-[#E5FF00]/50 bg-[#E5FF00]/10 text-[#E5FF00] font-black flex items-center justify-center">
-                        {a.priority || i + 1}
+                      <div className={`w-8 h-8 border font-black flex items-center justify-center ${isActive ? "border-[#00FF66]/60 bg-[#00FF66]/15 text-[#00FF66]" : "border-[#E5FF00]/50 bg-[#E5FF00]/10 text-[#E5FF00]"}`}>
+                        {isActive ? <CheckCircle2 size={14} /> : (a.priority || i + 1)}
                       </div>
                       <Icon size={14} className="text-zinc-500 mt-2" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <h4 className="font-display font-black text-base tracking-tight text-white">{a.title}</h4>
-                        <span className={`text-[10px] font-mono uppercase tracking-widest ${diff.color}`}>{diff.label}</span>
+                        <h4 className={`font-display font-black text-base tracking-tight ${isActive ? "text-zinc-400 line-through" : "text-white"}`}>{a.title}</h4>
+                        {isActive ? (
+                          <span className="text-[10px] font-mono uppercase tracking-widest text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-1.5">GIÀ ATTIVO</span>
+                        ) : (
+                          <span className={`text-[10px] font-mono uppercase tracking-widest ${diff.color}`}>{diff.label}</span>
+                        )}
                       </div>
-                      {a.impact && (
+                      {!isActive && a.impact && (
                         <div className="inline-flex items-center gap-1.5 text-xs text-[#00FF66] mb-2 font-mono">
                           <Zap size={11} /> {a.impact}
                         </div>
                       )}
-                      <p className="text-sm text-zinc-400 leading-relaxed mb-3 whitespace-pre-wrap">{a.description}</p>
-                      <div className="flex flex-wrap gap-2">
-                        <Link
-                          to={a.kind === "driver" ? "/app/pc" : "/app/desktop"}
-                          data-testid={`diagnose-action-${i}-apply`}
-                          className="inline-flex items-center gap-1.5 bg-[#E5FF00] text-black font-bold px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest hover:bg-white transition-colors"
-                        >
-                          <MonitorDown size={12} /> {a.cta || "Apri agent"}
-                        </Link>
+                      <p className={`text-sm leading-relaxed mb-3 whitespace-pre-wrap ${isActive ? "text-zinc-500" : "text-zinc-400"}`}>{a.description}</p>
+
+                      {a.verify && (
+                        <div className="mb-3">
+                          <button
+                            onClick={() => setExpandedVerify((p) => ({ ...p, [i]: !p[i] }))}
+                            className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-[#00E0FF] transition-colors"
+                            data-testid={`diagnose-action-${i}-verify-toggle`}
+                          >
+                            <Eye size={11} /> Come verificare se è già attivo
+                            <ChevronRight size={11} className={`transition-transform ${verifyOpen ? "rotate-90" : ""}`} />
+                          </button>
+                          {verifyOpen && (
+                            <div className="mt-2 p-3 border border-[#00E0FF]/30 bg-[#00E0FF]/5 text-xs text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap" data-testid={`diagnose-action-${i}-verify`}>
+                              {a.verify}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 items-center">
+                        {!isActive && (
+                          <>
+                            <Link
+                              to={a.kind === "driver" ? "/app/pc" : "/app/desktop"}
+                              data-testid={`diagnose-action-${i}-apply`}
+                              className="inline-flex items-center gap-1.5 bg-[#E5FF00] text-black font-bold px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest hover:bg-white transition-colors"
+                            >
+                              <MonitorDown size={12} /> {a.cta || "Apri agent"}
+                            </Link>
+                            <button
+                              onClick={() => savePlanned(a)}
+                              disabled={saved}
+                              data-testid={`diagnose-action-${i}-save`}
+                              className="inline-flex items-center gap-1.5 border border-[#2A2A35] hover:border-[#00E0FF] text-zinc-300 hover:text-[#00E0FF] px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              {saved ? <><Check size={12} /> Salvata</> : <><Bookmark size={12} /> Salva</>}
+                            </button>
+                          </>
+                        )}
                         <button
-                          onClick={() => savePlanned(a)}
-                          disabled={saved}
-                          data-testid={`diagnose-action-${i}-save`}
-                          className="inline-flex items-center gap-1.5 border border-[#2A2A35] hover:border-[#00E0FF] text-zinc-300 hover:text-[#00E0FF] px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                          onClick={() => toggleApplied(a)}
+                          data-testid={`diagnose-action-${i}-mark-active`}
+                          className={`inline-flex items-center gap-1.5 border px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest transition-colors ${
+                            isActive
+                              ? "border-[#00FF66]/50 bg-[#00FF66]/10 text-[#00FF66] hover:bg-[#00FF66]/20"
+                              : "border-[#2A2A35] hover:border-[#00FF66] text-zinc-400 hover:text-[#00FF66]"
+                          }`}
                         >
-                          {saved ? <><Check size={12} /> Salvata</> : <><Bookmark size={12} /> Salva per dopo</>}
+                          <CheckCircle2 size={12} /> {isActive ? "Attivo" : "Segna già attivo"}
                         </button>
+
+                        <div className="flex items-center gap-0.5 ml-auto">
+                          <button
+                            onClick={() => submitFeedback(a, "up")}
+                            data-testid={`diagnose-action-${i}-thumb-up`}
+                            aria-label="Utile"
+                            className={`p-1.5 border transition-colors ${fb === "up" ? "border-[#00FF66] bg-[#00FF66]/10 text-[#00FF66]" : "border-transparent text-zinc-600 hover:text-[#00FF66] hover:border-[#2A2A35]"}`}
+                          >
+                            <ThumbsUp size={12} />
+                          </button>
+                          <button
+                            onClick={() => submitFeedback(a, "down")}
+                            data-testid={`diagnose-action-${i}-thumb-down`}
+                            aria-label="Non utile"
+                            className={`p-1.5 border transition-colors ${fb === "down" ? "border-[#FF3B30] bg-[#FF3B30]/10 text-[#FF3B30]" : "border-transparent text-zinc-600 hover:text-[#FF3B30] hover:border-[#2A2A35]"}`}
+                          >
+                            <ThumbsDown size={12} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

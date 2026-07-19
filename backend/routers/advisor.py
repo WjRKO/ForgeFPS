@@ -51,6 +51,68 @@ class PlannedActionInput(BaseModel):
     source: str = "advisor_diagnose"
 
 
+class FeedbackInput(BaseModel):
+    target_type: str  # "diagnose_action" | "chat_message"
+    target_id: str    # diagnose id or chat message id
+    action_title: str = ""  # solo per diagnose_action
+    rating: str  # "up" | "down"
+    comment: str = ""
+
+
+class AppliedTweakInput(BaseModel):
+    title: str
+    active: bool = True  # true=segnalo come attivo, false=rimuovo il flag
+
+
+def _slug(s: str) -> str:
+    import re as _re
+    return _re.sub(r"[^a-z0-9]+", "-", (s or "").lower()).strip("-")[:80]
+
+
+async def _get_user_profile(uid: str) -> dict:
+    """Restituisce info utili all'AI: tweak gia' attivi, feedback aggregati.
+    Usato come 'memoria personalizzata' iniettata nel prompt."""
+    applied = await db.applied_tweaks.find(
+        {"user_id": uid, "active": True}, {"_id": 0, "title": 1, "slug": 1}
+    ).to_list(100)
+    # Feedback aggregati: prendo l'ultimo mese
+    since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    thumbs_down = await db.ai_feedback.find(
+        {"user_id": uid, "rating": "down", "created_at": {"$gte": since}, "action_title": {"$ne": ""}},
+        {"_id": 0, "action_title": 1, "comment": 1},
+    ).sort("created_at", -1).to_list(20)
+    return {"applied_tweaks": applied, "disliked": thumbs_down}
+
+
+async def _community_insights(uid: str, specs: dict) -> list:
+    """Trova utenti con hardware simile che hanno applicato azioni e visto miglioramenti
+    di health/benchmark. Ritorna una lista di stringhe da iniettare nel prompt come few-shot."""
+    data = (specs or {}).get("data") or {}
+    cpu_key = (data.get("cpu") or "").split()[0:3]  # es. "AMD Ryzen 7"
+    gpu_key = (data.get("gpu") or "").split()[0:3]  # es. "NVIDIA RTX 3070"
+    if not cpu_key and not gpu_key:
+        return []
+    try:
+        # utenti con CPU famiglia simile (case-insensitive substring del primo brand)
+        cpu_prefix = " ".join(cpu_key[:2]) if cpu_key else ""
+        gpu_prefix = " ".join(gpu_key[:2]) if gpu_key else ""
+        query = {"user_id": {"$ne": uid}, "active": True}
+        docs = await db.applied_tweaks.find(query, {"_id": 0, "title": 1, "user_id": 1}).limit(500).to_list(500)
+        if not docs:
+            return []
+        # Aggrega per titolo
+        from collections import Counter
+        titles = Counter([d["title"] for d in docs])
+        top = titles.most_common(5)
+        out = []
+        for title, count in top:
+            if count >= 2:
+                out.append(f"- '{title}' \u2192 gi\u00e0 applicato da {count} utenti con hardware simile")
+        return out[:5]
+    except Exception:
+        return []
+
+
 async def _check_ai_rate_limit(uid: str):
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
     used = await db.chat_messages.count_documents(
@@ -211,6 +273,22 @@ def build(get_current_user):
             )
         specs = await _enrich_specs_for_ai(uid, specs)
         specs_text = pc_context_text(specs)
+        # Fase 3: personalization + Fase 2: community
+        profile = await _get_user_profile(uid)
+        community = await _community_insights(uid, specs)
+        extra_context = ""
+        if profile["applied_tweaks"]:
+            extra_context += "\n\n[TWEAK GIA' ATTIVI sul PC dell'utente - NON riproporli come nuove azioni]:\n"
+            extra_context += "\n".join(f"- {t['title']}" for t in profile["applied_tweaks"])
+        if profile["disliked"]:
+            extra_context += "\n\n[FEEDBACK NEGATIVI passati - EVITA suggerimenti simili]:\n"
+            extra_context += "\n".join(
+                f"- '{d['action_title']}'" + (f" (motivo: {d['comment'][:100]})" if d.get('comment') else "")
+                for d in profile["disliked"][:5]
+            )
+        if community:
+            extra_context += "\n\n[COMMUNITY - utenti con hardware simile hanno applicato queste azioni]:\n"
+            extra_context += "\n".join(community)
         prompt = (
             "Analizza in maniera strutturata il PC dell'utente e proponi 3-5 azioni "
             "concrete e prioritizzate per migliorarne performance/latenza/stabilita' in gaming e streaming.\n"
@@ -222,6 +300,7 @@ def build(get_current_user):
             "    {\n"
             "      \"title\": \"titolo breve, verbo iniziale (es. 'Attiva GPU Scheduling')\",\n"
             "      \"description\": \"2-4 frasi che spiegano cosa fare e perche'\",\n"
+            "      \"verify\": \"1-2 frasi: come verificare se e' gia' attivo (percorso Windows Settings o comando PowerShell/registry)\",\n"
             "      \"impact\": \"stima misurabile (es. '+5-10% FPS', '-10 ms latency', '-5\\u00b0C GPU')\",\n"
             "      \"difficulty\": \"facile|medio|avanzato\",\n"
             "      \"kind\": \"tweak|driver|hardware|maintenance|manual\",\n"
@@ -230,12 +309,12 @@ def build(get_current_user):
             "    }\n"
             "  ]\n"
             "}\n"
-            "Priorita' 1 = massima. Ordina per priorita' decrescente. Usa il contesto PC reale (health checks, "
-            "trend benchmark, temperature) per personalizzare al massimo. Non ripetere azioni gia' evidentemente "
-            "applicate dall'utente. Rispondi in italiano se il contesto e' italiano."
+            "Priorita' 1 = massima. Ordina per priorita' decrescente. Usa il contesto PC reale. Il campo "
+            "'verify' e' SEMPRE obbligatorio e concreto (percorso o comando). Non ripetere azioni gia' "
+            "applicate. Rispondi in italiano."
         )
         try:
-            raw = await ai_engine.one_shot_advisor(prompt, specs_text=specs_text, lang="it")
+            raw = await ai_engine.one_shot_advisor(prompt, specs_text=specs_text + extra_context, lang="it")
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Errore AI: {str(e)[:200]}")
         raw = (raw or "").strip()
@@ -313,5 +392,90 @@ def build(get_current_user):
         if res.deleted_count == 0:
             raise HTTPException(404, "Azione non trovata")
         return {"ok": True}
+
+
+    # -------- Fase 1: Feedback thumbs up/down --------
+    @r.post("/feedback")
+    async def submit_feedback(data: FeedbackInput, user: dict = Depends(get_current_user)):
+        uid = str(user["_id"])
+        if data.rating not in ("up", "down"):
+            raise HTTPException(400, "rating deve essere 'up' o 'down'")
+        # Upsert per evitare duplicati
+        await db.ai_feedback.update_one(
+            {"user_id": uid, "target_type": data.target_type, "target_id": data.target_id},
+            {"$set": {
+                "user_id": uid,
+                "target_type": data.target_type,
+                "target_id": data.target_id,
+                "action_title": data.action_title,
+                "rating": data.rating,
+                "comment": data.comment[:500],
+                "created_at": now_iso(),
+            }},
+            upsert=True,
+        )
+        return {"ok": True}
+
+    # -------- Fase 3: Applied Tweaks (personalization memory) --------
+    @r.get("/applied-tweaks")
+    async def list_applied(user: dict = Depends(get_current_user)):
+        uid = str(user["_id"])
+        docs = await db.applied_tweaks.find(
+            {"user_id": uid, "active": True}, {"_id": 0}
+        ).sort("applied_at", -1).to_list(200)
+        return docs
+
+    @r.post("/applied-tweaks")
+    async def toggle_applied(data: AppliedTweakInput, user: dict = Depends(get_current_user)):
+        uid = str(user["_id"])
+        slug = _slug(data.title)
+        if not slug:
+            raise HTTPException(400, "title vuoto")
+        await db.applied_tweaks.update_one(
+            {"user_id": uid, "slug": slug},
+            {"$set": {
+                "user_id": uid,
+                "slug": slug,
+                "title": data.title[:200],
+                "active": bool(data.active),
+                "applied_at": now_iso(),
+            }},
+            upsert=True,
+        )
+        return {"ok": True, "slug": slug, "active": bool(data.active)}
+
+    # -------- Fase 1: Outcome tracking (delta benchmark dopo diagnosi) --------
+    @r.get("/outcome")
+    async def diagnose_outcome(user: dict = Depends(get_current_user)):
+        """Calcola il delta di health score / benchmark tra il momento dell'ultima diagnosi
+        e i benchmark successivi. Ritorna 'available: false' se non c'e' abbastanza dato."""
+        uid = str(user["_id"])
+        last_diag = await db.diagnoses.find_one({"user_id": uid}, sort=[("created_at", -1)])
+        if not last_diag:
+            return {"available": False}
+        diag_at = last_diag.get("created_at")
+        # benchmark dopo il diagnose
+        after = await db.benchmarks.find_one(
+            {"user_id": uid, "created_at": {"$gt": diag_at}},
+            sort=[("created_at", 1)],
+        )
+        # benchmark prima del diagnose (o il piu' recente prima)
+        before = await db.benchmarks.find_one(
+            {"user_id": uid, "created_at": {"$lte": diag_at}},
+            sort=[("created_at", -1)],
+        )
+        if not after or not before:
+            return {"available": False, "diagnosis_at": diag_at}
+        b_score = (before.get("after") or {}).get("overall") or 0
+        a_score = (after.get("after") or {}).get("overall") or 0
+        delta = a_score - b_score
+        return {
+            "available": True,
+            "diagnosis_at": diag_at,
+            "before_score": b_score,
+            "after_score": a_score,
+            "delta": delta,
+            "actions_count": len(last_diag.get("actions", [])),
+        }
 
     return r
