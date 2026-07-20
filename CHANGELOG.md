@@ -5,10 +5,66 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 
 ---
 
-## [Unreleased] — 2026-07-18
+## [Unreleased]
+
+_Prossime feature in sviluppo — vedi `/app/memory/ROADMAP.md`._
+
+## [0.6.5] — 2026-07-19
 
 ### Added
-- **Footer allargato con colonna "Community"**:
+- **Persistenza diagnosi**: nuovo `GET /api/advisor/diagnose/latest` + `useEffect` mount in `DiagnosePanel` che ripesca l'ultima diagnosi. Badge "generata Xh fa" con timestamp tooltip.
+- **Feedback thumbs 👍/👎** su diagnosi actions + chat messages via `POST /api/advisor/feedback` (target_type/target_id/action_title/rating/comment). Upsert idempotente.
+- **Applied Tweaks (personalization memory)**: `POST /api/advisor/applied-tweaks` toggle + `GET` list. Slug generato dal titolo. `_get_user_profile()` passa la lista all'AI come contesto.
+- **Community insights (RAG-lite)**: `_community_insights()` aggrega top 5 tweak applicati da utenti con hardware CPU/GPU simile (via Counter dei titoli) → iniettati nel prompt come esempi few-shot.
+- **Verify hint**: nuovo campo obbligatorio `verify` in ogni action della diagnosi. Frontend: sezione espandibile "Come verificare se è già attivo" con testo mono-space.
+- **Outcome tracking**: `GET /api/advisor/outcome` calcola delta benchmark tra il momento dell'ultima diagnosi e il primo benchmark successivo. Badge visualizzato nel header della diagnosi.
+- **Chat multi-modale (vision)**: `stream_advisor` accetta `image_data_url` (data URL base64). Se presente → `UserMessage(text=..., file_contents=[ImageContent(image_base64=...)])`. Frontend: paperclip button, preview con X, salvato nella bolla del messaggio user.
+- **Coach modes**: 5 personas (default/fps/streaming/troubleshoot/build) via `COACH_PROMPTS` che appende un suffix al system prompt. Frontend: dropdown in cima chat, preferenza in `localStorage.advisor_mode`.
+- **Follow-up chips**: `POST /api/advisor/followups?session_id=` + `ai_engine.generate_followups()` che chiede all'AI 3 domande brevi contestuali. Frontend: chip cliccabili sotto l'ultima risposta AI.
+- **Message actions**: thumbs, copia (clipboard API + Check animation), rigenera (rimuove ultima bolla AI e re-invia ultima query utente). Compaiono in hover.
+- **Auto-detect release announcer** ora funziona anche in prod: rimosso hardcode env, check `HOSTNAME.startswith("agent-env-")`.
+
+### Fixed
+- **Compilazione DiagnosePanel**: `CheckCircle2` non era stato aggiunto agli import (search_replace fallito silenziosamente). Fix applicato manualmente.
+
+### Changed
+- Nuove collezioni Mongo: `ai_feedback`, `applied_tweaks`, `diagnoses` (già presente).
+
+## [0.6.4] — 2026-07-19
+  - Nuovo endpoint `POST /api/advisor/diagnose` che chiama Claude Sonnet in modalità one-shot con schema JSON strutturato → ritorna `{summary, actions: [{title, description, impact, difficulty, kind, cta, priority}]}`.
+  - Nuovo modulo `ai_engine.one_shot_advisor()` per invocazioni singole con context PC completo (no chat history).
+  - Nuovo helper `_enrich_specs_for_ai()` in `routers/advisor.py`: arricchisce le specs con benchmark_history (ultimi 5) e tracker_summary (count + total_saved). Anche `advisor_chat` beneficia del context arricchito.
+  - `pc_context_text()` in `helpers.py` estesa con sezioni `[TREND BENCH]` (delta % tra ultimo e primo benchmark degli ultimi 5) e `[TRACKER]` (numero prodotti + risparmio totale).
+  - CRUD `/api/advisor/planned-actions` (GET list / POST create / POST done / DELETE) per la todo list "Salva per dopo".
+  - Frontend: `<DiagnosePanel>` componente riutilizzabile in cima a `/app/advisor` con stati idle/loading/done/error, big button "Diagnosi PC AI", card risultati con azioni prioritizzate, badge difficoltà colorato (facile/medio/avanzato), impatto in verde, CTA "Apri agent"/"Pulisci disco ora" + "Salva per dopo" con toast conferma.
+  - Empty state se PC non connesso → CTA "Connetti il PC →".
+- **Discord — comandi mini-guida**:
+  - `/help` completamente riscritto con embed rich (Onboarding · Gaming · Creator · Admin · Link utili).
+  - Nuovi `/come-iniziare` (3 step onboarding), `/ruoli` (Boosted PC, Pro, Creator Verified, Staff), `/canali` (mappa canali).
+- **Discord — flusso `/apply-creator`**:
+  - Slash command con validazione URL (twitch.tv, youtube.com, youtu.be, kick.com).
+  - View persistente `CreatorReviewView` con bottoni ✅ Approva / ❌ Rifiuta (custom_id fissi → sopravvive ai restart).
+  - Cooldown 7 giorni dopo un rifiuto (configurabile via `DISCORD_CREATOR_REAPPLY_DAYS`).
+  - Anti-doppio submit (max 1 pending per utente).
+  - DM automatico all'utente con esito (approvazione: ruolo assegnato + link; rifiuto: cooldown days).
+  - Embed originale aggiornato con colore verde/rosso e nota "APPROVATA/RIFIUTATA da @staff".
+  - Nuove env: `DISCORD_ROLE_CREATOR_VERIFIED`, `DISCORD_CHANNEL_CREATOR_REVIEW`.
+- **Sync automatico ruolo Boosted PC**:
+  - Il periodic task nel bot Discord (già usato per Pro) ora sync anche il ruolo Boosted per tutti gli utenti con `discord_user_id` in DB → ruolo assegnato retroattivamente se OAuth flow ha fallito.
+  - Refactor: nuovi helper `_sync_role()` (generico) + `_sync_all_roles_for_member()` (Boosted + Pro insieme).
+- **`/set-plan` admin command** con `defer(ephemeral=True)` per evitare timeout Discord 3s.
+- **`/announce-release <version> [force]`** admin command per forzare l'annuncio di una release. Nuovo helper `announce_release_by_version()` in `services/release_announcer.py`.
+- **Auto-detect ambiente per release announcer**: check `HOSTNAME.startswith("agent-env-")` → in preview skippa automatico, in prod parte. Override manuale con `RELEASE_ANNOUNCER_ENABLED=true/false`.
+
+### Fixed
+- **CORS wildcard bloccante**: `settings.get_cors_origins()` filtrava `"*"` producendo lista vuota. Nuovo `get_cors_origin_regex()` usa `allow_origin_regex=".*"` compatibile con `allow_credentials=True`.
+- **Email footer**: sostituita `hello@forgefps.dev` (non attiva) con `forgefps.support@gmail.com`. Al click ora copia negli appunti + toast Sonner "Email copiata".
+- **Query non ottimizzate**: `/api/stats` ora fetcha solo 2 field da products; `/api/products/{id}` limita history a 200 record (era 1000).
+
+### Changed
+- Nuove collezioni Mongo: `diagnoses` (snapshot delle diagnosi AI), `planned_actions` (todo list utente), `creator_applications` (pipeline verifica creator).
+
+## [0.6.3] — 2026-07-18
   - Nuovo componente riutilizzabile `FooterExtras.jsx` (`FooterCommunity` + `FooterLegal`) usato sia in `Landing.jsx` (5 colonne: Brand · Product · Community · Account · con legal row) sia in `MarketingChrome.jsx` (4 colonne).
   - **Discord** con badge live "🟢 XX online adesso" — dot verde pulsante — via `GET /api/discord/live-stats` (cache in-memory 5 min, fallback silenzioso se widget server non abilitato).
   - **GitHub** repo link + **Report a bug** (deep-link a `/issues/new/choose`) + email `hello@forgefps.dev`.

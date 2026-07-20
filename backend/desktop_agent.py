@@ -12,6 +12,7 @@ import time
 import shutil
 import socket
 import subprocess
+import shlex
 import tempfile
 import ctypes
 import re
@@ -56,14 +57,24 @@ def is_admin():
 
 
 def run(cmd):
+    # shell=False + list args to avoid shell injection.
+    # `cmd` accepts either a list or a string (split with Windows-aware shlex).
     try:
-        return subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout.strip()
+        args = shlex.split(cmd, posix=False) if isinstance(cmd, str) else cmd
+        return subprocess.run(args, shell=False, capture_output=True, text=True).stdout.strip()
     except Exception as e:
         return f"errore: {e}"
 
 
 def ps(cmd):
-    return run('powershell -NoProfile -Command "%s"' % cmd)
+    # PowerShell invocation via arg list — no shell interpolation.
+    try:
+        return subprocess.run(
+            ["powershell", "-NoProfile", "-Command", cmd],
+            shell=False, capture_output=True, text=True,
+        ).stdout.strip()
+    except Exception as e:
+        return f"errore: {e}"
 
 
 def _folder_size_mb(path):
@@ -580,12 +591,14 @@ def launch_secure_gui():
     except Exception as e:
         print("    Impossibile scaricare lo script: %s" % e)
         return
-    args = '-NoProfile -ExecutionPolicy Bypass -File "%s" -Token %s -Mode optimize' % (dest, AGENT_TOKEN)
+    args_list = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", dest, "-Token", AGENT_TOKEN, "-Mode", "optimize"]
     try:
         if not is_admin():
-            ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell.exe", args, None, 1)
+            # ShellExecuteW requires a single args string; use Windows-safe quoting.
+            args_str = subprocess.list2cmdline(args_list)
+            ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell.exe", args_str, None, 1)
         else:
-            subprocess.Popen("powershell.exe %s" % args, shell=True)
+            subprocess.Popen(["powershell.exe"] + args_list, shell=False)
         print("    GUI sicura avviata: segui le istruzioni nella finestra (Problema/Motivo/Impatto per ogni tweak).")
     except Exception as e:
         print("    Errore nell'avvio della GUI sicura: %s" % e)

@@ -641,6 +641,7 @@ export default function Dashboard() {
     api.get("/pc-benchmark").then(({ data }) => setBench(data?.latest ? data : null)).catch(() => setBench(null));
     api.get("/discord/status").then(({ data }) => setDiscord(data)).catch(() => setDiscord({ linked: false }));
     api.get("/notifications").then(({ data }) => setNotifs(data || [])).catch(() => setNotifs([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; setters are stable
   }, []);
 
   const shareBench = async () => {

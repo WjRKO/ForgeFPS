@@ -1,8 +1,9 @@
 import os
 import json
 import re
+import uuid
 import asyncio
-from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone, ImageContent
 
 MODEL_PROVIDER = "anthropic"
 MODEL_NAME = "claude-sonnet-4-6"
@@ -51,7 +52,7 @@ def build_chat(session_id: str, system: str = ADVISOR_SYSTEM) -> LlmChat:
                    system_message=system).with_model(MODEL_PROVIDER, MODEL_NAME)
 
 
-async def stream_advisor(session_id: str, history: list, message: str, specs_text: str = "", lang: str = "it"):
+async def stream_advisor(session_id: str, history: list, message: str, specs_text: str = "", lang: str = "it", image_data_url: str = ""):
     system = ADVISOR_SYSTEM
     if (lang or "it").startswith("en"):
         system += ("\n\nIMPORTANT: The user selected ENGLISH. Reply ENTIRELY in English "
@@ -72,11 +73,53 @@ async def stream_advisor(session_id: str, history: list, message: str, specs_tex
         recent = history[-8:]
         context = "\n".join(f"{'Utente' if m['role']=='user' else 'BOOST AI'}: {m['content']}" for m in recent)
     full = f"[Conversazione precedente]\n{context}\n\n[Nuovo messaggio]\n{message}" if context else message
-    async for event in chat.stream_message(UserMessage(text=full)):
+    kwargs = {"text": full}
+    if image_data_url and image_data_url.startswith("data:image/"):
+        try:
+            b64 = image_data_url.split(",", 1)[1]
+            kwargs["file_contents"] = [ImageContent(image_base64=b64)]
+        except Exception:
+            pass
+    async for event in chat.stream_message(UserMessage(**kwargs)):
         if isinstance(event, TextDelta):
             yield event.content
         elif isinstance(event, StreamDone):
             break
+
+
+async def generate_followups(history: list, lang: str = "it") -> list:
+    """Genera 3 follow-up chip cliccabili dalla conversazione. Ritorna [str, str, str]."""
+    if not history:
+        return []
+    recent = history[-6:]
+    convo = "\n".join(f"{'Utente' if m['role']=='user' else 'AI'}: {(m['content'] or '')[:400]}" for m in recent)
+    system = (
+        "Sei un assistente che genera 3 possibili domande di FOLLOW-UP che l'utente potrebbe fare "
+        "dopo la conversazione. Devono essere BREVI (max 8 parole), specifiche al contesto, e ognuna "
+        "deve aprire una direzione diversa (approfondimento tecnico, azione pratica, confronto). "
+        "Rispondi ESCLUSIVAMENTE con 3 righe, una per riga, senza numerazione, senza altro testo."
+    )
+    if (lang or "it").startswith("en"):
+        system += " Reply in English."
+    chat = build_chat(str(uuid.uuid4()), system)
+    text = await _collect(chat, f"Conversazione:\n{convo}\n\n3 follow-up:")
+    lines = [ln.strip("-* \t") for ln in (text or "").strip().split("\n") if ln.strip()]
+    return lines[:3]
+
+
+async def one_shot_advisor(prompt: str, specs_text: str = "", lang: str = "it") -> str:
+    """Chiama l'AI advisor una volta con context PC completo (no chat history).
+    Ritorna testo raw. Usato per diagnosi strutturate JSON."""
+    system = ADVISOR_SYSTEM
+    if (lang or "it").startswith("en"):
+        system += "\n\nReply in English."
+    if specs_text:
+        system += (
+            "\n\n[CONTESTO PC DELL'UTENTE - usa questi dati REALI per la diagnosi. "
+            "Fai riferimento a valori concreti quando possibile.]\n" + specs_text
+        )
+    chat = build_chat(str(uuid.uuid4()), system)
+    return await _collect(chat, prompt)
 
 
 BUILD_SYSTEM = (

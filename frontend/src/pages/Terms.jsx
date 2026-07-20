@@ -42,7 +42,7 @@ const CONTENT = {
       },
       {
         h: "9. Contatti",
-        p: "Per qualsiasi domanda su questi termini scrivici a hello@forgefps.dev o sul nostro server Discord.",
+        p: "Per qualsiasi domanda su questi termini scrivici a forgefps.support@gmail.com o sul nostro server Discord.",
       },
     ],
   },
@@ -85,7 +85,7 @@ const CONTENT = {
       },
       {
         h: "9. Contact",
-        p: "For any questions about these terms, write to hello@forgefps.dev or reach us on our Discord server.",
+        p: "For any questions about these terms, write to forgefps.support@gmail.com or reach us on our Discord server.",
       },
     ],
   },

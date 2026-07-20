@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket, Pencil, Gauge, TrendingUp, TrendingDown, Minus, Share2 } from "lucide-react";
 import { toast } from "sonner";
@@ -139,6 +139,33 @@ function BenchmarkCard({ bench }) {
     } finally { setExplaining(false); }
   };
 
+  // Extracted from inline nested ternaries for readability
+  const deltaIcon = (delta) => {
+    if (delta > 0) return <TrendingUp size={13} />;
+    if (delta < 0) return <TrendingDown size={13} />;
+    return <Minus size={13} />;
+  };
+  const cellBorderClass = (key) => {
+    if (key === "score") return "sm:col-span-2 border-[#E5FF00]/50";
+    if (key === "overall") return "sm:col-span-2 border-[#00E0FF]/40";
+    return "";
+  };
+  const valueClass = (key) => {
+    if (key === "score") return "text-2xl text-[#E5FF00]";
+    if (key === "overall") return "text-2xl text-[#00E0FF]";
+    return "text-lg text-zinc-100";
+  };
+  const shareIcon = () => {
+    if (sharing) return <Loader2 size={14} className="animate-spin" />;
+    if (shared) return <CheckCircle2 size={14} />;
+    return <Share2 size={14} />;
+  };
+  const shareLabel = () => {
+    if (sharing) return t("mypcpage.share_sending");
+    if (shared) return t("mypcpage.share_done");
+    return t("mypcpage.share_discord");
+  };
+
   return (
     <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick p-6 mb-4" data-testid="benchmark-card">
       <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4 flex items-center gap-2">
@@ -159,22 +186,20 @@ function BenchmarkCard({ bench }) {
             delta = Math.round(((av - bv) / bv) * 100);
             improved = m.higherBetter ? av >= bv : av <= bv;
           }
-          const isScore = m.key === "score";
-          const isOverall = m.key === "overall";
           return (
-            <div key={m.key} className={`bg-black border border-[#1A1A24] p-3 ${isScore ? "sm:col-span-2 border-[#E5FF00]/50" : isOverall ? "sm:col-span-2 border-[#00E0FF]/40" : ""}`} data-testid={`bench-${m.key}`}>
+            <div key={m.key} className={`bg-black border border-[#1A1A24] p-3 ${cellBorderClass(m.key)}`} data-testid={`bench-${m.key}`}>
               <div className="flex items-center justify-between">
                 <div className="text-xs uppercase tracking-widest text-zinc-500">{t(`mypcpage.${m.lk}`)}</div>
                 {delta != null && (
                   <div className={`flex items-center gap-1 text-xs font-bold ${improved ? "text-[#00FF66]" : "text-[#FF3B30]"}`}>
-                    {delta > 0 ? <TrendingUp size={13} /> : delta < 0 ? <TrendingDown size={13} /> : <Minus size={13} />}
+                    {deltaIcon(delta)}
                     {delta > 0 ? "+" : ""}{delta}%
                   </div>
                 )}
               </div>
               <div className="flex items-baseline gap-2 mt-1">
                 {hasCompare && bv != null && <span className="text-sm text-zinc-600 line-through">{bv}{m.unit}</span>}
-                <span className={`font-display font-black ${isScore ? "text-2xl text-[#E5FF00]" : isOverall ? "text-2xl text-[#00E0FF]" : "text-lg text-zinc-100"}`}>{av}{m.unit}</span>
+                <span className={`font-display font-black ${valueClass(m.key)}`}>{av}{m.unit}</span>
               </div>
             </div>
           );
@@ -192,8 +217,8 @@ function BenchmarkCard({ bench }) {
           )}
           <button onClick={shareOnDiscord} disabled={sharing || shared} data-testid="bench-share-btn"
             className={`inline-flex items-center gap-2 border px-4 py-2 text-xs font-bold transition-colors disabled:opacity-60 ${shared ? "bg-[#00FF66]/10 border-[#00FF66]/50 text-[#00FF66]" : "bg-[#5865F2]/10 border-[#5865F2]/50 text-[#5865F2] hover:bg-[#5865F2]/20"}`}>
-            {sharing ? <Loader2 size={14} className="animate-spin" /> : shared ? <CheckCircle2 size={14} /> : <Share2 size={14} />}
-            {sharing ? t("mypcpage.share_sending") : shared ? t("mypcpage.share_done") : t("mypcpage.share_discord")}
+            {shareIcon()}
+            {shareLabel()}
           </button>
         </div>
         {explainErr && <div className="text-xs text-[#FF3B30] mt-2" data-testid="bench-explain-err">{explainErr}</div>}
@@ -211,7 +236,13 @@ function BenchmarkCard({ bench }) {
 
 
 function ScoreRing({ score, grade }) {
-  const color = score >= 85 ? "#00FF66" : score >= 70 ? "#E5FF00" : score >= 50 ? "#FFA500" : "#FF3B30";
+  const scoreColor = (s) => {
+    if (s >= 85) return "#00FF66";
+    if (s >= 70) return "#E5FF00";
+    if (s >= 50) return "#FFA500";
+    return "#FF3B30";
+  };
+  const color = scoreColor(score);
   const circumference = 2 * Math.PI * 52;
   const offset = circumference - (score / 100) * circumference;
   return (
@@ -240,9 +271,9 @@ export default function MyPc() {
   const [editing, setEditing] = useState(false);
 
   const load = async () => {
-    try { const { data } = await api.get("/pc-specs"); setSpecs(data); } catch {}
-    try { const { data } = await api.get("/pc-health"); setHealth(data.available ? data : null); } catch {}
-    try { const { data } = await api.get("/pc-benchmark"); setBench(data.latest ? data : null); } catch {}
+    try { const { data } = await api.get("/pc-specs"); setSpecs(data); } catch (e) { console.error("load pc-specs failed", e); }
+    try { const { data } = await api.get("/pc-health"); setHealth(data.available ? data : null); } catch (e) { console.error("load pc-health failed", e); }
+    try { const { data } = await api.get("/pc-benchmark"); setBench(data.latest ? data : null); } catch (e) { console.error("load pc-benchmark failed", e); }
   };
   useEffect(() => { load(); }, []);
 
@@ -254,6 +285,10 @@ export default function MyPc() {
   };
 
   const hasSpecs = specs?.data?.cpu || specs?.data?.gpu;
+  const shownSpecKeys = useMemo(
+    () => SPEC_KEYS.filter((k) => specs?.data?.[k]),
+    [specs]
+  );
 
   if (!hasSpecs || editing) {
     return (
@@ -335,7 +370,7 @@ export default function MyPc() {
       <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick mb-4">
         <div className="p-5 border-b border-[#2A2A35] text-xs uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2"><Cpu size={14} className="text-[#E5FF00]" /> {t("mypcpage.hardware")}</div>
         <div className="grid sm:grid-cols-2 gap-px bg-[#1A1A24]">
-          {SPEC_KEYS.filter((k) => specs.data[k]).map((k) => (
+          {shownSpecKeys.map((k) => (
             <div key={k} className="bg-[#0F0F12] p-4" data-testid={`spec-${k}`}>
               <div className="text-xs uppercase tracking-widest text-zinc-500">{specLabel(t, k)}</div>
               <div className="text-sm text-zinc-100 mt-1">{composeSpec(k, specs.data)}</div>

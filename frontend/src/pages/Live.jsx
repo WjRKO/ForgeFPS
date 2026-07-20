@@ -58,8 +58,9 @@ export default function Live() {
   const timer = useRef(null);
 
   useEffect(() => {
-    api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
-    api.get("/alerts").then(({ data }) => setAlerts(data)).catch(() => {});
+    api.get("/agent/token").then(({ data }) => setToken(data.token)).catch((e) => console.error("load agent token failed", e));
+    api.get("/alerts").then(({ data }) => setAlerts(data)).catch((e) => console.error("load alerts failed", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; setters are stable
   }, []);
   useEffect(() => {
     const load = async () => {
@@ -83,11 +84,12 @@ export default function Live() {
           if (s.latency_ms != null && s.latency_ms > 0) { b.latSum += s.latency_ms; b.latN++; if (s.latency_ms > b.latMax) b.latMax = s.latency_ms; }
         }
         setSummary(buildSummary(acc.current));
-      } catch {}
+      } catch (e) { console.error("telemetry poll failed", e); }
     };
     load();
     timer.current = setInterval(load, 1000);
     return () => clearInterval(timer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- polling loop uses refs (stable) and module-level api; deps intentionally empty
   }, []);
 
   const resetSession = () => { acc.current = freshAcc(); setSummary(null); toast.success(t("live.session_reset_done")); };

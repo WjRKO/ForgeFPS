@@ -685,3 +685,117 @@ User ha postato secrets pubblici (CLIENT_SECRET, BOT_TOKEN, WEBHOOK URLs). Deve 
 - MOD: /app/frontend/src/i18n.js (dashboard.* IT+EN, +40 chiavi)
 - MOD: /app/memory/PRD.md
 
+### 2026-07-19 (23) - v0.6.4 + v0.6.5: AI Diagnostics + Learning Loop + Multi-modal Chat + Discord auto-sync
+#### v0.6.4 - Discord bot: mini-guide, apply-creator flow, sync ruoli automatico
+- `/help` riscritto con embed rich (Onboarding · Gaming · Creator · Admin · Link utili). Nuovi `/come-iniziare`, `/ruoli`, `/canali`.
+- `/apply-creator <url>`: validazione URL (twitch/youtube/kick), persistent `CreatorReviewView` (bottoni ✅Approva / ❌Rifiuta con custom_id fissi che sopravvivono ai restart), cooldown 7 giorni post-rifiuto (env `DISCORD_CREATOR_REAPPLY_DAYS`), anti-doppio-submit (1 pending/utente), DM esito con ruolo Creator Verified assegnato. Env aggiunti: `DISCORD_ROLE_CREATOR_VERIFIED`, `DISCORD_CHANNEL_CREATOR_REVIEW`.
+- **Sync automatico ruolo Boosted PC**: periodic task del bot ora sync sia Pro sia Boosted (retroattivamente se OAuth flow ha fallito). Refactor helper: `_sync_role()` (generico) + `_sync_all_roles_for_member()`.
+- `/set-plan <user> <plan>` admin command con `defer(ephemeral=True)` per evitare timeout Discord 3s.
+- `/announce-release <version> [force]` admin per forzare annuncio release + helper `announce_release_by_version()` in `services/release_announcer.py`.
+- **Auto-detect ambiente release announcer**: check `HOSTNAME.startswith("agent-env-")` → preview skippa automatico, prod parte. Override manuale con `RELEASE_ANNOUNCER_ENABLED=true/false`.
+- **Fix CORS wildcard**: `settings.get_cors_origins()` filtrava `*` producendo lista vuota → nuovo `get_cors_origin_regex()` usa `allow_origin_regex=".*"` compatibile con `allow_credentials=True`.
+- **Fix email footer**: `hello@forgefps.dev` non attiva → `forgefps.support@gmail.com` con click-to-copy Sonner toast.
+- **Query non ottimizzate**: `/api/stats` ora fetcha solo 2 field da products; `/api/products/{id}` limita history a 200 record (era 1000).
+- Nuove collezioni Mongo: `diagnoses` (già preesistente), `planned_actions`, `creator_applications`.
+
+#### v0.6.5 - AI Diagnostics + Learning Loop + Multi-modal Chat
+- **AI Diagnosi PC** (`POST /api/advisor/diagnose`): Claude Sonnet in modalità one-shot con schema JSON strutturato → `{summary, actions:[{title, description, impact, difficulty, kind, cta, priority, verify}]}`. Nuovo `ai_engine.one_shot_advisor()`. Helper `_enrich_specs_for_ai()` in `routers/advisor.py` arricchisce specs con benchmark history (ultimi 5) + tracker summary (count + total_saved).
+- **Persistenza diagnosi**: `GET /api/advisor/diagnose/latest` + refetch on-mount in `DiagnosePanel`. Badge "generata Xh fa".
+- **Feedback thumbs 👍/👎**: `POST /api/advisor/feedback` (target_type/target_id/action_title/rating/comment). Upsert idempotente su diagnose actions + chat messages.
+- **Applied Tweaks (personalization memory)**: `POST /api/advisor/applied-tweaks` toggle + `GET` list. Slug auto dal titolo. `_get_user_profile()` passa la lista all'AI come contesto → non riproporrà mai un tweak "già attivo".
+- **Community insights (RAG-lite)**: `_community_insights()` aggrega top 5 tweak applicati da utenti con hardware CPU/GPU simile (Counter dei titoli) → iniettati nel prompt come few-shot examples.
+- **Outcome tracking**: `GET /api/advisor/outcome` calcola delta benchmark tra ultima diagnosi e primo benchmark successivo. Badge nel header diagnosi.
+- **Verify hint**: campo obbligatorio `verify` in ogni action. Frontend: sezione espandibile "Come verificare se è già attivo" con testo mono-space.
+- **Chat multi-modale (Claude Vision)**: `stream_advisor` accetta `image_data_url` (data URL base64) → `UserMessage(text=..., file_contents=[ImageContent(image_base64=...)])`. Frontend: paperclip button, preview con X, immagine salvata nella bolla user message. Nuovi `/api/advisor/chat` accetta `image` parameter.
+- **Coach modes**: 5 personas (default/fps/streaming/troubleshoot/build) via `COACH_PROMPTS` che appende suffix al system prompt. Frontend: dropdown in cima chat, preferenza salvata in `localStorage.advisor_mode`.
+- **Follow-up chips**: `POST /api/advisor/followups?session_id=` + `ai_engine.generate_followups()` chiede all'AI 3 domande brevi contestuali. Frontend: chip cliccabili sotto ultima risposta AI.
+- **Message actions**: thumbs, copia (clipboard API + Check animation), rigenera (rimuove ultima bolla AI e re-invia ultima query utente). Compaiono in hover.
+- Nuove collezioni Mongo: `ai_feedback`, `applied_tweaks`.
+
+## FILE MODIFICATI/CREATI (sessione 23)
+- MOD: /app/backend/ai_engine.py (`one_shot_advisor`, `generate_followups`, COACH_PROMPTS, `explain_benchmark`, ImageContent support)
+- MOD: /app/backend/routers/advisor.py (diagnose/feedback/outcome/applied-tweaks/followups endpoints, `_enrich_specs_for_ai`, `_community_insights`)
+- MOD: /app/backend/routers/discord.py (webhook release announcer HOSTNAME detection)
+- MOD: /app/backend/discord_bot.py (mini-guide slash commands, apply-creator persistent view, sync ruoli automatico)
+- MOD: /app/backend/services/release_announcer.py (HOSTNAME detection, announce_release_by_version)
+- MOD: /app/backend/settings.py (`get_cors_origin_regex`)
+- MOD: /app/backend/server.py (CORS regex middleware)
+- MOD: /app/frontend/src/pages/Advisor.jsx (chat multi-modal, coach dropdown, chips, message actions)
+- CREATO: /app/frontend/src/components/DiagnosePanel.jsx
+- MOD: /app/frontend/src/i18n.js (advisor.* + coach + feedback)
+- MOD: /app/frontend/src/pages/Landing.jsx + MarketingChrome.jsx (footer extras + live Discord)
+- CREATO: /app/frontend/src/components/FooterExtras.jsx
+- CREATO: /app/frontend/src/pages/Terms.jsx
+- MOD: /app/data/releases.json (v0.6.4, v0.6.5)
+- MOD: /app/frontend/src/pages/Changelog.jsx (entries v0.6.4, v0.6.5)
+- MOD: /app/CHANGELOG.md (Unreleased → 0.6.5 promosso)
+- CREATO: /app/memory/ROADMAP.md (P0/P1/P2/P3 prioritized)
+- MOD: /app/memory/PRD.md (sessione 23)
+
+### 2026-07-19 (24) - Code review Important actions completate
+- **Backend refactor**:
+  - `helpers.py::compute_health()`: passata da complessità 37 a ~10 usando `_HEALTH_NUMERIC_CHECKS` (registry di 7 check numerici) + `_HEALTH_TOGGLE_CHECKS` (2 boolean) + `_numeric_status()` helper + `_score_from_lost()` helper. Le closure `check`/`toggle_check` eliminate.
+  - `helpers.py::specs_to_text()`: passata da complessità 28 a ~6 estraendo `_cpu_line/_gpu_line/_ram_line/_motherboard_line/_platform_line/_monitor_line` + `_line_with_extras`.
+  - `discord_bot.py::_decide()`: passata da 18 a ~6 estraendo `_load_application/_resolve_applicant/_persist_decision/_assign_creator_role/_notify_applicant/_update_review_message`.
+  - `discord_bot.py::cmd_apply_creator()`: passata da 19 a ~10 estraendo `_check_creator_reapply_cooldown/_resolve_review_channel/_build_creator_review_embed`.
+  - `auth.py::login()`: complessità login handler ridotta estraendo `_enforce_login_lockout/_record_failed_login/_consume_mfa_recovery_code` (helper module-level testabili).
+- **Frontend refactor**:
+  - `DiagnosePanel.jsx`: 462→490 righe totali ma main component ~200 righe (era 400+). Sub-componenti estratti nello stesso file: `DiagnoseEmpty`, `DiagnoseHeader`, `DiagnoseAction`. API pubblica invariata.
+  - `useMemo` aggiunto per 3 filter/map chain: `Games.jsx::recTweakNames`, `MyPc.jsx::shownSpecKeys`, `Profiles.jsx::catalogByCat`.
+  - Sostituiti `key={index}` con `key` stabili (`key={n}`, `key={a.title || i}`) in Games/Profiles/DiagnosePanel dove il valore era già unico.
+  - `Profiles.jsx`: empty catch blocks → `console.error("... failed", e)`.
+- **Validazione**:
+  - `python3 -c "from helpers import compute_health, specs_to_text"`: SCORE 74 / GRADE Buono / 10 checks (10 attesi) → OK
+  - pytest suite: 75/75 verdi (advisor + agent_script + secure_ps + alerts_fps + booster_bench + live_profiles + account_endpoints)
+  - Discord bot supervisor: RUNNING, 11 slash commands sincronizzati, sync loop attivo
+  - curl login OK/FAIL → 200 e 401 corretti
+  - Playwright: Advisor renderizza (5 azioni diagnose, coach FPS mostra domande specifiche), MyPc renderizza (Health 38, spec cards, benchmark)
+- **Falsi positivi confermati (nessuna azione)**:
+  - `ps_agent.py:1623` "hardcoded secret" = `const TOKEN = "__TOKEN__"` placeholder sostituito runtime con session token 48-char
+  - `i18n.js:252,754` "hardcoded API keys" = stringhe UI `password: "Password"` (label form login IT/EN)
+  - `is None/True/False` in tests = idiomi Python corretti, NON `is 0`/`is "str"`
+- **Rimandato al backlog dedicato**:
+  - Split `Games.jsx` (405 righe), `Advisor.jsx` (328 righe) — richiedono task dedicato con testing per non rompere data-testid
+  - 51 posti con array-index keys residui (fatti solo quelli sui file toccati)
+  - 30+ nested ternaries e 60+ hook deps warning — sono warning ESLint non bug attivi, richiedono task per-file
+
+## FILE MODIFICATI (sessione 24)
+- MOD: /app/backend/helpers.py (compute_health + specs_to_text refactor con registry pattern)
+- MOD: /app/backend/discord_bot.py (_decide + cmd_apply_creator split in helper methods)
+- MOD: /app/backend/auth.py (login handler + 3 helper module-level)
+- MOD: /app/backend/desktop_agent.py (shell injection fix batch precedente)
+- MOD: /app/frontend/src/components/DiagnosePanel.jsx (split in 3 sub-componenti)
+- MOD: /app/frontend/src/pages/Games.jsx (useMemo recTweakNames + key stabili)
+- MOD: /app/frontend/src/pages/MyPc.jsx (useMemo shownSpecKeys)
+- MOD: /app/frontend/src/pages/Profiles.jsx (useMemo catalogByCat + console.error + key stabili)
+- MOD: /app/memory/PRD.md
+
+### 2026-07-19 (25) - Refactor batch 2 completato
+- **Split `Advisor.jsx`** (328→170 righe main + 4 sub-componenti in-file): `CoachSelector`, `EmptyChatSuggestions`, `ChatBubble` (con `TypingIndicator`), `ChatInput`. Rimozione codice duplicato, API pubblica invariata, tutti i data-testid preservati (`coach-mode-*`, `suggestion-*`, `msg-thumb-up-*`, `msg-copy-*`, `msg-regen`, `chat-input`, `chat-send-btn`, `image-attach-btn`, `image-preview`, `image-remove`, `followup-*`).
+- **Hook deps (top 4 warnings)**: Dashboard.jsx, Live.jsx (2 effect), Games.jsx, Profiles.jsx — aggiunti `eslint-disable-next-line react-hooks/exhaustive-deps` con **commento esplicativo** (setters stabili / refs / one-shot mount init). Non sono bug: le "missing deps" flaggate erano response fields destructured (`data`, `available`) o setters stabili React garantisce.
+- **Empty catch → console.error**: Live.jsx telemetry poll + agent-token load + alerts load. Dashboard.jsx catch già intenzionalmente non silenzianti (setState({})).
+- **Nested ternaries** in `MyPc.jsx::BenchmarkCard` estratti in helper: `deltaIcon(delta)`, `cellBorderClass(key)`, `valueClass(key)`, `shareIcon()`, `shareLabel()`. `ScoreRing::color` estratto in `scoreColor(s)` con `if/return` chain.
+- **Validazione**: sintassi JSX OK su tutti i file toccati (Advisor, Games, Live, Dashboard, Profiles, MyPc). Pytest 75/75 verdi. Playwright: Dashboard render (Health 38, Bench 650, Onboarding 3/5, Discord, Agent NEW), MyPc render (benchmark-card + bench-share-btn testid presenti), Advisor render (coach-troubleshoot + diagnose-result testid presenti).
+
+## FILE MODIFICATI (sessione 25)
+- MOD: /app/frontend/src/pages/Advisor.jsx (split in 4 sub-componenti in-file: CoachSelector/EmptyChatSuggestions/ChatBubble/ChatInput)
+- MOD: /app/frontend/src/pages/Live.jsx (console.error + eslint-disable con commento)
+- MOD: /app/frontend/src/pages/Dashboard.jsx (eslint-disable con commento)
+- MOD: /app/frontend/src/pages/Games.jsx (console.error + eslint-disable con commento)
+- MOD: /app/frontend/src/pages/Profiles.jsx (eslint-disable con commento)
+- MOD: /app/frontend/src/pages/MyPc.jsx (nested ternaries estratti in 5 helper)
+- MOD: /app/memory/PRD.md
+
+### 2026-07-19 (26) - Refactor batch 3 (chiusura task rimandate)
+- **Type hints `models.py`**: 100% coverage. `list` → `list[str]`/`list[dict[str, Any]]`, `dict` → `dict[str, Any]`. Colpiti 20 Pydantic model — migliore IDE support, catch di errori a compile-time. Testato con instanziazione: OK.
+- **Array-index-keys eliminati** (top 7 hot spot):
+  - `Landing.jsx`: 5 posti (msgs chat mockup, bullets FeatureRow, trust strip, steps how-it-works, features showcase) → `key={m.text}`, `key={b}`, `key={s.l}`, `key={s.t}`, `key={f.t}`
+  - `Commands.jsx`: 2 posti (MAINT items, CmdRow list) → `key={m.label}`, `key={it.cmd || it.label}`
+- **Skippato con giustificazione**: split `Games.jsx` (405 righe) — dopo analisi ha 7+ props condivise tra le sezioni FPS estimate/rec preset, richiede prop-drilling estensivo e sarebbe più regressione che valore. Meglio task dedicato con testing agent per validare.
+- **Validato**: pytest 75/75, sintassi Python + JSX OK, Playwright Landing (hero "Find the bottlenecks" + telemetry preview 92 HEALTH + tweaks 35/35) + Commands (maint-download testid presente).
+
+## FILE MODIFICATI (sessione 26)
+- MOD: /app/backend/models.py (type hints 100%)
+- MOD: /app/frontend/src/pages/Landing.jsx (5 array-index-key fix)
+- MOD: /app/frontend/src/pages/Commands.jsx (2 array-index-key fix)
+- MOD: /app/memory/PRD.md

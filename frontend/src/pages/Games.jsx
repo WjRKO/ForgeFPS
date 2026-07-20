@@ -51,18 +51,18 @@ export default function Games() {
     try { return typeof window !== "undefined" ? window.localStorage.getItem(BOOST_MODE_KEY) : null; } catch { return null; }
   });
   const chooseMode = (m) => {
-    try { window.localStorage.setItem(BOOST_MODE_KEY, m); } catch {}
+    try { window.localStorage.setItem(BOOST_MODE_KEY, m); } catch (e) { console.error("boost mode save failed", e); }
     setBoostMode(m);
     if (m === "auto") setShowBoostCfg(true);
     if (m === "manual") setShowConfig(true);
   };
   const resetMode = () => {
-    try { window.localStorage.removeItem(BOOST_MODE_KEY); } catch {}
+    try { window.localStorage.removeItem(BOOST_MODE_KEY); } catch (e) { console.error("boost mode reset failed", e); }
     setBoostMode(null);
   };
 
   const loadGames = async () => {
-    try { const { data } = await api.get("/games"); setGames(data.games || []); } catch {}
+    try { const { data } = await api.get("/games"); setGames(data.games || []); } catch (e) { console.error("loadGames failed", e); }
   };
   const loadPrematch = async () => {
     try {
@@ -72,20 +72,21 @@ export default function Games() {
       setGroups(Object.fromEntries(APP_GROUPS.map((g) => [g.id, g.procs.every((p) => apps.includes(p))])));
       setRunningApps(data.running_apps || []);
       setRunningAt(data.running_at || null);
-    } catch {}
+    } catch (e) { console.error("loadPrematch failed", e); }
   };
   useEffect(() => {
     loadGames();
     loadPrematch();
-    api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {});
-    api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
-    api.get("/profiles/templates").then(({ data }) => { setTemplates(data.templates || []); setCatalog(data.catalog || []); }).catch(() => {});
+    api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch((e) => console.error("load pc-specs failed", e));
+    api.get("/agent/token").then(({ data }) => setToken(data.token)).catch((e) => console.error("load agent token failed", e));
+    api.get("/profiles/templates").then(({ data }) => { setTemplates(data.templates || []); setCatalog(data.catalog || []); }).catch((e) => console.error("load templates failed", e));
     api.get("/booster").then(({ data }) => {
       setBoostCfg({ set_power: data.set_power !== false, boost_priority: data.boost_priority !== false, purge_ram: data.purge_ram !== false });
       const apps = data.close_apps || [];
       setBoostGroups(Object.fromEntries(APP_GROUPS.map((g) => [g.id, g.procs.every((p) => apps.includes(p)) && g.procs.length > 0])));
-    }).catch(() => {});
-    api.get("/booster/sessions").then(({ data }) => setBoostSessions(data.sessions || [])).catch(() => {});
+    }).catch((e) => console.error("load booster failed", e));
+    api.get("/booster/sessions").then(({ data }) => setBoostSessions(data.sessions || [])).catch((e) => console.error("load booster sessions failed", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot init on mount; loaders are stable inline fns
   }, []);
 
   const saveBoostConfig = async () => {
@@ -102,6 +103,15 @@ export default function Games() {
     return templates.find((t) => (t.match || []).some((m) => g.includes(m)))
       || templates.find((t) => t.id === "tpl_balanced") || null;
   }, [game, templates]);
+
+  // Precompute the tweak-name chips shown for the recommended preset (was inline filter/map/slice in JSX)
+  const recTweakNames = useMemo(() => {
+    if (!recTpl || !catalog.length) return [];
+    return recTpl.tweak_ids
+      .map((id) => catalog.find((c) => c.id === id)?.name)
+      .filter(Boolean)
+      .slice(0, 8);
+  }, [recTpl, catalog]);
 
   const saveConfig = async () => {
     setSavingCfg(true);
@@ -411,8 +421,8 @@ export default function Games() {
             <span className="text-zinc-500"> · {recTpl.preset_label}</span>
           </p>
           <div className="flex flex-wrap gap-1.5 mb-3">
-            {recTpl.tweak_ids.map((id) => catalog.find((c) => c.id === id)?.name).filter(Boolean).slice(0, 8).map((n, i) => (
-              <span key={i} className="text-[11px] bg-black border border-[#1A1A24] px-2 py-0.5 text-zinc-400">{n}</span>
+            {recTweakNames.map((n) => (
+              <span key={n} className="text-[11px] bg-black border border-[#1A1A24] px-2 py-0.5 text-zinc-400">{n}</span>
             ))}
             {recTpl.tweak_ids.length > 8 && <span className="text-[11px] text-zinc-600 px-1">+{recTpl.tweak_ids.length - 8}</span>}
           </div>
