@@ -121,7 +121,9 @@ function CmdRow({ label, cmd, testid, accent }) {
 const SECURE = {
   it: {
     exe_badge: "Nuovo", exe_title: "App desktop con un click", exe_desc: "Scarica lo ZIP dell'app Windows, estrailo e avvia forgefps-agent.exe. Da v0.6.7 usiamo il pacchetto onedir: niente falso positivo su Windows Defender.",
-    exe_btn: "Scarica FrameForge (ZIP)", exe_run: "Estrai lo ZIP, entra nella cartella e doppio click su forgefps-agent.exe — oppure da terminale:", exe_sha: "SHA256 del ZIP", exe_vt: "Verifica questo file su VirusTotal",
+    exe_btn: "Scarica FrameForge (ZIP)", exe_run: "Estrai lo ZIP, entra nella cartella e doppio click su Avvia-FrameForge.bat — oppure da terminale:", exe_sha: "SHA256 del ZIP", exe_vt: "Verifica questo file su VirusTotal",
+    exe_personalized_hint: "Il ZIP contiene il tuo token già dentro: estrai, apri la cartella e doppio click su Avvia-FrameForge.bat — la GUI parte senza incollare nulla.",
+    bat_btn: "Scarica solo launcher (.bat)", bat_hint: "Se hai già il ZIP generico dal repo pubblico: mettilo accanto e doppio click.",
     warn_title: "Importante: a quale server si collega l'app?",
     warn_desc_a: "Per impostazione predefinita l'.exe si collega a",
     warn_desc_b: "(produzione). Il token deve provenire dallo stesso sito a cui punta l'app: se lo copi da un ambiente diverso vedrai «Token non valido».",
@@ -138,7 +140,9 @@ const SECURE = {
   },
   en: {
     exe_badge: "New", exe_title: "One-click desktop app", exe_desc: "Download the Windows app ZIP, extract it and run forgefps-agent.exe. Since v0.6.7 we ship an onedir bundle: no more Windows Defender false positive.",
-    exe_btn: "Download FrameForge (ZIP)", exe_run: "Extract the ZIP, open the folder and double-click forgefps-agent.exe — or from a terminal:", exe_sha: "ZIP SHA256", exe_vt: "Check this file on VirusTotal",
+    exe_btn: "Download FrameForge (ZIP)", exe_run: "Extract the ZIP, open the folder and double-click Avvia-FrameForge.bat — or from a terminal:", exe_sha: "ZIP SHA256", exe_vt: "Check this file on VirusTotal",
+    exe_personalized_hint: "The ZIP has your token baked in: extract, open the folder and double-click Avvia-FrameForge.bat — GUI opens with zero prompts.",
+    bat_btn: "Download launcher only (.bat)", bat_hint: "If you already have the public generic ZIP: drop this next to it and double-click.",
     warn_title: "Important: which server does the app connect to?",
     warn_desc_a: "By default the .exe connects to",
     warn_desc_b: "(production). The token must come from the same site the app points to: if you copy it from a different environment you'll see \u201cInvalid token\u201d.",
@@ -326,10 +330,25 @@ export default function DesktopAgent() {
             {/* Preview GUI Edge (video/gif reale se presente, altrimenti mock animato) */}
             <AgentPreview label={en ? "Live GUI preview" : "Anteprima GUI live"} />
 
-            <a href={AGENT_EXE_URL} target="_blank" rel="noreferrer" data-testid="exe-download-btn" onClick={() => trackConversion("agent_download")}
+            <button type="button" data-testid="exe-download-btn"
+              onClick={async () => {
+                trackConversion("agent_download");
+                toast(en ? "Preparing your personalized ZIP..." : "Preparo il tuo ZIP personalizzato...");
+                try {
+                  const resp = await api.get("/agent/download-zip", { responseType: "blob", timeout: 60000 });
+                  const url = window.URL.createObjectURL(resp.data);
+                  const a = document.createElement("a");
+                  a.href = url; a.download = "forgefps-agent.zip";
+                  document.body.appendChild(a); a.click(); a.remove();
+                  window.URL.revokeObjectURL(url);
+                } catch (e) {
+                  toast.error(en ? "Download failed. Retry in a moment." : "Download fallito. Riprova tra un momento.");
+                }
+              }}
               className="flex items-center justify-center gap-2 bg-[#00E0FF] text-black font-bold py-3 text-sm uppercase tracking-wide hover:bg-[#33e8ff] transition-colors w-full">
               <Download size={16} /> {s.exe_btn}
-            </a>
+            </button>
+            <p className="mt-1.5 text-[10px] text-zinc-500 leading-relaxed px-1" data-testid="exe-personalized-hint">{s.exe_personalized_hint}</p>
 
             <a href={AGENT_RELEASES_URL} target="_blank" rel="noreferrer" data-testid="exe-releases-link"
               className="mt-2 flex items-center justify-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-[#00E0FF] transition-colors">

@@ -50,8 +50,8 @@ const GUIDES = [
       lead: "Dallo zero al primo tweak applicato. Il percorso più veloce per capire come funziona.",
       steps: [
         { where: "web", text: "Accedi all'app e vai su Dashboard → clicca su Il mio PC per vedere lo score attuale (0-100)." },
-        { where: "web", text: "Apri la sezione Agent desktop dal menu laterale. Scarica lo ZIP e copia il tuo Token." },
-        { where: "desktop", text: "Estrai lo ZIP (tasto destro → Extract All), entra nella cartella e apri PowerShell lì. Poi lancia:", cmd: '.\\forgefps-agent.exe --token IL_TUO_TOKEN --mode optimize' },
+        { where: "web", text: "Apri la sezione Agent desktop dal menu laterale. Clicca 'Scarica FrameForge (ZIP)' — il ZIP contiene già il tuo token." },
+        { where: "desktop", text: "Estrai lo ZIP (tasto destro → Extract All), entra nella cartella e doppio click su 'Avvia-FrameForge.bat'. La GUI parte automaticamente, senza incollare nulla." },
         { where: "desktop", text: "Nella GUI Edge che si apre, clicca sul preset Competitivo. I tweak già attivi sono contrassegnati con GIÀ ATTIVO — non tocca nulla di inutile." },
         { where: "desktop", text: "Clicca Applica selezionati. Attendi il completamento (di solito 30-60s). Chiudi la finestra." },
         { where: "web", text: "Torna sul sito e ricarica Il mio PC: lo score è aggiornato. Se serve, riavvia il PC per consolidare le modifiche." },
@@ -66,8 +66,8 @@ const GUIDES = [
       lead: "From zero to your first applied tweak. The fastest path to understanding the flow.",
       steps: [
         { where: "web", text: "Log into the app and go to Dashboard → click My PC to see your current score (0-100)." },
-        { where: "web", text: "Open Desktop agent from the sidebar. Download the ZIP and copy your Token." },
-        { where: "desktop", text: "Extract the ZIP (right-click → Extract All), open the folder, then open PowerShell there and run:", cmd: '.\\forgefps-agent.exe --token YOUR_TOKEN --mode optimize' },
+        { where: "web", text: "Open Desktop agent from the sidebar. Click 'Download FrameForge (ZIP)' — the ZIP has your token baked in." },
+        { where: "desktop", text: "Extract the ZIP (right-click → Extract All), open the folder and double-click 'Avvia-FrameForge.bat'. The GUI opens automatically, no token to paste." },
         { where: "desktop", text: "In the Edge GUI that opens, click the Competitive preset. Tweaks already active are marked ALREADY ACTIVE — nothing useless is touched." },
         { where: "desktop", text: "Click Apply selected. Wait for completion (usually 30-60s). Close the window." },
         { where: "web", text: "Back on the site, reload My PC: the score is updated. Reboot if needed to consolidate changes." },
