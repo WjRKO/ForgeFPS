@@ -3,23 +3,33 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
   build-sign:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
       - run: python -m pip install --upgrade pip pyinstaller
-      - run: pyinstaller --onefile --name forgefps-agent --console --noupx --clean --version-file version_info.txt forgefps_agent.py
+
+      # v0.6.7: --onedir invece di --onefile per eliminare i falsi positivi Defender
+      - name: Build onedir (folder + DLLs)
+        run: pyinstaller --onedir --name forgefps-agent --console --noupx --clean --version-file version_info.txt forgefps_agent.py
+
+      # Firma il .exe INTERNO alla cartella con SignPath
       - id: unsigned
         uses: actions/upload-artifact@v4
         with:
           name: forgefps-agent-unsigned
-          path: dist/forgefps-agent.exe
+          path: dist/forgefps-agent/forgefps-agent.exe
+
       - uses: signpath/github-action-submit-signing-request@v1
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -29,11 +39,29 @@ jobs:
           github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
           wait-for-completion: true
           output-artifact-directory: 'signed'
-      - shell: pwsh
+
+      # Sostituisci il .exe non firmato con quello firmato, poi ricomprimi
+      - name: Repackage folder with signed .exe
+        shell: pwsh
         run: |
-          $h = (Get-FileHash signed/forgefps-agent.exe -Algorithm SHA256).Hash.ToLower()
+          Copy-Item -Path 'signed\forgefps-agent.exe' -Destination 'dist\forgefps-agent\forgefps-agent.exe' -Force
+          Compress-Archive -Path 'dist\forgefps-agent' -DestinationPath 'dist\forgefps-agent.zip' -Force
+
+      - id: hash
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash dist/forgefps-agent.zip -Algorithm SHA256).Hash.ToLower()
           echo "SHA256=$h" >> $env:GITHUB_STEP_SUMMARY
+          echo "SHA256=$h" >> $env:GITHUB_OUTPUT
+
       - uses: softprops/action-gh-release@v2
         with:
-          files: signed/forgefps-agent.exe
+          files: dist/forgefps-agent.zip
           generate_release_notes: true
+          body: |
+            **SHA256 (ZIP):** `${{ steps.hash.outputs.SHA256 }}`
+
+            v0.6.7 — Build `--onedir` (cartella + DLL, firmata SignPath) invece di `--onefile`
+            per eliminare i falsi positivi euristici di Windows Defender sul bootloader PyInstaller.
+
+            **Uso:** estrai il ZIP → apri la cartella `forgefps-agent/` → `forgefps-agent.exe --token IL_TUO_TOKEN`.
