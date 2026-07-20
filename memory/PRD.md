@@ -812,3 +812,31 @@ User ha postato secrets pubblici (CLIENT_SECRET, BOT_TOKEN, WEBHOOK URLs). Deve 
 - MOD: /app/frontend/src/pages/Landing.jsx (5 array-index-key fix)
 - MOD: /app/frontend/src/pages/Commands.jsx (2 array-index-key fix)
 - MOD: /app/memory/PRD.md
+
+### 2026-07-20 (28) - Step 2 GUI Profili + Live Sync toggle nella GUI Sicura
+- **Nuova tab "Profili Cloud"** in `ps_agent.py`:
+  - `CATS` esteso con `{key:"profiles", label:"Profili Cloud"}`; state esteso con `profiles: null`
+  - `renderTabs()` gestisce case profili (mostra count profili invece di `todo/total` tweak)
+  - `renderCards()` fa early-return a `renderProfilesTab(el)` quando `activeCat === "profiles"`
+  - `loadProfiles()`: chiama `/api/profiles-cloud` locale (proxy al cloud); gestisce loading/error state
+  - `renderProfilesTab()`: due sezioni ("I MIEI PROFILI" e "TEMPLATE COMMUNITY") con card che mostrano fino a 6 nomi tweak + "+N" se piu. Testid `profile-<id>`, `profile-template-<id>`, `apply-*`, `section-my-profiles`, `section-templates`
+  - `applyProfile(tweakIds)`: seleziona i tweak matching nella lista locale (`state.tweaks` filtered per compatibilita HW `!t.fit.skip`), jump a tab Gaming, toast di conferma con conteggio matched
+- **Nuovo endpoint PowerShell `/api/profiles-cloud`** (GET): proxy con `Invoke-RestMethod` a `$BACKEND/api/agent/profiles` usando header `X-Agent-Token`. Fallback a payload vuoto se cloud unreachable.
+- **Live Sync toggle** nell'header:
+  - Nuovo `<label class="live-sync-toggle">` con input checkbox `#liveSyncToggle`, dot pulse animato quando ON (verde `--ok`)
+  - Nuovo endpoint PS `/api/live-sync` (POST): flip `$script:LIVE_SYNC` bool
+  - Nuova funzione PS `Push-LiveSample`: chiama `Get-TelemetrySample` (già esistente per benchmark) e la invia a `$BACKEND/api/agent/telemetry`
+  - Push opportunistico dentro `/api/log` (già pollato dal frontend ogni 400ms): throttle a 3s via `$script:LIVE_LAST_TS`
+  - Toggle wired via `_liveToggle.addEventListener("change", ...)`: POST + toast di conferma
+- **CSS aggiunto**: `.header-actions`, `.live-sync-toggle`, `.live-sync-dot` con `@keyframes pulse`, `.profile-card`, `.profile-section-title`
+- **Nessuna regressione**: 24/24 test agent_script + secure_ps verdi. Sintassi ps_agent.py OK.
+
+**Note deployment**: `ps_agent.py` è servito dal backend cloud (`/api/agent/script`). Al prossimo redeploy prod la GUI ha subito le nuove feature. Serve un test in VM Windows per verificare:
+1. La tab Profili carica → cards visibili
+2. Click "Applica profilo" → tweak selezionati nella tab Gaming
+3. Toggle "Sync Cloud" ON → dot verde pulsante, dati visibili su `/app/live` da altro device
+4. Toggle OFF → dot grigio, stop stream
+
+## FILE MODIFICATI (sessione 28)
+- MOD: /app/backend/ps_agent.py (tab Profili + Live Sync toggle + relativi endpoint PS)
+- MOD: /app/memory/PRD.md

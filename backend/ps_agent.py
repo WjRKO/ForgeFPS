@@ -613,6 +613,14 @@ function Send-Telemetry($sample) {
   $body = @{ sample = $sample } | ConvertTo-Json -Depth 5 -Compress
   try { Invoke-RestMethod -Uri "$BACKEND/api/agent/telemetry" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
 }
+function Push-LiveSample {
+  # Lightweight sample sent to cloud when Live Sync toggle is ON.
+  # Reuses Get-TelemetrySample which already handles CPU/GPU/RAM/temps via WMI+LHM.
+  try {
+    $sample = Get-TelemetrySample
+    if ($sample) { Send-Telemetry $sample }
+  } catch {}
+}
 
 # ---------------- FPS via PresentMon (opzionale, richiede admin) ----------------
 $script:PM_EXE = Join-Path $env:TEMP 'PresentMon.exe'
@@ -1239,6 +1247,8 @@ function Show-WebGui {
   foreach ($t in $script:TWEAKS) { $f = 'ok'; if ($t.fit) { $f = & $t.fit }; if (-not $f) { $f = 'ok' }; $script:FITMAP[$t.id] = $f }
   $script:WEBLOG = New-Object System.Collections.ArrayList
   $script:APPLYING = $false
+  $script:LIVE_SYNC = $false
+  $script:LIVE_LAST_TS = 0
 
   # Session token random per gli endpoint locali
   $chars = [char[]](([byte][char]"A"..[byte][char]"Z") + ([byte][char]"a"..[byte][char]"z") + ([byte][char]"0"..[byte][char]"9"))
@@ -1403,6 +1413,69 @@ function Show-WebGui {
     font-size: 10px; color: var(--muted); line-height: 1.4;
   }
   header > div:has(> .backup-badge) { position: relative; }
+
+  /* Header actions: live sync toggle + backup badge grouped */
+  .header-actions {
+    display: flex; align-items: center; gap: 12px; position: relative;
+  }
+  .live-sync-toggle {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border: 1px solid var(--border);
+    font-size: 11px; font-family: "Consolas", monospace;
+    color: var(--muted); cursor: pointer; user-select: none;
+    transition: all 0.15s;
+  }
+  .live-sync-toggle:hover { border-color: var(--ok); color: var(--fg); }
+  .live-sync-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+  .live-sync-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted); transition: all 0.2s;
+    box-shadow: 0 0 0 0 rgba(0, 255, 102, 0);
+  }
+  .live-sync-toggle input:checked ~ .live-sync-dot {
+    background: var(--ok);
+    box-shadow: 0 0 12px 2px rgba(0, 255, 102, 0.55);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  .live-sync-toggle input:checked ~ .live-sync-text { color: var(--ok); }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 8px 1px rgba(0, 255, 102, 0.45); }
+    50%      { box-shadow: 0 0 16px 3px rgba(0, 255, 102, 0.75); }
+  }
+
+  /* Profili tab: cards per applicare preset dal cloud */
+  .profile-card {
+    background: var(--card); border: 1px solid var(--border);
+    padding: 16px; transition: border-color 0.15s;
+  }
+  .profile-card:hover { border-color: var(--accent); }
+  .profile-card h3 {
+    font-size: 15px; margin: 0 0 6px; color: var(--fg);
+  }
+  .profile-card .profile-meta {
+    font-size: 11px; color: var(--muted); font-family: "Consolas", monospace;
+    letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 8px;
+  }
+  .profile-card .profile-tweaks {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px;
+  }
+  .profile-card .profile-tweaks span {
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    padding: 2px 8px; font-size: 10px; color: var(--muted);
+  }
+  .profile-card .profile-apply {
+    background: var(--accent); color: #000; border: none;
+    padding: 8px 14px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.15em; cursor: pointer; text-transform: uppercase;
+    font-family: "Consolas", monospace;
+  }
+  .profile-card .profile-apply:hover { background: #fff; }
+  .profile-section-title {
+    grid-column: 1 / -1; font-family: "Consolas", monospace;
+    font-size: 10px; color: var(--accent); letter-spacing: 0.2em;
+    text-transform: uppercase; padding: 12px 0 4px;
+    border-bottom: 1px solid var(--border);
+  }
 
   .preset-bar {
     padding: 14px 28px;
@@ -1619,11 +1692,18 @@ function Show-WebGui {
         <div class="hw-line" id="hwLine">PC: rilevamento in corso...</div>
         <div class="admin-line" id="adminLine"></div>
       </div>
-      <div class="backup-badge" id="backupBadge" data-testid="backup-badge" role="button" tabindex="0" title="Clicca per vedere la lista">Backup: 0</div>
-      <div class="backup-panel" id="backupPanel" data-testid="backup-panel" hidden>
-        <div class="backup-panel-title">Modifiche reversibili</div>
-        <ul id="backupList" class="backup-list"></ul>
-        <div class="backup-panel-hint">Usa "RIPRISTINA TUTTO" in fondo per riportare il PC allo stato iniziale.</div>
+      <div class="header-actions">
+        <label class="live-sync-toggle" data-testid="live-sync-label" title="Invia CPU/GPU/RAM/temp in tempo reale al Command Center cloud">
+          <input type="checkbox" id="liveSyncToggle" data-testid="live-sync-toggle" />
+          <span class="live-sync-dot" aria-hidden="true"></span>
+          <span class="live-sync-text">Sync Cloud</span>
+        </label>
+        <div class="backup-badge" id="backupBadge" data-testid="backup-badge" role="button" tabindex="0" title="Clicca per vedere la lista">Backup: 0</div>
+        <div class="backup-panel" id="backupPanel" data-testid="backup-panel" hidden>
+          <div class="backup-panel-title">Modifiche reversibili</div>
+          <ul id="backupList" class="backup-list"></ul>
+          <div class="backup-panel-hint">Usa "RIPRISTINA TUTTO" in fondo per riportare il PC allo stato iniziale.</div>
+        </div>
       </div>
     </div>
   </header>
@@ -1663,9 +1743,10 @@ function Show-WebGui {
     { key: "gaming",  label: "Gaming & FPS" },
     { key: "input",   label: "Latenza & Input" },
     { key: "network", label: "Rete & Streaming" },
-    { key: "system",  label: "Sistema & Debloat" }
+    { key: "system",  label: "Sistema & Debloat" },
+    { key: "profiles", label: "Profili Cloud" }
   ];
-  let state = { tweaks: [], hw: {}, admin: false, backup: 0, presets: {} };
+  let state = { tweaks: [], hw: {}, admin: false, backup: 0, backup_ids: [], presets: {}, profiles: null };
   let selected = new Set();
   let activeCat = "gaming";
   let searchQ = "";
@@ -1699,16 +1780,26 @@ function Show-WebGui {
   function renderTabs() {
     const el = document.getElementById("tabs");
     el.innerHTML = CATS.map(c => {
+      if (c.key === "profiles") {
+        const count = state.profiles?.profiles?.length ?? "…";
+        return `<button class="tab ${c.key === activeCat ? "active" : ""}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${count}</span></button>`;
+      }
       const inCat = state.tweaks.filter(t => t.cat === c.key && !t.fit.skip);
       const todo = inCat.filter(t => !isApplied(t)).length;
       const total = inCat.length;
       return `<button class="tab ${c.key === activeCat ? "active" : ""}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${todo}/${total}</span></button>`;
     }).join("");
-    [...el.querySelectorAll(".tab")].forEach(b => b.onclick = () => { activeCat = b.dataset.cat; renderTabs(); renderCards(); });
+    [...el.querySelectorAll(".tab")].forEach(b => b.onclick = () => {
+      activeCat = b.dataset.cat;
+      if (activeCat === "profiles" && !state.profiles) loadProfiles();
+      renderTabs();
+      renderCards();
+    });
   }
 
   function renderCards() {
     const el = document.getElementById("cards");
+    if (activeCat === "profiles") { renderProfilesTab(el); return; }
     const items = state.tweaks.filter(t => t.cat === activeCat).filter(t => {
       if (!searchQ) return true;
       const q = searchQ.toLowerCase();
@@ -1765,6 +1856,69 @@ function Show-WebGui {
   function updateSelCount() {
     document.getElementById("selCount").innerHTML = `<b>${selected.size}</b> tweak selezionati`;
   }
+
+  // -------- Cloud profiles tab --------
+  async function loadProfiles() {
+    const el = document.getElementById("cards");
+    if (activeCat === "profiles") el.innerHTML = `<div class="empty">Caricamento profili dal cloud…</div>`;
+    try {
+      const d = await api("/api/profiles-cloud");
+      state.profiles = d && !d.err ? d : { profiles: [], templates: [], catalog: [], err: d?.err };
+    } catch (e) {
+      state.profiles = { profiles: [], templates: [], catalog: [], err: "network" };
+    }
+    if (activeCat === "profiles") { renderTabs(); renderCards(); }
+  }
+
+  function renderProfilesTab(el) {
+    const p = state.profiles;
+    if (!p) { el.innerHTML = `<div class="empty">Caricamento profili…</div>`; loadProfiles(); return; }
+    if (p.err) { el.innerHTML = `<div class="empty">Cloud non raggiungibile. Verifica la connessione internet e riprova.</div>`; return; }
+    const catalogMap = {};
+    (p.catalog || []).forEach(c => { catalogMap[c.id] = c.name; });
+    const cardHtml = (item, opts) => {
+      const isTemplate = !!opts.template;
+      const tweakIds = item.tweak_ids || [];
+      const names = tweakIds.map(id => catalogMap[id]).filter(Boolean).slice(0, 6);
+      const extra = tweakIds.length > 6 ? ` <span>+${tweakIds.length - 6}</span>` : "";
+      const meta = isTemplate ? `📚 Template community · ${tweakIds.length} tweak` : `👤 Il tuo profilo · ${tweakIds.length} tweak`;
+      const testid = isTemplate ? `profile-template-${item.id}` : `profile-${item.id}`;
+      return `<div class="profile-card" data-testid="${testid}">
+        <h3>${esc(item.name || item.game_name || 'Senza nome')}</h3>
+        <div class="profile-meta">${meta}</div>
+        <div class="profile-tweaks">${names.map(n => `<span>${esc(n)}</span>`).join("")}${extra}</div>
+        <button class="profile-apply" data-testid="apply-${testid}" onclick='applyProfile(${JSON.stringify(tweakIds)})'>Applica profilo</button>
+      </div>`;
+    };
+    let html = "";
+    if ((p.profiles || []).length) {
+      html += `<div class="profile-section-title" data-testid="section-my-profiles">// I MIEI PROFILI</div>`;
+      html += p.profiles.map(pr => cardHtml(pr, { template: false })).join("");
+    } else {
+      html += `<div class="profile-section-title">// I MIEI PROFILI</div><div class="empty" style="grid-column: 1 / -1;">Nessun profilo personale ancora. Creane uno su forgefps.dev/app/profiles.</div>`;
+    }
+    if ((p.templates || []).length) {
+      html += `<div class="profile-section-title" data-testid="section-templates">// TEMPLATE COMMUNITY</div>`;
+      html += p.templates.map(t => cardHtml(t, { template: true })).join("");
+    }
+    el.innerHTML = html;
+  }
+
+  window.applyProfile = function(tweakIds) {
+    if (!Array.isArray(tweakIds) || !tweakIds.length) return;
+    // Select the tweaks in the local catalog matching this profile.
+    selected.clear();
+    let matched = 0;
+    for (const id of tweakIds) {
+      if (state.tweaks.find(t => t.id === id && !t.fit.skip)) { selected.add(id); matched++; }
+    }
+    if (!matched) { toast("Nessun tweak compatibile con il tuo hardware", "err"); return; }
+    toast(`Profilo caricato: ${matched} tweak selezionati`, "ok");
+    // Jump to Gaming tab so the user sees what got selected.
+    activeCat = "gaming";
+    renderTabs(); renderCards(); updateSelCount();
+  };
+
   function renderHeader() {
     const hw = state.hw || {};
     const gpuTxt = hw.gpu || "?";
@@ -1894,6 +2048,17 @@ function Show-WebGui {
   document.getElementById("restoreBtn").onclick = doRestore;
   document.getElementById("searchBox").oninput = e => { searchQ = e.target.value; renderCards(); };
 
+  // Live Sync toggle: streams telemetry to cloud when ON.
+  const _liveToggle = document.getElementById("liveSyncToggle");
+  if (_liveToggle) {
+    _liveToggle.addEventListener("change", async () => {
+      try {
+        const d = await api("/api/live-sync", { method: "POST", headers: {"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ enabled: _liveToggle.checked }) });
+        if (d && d.ok) toast(d.enabled ? "Sync Cloud attivo · dati in streaming" : "Sync Cloud disattivato", d.enabled ? "ok" : null);
+      } catch { _liveToggle.checked = !_liveToggle.checked; toast("Errore attivazione sync", "err"); }
+    });
+  }
+
   // Backup badge toggle: open panel with reversible tweaks list.
   const _backupBadge = document.getElementById("backupBadge");
   if (_backupBadge) {
@@ -2000,7 +2165,15 @@ function Show-WebGui {
           if ($script:WEBLOG.Count -gt $since) {
             $slice = @($script:WEBLOG.GetRange($since, $script:WEBLOG.Count - $since))
           }
-          Send-Json $ctx @{ logs = $slice; total = $script:WEBLOG.Count; applying = $script:APPLYING }
+          # Opportunistic live-telemetry push (throttled 3s).
+          if ($script:LIVE_SYNC) {
+            $now = [int](Get-Date -UFormat %s)
+            if (($now - $script:LIVE_LAST_TS) -ge 3) {
+              $script:LIVE_LAST_TS = $now
+              try { Push-LiveSample } catch {}
+            }
+          }
+          Send-Json $ctx @{ logs = $slice; total = $script:WEBLOG.Count; applying = $script:APPLYING; live_sync = $script:LIVE_SYNC }
         }
         elseif ($path -eq '/api/apply' -and $method -eq 'POST') {
           $body = Read-Body $ctx | ConvertFrom-Json
@@ -2030,6 +2203,21 @@ function Show-WebGui {
           $t = $script:TWMAP[$body.id]
           if ($t) { WebLog ("-> {0}" -f $t.name); & $t.apply; Save-Backup }
           Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = @($script:BK.Keys) }
+        }
+        elseif ($path -eq '/api/profiles-cloud' -and $method -eq 'GET') {
+          # Proxy to FrameForge cloud: /api/agent/profiles (X-Agent-Token auth).
+          try {
+            $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/profiles" -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 8
+            Send-Json $ctx $resp
+          } catch {
+            Send-Json $ctx @{ err = "cloud unreachable"; profiles = @(); templates = @(); catalog = @() }
+          }
+        }
+        elseif ($path -eq '/api/live-sync' -and $method -eq 'POST') {
+          # Toggle live telemetry stream to cloud on/off.
+          $body = Read-Body $ctx | ConvertFrom-Json
+          $script:LIVE_SYNC = [bool]$body.enabled
+          Send-Json $ctx @{ ok = $true; enabled = $script:LIVE_SYNC }
         }
         elseif ($path -eq '/api/restore' -and $method -eq 'POST') {
           WebLog 'Ripristino dal backup...'; $msg = Invoke-Restore; WebLog ('  ' + $msg)
