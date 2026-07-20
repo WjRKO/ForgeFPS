@@ -1,5 +1,21 @@
 # FrameForge — Changelog
 
+## v0.6.13 — 2026-07-20 · Fix ZIP troncato al download (Cloudflare/ingress)
+### Fixed
+- **`routers/pc.py:agent_download_zip`**: `StreamingResponse(BytesIO(...))` → `Response(content=payload,
+  headers={"Content-Length": str(len(payload)), ...})`.
+- **Root cause**: `StreamingResponse` con BytesIO senza `Content-Length` header esplicito veniva
+  troncato dal reverse-proxy in mezzo (Cloudflare/ingress). L'utente riceveva ~2.8 MB dei 9.1 MB
+  attesi e 7-Zip segnalava "Fine dei dati inattesa" con corruzione di `_ssl.pyd`.
+- **Fix verificato dal testing agent** (iteration_29.json, 4/4 PASS): Content-Length header
+  9128837 bytes esatti, `zipfile.testzip()` = None (integro), 60 entries + Avvia-FrameForge.bat,
+  `_ssl.pyd` legge 179432 bytes puliti.
+
+### Files touched
+- `backend/routers/pc.py`
+
+---
+
 ## v0.6.12 — 2026-07-20 · Backlog Code Quality (auth split + component split + hook cleanup)
 ### Backend
 - **`auth.py` refactor** (474 → 363 righe, −23%). Estratti in file separati mantenendo API contract 100% identico (path, payload, cookies, status codes, rate-limits invariati):
