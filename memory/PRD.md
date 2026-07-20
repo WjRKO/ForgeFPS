@@ -732,3 +732,40 @@ User ha postato secrets pubblici (CLIENT_SECRET, BOT_TOKEN, WEBHOOK URLs). Deve 
 - CREATO: /app/memory/ROADMAP.md (P0/P1/P2/P3 prioritized)
 - MOD: /app/memory/PRD.md (sessione 23)
 
+### 2026-07-19 (24) - Code review Important actions completate
+- **Backend refactor**:
+  - `helpers.py::compute_health()`: passata da complessità 37 a ~10 usando `_HEALTH_NUMERIC_CHECKS` (registry di 7 check numerici) + `_HEALTH_TOGGLE_CHECKS` (2 boolean) + `_numeric_status()` helper + `_score_from_lost()` helper. Le closure `check`/`toggle_check` eliminate.
+  - `helpers.py::specs_to_text()`: passata da complessità 28 a ~6 estraendo `_cpu_line/_gpu_line/_ram_line/_motherboard_line/_platform_line/_monitor_line` + `_line_with_extras`.
+  - `discord_bot.py::_decide()`: passata da 18 a ~6 estraendo `_load_application/_resolve_applicant/_persist_decision/_assign_creator_role/_notify_applicant/_update_review_message`.
+  - `discord_bot.py::cmd_apply_creator()`: passata da 19 a ~10 estraendo `_check_creator_reapply_cooldown/_resolve_review_channel/_build_creator_review_embed`.
+  - `auth.py::login()`: complessità login handler ridotta estraendo `_enforce_login_lockout/_record_failed_login/_consume_mfa_recovery_code` (helper module-level testabili).
+- **Frontend refactor**:
+  - `DiagnosePanel.jsx`: 462→490 righe totali ma main component ~200 righe (era 400+). Sub-componenti estratti nello stesso file: `DiagnoseEmpty`, `DiagnoseHeader`, `DiagnoseAction`. API pubblica invariata.
+  - `useMemo` aggiunto per 3 filter/map chain: `Games.jsx::recTweakNames`, `MyPc.jsx::shownSpecKeys`, `Profiles.jsx::catalogByCat`.
+  - Sostituiti `key={index}` con `key` stabili (`key={n}`, `key={a.title || i}`) in Games/Profiles/DiagnosePanel dove il valore era già unico.
+  - `Profiles.jsx`: empty catch blocks → `console.error("... failed", e)`.
+- **Validazione**:
+  - `python3 -c "from helpers import compute_health, specs_to_text"`: SCORE 74 / GRADE Buono / 10 checks (10 attesi) → OK
+  - pytest suite: 75/75 verdi (advisor + agent_script + secure_ps + alerts_fps + booster_bench + live_profiles + account_endpoints)
+  - Discord bot supervisor: RUNNING, 11 slash commands sincronizzati, sync loop attivo
+  - curl login OK/FAIL → 200 e 401 corretti
+  - Playwright: Advisor renderizza (5 azioni diagnose, coach FPS mostra domande specifiche), MyPc renderizza (Health 38, spec cards, benchmark)
+- **Falsi positivi confermati (nessuna azione)**:
+  - `ps_agent.py:1623` "hardcoded secret" = `const TOKEN = "__TOKEN__"` placeholder sostituito runtime con session token 48-char
+  - `i18n.js:252,754` "hardcoded API keys" = stringhe UI `password: "Password"` (label form login IT/EN)
+  - `is None/True/False` in tests = idiomi Python corretti, NON `is 0`/`is "str"`
+- **Rimandato al backlog dedicato**:
+  - Split `Games.jsx` (405 righe), `Advisor.jsx` (328 righe) — richiedono task dedicato con testing per non rompere data-testid
+  - 51 posti con array-index keys residui (fatti solo quelli sui file toccati)
+  - 30+ nested ternaries e 60+ hook deps warning — sono warning ESLint non bug attivi, richiedono task per-file
+
+## FILE MODIFICATI (sessione 24)
+- MOD: /app/backend/helpers.py (compute_health + specs_to_text refactor con registry pattern)
+- MOD: /app/backend/discord_bot.py (_decide + cmd_apply_creator split in helper methods)
+- MOD: /app/backend/auth.py (login handler + 3 helper module-level)
+- MOD: /app/backend/desktop_agent.py (shell injection fix batch precedente)
+- MOD: /app/frontend/src/components/DiagnosePanel.jsx (split in 3 sub-componenti)
+- MOD: /app/frontend/src/pages/Games.jsx (useMemo recTweakNames + key stabili)
+- MOD: /app/frontend/src/pages/MyPc.jsx (useMemo shownSpecKeys)
+- MOD: /app/frontend/src/pages/Profiles.jsx (useMemo catalogByCat + console.error + key stabili)
+- MOD: /app/memory/PRD.md

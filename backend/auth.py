@@ -129,6 +129,32 @@ def _verify_mfa(user: dict, code: str) -> bool:
     return False
 
 
+async def _enforce_login_lockout(db, identifier: str):
+    """Raise 429 if this identifier is currently locked out."""
+    attempt = await db.login_attempts.find_one({"identifier": identifier})
+    if attempt and attempt.get("count", 0) >= MAX_ATTEMPTS:
+        locked_until = attempt.get("locked_until")
+        if locked_until and datetime.fromisoformat(locked_until) > datetime.now(timezone.utc):
+            raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
+    return attempt
+
+
+async def _record_failed_login(db, identifier: str, previous_attempt: dict | None):
+    """Increment failure counter for this identifier; apply lockout if threshold reached."""
+    new_count = (previous_attempt.get("count", 0) if previous_attempt else 0) + 1
+    update = {"count": new_count}
+    if new_count >= MAX_ATTEMPTS:
+        update["locked_until"] = (datetime.now(timezone.utc) + timedelta(minutes=LOCKOUT_MINUTES)).isoformat()
+    await db.login_attempts.update_one({"identifier": identifier}, {"$set": update}, upsert=True)
+
+
+async def _consume_mfa_recovery_code(db, user: dict, code: str):
+    """Remove any matching recovery code from the user's recovery list (idempotent)."""
+    matches = [rc for rc in user.get("mfa_recovery", []) if verify_password(code.strip(), rc)]
+    if matches:
+        await db.users.update_one({"_id": user["_id"]}, {"$pull": {"mfa_recovery": {"$in": matches}}})
+
+
 def build_auth_router(db):
     router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -172,27 +198,17 @@ def build_auth_router(db):
         email = data.email.lower()
         ip = request.client.host if request.client else "unknown"
         identifier = f"{ip}:{email}"
-        attempt = await db.login_attempts.find_one({"identifier": identifier})
-        if attempt and attempt.get("count", 0) >= MAX_ATTEMPTS:
-            locked_until = attempt.get("locked_until")
-            if locked_until and datetime.fromisoformat(locked_until) > datetime.now(timezone.utc):
-                raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
+        previous_attempt = await _enforce_login_lockout(db, identifier)
         user = await db.users.find_one({"email": email})
         if not user or not verify_password(data.password, user["password_hash"]):
-            new_count = (attempt.get("count", 0) if attempt else 0) + 1
-            update = {"count": new_count}
-            if new_count >= MAX_ATTEMPTS:
-                update["locked_until"] = (datetime.now(timezone.utc) + timedelta(minutes=LOCKOUT_MINUTES)).isoformat()
-            await db.login_attempts.update_one({"identifier": identifier}, {"$set": update}, upsert=True)
+            await _record_failed_login(db, identifier, previous_attempt)
             raise HTTPException(status_code=401, detail="Invalid email or password")
         await db.login_attempts.delete_one({"identifier": identifier})
         uid = str(user["_id"])
         if user.get("mfa_enabled"):
             if not _verify_mfa(user, data.code or ""):
                 return {"mfa_required": True}
-            await db.users.update_one(
-                {"_id": user["_id"]},
-                {"$pull": {"mfa_recovery": {"$in": [rc for rc in user.get("mfa_recovery", []) if verify_password((data.code or "").strip(), rc)]}}})
+            await _consume_mfa_recovery_code(db, user, data.code or "")
         if needs_rehash(user["password_hash"]):
             await db.users.update_one({"_id": user["_id"]}, {"$set": {"password_hash": hash_password(data.password)}})
         set_auth_cookies(response, create_access_token(uid, email), create_refresh_token(uid))

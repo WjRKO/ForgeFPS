@@ -161,34 +161,7 @@ export default function DiagnosePanel({ hasSpecs }) {
   };
 
   if (!hasSpecs) {
-    return (
-      <div
-        className="mb-6 border border-[#E5FF00]/30 bg-gradient-to-br from-[#E5FF00]/10 to-transparent p-5"
-        data-testid="diagnose-empty"
-      >
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 bg-[#E5FF00]/20 border border-[#E5FF00]/40 flex items-center justify-center shrink-0">
-            <Stethoscope size={24} className="text-[#E5FF00]" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-display font-black text-lg tracking-tight text-white mb-1">
-              Diagnosi PC AI
-            </h3>
-            <p className="text-zinc-400 text-sm mb-3">
-              Collega prima il tuo PC per ottenere una diagnosi personalizzata: 3-5 azioni prioritizzate
-              con impatto stimato su FPS, latenza e temperature.
-            </p>
-            <Link
-              to="/app/desktop"
-              className="inline-flex items-center gap-1.5 border border-[#E5FF00]/50 text-[#E5FF00] hover:bg-[#E5FF00]/10 px-4 py-2 text-xs font-mono uppercase tracking-widest transition-colors"
-              data-testid="diagnose-connect-cta"
-            >
-              <MonitorDown size={13} /> Connetti il PC →
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
+    return <DiagnoseEmpty />;
   }
 
   return (
@@ -257,187 +230,33 @@ export default function DiagnosePanel({ hasSpecs }) {
 
       {state === "done" && result && (
         <div className="border border-[#00E0FF]/40 bg-gradient-to-br from-[#00E0FF]/5 to-transparent" data-testid="diagnose-result">
-          {/* Header */}
-          <div className="p-5 border-b border-[#1A1A24] flex items-start gap-3">
-            <button
-              onClick={toggleCollapsed}
-              className="w-10 h-10 bg-[#00E0FF]/15 border border-[#00E0FF]/40 flex items-center justify-center shrink-0 hover:bg-[#00E0FF]/25 transition-colors group"
-              data-testid="diagnose-collapse-toggle"
-              aria-label={collapsed ? "Espandi diagnosi" : "Comprimi diagnosi"}
-              aria-expanded={!collapsed}
-              title={collapsed ? "Espandi diagnosi" : "Comprimi diagnosi"}
-            >
-              {collapsed
-                ? <ChevronRight size={18} className="text-[#00E0FF] group-hover:translate-x-0.5 transition-transform" />
-                : <ChevronDown size={18} className="text-[#00E0FF]" />}
-            </button>
-            <button
-              onClick={toggleCollapsed}
-              className="flex-1 min-w-0 text-left"
-              data-testid="diagnose-header-clickable"
-              aria-label={collapsed ? "Espandi diagnosi" : "Comprimi diagnosi"}
-            >
-              <div className="flex items-center gap-2 flex-wrap mb-1">
-                <div className="text-[10px] font-mono uppercase tracking-widest text-[#00E0FF]">
-                  // DIAGNOSI · {(result.actions || []).length} AZIONI
-                </div>
-                {createdAt && (
-                  <span
-                    className="text-[10px] font-mono text-zinc-500"
-                    data-testid="diagnose-timestamp"
-                    title={new Date(createdAt).toLocaleString()}
-                  >
-                    · generata {relTimeIt(createdAt)}
-                  </span>
-                )}
-                {collapsed && (
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 border border-[#2A2A35] px-1.5 py-0.5">
-                    Compressa
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-zinc-200 leading-relaxed">
-                {result.summary || "Ecco le azioni consigliate dall'AI per il tuo PC."}
-              </p>
-              {outcome?.available && outcome.delta !== 0 && (
-                <div
-                  className={`mt-2 inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest border px-2 py-0.5 ${
-                    outcome.delta > 0
-                      ? "border-[#00FF66]/40 bg-[#00FF66]/10 text-[#00FF66]"
-                      : "border-[#FF3B30]/40 bg-[#FF3B30]/10 text-[#FF3B30]"
-                  }`}
-                  data-testid="outcome-badge"
-                  title="Delta benchmark tra prima e dopo l'ultima diagnosi"
-                >
-                  {outcome.delta > 0 ? <ThumbsUp size={10} /> : <ThumbsDown size={10} />}
-                  Dopo l'ultima diagnosi: {outcome.delta > 0 ? "+" : ""}{outcome.delta} punti benchmark
-                </div>
-              )}
-            </button>
-            <button
-              onClick={dismiss}
-              className="text-zinc-500 hover:text-white shrink-0"
-              data-testid="diagnose-close"
-              aria-label="Chiudi"
-            >
-              <X size={16} />
-            </button>
-          </div>
+          <DiagnoseHeader
+            result={result}
+            createdAt={createdAt}
+            collapsed={collapsed}
+            outcome={outcome}
+            onToggleCollapsed={toggleCollapsed}
+            onDismiss={dismiss}
+          />
 
           {/* Actions list — hidden when collapsed */}
           {!collapsed && (
           <div className="divide-y divide-[#1A1A24]" data-testid="diagnose-actions-list">
-            {(result.actions || []).map((a, i) => {
-              const Icon = KIND_ICONS[a.kind] || Zap;
-              const diff = DIFFICULTY_STYLES[(a.difficulty || "").toLowerCase()] || DIFFICULTY_STYLES.facile;
-              const saved = savedIds.has(a.title);
-              const slug = toSlug(a.title);
-              const isActive = appliedSlugs.has(slug);
-              const fb = feedback[a.title];
-              const verifyOpen = expandedVerify[i];
-              return (
-                <div
-                  key={i}
-                  className={`p-5 transition-colors ${isActive ? "bg-[#00FF66]/5" : "hover:bg-[#0F0F12]"}`}
-                  data-testid={`diagnose-action-${i}`}
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="flex flex-col items-center shrink-0">
-                      <div className={`w-8 h-8 border font-black flex items-center justify-center ${isActive ? "border-[#00FF66]/60 bg-[#00FF66]/15 text-[#00FF66]" : "border-[#E5FF00]/50 bg-[#E5FF00]/10 text-[#E5FF00]"}`}>
-                        {isActive ? <CheckCircle2 size={14} /> : (a.priority || i + 1)}
-                      </div>
-                      <Icon size={14} className="text-zinc-500 mt-2" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <h4 className={`font-display font-black text-base tracking-tight ${isActive ? "text-zinc-400 line-through" : "text-white"}`}>{a.title}</h4>
-                        {isActive ? (
-                          <span className="text-[10px] font-mono uppercase tracking-widest text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-1.5">GIÀ ATTIVO</span>
-                        ) : (
-                          <span className={`text-[10px] font-mono uppercase tracking-widest ${diff.color}`}>{diff.label}</span>
-                        )}
-                      </div>
-                      {!isActive && a.impact && (
-                        <div className="inline-flex items-center gap-1.5 text-xs text-[#00FF66] mb-2 font-mono">
-                          <Zap size={11} /> {a.impact}
-                        </div>
-                      )}
-                      <p className={`text-sm leading-relaxed mb-3 whitespace-pre-wrap ${isActive ? "text-zinc-500" : "text-zinc-400"}`}>{a.description}</p>
-
-                      {a.verify && (
-                        <div className="mb-3">
-                          <button
-                            onClick={() => setExpandedVerify((p) => ({ ...p, [i]: !p[i] }))}
-                            className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-[#00E0FF] transition-colors"
-                            data-testid={`diagnose-action-${i}-verify-toggle`}
-                          >
-                            <Eye size={11} /> Come verificare se è già attivo
-                            <ChevronRight size={11} className={`transition-transform ${verifyOpen ? "rotate-90" : ""}`} />
-                          </button>
-                          {verifyOpen && (
-                            <div className="mt-2 p-3 border border-[#00E0FF]/30 bg-[#00E0FF]/5 text-xs text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap" data-testid={`diagnose-action-${i}-verify`}>
-                              {a.verify}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="flex flex-wrap gap-2 items-center">
-                        {!isActive && (
-                          <>
-                            <Link
-                              to={a.kind === "driver" ? "/app/pc" : "/app/desktop"}
-                              data-testid={`diagnose-action-${i}-apply`}
-                              className="inline-flex items-center gap-1.5 bg-[#E5FF00] text-black font-bold px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest hover:bg-white transition-colors"
-                            >
-                              <MonitorDown size={12} /> {a.cta || "Apri agent"}
-                            </Link>
-                            <button
-                              onClick={() => savePlanned(a)}
-                              disabled={saved}
-                              data-testid={`diagnose-action-${i}-save`}
-                              className="inline-flex items-center gap-1.5 border border-[#2A2A35] hover:border-[#00E0FF] text-zinc-300 hover:text-[#00E0FF] px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                            >
-                              {saved ? <><Check size={12} /> Salvata</> : <><Bookmark size={12} /> Salva</>}
-                            </button>
-                          </>
-                        )}
-                        <button
-                          onClick={() => toggleApplied(a)}
-                          data-testid={`diagnose-action-${i}-mark-active`}
-                          className={`inline-flex items-center gap-1.5 border px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest transition-colors ${
-                            isActive
-                              ? "border-[#00FF66]/50 bg-[#00FF66]/10 text-[#00FF66] hover:bg-[#00FF66]/20"
-                              : "border-[#2A2A35] hover:border-[#00FF66] text-zinc-400 hover:text-[#00FF66]"
-                          }`}
-                        >
-                          <CheckCircle2 size={12} /> {isActive ? "Attivo" : "Segna già attivo"}
-                        </button>
-
-                        <div className="flex items-center gap-0.5 ml-auto">
-                          <button
-                            onClick={() => submitFeedback(a, "up")}
-                            data-testid={`diagnose-action-${i}-thumb-up`}
-                            aria-label="Utile"
-                            className={`p-1.5 border transition-colors ${fb === "up" ? "border-[#00FF66] bg-[#00FF66]/10 text-[#00FF66]" : "border-transparent text-zinc-600 hover:text-[#00FF66] hover:border-[#2A2A35]"}`}
-                          >
-                            <ThumbsUp size={12} />
-                          </button>
-                          <button
-                            onClick={() => submitFeedback(a, "down")}
-                            data-testid={`diagnose-action-${i}-thumb-down`}
-                            aria-label="Non utile"
-                            className={`p-1.5 border transition-colors ${fb === "down" ? "border-[#FF3B30] bg-[#FF3B30]/10 text-[#FF3B30]" : "border-transparent text-zinc-600 hover:text-[#FF3B30] hover:border-[#2A2A35]"}`}
-                          >
-                            <ThumbsDown size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {(result.actions || []).map((a, i) => (
+              <DiagnoseAction
+                key={a.title || i}
+                index={i}
+                action={a}
+                isActive={appliedSlugs.has(toSlug(a.title))}
+                isSaved={savedIds.has(a.title)}
+                feedback={feedback[a.title]}
+                verifyOpen={!!expandedVerify[i]}
+                onToggleVerify={() => setExpandedVerify((p) => ({ ...p, [i]: !p[i] }))}
+                onApply={savePlanned}
+                onToggleApplied={toggleApplied}
+                onSubmitFeedback={submitFeedback}
+              />
+            ))}
           </div>
           )}
 
@@ -456,6 +275,216 @@ export default function DiagnosePanel({ hasSpecs }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+
+// -------------------- Sub-components (kept in-file to preserve one-import contract) --------------------
+
+function DiagnoseEmpty() {
+  return (
+    <div
+      className="mb-6 border border-[#E5FF00]/30 bg-gradient-to-br from-[#E5FF00]/10 to-transparent p-5"
+      data-testid="diagnose-empty"
+    >
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 bg-[#E5FF00]/20 border border-[#E5FF00]/40 flex items-center justify-center shrink-0">
+          <Stethoscope size={24} className="text-[#E5FF00]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-display font-black text-lg tracking-tight text-white mb-1">
+            Diagnosi PC AI
+          </h3>
+          <p className="text-zinc-400 text-sm mb-3">
+            Collega prima il tuo PC per ottenere una diagnosi personalizzata: 3-5 azioni prioritizzate
+            con impatto stimato su FPS, latenza e temperature.
+          </p>
+          <Link
+            to="/app/desktop"
+            className="inline-flex items-center gap-1.5 border border-[#E5FF00]/50 text-[#E5FF00] hover:bg-[#E5FF00]/10 px-4 py-2 text-xs font-mono uppercase tracking-widest transition-colors"
+            data-testid="diagnose-connect-cta"
+          >
+            <MonitorDown size={13} /> Connetti il PC →
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DiagnoseHeader({ result, createdAt, collapsed, outcome, onToggleCollapsed, onDismiss }) {
+  return (
+    <div className="p-5 border-b border-[#1A1A24] flex items-start gap-3">
+      <button
+        onClick={onToggleCollapsed}
+        className="w-10 h-10 bg-[#00E0FF]/15 border border-[#00E0FF]/40 flex items-center justify-center shrink-0 hover:bg-[#00E0FF]/25 transition-colors group"
+        data-testid="diagnose-collapse-toggle"
+        aria-label={collapsed ? "Espandi diagnosi" : "Comprimi diagnosi"}
+        aria-expanded={!collapsed}
+        title={collapsed ? "Espandi diagnosi" : "Comprimi diagnosi"}
+      >
+        {collapsed
+          ? <ChevronRight size={18} className="text-[#00E0FF] group-hover:translate-x-0.5 transition-transform" />
+          : <ChevronDown size={18} className="text-[#00E0FF]" />}
+      </button>
+      <button
+        onClick={onToggleCollapsed}
+        className="flex-1 min-w-0 text-left"
+        data-testid="diagnose-header-clickable"
+        aria-label={collapsed ? "Espandi diagnosi" : "Comprimi diagnosi"}
+      >
+        <div className="flex items-center gap-2 flex-wrap mb-1">
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[#00E0FF]">
+            // DIAGNOSI · {(result.actions || []).length} AZIONI
+          </div>
+          {createdAt && (
+            <span
+              className="text-[10px] font-mono text-zinc-500"
+              data-testid="diagnose-timestamp"
+              title={new Date(createdAt).toLocaleString()}
+            >
+              · generata {relTimeIt(createdAt)}
+            </span>
+          )}
+          {collapsed && (
+            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 border border-[#2A2A35] px-1.5 py-0.5">
+              Compressa
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-zinc-200 leading-relaxed">
+          {result.summary || "Ecco le azioni consigliate dall'AI per il tuo PC."}
+        </p>
+        {outcome?.available && outcome.delta !== 0 && (
+          <div
+            className={`mt-2 inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest border px-2 py-0.5 ${
+              outcome.delta > 0
+                ? "border-[#00FF66]/40 bg-[#00FF66]/10 text-[#00FF66]"
+                : "border-[#FF3B30]/40 bg-[#FF3B30]/10 text-[#FF3B30]"
+            }`}
+            data-testid="outcome-badge"
+            title="Delta benchmark tra prima e dopo l'ultima diagnosi"
+          >
+            {outcome.delta > 0 ? <ThumbsUp size={10} /> : <ThumbsDown size={10} />}
+            Dopo l'ultima diagnosi: {outcome.delta > 0 ? "+" : ""}{outcome.delta} punti benchmark
+          </div>
+        )}
+      </button>
+      <button
+        onClick={onDismiss}
+        className="text-zinc-500 hover:text-white shrink-0"
+        data-testid="diagnose-close"
+        aria-label="Chiudi"
+      >
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
+
+function DiagnoseAction({ index, action, isActive, isSaved, feedback, verifyOpen, onToggleVerify, onApply, onToggleApplied, onSubmitFeedback }) {
+  const Icon = KIND_ICONS[action.kind] || Zap;
+  const diff = DIFFICULTY_STYLES[(action.difficulty || "").toLowerCase()] || DIFFICULTY_STYLES.facile;
+  return (
+    <div
+      className={`p-5 transition-colors ${isActive ? "bg-[#00FF66]/5" : "hover:bg-[#0F0F12]"}`}
+      data-testid={`diagnose-action-${index}`}
+    >
+      <div className="flex items-start gap-4">
+        <div className="flex flex-col items-center shrink-0">
+          <div className={`w-8 h-8 border font-black flex items-center justify-center ${isActive ? "border-[#00FF66]/60 bg-[#00FF66]/15 text-[#00FF66]" : "border-[#E5FF00]/50 bg-[#E5FF00]/10 text-[#E5FF00]"}`}>
+            {isActive ? <CheckCircle2 size={14} /> : (action.priority || index + 1)}
+          </div>
+          <Icon size={14} className="text-zinc-500 mt-2" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <h4 className={`font-display font-black text-base tracking-tight ${isActive ? "text-zinc-400 line-through" : "text-white"}`}>{action.title}</h4>
+            {isActive ? (
+              <span className="text-[10px] font-mono uppercase tracking-widest text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-1.5">GIÀ ATTIVO</span>
+            ) : (
+              <span className={`text-[10px] font-mono uppercase tracking-widest ${diff.color}`}>{diff.label}</span>
+            )}
+          </div>
+          {!isActive && action.impact && (
+            <div className="inline-flex items-center gap-1.5 text-xs text-[#00FF66] mb-2 font-mono">
+              <Zap size={11} /> {action.impact}
+            </div>
+          )}
+          <p className={`text-sm leading-relaxed mb-3 whitespace-pre-wrap ${isActive ? "text-zinc-500" : "text-zinc-400"}`}>{action.description}</p>
+
+          {action.verify && (
+            <div className="mb-3">
+              <button
+                onClick={onToggleVerify}
+                className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-[#00E0FF] transition-colors"
+                data-testid={`diagnose-action-${index}-verify-toggle`}
+              >
+                <Eye size={11} /> Come verificare se è già attivo
+                <ChevronRight size={11} className={`transition-transform ${verifyOpen ? "rotate-90" : ""}`} />
+              </button>
+              {verifyOpen && (
+                <div className="mt-2 p-3 border border-[#00E0FF]/30 bg-[#00E0FF]/5 text-xs text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap" data-testid={`diagnose-action-${index}-verify`}>
+                  {action.verify}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2 items-center">
+            {!isActive && (
+              <>
+                <Link
+                  to={action.kind === "driver" ? "/app/pc" : "/app/desktop"}
+                  data-testid={`diagnose-action-${index}-apply`}
+                  className="inline-flex items-center gap-1.5 bg-[#E5FF00] text-black font-bold px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest hover:bg-white transition-colors"
+                >
+                  <MonitorDown size={12} /> {action.cta || "Apri agent"}
+                </Link>
+                <button
+                  onClick={() => onApply(action)}
+                  disabled={isSaved}
+                  data-testid={`diagnose-action-${index}-save`}
+                  className="inline-flex items-center gap-1.5 border border-[#2A2A35] hover:border-[#00E0FF] text-zinc-300 hover:text-[#00E0FF] px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isSaved ? <><Check size={12} /> Salvata</> : <><Bookmark size={12} /> Salva</>}
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => onToggleApplied(action)}
+              data-testid={`diagnose-action-${index}-mark-active`}
+              className={`inline-flex items-center gap-1.5 border px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest transition-colors ${
+                isActive
+                  ? "border-[#00FF66]/50 bg-[#00FF66]/10 text-[#00FF66] hover:bg-[#00FF66]/20"
+                  : "border-[#2A2A35] hover:border-[#00FF66] text-zinc-400 hover:text-[#00FF66]"
+              }`}
+            >
+              <CheckCircle2 size={12} /> {isActive ? "Attivo" : "Segna già attivo"}
+            </button>
+
+            <div className="flex items-center gap-0.5 ml-auto">
+              <button
+                onClick={() => onSubmitFeedback(action, "up")}
+                data-testid={`diagnose-action-${index}-thumb-up`}
+                aria-label="Utile"
+                className={`p-1.5 border transition-colors ${feedback === "up" ? "border-[#00FF66] bg-[#00FF66]/10 text-[#00FF66]" : "border-transparent text-zinc-600 hover:text-[#00FF66] hover:border-[#2A2A35]"}`}
+              >
+                <ThumbsUp size={12} />
+              </button>
+              <button
+                onClick={() => onSubmitFeedback(action, "down")}
+                data-testid={`diagnose-action-${index}-thumb-down`}
+                aria-label="Non utile"
+                className={`p-1.5 border transition-colors ${feedback === "down" ? "border-[#FF3B30] bg-[#FF3B30]/10 text-[#FF3B30]" : "border-transparent text-zinc-600 hover:text-[#FF3B30] hover:border-[#2A2A35]"}`}
+              >
+                <ThumbsDown size={12} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

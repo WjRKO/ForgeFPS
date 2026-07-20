@@ -103,6 +103,15 @@ export default function Games() {
       || templates.find((t) => t.id === "tpl_balanced") || null;
   }, [game, templates]);
 
+  // Precompute the tweak-name chips shown for the recommended preset (was inline filter/map/slice in JSX)
+  const recTweakNames = useMemo(() => {
+    if (!recTpl || !catalog.length) return [];
+    return recTpl.tweak_ids
+      .map((id) => catalog.find((c) => c.id === id)?.name)
+      .filter(Boolean)
+      .slice(0, 8);
+  }, [recTpl, catalog]);
+
   const saveConfig = async () => {
     setSavingCfg(true);
     const close_apps = APP_GROUPS.filter((g) => groups[g.id]).flatMap((g) => g.procs);
@@ -411,8 +420,8 @@ export default function Games() {
             <span className="text-zinc-500"> · {recTpl.preset_label}</span>
           </p>
           <div className="flex flex-wrap gap-1.5 mb-3">
-            {recTpl.tweak_ids.map((id) => catalog.find((c) => c.id === id)?.name).filter(Boolean).slice(0, 8).map((n, i) => (
-              <span key={i} className="text-[11px] bg-black border border-[#1A1A24] px-2 py-0.5 text-zinc-400">{n}</span>
+            {recTweakNames.map((n) => (
+              <span key={n} className="text-[11px] bg-black border border-[#1A1A24] px-2 py-0.5 text-zinc-400">{n}</span>
             ))}
             {recTpl.tweak_ids.length > 8 && <span className="text-[11px] text-zinc-600 px-1">+{recTpl.tweak_ids.length - 8}</span>}
           </div>

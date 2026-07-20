@@ -8,6 +8,64 @@ from scraper import scrape_product
 
 
 # ---------- Hardware specs formatting ----------
+def _line_with_extras(name: str, main: str, extras: list) -> str:
+    return f"{name}: {main}" + (f" ({', '.join(extras)})" if extras else "")
+
+
+def _cpu_line(d: dict) -> str:
+    extras = []
+    if d.get("cpu_cores"):
+        extras.append(f"{d['cpu_cores']} core")
+    if d.get("cpu_threads"):
+        extras.append(f"{d['cpu_threads']} thread")
+    if d.get("cpu_clock_ghz"):
+        extras.append(f"{d['cpu_clock_ghz']} GHz")
+    return _line_with_extras("CPU", d["cpu"], extras)
+
+
+def _gpu_line(d: dict) -> str:
+    extras = []
+    if d.get("gpu_vram_gb"):
+        extras.append(f"{d['gpu_vram_gb']} GB VRAM")
+    if d.get("gpu_driver_version"):
+        extras.append(f"driver {d['gpu_driver_version']}")
+    return _line_with_extras("GPU", d["gpu"], extras)
+
+
+def _ram_line(d: dict) -> str:
+    extras = []
+    if d.get("ram_type"):
+        extras.append(d["ram_type"])
+    if d.get("ram_speed_mhz"):
+        extras.append(f"{d['ram_speed_mhz']} MHz")
+    if d.get("ram_modules"):
+        extras.append(f"{d['ram_modules']} moduli")
+    return _line_with_extras("RAM", d["ram"], extras)
+
+
+def _motherboard_line(d: dict) -> str:
+    mb = d["motherboard"]
+    if d.get("bios"):
+        mb += f" [BIOS: {d['bios']}]"
+    return f"Scheda madre (da WMI, può essere un codice OEM es. MS-7C56=MSI B550): {mb}"
+
+
+def _platform_line(d: dict) -> str | None:
+    parts = []
+    if d.get("cpu_socket"):
+        parts.append(f"socket {d['cpu_socket']}")
+    if d.get("chipset"):
+        parts.append(f"chipset {d['chipset']}")
+    return "Piattaforma: " + ", ".join(parts) if parts else None
+
+
+def _monitor_line(d: dict) -> str:
+    res = d["resolution"]
+    if d.get("refresh_hz"):
+        res += f" @ {d['refresh_hz']}Hz"
+    return f"Monitor: {res}"
+
+
 def specs_to_text(specs: dict) -> str:
     if not specs:
         return ""
@@ -16,51 +74,22 @@ def specs_to_text(specs: dict) -> str:
     if d.get("os"):
         lines.append(f"OS: {d['os']}")
     if d.get("cpu"):
-        extra = []
-        if d.get("cpu_cores"):
-            extra.append(f"{d['cpu_cores']} core")
-        if d.get("cpu_threads"):
-            extra.append(f"{d['cpu_threads']} thread")
-        if d.get("cpu_clock_ghz"):
-            extra.append(f"{d['cpu_clock_ghz']} GHz")
-        lines.append(f"CPU: {d['cpu']}" + (f" ({', '.join(extra)})" if extra else ""))
+        lines.append(_cpu_line(d))
     if d.get("gpu"):
-        g_extra = []
-        if d.get("gpu_vram_gb"):
-            g_extra.append(f"{d['gpu_vram_gb']} GB VRAM")
-        if d.get("gpu_driver_version"):
-            g_extra.append(f"driver {d['gpu_driver_version']}")
-        lines.append(f"GPU: {d['gpu']}" + (f" ({', '.join(g_extra)})" if g_extra else ""))
+        lines.append(_gpu_line(d))
     if d.get("ram"):
-        r_extra = []
-        if d.get("ram_type"):
-            r_extra.append(d["ram_type"])
-        if d.get("ram_speed_mhz"):
-            r_extra.append(f"{d['ram_speed_mhz']} MHz")
-        if d.get("ram_modules"):
-            r_extra.append(f"{d['ram_modules']} moduli")
-        lines.append(f"RAM: {d['ram']}" + (f" ({', '.join(r_extra)})" if r_extra else ""))
+        lines.append(_ram_line(d))
     if d.get("disk"):
         lines.append(f"Storage: {d['disk']}")
     if d.get("motherboard"):
-        mb = d["motherboard"]
-        if d.get("bios"):
-            mb += f" [BIOS: {d['bios']}]"
-        lines.append(f"Scheda madre (da WMI, può essere un codice OEM es. MS-7C56=MSI B550): {mb}")
-    if d.get("chipset") or d.get("cpu_socket"):
-        sc = []
-        if d.get("cpu_socket"):
-            sc.append(f"socket {d['cpu_socket']}")
-        if d.get("chipset"):
-            sc.append(f"chipset {d['chipset']}")
-        lines.append("Piattaforma: " + ", ".join(sc))
+        lines.append(_motherboard_line(d))
+    platform = _platform_line(d)
+    if platform:
+        lines.append(platform)
     if d.get("system_model") and d["system_model"].lower() not in (d.get("motherboard", "").lower(), "system product name"):
         lines.append(f"Modello sistema: {d['system_model']}")
     if d.get("resolution"):
-        res = d["resolution"]
-        if d.get("refresh_hz"):
-            res += f" @ {d['refresh_hz']}Hz"
-        lines.append(f"Monitor: {res}")
+        lines.append(_monitor_line(d))
     return "\n".join(lines)
 
 
@@ -73,34 +102,98 @@ def days_since(date_str: str):
         return None
 
 
+# Numeric checks: (id, label, weight, key, thresholds, fmt, fix, mkey, higher_bad)
+# `key` is either the raw health field or a callable(health) returning the value.
+_HEALTH_NUMERIC_CHECKS = [
+    ("temp", "File temporanei", 8, "temp_mb", (1500, 5000),
+     lambda v: f"{int(v)} MB",
+     "Esegui la pulizia file temporanei (Desktop Agent opz. 1)", "mb", True),
+    ("startup", "Programmi all'avvio", 10, "startup_count", (8, 15),
+     lambda v: f"{int(v)} programmi",
+     "Disabilita gli avvii non essenziali (pagina 'Il mio PC')", "programs", True),
+    ("ram", "Uso RAM", 10, "ram_used_pct", (80, 90),
+     lambda v: f"{int(v)}% in uso",
+     "Chiudi app in background o aggiungi RAM", "ram_pct", True),
+    ("disk", "Spazio disco (C:)", 12, "disk_free_pct", (12, 6),
+     lambda v: f"{int(v)}% libero",
+     "Libera spazio: pulizia disco (Desktop Agent opz. 6)", "disk_pct", False),
+    ("driver", "Driver GPU", 12,
+     lambda h: days_since(h["gpu_driver_date"]) if h.get("gpu_driver_date") else None,
+     (180, 365),
+     lambda v: f"aggiornato {int(v)} giorni fa",
+     "Aggiorna i driver della GPU", "driver_days", True),
+    ("gpu_temp", "Temperatura GPU", 12,
+     lambda h: h["gpu_temp"] if (h.get("gpu_temp") is not None and h["gpu_temp"] > 0) else None,
+     (75, 84), lambda v: f"{int(v)}°C",
+     "Migliora airflow/curva ventole: rischio throttling", "temp_c", True),
+    ("cpu_temp", "Temperatura CPU", 10,
+     lambda h: h["cpu_temp"] if (h.get("cpu_temp") is not None and h["cpu_temp"] > 0) else None,
+     (80, 89), lambda v: f"{int(v)}°C",
+     "Verifica dissipatore/pasta termica: rischio throttling", "temp_c", True),
+]
+
+# Boolean toggle checks: (id, label, health_key, weight, fix)
+_HEALTH_TOGGLE_CHECKS = [
+    ("game_mode", "Game Mode", "game_mode", 8, "Attiva Game Mode (Desktop Agent opz. 5)"),
+    ("hags", "GPU Scheduling (HAGS)", "gpu_scheduling", 6, "Abilita HAGS (Desktop Agent opz. 5)"),
+]
+
+
+def _numeric_status(value, thresholds, higher_bad):
+    ok_t, warn_t = thresholds
+    if higher_bad:
+        return "ok" if value <= ok_t else ("warn" if value <= warn_t else "bad")
+    return "ok" if value >= ok_t else ("warn" if value >= warn_t else "bad")
+
+
+def _score_from_lost(lost: float, total_weight: float) -> tuple[int, str, str]:
+    score = round(100 * (1 - (lost / total_weight))) if total_weight else 100
+    score = max(0, min(100, score))
+    grade_key = ("ottimo" if score >= 85 else "buono" if score >= 70
+                 else "migliorare" if score >= 50 else "critico")
+    grade = {"ottimo": "Ottimo", "buono": "Buono",
+             "migliorare": "Da migliorare", "critico": "Critico"}[grade_key]
+    return score, grade, grade_key
+
+
 def compute_health(health: dict) -> dict:
     checks = []
-    total_weight = 0
+    total_weight = 0.0
     lost = 0.0
 
-    def check(cid, label, weight, value, thresholds, fmt, fix, mkey, higher_bad=True, present=True):
-        nonlocal total_weight, lost
-        if not present or value is None:
+    # Numeric checks via registry
+    for cid, label, weight, key, thresholds, fmt, fix, mkey, higher_bad in _HEALTH_NUMERIC_CHECKS:
+        value = key(health) if callable(key) else health.get(key)
+        if value is None:
             checks.append({"id": cid, "label": label, "status": "unknown",
                            "message": "Dato non disponibile", "fix": None,
                            "mkey": "na", "mval": None})
-            return
-        ok_t, warn_t = thresholds
-        if higher_bad:
-            status = "ok" if value <= ok_t else ("warn" if value <= warn_t else "bad")
-        else:
-            status = "ok" if value >= ok_t else ("warn" if value >= warn_t else "bad")
+            continue
+        status = _numeric_status(value, thresholds, higher_bad)
         total_weight += weight
         if status == "bad":
             lost += weight
         elif status == "warn":
             lost += weight * 0.5
         checks.append({"id": cid, "label": label, "status": status,
-                       "message": fmt(value), "fix": None if status == "ok" else fix,
+                       "message": fmt(value),
+                       "fix": None if status == "ok" else fix,
                        "mkey": mkey, "mval": int(value)})
 
-    def toggle_check(cid, label, key, weight, fix):
-        nonlocal total_weight, lost
+    # Power plan (has custom string logic, kept inline)
+    power = (health.get("power_plan") or "").lower()
+    hp = any(x in power for x in ("high", "prestazioni elevate", "ultimate"))
+    total_weight += 15
+    if not hp:
+        lost += 15
+    checks.append({"id": "power", "label": "Piano energetico",
+                   "status": "ok" if hp else "bad",
+                   "message": "Alte prestazioni" if hp else "Non ottimale",
+                   "fix": None if hp else "Attiva 'Alte prestazioni' (Desktop Agent opz. 3)",
+                   "mkey": "power_hp" if hp else "power_bad", "mval": None})
+
+    # Boolean toggle checks via registry
+    for cid, label, key, weight, fix in _HEALTH_TOGGLE_CHECKS:
         present = key in health
         val = bool(health.get(key))
         if present:
@@ -113,53 +206,9 @@ def compute_health(health: dict) -> dict:
                        "fix": None if (val or not present) else fix,
                        "mkey": ("on" if val else "off") if present else "na", "mval": None})
 
-    check("temp", "File temporanei", 8, health.get("temp_mb"), (1500, 5000),
-          lambda v: f"{int(v)} MB", "Esegui la pulizia file temporanei (Desktop Agent opz. 1)",
-          "mb", present="temp_mb" in health)
-    check("startup", "Programmi all'avvio", 10, health.get("startup_count"), (8, 15),
-          lambda v: f"{int(v)} programmi", "Disabilita gli avvii non essenziali (pagina 'Il mio PC')",
-          "programs", present="startup_count" in health)
-
-    power = (health.get("power_plan") or "").lower()
-    hp = any(x in power for x in ("high", "prestazioni elevate", "ultimate"))
-    total_weight += 15
-    if not hp:
-        lost += 15
-    checks.append({"id": "power", "label": "Piano energetico",
-                   "status": "ok" if hp else "bad",
-                   "message": "Alte prestazioni" if hp else "Non ottimale",
-                   "fix": None if hp else "Attiva 'Alte prestazioni' (Desktop Agent opz. 3)",
-                   "mkey": "power_hp" if hp else "power_bad", "mval": None})
-
-    toggle_check("game_mode", "Game Mode", "game_mode", 8, "Attiva Game Mode (Desktop Agent opz. 5)")
-    toggle_check("hags", "GPU Scheduling (HAGS)", "gpu_scheduling", 6, "Abilita HAGS (Desktop Agent opz. 5)")
-
-    check("ram", "Uso RAM", 10, health.get("ram_used_pct"), (80, 90),
-          lambda v: f"{int(v)}% in uso", "Chiudi app in background o aggiungi RAM",
-          "ram_pct", present="ram_used_pct" in health)
-    check("disk", "Spazio disco (C:)", 12, health.get("disk_free_pct"), (12, 6),
-          lambda v: f"{int(v)}% libero", "Libera spazio: pulizia disco (Desktop Agent opz. 6)",
-          "disk_pct", higher_bad=False, present="disk_free_pct" in health)
-
-    days = days_since(health["gpu_driver_date"]) if health.get("gpu_driver_date") else None
-    check("driver", "Driver GPU", 12, days, (180, 365),
-          lambda v: f"aggiornato {int(v)} giorni fa", "Aggiorna i driver della GPU",
-          "driver_days", present=days is not None)
-    _gpu_t = health.get("gpu_temp")
-    _gpu_t = _gpu_t if (_gpu_t is not None and _gpu_t > 0) else None
-    _cpu_t = health.get("cpu_temp")
-    _cpu_t = _cpu_t if (_cpu_t is not None and _cpu_t > 0) else None
-    check("gpu_temp", "Temperatura GPU", 12, _gpu_t, (75, 84),
-          lambda v: f"{int(v)}°C", "Migliora airflow/curva ventole: rischio throttling",
-          "temp_c", present=_gpu_t is not None)
-    check("cpu_temp", "Temperatura CPU", 10, _cpu_t, (80, 89),
-          lambda v: f"{int(v)}°C", "Verifica dissipatore/pasta termica: rischio throttling",
-          "temp_c", present=_cpu_t is not None)
-
-    score = round(100 * (1 - (lost / total_weight))) if total_weight else 100
-    score = max(0, min(100, score))
-    grade_key = "ottimo" if score >= 85 else "buono" if score >= 70 else "migliorare" if score >= 50 else "critico"
-    grade = {"ottimo": "Ottimo", "buono": "Buono", "migliorare": "Da migliorare", "critico": "Critico"}[grade_key]
+    _gpu_t = next((c["mval"] for c in checks if c["id"] == "gpu_temp"), None)
+    _cpu_t = next((c["mval"] for c in checks if c["id"] == "cpu_temp"), None)
+    score, grade, grade_key = _score_from_lost(lost, total_weight)
     return {"score": score, "grade": grade, "grade_key": grade_key, "checks": checks,
             "driver_version": health.get("gpu_driver_version"),
             "gpu_temp": _gpu_t, "cpu_temp": _cpu_t,

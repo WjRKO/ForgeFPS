@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Gamepad2, Plus, Trash2, Save, X, Zap } from "lucide-react";
 import { toast } from "sonner";
@@ -20,7 +20,7 @@ function ProfileCard({ p, catalog, token, onDelete }) {
         )}
       </div>
       <div className="flex flex-wrap gap-1.5 mb-4">
-        {names.slice(0, 8).map((n, i) => <span key={i} className="text-[11px] bg-black border border-[#1A1A24] px-2 py-0.5 text-zinc-400">{n}</span>)}
+        {names.slice(0, 8).map((n) => <span key={n} className="text-[11px] bg-black border border-[#1A1A24] px-2 py-0.5 text-zinc-400">{n}</span>)}
         {names.length > 8 && <span className="text-[11px] text-zinc-600 px-1 py-0.5">+{names.length - 8}</span>}
       </div>
       <SecureRunBlock token={token} mode="optimize" profile={p.id} testid={`profile-run-${p.id}`} />
@@ -38,10 +38,10 @@ export default function Profiles() {
   const [name, setName] = useState("");
   const [selected, setSelected] = useState([]);
 
-  const load = async () => { try { const { data } = await api.get("/profiles"); setProfiles(data); } catch {} };
+  const load = async () => { try { const { data } = await api.get("/profiles"); setProfiles(data); } catch (e) { console.error("load profiles failed", e); } };
   useEffect(() => {
-    api.get("/profiles/templates").then(({ data }) => { setTemplates(data.templates); setCatalog(data.catalog); }).catch(() => {});
-    api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
+    api.get("/profiles/templates").then(({ data }) => { setTemplates(data.templates); setCatalog(data.catalog); }).catch((e) => console.error("load templates failed", e));
+    api.get("/agent/token").then(({ data }) => setToken(data.token)).catch((e) => console.error("load agent token failed", e));
     load();
   }, []);
 
@@ -59,6 +59,12 @@ export default function Profiles() {
 
   const cats = ["gaming", "input", "network", "system"];
   const CAT_LABELS = { gaming: t("profiles.cat_gaming"), input: t("profiles.cat_input"), network: t("profiles.cat_network"), system: t("profiles.cat_system") };
+  // Group catalog once per catalog change so the create-profile form doesn't re-filter on every render.
+  const catalogByCat = useMemo(() => {
+    const map = { gaming: [], input: [], network: [], system: [] };
+    for (const c of catalog) if (map[c.cat]) map[c.cat].push(c);
+    return map;
+  }, [catalog]);
 
   return (
     <div className="max-w-5xl mx-auto fade-up" data-testid="profiles-page">
@@ -83,7 +89,7 @@ export default function Profiles() {
             <div key={cat} className="mb-4">
               <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{CAT_LABELS[cat]}</div>
               <div className="grid sm:grid-cols-2 gap-1.5">
-                {catalog.filter((c) => c.cat === cat).map((c) => (
+                {(catalogByCat[cat] || []).map((c) => (
                   <label key={c.id} data-testid={`tweak-opt-${c.id}`} className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer border border-[#1A1A24] px-2 py-1.5 hover:border-[#2A2A35]">
                     <input type="checkbox" checked={selected.includes(c.id)} onChange={() => toggle(c.id)} className="accent-[#E5FF00]" />
                     {c.name}

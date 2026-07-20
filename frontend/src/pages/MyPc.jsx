@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket, Pencil, Gauge, TrendingUp, TrendingDown, Minus, Share2 } from "lucide-react";
 import { toast } from "sonner";
@@ -254,6 +254,10 @@ export default function MyPc() {
   };
 
   const hasSpecs = specs?.data?.cpu || specs?.data?.gpu;
+  const shownSpecKeys = useMemo(
+    () => SPEC_KEYS.filter((k) => specs?.data?.[k]),
+    [specs]
+  );
 
   if (!hasSpecs || editing) {
     return (
@@ -335,7 +339,7 @@ export default function MyPc() {
       <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick mb-4">
         <div className="p-5 border-b border-[#2A2A35] text-xs uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2"><Cpu size={14} className="text-[#E5FF00]" /> {t("mypcpage.hardware")}</div>
         <div className="grid sm:grid-cols-2 gap-px bg-[#1A1A24]">
-          {SPEC_KEYS.filter((k) => specs.data[k]).map((k) => (
+          {shownSpecKeys.map((k) => (
             <div key={k} className="bg-[#0F0F12] p-4" data-testid={`spec-${k}`}>
               <div className="text-xs uppercase tracking-widest text-zinc-500">{specLabel(t, k)}</div>
               <div className="text-sm text-zinc-100 mt-1">{composeSpec(k, specs.data)}</div>
