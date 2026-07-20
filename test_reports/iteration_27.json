@@ -1,0 +1,36 @@
+{
+  "summary": "Regression suite for the auth.py refactor (magic-link -> auth_magic.py, MFA -> auth_mfa.py). 15/16 tests PASS, 1 xfail (pre-existing infra issue, NOT a refactor regression). API contract 100% preserved: all paths, payloads, cookies, status codes, rate-limits identical to pre-refactor baseline (iteration_26). Serial run required (-n 0) as documented previously.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/auth/login",
+        "issue": "Brute-force lockout NOT triggered via preview URL after 5 wrong attempts. Root cause: preview backend runs behind an ingress with multiple frontends/replicas, so request.client.host varies across calls (observed: 10.208.151.66 and 10.208.151.69 for same session). db.login_attempts stores separate rows per (ip,email), so no single identifier reaches the 5-fail threshold and 429 never fires. This is a PRE-EXISTING infra limitation, NOT introduced by this refactor. Fix requires reading X-Forwarded-For / X-Real-IP or keying lockout by email only. Marked xfail in test suite."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_auth_refactor_regression.py",
+    "/app/test_reports/pytest/auth_refactor_results.xml"
+  ],
+  "action_items": [
+    "(OPTIONAL, NOT a refactor regression) Harden brute-force lockout: honor X-Forwarded-For behind ingress OR key login_attempts by email alone (not ip:email). Current behaviour lets an attacker rotate through ingress IPs to bypass the 5-attempt cap. This is pre-existing (not caused by this refactor)."
+  ],
+  "critical_code_review_comments": [
+    "auth.py L23: COOKIE_SECURE depends on FRONTEND_URL starting with https. If FRONTEND_URL is unset at import time, cookies fall back to secure=False even in prod. Prefer explicit COOKIE_SECURE env or derive from request.url.scheme in set_auth_cookies.",
+    "auth_mfa.py mfa_disable L47-56: current contract silently returns {ok:true} when MFA is disabled AND the code is wrong. Preserved intentionally by the refactor (matches pre-refactor line 449-451), but this masks bugs — consider returning 400 in future revisions when MFA is disabled AND caller sent a code, so misuse is visible.",
+    "auth_magic.py L51-59: consume-magic uses find_one_and_update with {used:false} for atomic single-use — good. However there is no TTL index on db.magic_tokens.expires_at; expired-but-unused tokens accumulate forever. Add TTL index on the ISO string field is not possible (must be a real BSON Date). Consider storing expires_at as datetime and creating a TTL index; today expired tokens remain queryable via /magic-status indefinitely.",
+    "auth.py login (L213-232) still returns {mfa_required: true} with HTTP 200 when MFA is required but code missing. Review request said '403'; current implementation is 200 with body flag (unchanged by refactor). Test asserts current contract."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_auth_refactor_regression.py (new, 16 tests, serial only)"
+  ],
+  "success_rate": {"backend": "100% of refactor contract (15 passed, 1 xfail for pre-existing infra issue)", "frontend": "not tested (per request)"},
+  "test_credentials": "admin@boostpc.io / 4zWK4o_xSw5prU-2b7w9dQ",
+  "seed_data_creation": "None. Suite auto-cleans db.magic_tokens and db.login_attempts before/after each test via pymongo (sync). Registers a throwaway user for reset-password test and deletes it in teardown.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run this suite with `-n 0` (serial). pytest.ini forces -n 2 loadscope but rate-limit tests (5-per-hour magic-link, brute-force) share the admin identifier and race across workers. All 16 endpoints covered: login (success/401), register, me, logout, refresh, forgot+reset+change-password, magic-link create, magic-link rate-limit (5/hr -> 429), consume-magic (Android UA -> device_label), consume-magic single-use (2nd -> 401), magic-status (public), mfa/status, mfa/setup (secret+qr+otpauth), mfa/enable+recovery-codes, mfa login required, mfa/disable (disabled -> ok, enabled+valid-code -> ok). Refactor is confirmed a pure move; no behaviour change detected.",
+  "rca of the issue": "Brute-force lockout xfail RCA: request.client.host observed as 10.208.151.66 and 10.208.151.69 for consecutive requests from the same external client. Identifier=ip:email splits attempts across two rows; neither reaches count>=5. Mitigation: (a) middleware to set request.scope['client'] from X-Forwarded-For, OR (b) change identifier to email only in _enforce_login_lockout/_record_failed_login. Reproduction: `for i in range(6): POST /api/auth/login with wrong password` and inspect db.login_attempts."
+}

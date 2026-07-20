@@ -86,7 +86,6 @@ export default function Games() {
       setBoostGroups(Object.fromEntries(APP_GROUPS.map((g) => [g.id, g.procs.every((p) => apps.includes(p)) && g.procs.length > 0])));
     }).catch((e) => console.error("load booster failed", e));
     api.get("/booster/sessions").then(({ data }) => setBoostSessions(data.sessions || [])).catch((e) => console.error("load booster sessions failed", e));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot init on mount; loaders are stable inline fns
   }, []);
 
   const saveBoostConfig = async () => {

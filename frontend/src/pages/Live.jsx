@@ -60,7 +60,6 @@ export default function Live() {
   useEffect(() => {
     api.get("/agent/token").then(({ data }) => setToken(data.token)).catch((e) => console.error("load agent token failed", e));
     api.get("/alerts").then(({ data }) => setAlerts(data)).catch((e) => console.error("load alerts failed", e));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; setters are stable
   }, []);
   useEffect(() => {
     const load = async () => {
@@ -89,7 +88,6 @@ export default function Live() {
     load();
     timer.current = setInterval(load, 1000);
     return () => clearInterval(timer.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- polling loop uses refs (stable) and module-level api; deps intentionally empty
   }, []);
 
   const resetSession = () => { acc.current = freshAcc(); setSummary(null); toast.success(t("live.session_reset_done")); };

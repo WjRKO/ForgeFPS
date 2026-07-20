@@ -211,6 +211,7 @@ export default function Account() {
       toast.success(t("account.discord_linked_ok"));
       window.history.replaceState({}, "", window.location.pathname);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo mount, i18n t() e' stabile durante il redirect
   }, []);
   const connectDiscord = () => {
     const base = process.env.REACT_APP_BACKEND_URL || "";
