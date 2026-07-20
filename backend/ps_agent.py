@@ -1369,7 +1369,40 @@ function Show-WebGui {
   .backup-badge {
     font-size: 11px; padding: 6px 12px; border: 1px solid var(--info);
     color: var(--info); font-family: "Consolas", monospace;
+    cursor: pointer; user-select: none; transition: background 0.15s;
   }
+  .backup-badge:hover, .backup-badge:focus-visible { background: rgba(0, 224, 255, 0.08); outline: none; }
+  .backup-badge.disabled { opacity: 0.5; cursor: not-allowed; }
+  .backup-panel {
+    position: absolute; top: calc(100% + 6px); right: 28px;
+    min-width: 320px; max-width: 420px; max-height: 400px; overflow-y: auto;
+    background: var(--bg); border: 1px solid var(--info);
+    padding: 12px 14px; z-index: 100; box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  }
+  .backup-panel[hidden] { display: none; }
+  .backup-panel-title {
+    font-family: "Consolas", monospace; font-size: 10px;
+    color: var(--info); text-transform: uppercase; letter-spacing: 0.15em;
+    margin-bottom: 10px;
+  }
+  .backup-list { list-style: none; margin: 0; padding: 0; }
+  .backup-list li {
+    padding: 6px 0; border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--fg); display: flex; align-items: center; gap: 8px;
+  }
+  .backup-list li:last-child { border-bottom: none; }
+  .backup-list li::before {
+    content: "\2713"; color: var(--ok); font-weight: 700; font-size: 11px;
+  }
+  .backup-list li.empty {
+    color: var(--muted); font-style: italic; justify-content: center; padding: 12px 0;
+  }
+  .backup-list li.empty::before { content: ""; }
+  .backup-panel-hint {
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+    font-size: 10px; color: var(--muted); line-height: 1.4;
+  }
+  header > div:has(> .backup-badge) { position: relative; }
 
   .preset-bar {
     padding: 14px 28px;
@@ -1586,7 +1619,12 @@ function Show-WebGui {
         <div class="hw-line" id="hwLine">PC: rilevamento in corso...</div>
         <div class="admin-line" id="adminLine"></div>
       </div>
-      <div class="backup-badge" id="backupBadge">Backup: 0</div>
+      <div class="backup-badge" id="backupBadge" data-testid="backup-badge" role="button" tabindex="0" title="Clicca per vedere la lista">Backup: 0</div>
+      <div class="backup-panel" id="backupPanel" data-testid="backup-panel" hidden>
+        <div class="backup-panel-title">Modifiche reversibili</div>
+        <ul id="backupList" class="backup-list"></ul>
+        <div class="backup-panel-hint">Usa "RIPRISTINA TUTTO" in fondo per riportare il PC allo stato iniziale.</div>
+      </div>
     </div>
   </header>
 
@@ -1739,6 +1777,44 @@ function Show-WebGui {
     if (state.admin) { adm.className = "admin-line ok"; adm.textContent = "Amministratore: SI - tutte le ottimizzazioni disponibili."; }
     else { adm.className = "admin-line no"; adm.textContent = "Amministratore: NO - alcune opzioni non verranno applicate."; }
     document.getElementById("backupBadge").textContent = `Backup: ${state.backup} modifiche reversibili`;
+    renderBackupPanel();
+  }
+
+  // Populate the backup dropdown with the names of the tweaks currently reversible.
+  function renderBackupPanel() {
+    const badge = document.getElementById("backupBadge");
+    const list = document.getElementById("backupList");
+    if (!list) return;
+    const ids = Array.isArray(state.backup_ids) ? state.backup_ids : [];
+    // ID -> friendly name via existing tweaks catalog.
+    const items = ids.map(id => {
+      const tw = state.tweaks.find(t => t.id === id);
+      return { id, name: tw ? tw.name : id };
+    });
+    list.innerHTML = "";
+    if (items.length === 0) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = "Nessuna modifica applicata ancora.";
+      list.appendChild(li);
+      badge.classList.add("disabled");
+    } else {
+      badge.classList.remove("disabled");
+      for (const it of items) {
+        const li = document.createElement("li");
+        li.setAttribute("data-testid", `backup-item-${it.id}`);
+        li.textContent = it.name;
+        list.appendChild(li);
+      }
+    }
+  }
+
+  function toggleBackupPanel(force) {
+    const panel = document.getElementById("backupPanel");
+    if (!panel) return;
+    const willOpen = typeof force === "boolean" ? force : panel.hasAttribute("hidden");
+    if (willOpen) panel.removeAttribute("hidden");
+    else panel.setAttribute("hidden", "");
   }
 
   function applyPreset(key) {
@@ -1782,7 +1858,7 @@ function Show-WebGui {
     const d = await api("/api/state");
     state.tweaks = d.tweaks || [];
     state.hw = d.hw || {}; state.admin = !!d.admin;
-    state.backup = d.backup || 0; state.presets = d.presets || {};
+    state.backup = d.backup || 0; state.backup_ids = d.backup_ids || []; state.presets = d.presets || {};
     renderHeader(); renderTabs(); renderCards();
     if (showToast) toast("Aggiornato", "ok");
   }
@@ -1792,14 +1868,14 @@ function Show-WebGui {
     setApplying(true);
     const bench = document.getElementById("benchToggle").checked;
     const d = await api("/api/apply", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ ids: Array.from(selected), benchmark: bench }) });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; renderHeader(); renderCards(); }
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; renderHeader(); renderCards(); }
     setApplying(false);
     toast("Ottimizzazioni applicate", "ok");
   }
   async function applyOne(id) {
     setApplying(true);
     const d = await api("/api/apply-one", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ id }) });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; renderHeader(); renderCards(); }
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; renderHeader(); renderCards(); }
     setApplying(false);
     toast("Applicato");
   }
@@ -1807,7 +1883,7 @@ function Show-WebGui {
     if (!confirm("Ripristinare TUTTE le modifiche dal backup?")) return;
     setApplying(true);
     const d = await api("/api/restore", { method: "POST", headers:{"X-FF-Token":TOKEN} });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = 0; renderHeader(); renderCards(); }
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = 0; state.backup_ids = []; renderHeader(); renderCards(); }
     setApplying(false);
     toast("Ripristino completato", "ok");
   }
@@ -1817,6 +1893,20 @@ function Show-WebGui {
   document.getElementById("applyBtn").onclick = applySelected;
   document.getElementById("restoreBtn").onclick = doRestore;
   document.getElementById("searchBox").oninput = e => { searchQ = e.target.value; renderCards(); };
+
+  // Backup badge toggle: open panel with reversible tweaks list.
+  const _backupBadge = document.getElementById("backupBadge");
+  if (_backupBadge) {
+    _backupBadge.addEventListener("click", () => toggleBackupPanel());
+    _backupBadge.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleBackupPanel(); }
+    });
+    document.addEventListener("click", (e) => {
+      const panel = document.getElementById("backupPanel");
+      if (!panel || panel.hasAttribute("hidden")) return;
+      if (!panel.contains(e.target) && e.target !== _backupBadge) toggleBackupPanel(false);
+    });
+  }
   window.addEventListener("beforeunload", () => {
     try { navigator.sendBeacon(`/api/close?tk=${encodeURIComponent(TOKEN)}`, ""); } catch(e){}
   });
@@ -1894,6 +1984,7 @@ function Show-WebGui {
         elseif ($path -eq '/api/state' -and $method -eq 'GET') {
           $dto = @{
             hw = $script:HW; admin = $isAdmin; backup = $script:BK.Count
+            backup_ids = @($script:BK.Keys)
             tweaks = Get-TweakDto
             presets = @{
               competitive = @($script:PRESETS.competitivo)
@@ -1932,17 +2023,17 @@ function Show-WebGui {
           Send-Data (Get-Specs) (Get-Health) (Get-StartupList)
           WebLog 'FATTO. Dati inviati a FrameForge. Riavvio consigliato.'
           $script:APPLYING = $false
-          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; before = $before; after = $after }
+          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = @($script:BK.Keys); before = $before; after = $after }
         }
         elseif ($path -eq '/api/apply-one' -and $method -eq 'POST') {
           $body = Read-Body $ctx | ConvertFrom-Json
           $t = $script:TWMAP[$body.id]
           if ($t) { WebLog ("-> {0}" -f $t.name); & $t.apply; Save-Backup }
-          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count }
+          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = @($script:BK.Keys) }
         }
         elseif ($path -eq '/api/restore' -and $method -eq 'POST') {
           WebLog 'Ripristino dal backup...'; $msg = Invoke-Restore; WebLog ('  ' + $msg)
-          Send-Json $ctx @{ ok = $true; message = $msg; tweaks = Get-TweakDto; backup = $script:BK.Count }
+          Send-Json $ctx @{ ok = $true; message = $msg; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = @($script:BK.Keys) }
         }
         elseif ($path -eq '/api/close') {
           Send-Json $ctx @{ ok = $true }

@@ -786,7 +786,20 @@ User ha postato secrets pubblici (CLIENT_SECRET, BOT_TOKEN, WEBHOOK URLs). Deve 
 - MOD: /app/frontend/src/pages/MyPc.jsx (nested ternaries estratti in 5 helper)
 - MOD: /app/memory/PRD.md
 
-### 2026-07-19 (26) - Refactor batch 3 (chiusura task rimandate)
+### 2026-07-20 (27) - Enhancement Backup panel + Step 1 agent-authed profiles
+- **`GET /api/agent/profiles`** in `routers/pc.py`: nuovo endpoint agent-authenticated via `X-Agent-Token` (stesso pattern collaudato di /api/agent/report-specs, /api/agent/telemetry). Ritorna `{profiles, templates, catalog}`. Testato end-to-end con curl: 200 OK con auth valida, 401 con auth invalida.
+- **Backup badge → dropdown** in `ps_agent.py` (GUI Sicura):
+  - PowerShell backend: aggiunto `backup_ids = @($script:BK.Keys)` a 4 endpoint locali (/api/state, /api/apply, /api/apply-one, /api/restore) — ora il frontend riceve la lista degli ID reversibili
+  - HTML: badge trasformato in role="button" con panel `#backupPanel` (hidden by default), lista `#backupList` con item testid `backup-item-<id>`
+  - CSS: nuovo styling per panel (absolute positioning, max-height + scroll, hover state, disabled state quando 0)
+  - JS: `renderBackupPanel()` mappa `state.backup_ids` → nomi friendly via `state.tweaks.find(t => t.id === id).name`. Toggle su click + keyboard (Enter/Space). Click-outside-to-close.
+  - Sync in tutti i flow: applySelected, applyOne, doRestore (reset a [] dopo ripristino totale)
+- **Nessuna regressione**: 24/24 test agent_script + secure_ps verdi, 68/68 test non-LLM verdi
+
+## FILE MODIFICATI (sessione 27)
+- MOD: /app/backend/routers/pc.py (agent_list_profiles endpoint + import TWEAK_CATALOG/TEMPLATES)
+- MOD: /app/backend/ps_agent.py (backup dropdown: PS backend + HTML + CSS + JS)
+- MOD: /app/memory/PRD.md
 - **Type hints `models.py`**: 100% coverage. `list` → `list[str]`/`list[dict[str, Any]]`, `dict` → `dict[str, Any]`. Colpiti 20 Pydantic model — migliore IDE support, catch di errori a compile-time. Testato con instanziazione: OK.
 - **Array-index-keys eliminati** (top 7 hot spot):
   - `Landing.jsx`: 5 posti (msgs chat mockup, bullets FeatureRow, trust strip, steps how-it-works, features showcase) → `key={m.text}`, `key={b}`, `key={s.l}`, `key={s.t}`, `key={f.t}`
