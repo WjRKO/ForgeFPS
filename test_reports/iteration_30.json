@@ -1,0 +1,22 @@
+{
+  "summary": "Iteration 30 backend-only. Verified FIX-1 (LLM budget UX -> HTTP 402 friendly) and FIX-2 (AI advisor bilingual prompt). 7/7 tests PASSED. /api/fps/estimate returns 402 with detail='Credito LLM esaurito. Ricarica da Profilo -> Universal Key -> Add Balance.' as expected (LLM budget currently exhausted per note). /api/startup/analyze same behavior after seeding startup data via agent token. stream_advisor prompt verified via monkeypatched build_chat: lang='en' -> contains '[USER PC CONTEXT', 'Reply ENTIRELY in English'; NO Italian block. lang='it' -> '[CONTESTO PC DELL'UTENTE' and 'Rispondi INTERAMENTE in italiano'; NO English block. Regressions OK: /api/auth/login, /api/auth/me, /api/agent/download-zip (Content-Length matches body), /api/auth/magic-link.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_llm_budget_and_bilingual_iter30.py",
+    "/app/test_reports/pytest/iteration_30.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Budget exception detection uses substring match ('Budget' and 'exceeded' in msg). Works for LiteLLM's current phrasing but fragile if provider changes error text - consider matching on specific exception type or HTTP 402/429 from upstream in future.",
+    "ai_engine.one_shot_advisor() (line ~138-150) still hardcodes Italian '[CONTESTO PC DELL'UTENTE...]' block regardless of lang - only stream_advisor was made bilingual. If one_shot_advisor is ever used with lang='en', PC context section will still be in IT. Non-blocking but worth cleanup for consistency."
+  ],
+  "updated_files": ["/app/backend/tests/test_llm_budget_and_bilingual_iter30.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "N/A (skipped per request)"},
+  "test_credentials": "admin@boostpc.io / 4zWK4o_xSw5prU-2b7w9dQ (working)",
+  "seed_data_creation": "Seeded pc_specs.startup via /api/agent/report-specs with 3 dummy dict items for the admin user to enable /api/startup/analyze test. Non-destructive (upsert).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "LLM budget is exhausted (LiteLLM error: 'Budget has been exceeded! Current cost: 2.003, Max budget: 2.0'). Endpoints requiring LLM (fps/estimate, startup/analyze, upgrade/analyze, advisor/chat, benchmark/explain, build generation) will return 402 (or 502 for those not yet wrapped). Only fps/estimate and startup/analyze have been updated to 402 - other endpoints (/api/upgrade/analyze, /api/benchmark/explain, /api/advisor/chat) still return 502 with raw budget text; may need similar treatment if user reports.",
+  "rca of the issue": "N/A - fixes verified working."
+}

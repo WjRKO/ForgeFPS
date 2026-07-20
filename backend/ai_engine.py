@@ -55,26 +55,43 @@ def build_chat(session_id: str, system: str = ADVISOR_SYSTEM) -> LlmChat:
 async def stream_advisor(session_id: str, history: list, message: str, specs_text: str = "", lang: str = "it", image_data_url: str = ""):
     system = ADVISOR_SYSTEM
     # Language directive: explicit, always present (Claude follows the last relevant instruction).
-    if (lang or "it").startswith("en"):
+    is_en = (lang or "it").startswith("en")
+    if is_en:
         system += "\n\nLANGUAGE: Reply ENTIRELY in English. Keep Markdown formatting and PowerShell code blocks."
     else:
         system += "\n\nLINGUA: Rispondi INTERAMENTE in italiano. Mantieni il Markdown e i blocchi di codice PowerShell."
     if specs_text:
-        system += ("\n\n[CONTESTO PC DELL'UTENTE - usa questi dati REALI per consigli su misura. "
-                   "Fai riferimento PROATTIVO a Health Score, problemi rilevati, temperature, benchmark e "
-                   "programmi all'avvio quando pertinenti (es. cita il valore reale: 'il tuo driver ha X giorni', "
-                   "'CPU a Y°C'). Identifica con precisione generazione e fascia di CPU e GPU (es. Ampere/Ada, "
-                   "Zen3/Zen4). Se la scheda madre è indicata come codice OEM (es. MS-7C56, MS-7B86), traducilo "
-                   "nel nome commerciale reale (es. MSI B550 Tomahawk) e verifica la compatibilità socket/chipset. "
-                   "Quando suggerisci comandi Windows, forniscili in blocchi di codice PowerShell (```powershell ... ```) "
-                   "così l'utente può copiarli. Usa Markdown: grassetto, elenchi, titoli.]\n" + specs_text)
+        if is_en:
+            system += ("\n\n[USER PC CONTEXT - use these REAL data for personalized advice. "
+                       "Proactively reference Health Score, detected issues, temperatures, benchmarks and "
+                       "startup programs when relevant (e.g. cite the real value: 'your driver is X days old', "
+                       "'CPU at Y degC'). Precisely identify generation and tier of CPU and GPU (e.g. Ampere/Ada, "
+                       "Zen3/Zen4). If the motherboard is listed as an OEM code (e.g. MS-7C56, MS-7B86), translate "
+                       "it to the real commercial name (e.g. MSI B550 Tomahawk) and verify socket/chipset compatibility. "
+                       "When suggesting Windows commands, provide them in PowerShell code blocks (```powershell ... ```) "
+                       "so the user can copy them. Use Markdown: bold, lists, headings.]\n" + specs_text)
+        else:
+            system += ("\n\n[CONTESTO PC DELL'UTENTE - usa questi dati REALI per consigli su misura. "
+                       "Fai riferimento PROATTIVO a Health Score, problemi rilevati, temperature, benchmark e "
+                       "programmi all'avvio quando pertinenti (es. cita il valore reale: 'il tuo driver ha X giorni', "
+                       "'CPU a Y°C'). Identifica con precisione generazione e fascia di CPU e GPU (es. Ampere/Ada, "
+                       "Zen3/Zen4). Se la scheda madre è indicata come codice OEM (es. MS-7C56, MS-7B86), traducilo "
+                       "nel nome commerciale reale (es. MSI B550 Tomahawk) e verifica la compatibilità socket/chipset. "
+                       "Quando suggerisci comandi Windows, forniscili in blocchi di codice PowerShell (```powershell ... ```) "
+                       "così l'utente può copiarli. Usa Markdown: grassetto, elenchi, titoli.]\n" + specs_text)
     chat = build_chat(session_id, system)
     # replay history into context
     context = ""
     if history:
         recent = history[-8:]
-        context = "\n".join(f"{'Utente' if m['role']=='user' else 'BOOST AI'}: {m['content']}" for m in recent)
-    full = f"[Conversazione precedente]\n{context}\n\n[Nuovo messaggio]\n{message}" if context else message
+        role_user = "User" if is_en else "Utente"
+        context = "\n".join(f"{role_user if m['role']=='user' else 'BOOST AI'}: {m['content']}" for m in recent)
+    if context:
+        prev_hdr = "[Previous conversation]" if is_en else "[Conversazione precedente]"
+        new_hdr = "[New message]" if is_en else "[Nuovo messaggio]"
+        full = f"{prev_hdr}\n{context}\n\n{new_hdr}\n{message}"
+    else:
+        full = message
     kwargs = {"text": full}
     if image_data_url and image_data_url.startswith("data:image/"):
         try:

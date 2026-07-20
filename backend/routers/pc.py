@@ -542,7 +542,11 @@ def build(get_current_user):
         try:
             return await ai_engine.estimate_fps(specs_to_text(specs) if specs else "", data.game, data.resolution)
         except Exception as e:
-            raise HTTPException(status_code=502, detail=str(e))
+            msg = str(e)
+            if "Budget" in msg and "exceeded" in msg:
+                raise HTTPException(status_code=402,
+                    detail="Credito LLM esaurito. Ricarica da Profilo -> Universal Key -> Add Balance.")
+            raise HTTPException(status_code=502, detail=msg)
 
     @r.post("/startup/analyze")
     async def startup_analyze(user: dict = Depends(get_current_user)):
@@ -553,7 +557,11 @@ def build(get_current_user):
         try:
             return await ai_engine.analyze_startup(startup)
         except Exception as e:
-            raise HTTPException(status_code=502, detail=str(e))
+            msg = str(e)
+            if "Budget" in msg and "exceeded" in msg:
+                raise HTTPException(status_code=402,
+                    detail="Credito LLM esaurito. Ricarica da Profilo -> Universal Key -> Add Balance.")
+            raise HTTPException(status_code=502, detail=msg)
 
     @r.get("/desktop-agent/download")
     async def download_agent(user: dict = Depends(get_current_user)):

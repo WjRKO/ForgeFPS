@@ -2485,8 +2485,11 @@ function Show-WebGui {
           if ([string]::IsNullOrWhiteSpace($magic)) { $ctx.Response.StatusCode = 400; $ctx.Response.Close() }
           else {
             try {
-              $svg = Invoke-RestMethod -Uri "$BACKEND/api/agent/magic-qr?token=$([Uri]::EscapeDataString($magic))" -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 10
-              $bytes = [System.Text.Encoding]::UTF8.GetBytes([string]$svg)
+              # NOTA: Invoke-RestMethod auto-parsa image/svg+xml come [xml] object e
+              # perde il markup. Usiamo Invoke-WebRequest -UseBasicParsing per ottenere
+              # i bytes raw del SVG e inoltrarli intatti al browser.
+              $resp = Invoke-WebRequest -Uri "$BACKEND/api/agent/magic-qr?token=$([Uri]::EscapeDataString($magic))" -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 10 -UseBasicParsing
+              $bytes = if ($resp.RawContentStream) { $resp.RawContentStream.ToArray() } else { [System.Text.Encoding]::UTF8.GetBytes([string]$resp.Content) }
               $ctx.Response.ContentType = 'image/svg+xml'
               $ctx.Response.Headers.Add('Cache-Control','no-store')
               $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
