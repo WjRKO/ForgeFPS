@@ -867,3 +867,38 @@ _(dettagli riassunti nel finish summary della sessione: tab "Profili Cloud" nel 
 ## FILE MODIFICATI (sessione 28)
 - MOD: /app/backend/ps_agent.py (tab Profili + Live Sync toggle + relativi endpoint PS)
 - MOD: /app/memory/PRD.md
+
+
+---
+
+## Sessione 29 (2026-07-20) — v0.6.6
+
+### Feature: Cross-device Magic Link Notification + QR dentro GUI Desktop
+Utente ha richiesto due estensioni al flusso Magic Link introdotto in v0.6.5:
+1. **Notifica quando il mobile fa scan del QR** (feedback real-time all'origine)
+2. **Bottone "Continua sul Telefono" dentro la GUI Sicura desktop** (funziona anche senza aprire il browser)
+Scelta utente: toast web + **notifica Windows nativa** nella GUI (BurntToast/tray balloon fallback).
+
+### Backend
+- `auth.py`: helper `_parse_device_label(ua)`, `consume-magic` ora salva UA/label, nuovo `GET /api/auth/magic-status/{token}` pubblico.
+- `routers/pc.py`: nuovi `POST /api/agent/magic-link` e `GET /api/agent/magic-qr` (auth X-Agent-Token, condividono rate-limit 5/h con endpoint web).
+
+### Frontend
+- `MobileHandoffModal.jsx`: polling 2s + stato "consumed" + toast + auto-close (fix race con effect separato).
+
+### Desktop GUI (`ps_agent.py`)
+- Bottone "Continua sul Telefono" nell'header.
+- Modal QR interno alla GUI Edge WebView, con auto-close e stato Device connesso.
+- 4 endpoint locali PS proxied al cloud.
+- `Show-DeviceToast` in background job → notifica Windows nativa.
+
+### Testing
+- iteration_26.json: 17/17 backend PASS, frontend end-to-end verificato (compresa auto-close bug fixata post-review).
+
+### File toccati sessione 29
+- MOD: /app/backend/auth.py
+- MOD: /app/backend/routers/pc.py
+- MOD: /app/backend/ps_agent.py (~200 righe aggiunte HTML+CSS+JS+PowerShell)
+- MOD: /app/frontend/src/components/MobileHandoffModal.jsx
+- NEW: /app/memory/CHANGELOG.md
+- NEW: /app/backend/tests/test_magic_link_mobile_handoff.py (dal testing agent)

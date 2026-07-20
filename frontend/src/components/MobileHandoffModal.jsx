@@ -43,7 +43,7 @@ export default function MobileHandoffModal({ open, onClose }) {
   }, [state, remaining]);
 
   // Poll for cross-device scan: when the mobile consumes the token,
-  // switch to the "consumed" state, notify the user, and auto-close.
+  // switch to the "consumed" state and notify the user.
   useEffect(() => {
     if (state !== "ready" || !magicToken) return;
     let cancelled = false;
@@ -55,13 +55,20 @@ export default function MobileHandoffModal({ open, onClose }) {
           setDeviceLabel(data.device_label || "Dispositivo");
           setState("consumed");
           toast.success(`Nuovo device connesso: ${data.device_label || "Dispositivo"}`);
-          setTimeout(() => { if (!cancelled) onClose?.(); }, 2200);
         }
       } catch { /* transient errors: keep polling */ }
     };
     const id = setInterval(poll, 2000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [state, magicToken, onClose]);
+  }, [state, magicToken]);
+
+  // Auto-close after the "consumed" celebration is shown.
+  // Kept as a separate effect so the poll cleanup does not cancel this timer.
+  useEffect(() => {
+    if (state !== "consumed") return;
+    const id = setTimeout(() => onClose?.(), 2200);
+    return () => clearTimeout(id);
+  }, [state, onClose]);
 
   useEffect(() => {
     if (open && state === "idle") generate();
