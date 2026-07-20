@@ -1,4 +1,4 @@
-name: build-and-sign
+name: build
 on:
   push:
     tags: ['v*']
@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 jobs:
-  build-sign:
+  build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,29 +23,9 @@ jobs:
       - name: Build onedir (folder + DLLs)
         run: pyinstaller --onedir --name forgefps-agent --console --noupx --clean --version-file version_info.txt forgefps_agent.py
 
-      # Firma il .exe INTERNO alla cartella con SignPath
-      - id: unsigned
-        uses: actions/upload-artifact@v4
-        with:
-          name: forgefps-agent-unsigned
-          path: dist/forgefps-agent/forgefps-agent.exe
-
-      - uses: signpath/github-action-submit-signing-request@v1
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: 'forgefps-agent'
-          signing-policy-slug: 'release-signing'
-          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
-          wait-for-completion: true
-          output-artifact-directory: 'signed'
-
-      # Sostituisci il .exe non firmato con quello firmato, poi ricomprimi
-      - name: Repackage folder with signed .exe
+      - name: Zip forgefps-agent folder
         shell: pwsh
-        run: |
-          Copy-Item -Path 'signed\forgefps-agent.exe' -Destination 'dist\forgefps-agent\forgefps-agent.exe' -Force
-          Compress-Archive -Path 'dist\forgefps-agent' -DestinationPath 'dist\forgefps-agent.zip' -Force
+        run: Compress-Archive -Path 'dist/forgefps-agent' -DestinationPath 'dist/forgefps-agent.zip' -Force
 
       - id: hash
         shell: pwsh
@@ -61,7 +41,7 @@ jobs:
           body: |
             **SHA256 (ZIP):** `${{ steps.hash.outputs.SHA256 }}`
 
-            v0.6.7 — Build `--onedir` (cartella + DLL, firmata SignPath) invece di `--onefile`
-            per eliminare i falsi positivi euristici di Windows Defender sul bootloader PyInstaller.
+            v0.6.7 — Build `--onedir` (cartella + DLL) invece di `--onefile` per eliminare
+            i falsi positivi euristici di Windows Defender sul bootloader PyInstaller.
 
             **Uso:** estrai il ZIP → apri la cartella `forgefps-agent/` → `forgefps-agent.exe --token IL_TUO_TOKEN`.
