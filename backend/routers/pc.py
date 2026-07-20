@@ -12,7 +12,7 @@ from helpers import specs_to_text, compute_health, get_or_create_agent_token, gr
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
 from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput
-from routers.profiles import resolve_tweak_ids
+from routers.profiles import resolve_tweak_ids, TWEAK_CATALOG, TEMPLATES
 from routers.advisor import _check_ai_rate_limit
 
 # Default background processes closed by "Prima del match" (must stay in sync with frontend groups)
@@ -61,6 +61,17 @@ def build(get_current_user):
     @r.get("/agent/token")
     async def agent_token(user: dict = Depends(get_current_user)):
         return {"token": await get_or_create_agent_token(str(user["_id"]))}
+
+    @r.get("/agent/profiles")
+    async def agent_list_profiles(x_agent_token: str = Header(default="")):
+        """Ritorna i profili dell'utente + catalog per la GUI desktop.
+        Autenticata via X-Agent-Token (stesso pattern di /api/agent/report-specs)."""
+        rec = await db.agent_tokens.find_one({"token": x_agent_token})
+        if not rec:
+            raise HTTPException(status_code=401, detail="Token agent non valido")
+        uid = rec["user_id"]
+        profiles = await db.game_profiles.find({"user_id": uid}, {"_id": 0}).sort("updated_at", -1).to_list(100)
+        return {"profiles": profiles, "templates": TEMPLATES, "catalog": TWEAK_CATALOG}
 
     @r.post("/agent/report-specs")
     async def report_specs(data: SpecsInput, x_agent_token: str = Header(default="")):
