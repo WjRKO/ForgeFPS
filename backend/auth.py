@@ -116,6 +116,23 @@ def public_user(user: dict) -> dict:
             "mfa_enabled": bool(user.get("mfa_enabled"))}
 
 
+def _parse_device_label(ua: str) -> str:
+    """Parse a short human-readable device label from a User-Agent string.
+    Used for the cross-device magic-link scan notification (never exposes IP)."""
+    if not ua:
+        return "Dispositivo sconosciuto"
+    s = ua.lower()
+    if "iphone" in s: return "iPhone"
+    if "ipad" in s: return "iPad"
+    if "android" in s:
+        if "tablet" in s: return "Tablet Android"
+        return "Android"
+    if "windows" in s: return "Windows"
+    if "mac os" in s or "macintosh" in s: return "Mac"
+    if "linux" in s: return "Linux"
+    return "Dispositivo sconosciuto"
+
+
 def _verify_mfa(user: dict, code: str) -> bool:
     if not code:
         return False
@@ -250,15 +267,22 @@ def build_auth_router(db):
         return {"token": token, "expires_in_seconds": ttl_seconds}
 
     @router.post("/consume-magic")
-    async def consume_magic_link(data: dict, response: Response):
+    async def consume_magic_link(data: dict, request: Request, response: Response):
         """Consume a magic link token, set auth cookies, return user profile.
-        Single-use, 5-minute TTL enforced."""
+        Single-use, 5-minute TTL enforced. Records device info for cross-device notification."""
         token = (data or {}).get("token", "").strip()
         if not token:
             raise HTTPException(status_code=400, detail="Missing token")
+        ua = request.headers.get("user-agent", "")
+        device_label = _parse_device_label(ua)
         rec = await db.magic_tokens.find_one_and_update(
             {"token": token, "used": False},
-            {"$set": {"used": True, "used_at": datetime.now(timezone.utc).isoformat()}},
+            {"$set": {
+                "used": True,
+                "used_at": datetime.now(timezone.utc).isoformat(),
+                "device_ua": ua[:300],
+                "device_label": device_label,
+            }},
         )
         if not rec:
             raise HTTPException(status_code=401, detail="Link expired or already used")
@@ -274,6 +298,32 @@ def build_auth_router(db):
         uid = str(user["_id"])
         set_auth_cookies(response, create_access_token(uid, user["email"]), create_refresh_token(uid))
         return public_user(user)
+
+    @router.get("/magic-status/{token}")
+    async def magic_status(token: str):
+        """Public: check if a magic token has been consumed. Used by desktop GUI and
+        web modal to detect cross-device handoff and notify the originating device.
+        Returns only status + device label, never user identity."""
+        token = (token or "").strip()
+        if not token:
+            raise HTTPException(status_code=400, detail="Missing token")
+        rec = await db.magic_tokens.find_one(
+            {"token": token},
+            {"used": 1, "used_at": 1, "device_label": 1, "expires_at": 1},
+        )
+        if not rec:
+            raise HTTPException(status_code=404, detail="Token not found")
+        expired = False
+        try:
+            expired = datetime.fromisoformat(rec["expires_at"].replace("Z", "+00:00")) < datetime.now(timezone.utc)
+        except Exception:
+            expired = True
+        return {
+            "used": bool(rec.get("used")),
+            "used_at": rec.get("used_at"),
+            "device_label": rec.get("device_label") or "",
+            "expired": expired,
+        }
 
     @router.post("/refresh")
     async def refresh(request: Request, response: Response):

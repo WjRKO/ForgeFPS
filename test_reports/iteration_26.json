@@ -1,0 +1,43 @@
+{
+  "summary": "Tested new 'Continua sul Telefono' feature: backend agent magic-link/QR endpoints + cross-device notification. 17/17 backend tests pass (serial mode). Frontend flow: modal opens, QR renders, countdown works, Rigenera works, polling detects consume within ~2s, 'Device connesso: Android' shown + success toast visible. BUG: modal does NOT auto-close after 2.2s as intended.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "MobileHandoffModal",
+        "issue": "Modal does not auto-close after successful consume. The polling useEffect calls setState('consumed') which triggers the effect cleanup (sets local `cancelled = true`), so the scheduled setTimeout closure that calls onClose() sees cancelled===true and no-ops. Modal stays on screen indefinitely until user clicks X/overlay.",
+        "selector": "[data-testid=\"mobile-handoff-modal\"]",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_magic_link_mobile_handoff.py",
+    "/app/test_reports/pytest/magic_link_results.xml"
+  ],
+  "action_items": [
+    "Fix MobileHandoffModal auto-close: move the setTimeout(onClose,2200) OUTSIDE the polling effect (e.g., use a separate useEffect keyed on `state === 'consumed'`) so the cleanup running when state changes does not cancel the auto-close timer. Alternative: use a ref for `cancelled` that only flips on unmount, not on every state change.",
+    "Consider serializing rate-limit-sensitive tests in pytest by moving them to a single module and using -n0 in CI, OR by scoping cleanup fixture to module-level instead of function-level, OR by using unique user per test. Right now the mandatory `-n 2 --dist loadscope` in pytest.ini causes cross-worker DB races because each test wipes db.magic_tokens between tests."
+  ],
+  "critical_code_review_comments": [
+    "MobileHandoffModal.jsx L47-64: setTimeout in polling effect shares `cancelled` closure with cleanup -> auto-close is racy and effectively broken (bug above).",
+    "auth.py: consume-magic single-use is enforced via find_one_and_update on {used:false} — good. However the same token is returned as 'used' by magic-status forever with no cleanup TTL index; consider a TTL index on magic_tokens.expires_at for hygiene.",
+    "routers/pc.py agent_magic_link uses os.environ.get('FRONTEND_URL','') with fallback; if FRONTEND_URL unset in prod, mobile_url would become '/auth/mobile?t=...' (relative) which desktop GUI cannot open. Consider raising early or asserting.",
+    "MobileHandoffModal L38-43: countdown effect resets state to 'idle' when remaining hits 0, but never sets remaining back; the subsequent branch checks `state === 'idle' && remaining === 0 && magicUrl` — this is fine but should also clear polling explicitly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_magic_link_mobile_handoff.py (new)"
+  ],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "90% (all core flows OK, auto-close broken)"},
+  "test_credentials": "admin@boostpc.io / 4zWK4o_xSw5prU-2b7w9dQ",
+  "seed_data_creation": "None. Test suite auto-cleans db.magic_tokens between tests.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend suite must be run with `-n 0` because /app/backend/pytest.ini forces -n 2 which causes cross-worker races (each test's autouse cleanup wipes db.magic_tokens). All 17 tests PASS serially. Frontend: verify auto-close after main agent fixes the setTimeout closure bug in MobileHandoffModal.jsx.",
+  "rca of the issue": "MobileHandoffModal.jsx polling useEffect declares `let cancelled = false;` and its cleanup sets `cancelled = true`. When the poll detects used=true, it calls setState('consumed') then schedules setTimeout(onClose, 2200). React re-runs the effect due to state change; the previous effect's cleanup fires and sets cancelled=true; the setTimeout closure captures this outer `cancelled`, so `if (!cancelled) onClose?.()` never runs. FIX: split into two effects — keep polling in one (deps: [state, magicToken]) and put the auto-close timer in a separate effect keyed on `state === 'consumed'` with its own timer id cleanup, e.g.:\n\nuseEffect(() => {\n  if (state !== 'consumed') return;\n  const id = setTimeout(() => onClose?.(), 2200);\n  return () => clearTimeout(id);\n}, [state, onClose]);\n\nReproduction: (1) login as admin, (2) click 'Continue on Mobile', (3) POST /api/auth/consume-magic with the modal's token from another client; observe modal transitions to consumed state + shows Android label + toast, but stays visible >6s."
+}

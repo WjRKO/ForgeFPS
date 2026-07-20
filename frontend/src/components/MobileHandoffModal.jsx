@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { X, Loader2, RefreshCw, Smartphone } from "lucide-react";
+import { X, Loader2, RefreshCw, Smartphone, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 
@@ -10,18 +10,22 @@ import api from "@/lib/api";
  * Token TTL: 5 minutes, single-use (enforced backend-side).
  */
 export default function MobileHandoffModal({ open, onClose }) {
-  const [state, setState] = useState("idle"); // idle | loading | ready | error
+  const [state, setState] = useState("idle"); // idle | loading | ready | error | consumed
   const [magicUrl, setMagicUrl] = useState("");
+  const [magicToken, setMagicToken] = useState("");
   const [remaining, setRemaining] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
+  const [deviceLabel, setDeviceLabel] = useState("");
 
   const generate = async () => {
     setState("loading");
     setErrorMsg("");
+    setDeviceLabel("");
     try {
       const { data } = await api.post("/auth/magic-link");
       const url = `${window.location.origin}/auth/mobile?t=${encodeURIComponent(data.token)}`;
       setMagicUrl(url);
+      setMagicToken(data.token);
       setRemaining(data.expires_in_seconds || 300);
       setState("ready");
     } catch (e) {
@@ -38,9 +42,30 @@ export default function MobileHandoffModal({ open, onClose }) {
     return () => clearInterval(id);
   }, [state, remaining]);
 
+  // Poll for cross-device scan: when the mobile consumes the token,
+  // switch to the "consumed" state, notify the user, and auto-close.
+  useEffect(() => {
+    if (state !== "ready" || !magicToken) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const { data } = await api.get(`/auth/magic-status/${encodeURIComponent(magicToken)}`);
+        if (cancelled) return;
+        if (data.used) {
+          setDeviceLabel(data.device_label || "Dispositivo");
+          setState("consumed");
+          toast.success(`Nuovo device connesso: ${data.device_label || "Dispositivo"}`);
+          setTimeout(() => { if (!cancelled) onClose?.(); }, 2200);
+        }
+      } catch { /* transient errors: keep polling */ }
+    };
+    const id = setInterval(poll, 2000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [state, magicToken, onClose]);
+
   useEffect(() => {
     if (open && state === "idle") generate();
-    if (!open) { setState("idle"); setMagicUrl(""); }
+    if (!open) { setState("idle"); setMagicUrl(""); setMagicToken(""); setDeviceLabel(""); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -94,6 +119,13 @@ export default function MobileHandoffModal({ open, onClose }) {
           {state === "ready" && magicUrl && (
             <div className="bg-white p-4" data-testid="mobile-handoff-qr">
               <QRCodeSVG value={magicUrl} size={200} level="M" includeMargin={false} />
+            </div>
+          )}
+          {state === "consumed" && (
+            <div className="text-center" data-testid="mobile-handoff-consumed">
+              <CheckCircle2 size={56} className="text-[#00FF66] mx-auto mb-3" />
+              <div className="text-white font-display font-black text-lg mb-1">Device connesso</div>
+              <div className="text-zinc-400 text-sm">{deviceLabel || "Dispositivo"} ha effettuato l'accesso</div>
             </div>
           )}
           {state === "idle" && remaining === 0 && magicUrl && (

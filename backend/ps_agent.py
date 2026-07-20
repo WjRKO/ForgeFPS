@@ -1289,6 +1289,35 @@ function Show-WebGui {
     if (-not $tk) { $tk = $ctx.Request.Headers["X-FF-Token"] }
     return ($tk -eq $sess)
   }
+  function Show-DeviceToast($device) {
+    # Native Windows toast for "new device connected" magic-link cross-device scan.
+    # Fire in a background thread so the HTTP handler returns instantly.
+    $title = 'FrameForge - Nuovo device connesso'
+    $body  = "$device ha effettuato l'accesso al tuo account tramite QR"
+    try {
+      Start-Job -ScriptBlock {
+        param($t, $b)
+        try {
+          if (Get-Command -Name New-BurntToastNotification -ErrorAction SilentlyContinue) {
+            New-BurntToastNotification -Text $t, $b | Out-Null
+            return
+          }
+        } catch {}
+        try {
+          Add-Type -AssemblyName System.Windows.Forms | Out-Null
+          $ni = New-Object System.Windows.Forms.NotifyIcon
+          $ni.Icon = [System.Drawing.SystemIcons]::Information
+          $ni.BalloonTipTitle = $t
+          $ni.BalloonTipText  = $b
+          $ni.Visible = $true
+          $ni.ShowBalloonTip(6000)
+          Start-Sleep -Seconds 7
+          $ni.Visible = $false
+          $ni.Dispose()
+        } catch {}
+      } -ArgumentList $title, $body | Out-Null
+    } catch {}
+  }
   function Get-TweakDto {
     $arr = @()
     foreach ($t in $script:TWEAKS) {
@@ -1442,6 +1471,84 @@ function Show-WebGui {
     0%, 100% { box-shadow: 0 0 8px 1px rgba(0, 255, 102, 0.45); }
     50%      { box-shadow: 0 0 16px 3px rgba(0, 255, 102, 0.75); }
   }
+
+  /* Continua sul Telefono button + Magic Link modal */
+  .mobile-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border: 1px solid var(--accent); background: transparent;
+    color: var(--accent); font-family: "Consolas", monospace;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .mobile-btn:hover { background: var(--accent); color: #000; }
+  .mobile-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .mobile-btn-icon { font-size: 14px; line-height: 1; }
+
+  .mh-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.82);
+    z-index: 200; display: flex; align-items: center; justify-content: center;
+    padding: 20px; backdrop-filter: blur(6px);
+  }
+  .mh-overlay[hidden] { display: none; }
+  .mh-modal {
+    max-width: 440px; width: 100%; background: #0F0F12;
+    border: 1px solid #2A2A35; padding: 28px 26px 20px; position: relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+  }
+  .mh-close {
+    position: absolute; top: 10px; right: 12px; background: none; border: none;
+    color: #7a7a85; font-size: 22px; line-height: 1; cursor: pointer;
+  }
+  .mh-close:hover { color: var(--fg); }
+  .mh-eyebrow {
+    font-family: "Consolas", monospace; font-size: 10px; letter-spacing: 0.2em;
+    color: var(--accent); margin-bottom: 8px;
+  }
+  .mh-title {
+    font-size: 20px; margin: 0 0 6px; color: var(--fg); font-weight: 900; letter-spacing: -0.01em;
+  }
+  .mh-sub { font-size: 13px; color: #a1a1aa; margin: 0 0 18px; line-height: 1.5; }
+  .mh-body {
+    min-height: 240px; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 14px;
+  }
+  .mh-loading { color: var(--muted); font-family: "Consolas", monospace; font-size: 12px; }
+  .mh-error {
+    color: #FF3B30; font-size: 13px; text-align: center; padding: 12px; line-height: 1.5;
+  }
+  .mh-qr { background: #fff; padding: 14px; }
+  .mh-qr svg { display: block; width: 220px; height: 220px; }
+  .mh-consumed { text-align: center; }
+  .mh-check {
+    width: 64px; height: 64px; margin: 0 auto 12px;
+    border-radius: 50%; background: rgba(0,255,102,0.12); color: var(--ok);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 40px; line-height: 1;
+    box-shadow: 0 0 24px 4px rgba(0,255,102,0.35);
+  }
+  .mh-consumed-title { font-size: 18px; font-weight: 900; color: var(--fg); margin-bottom: 4px; }
+  .mh-consumed-sub { font-size: 13px; color: #a1a1aa; }
+  .mh-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 12px; border-top: 1px solid #1A1A24; margin-bottom: 12px;
+  }
+  .mh-countdown {
+    font-family: "Consolas", monospace; font-size: 11px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+  }
+  .mh-time { color: var(--ok); margin-left: 8px; }
+  .mh-time.low { color: #FF3B30; }
+  .mh-regen {
+    background: none; border: 1px solid #2A2A35; color: var(--muted);
+    padding: 6px 12px; font-family: "Consolas", monospace; font-size: 10px;
+    letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer;
+  }
+  .mh-regen:hover { color: var(--accent); border-color: var(--accent); }
+  .mh-safety {
+    font-size: 10px; color: #52525b; line-height: 1.5;
+    padding-top: 12px; border-top: 1px solid #1A1A24;
+  }
+  .mh-safety strong { color: #a1a1aa; }
 
   /* Profili tab: cards per applicare preset dal cloud */
   .profile-card {
@@ -1693,6 +1800,10 @@ function Show-WebGui {
         <div class="admin-line" id="adminLine"></div>
       </div>
       <div class="header-actions">
+        <button type="button" class="mobile-btn" id="mobileHandoffBtn" data-testid="mobile-handoff-btn" title="Apri la Dashboard sul telefono senza login">
+          <span class="mobile-btn-icon" aria-hidden="true">&#9990;</span>
+          <span>Continua sul Telefono</span>
+        </button>
         <label class="live-sync-toggle" data-testid="live-sync-label" title="Invia CPU/GPU/RAM/temp in tempo reale al Command Center cloud">
           <input type="checkbox" id="liveSyncToggle" data-testid="live-sync-toggle" />
           <span class="live-sync-dot" aria-hidden="true"></span>
@@ -1735,6 +1846,32 @@ function Show-WebGui {
   </footer>
 
   <div class="toast" id="toast"></div>
+
+  <div class="mh-overlay" id="mobileHandoffOverlay" hidden data-testid="mobile-handoff-overlay">
+    <div class="mh-modal" role="dialog" aria-modal="true" aria-labelledby="mhTitle" data-testid="mobile-handoff-modal">
+      <button type="button" class="mh-close" id="mhClose" aria-label="Chiudi" data-testid="mobile-handoff-close">&times;</button>
+      <div class="mh-eyebrow">// CONTINUA SUL TELEFONO</div>
+      <h2 class="mh-title" id="mhTitle">Apri la Dashboard sul mobile</h2>
+      <p class="mh-sub">Scansiona il QR con la fotocamera del telefono. Ti collegherai automaticamente al tuo account, senza login.</p>
+      <div class="mh-body" id="mhBody">
+        <div class="mh-loading" id="mhLoading">Generazione QR sicuro...</div>
+        <div class="mh-error" id="mhError" hidden></div>
+        <div class="mh-qr" id="mhQr" hidden></div>
+        <div class="mh-consumed" id="mhConsumed" hidden>
+          <div class="mh-check">&#10003;</div>
+          <div class="mh-consumed-title">Device connesso</div>
+          <div class="mh-consumed-sub" id="mhDeviceLabel">Dispositivo</div>
+        </div>
+      </div>
+      <div class="mh-footer" id="mhFooter" hidden>
+        <div class="mh-countdown"><span>Scade tra</span> <span class="mh-time" id="mhTime">05:00</span></div>
+        <button type="button" class="mh-regen" id="mhRegen" data-testid="mobile-handoff-regenerate">Rigenera</button>
+      </div>
+      <div class="mh-safety">
+        <strong>Sicurezza:</strong> il link scade in 5 minuti ed &egrave; a uso singolo.
+      </div>
+    </div>
+  </div>
 
 <script>
 (function(){
@@ -2076,6 +2213,118 @@ function Show-WebGui {
     try { navigator.sendBeacon(`/api/close?tk=${encodeURIComponent(TOKEN)}`, ""); } catch(e){}
   });
 
+  // -------- Mobile Handoff (Continua sul Telefono) --------
+  const mh = {
+    btn: document.getElementById("mobileHandoffBtn"),
+    overlay: document.getElementById("mobileHandoffOverlay"),
+    closeBtn: document.getElementById("mhClose"),
+    regenBtn: document.getElementById("mhRegen"),
+    loading: document.getElementById("mhLoading"),
+    error: document.getElementById("mhError"),
+    qr: document.getElementById("mhQr"),
+    consumed: document.getElementById("mhConsumed"),
+    deviceLabel: document.getElementById("mhDeviceLabel"),
+    footer: document.getElementById("mhFooter"),
+    time: document.getElementById("mhTime"),
+    token: "",
+    remaining: 0,
+    tickId: 0,
+    pollId: 0,
+    open: false,
+  };
+  function mhSetVis(node, visible) {
+    if (!node) return;
+    if (visible) node.removeAttribute("hidden"); else node.setAttribute("hidden", "");
+  }
+  function mhStopTimers() {
+    if (mh.tickId) { clearInterval(mh.tickId); mh.tickId = 0; }
+    if (mh.pollId) { clearInterval(mh.pollId); mh.pollId = 0; }
+  }
+  function mhReset() {
+    mhStopTimers();
+    mh.token = ""; mh.remaining = 0;
+    mhSetVis(mh.loading, true);
+    mhSetVis(mh.error, false); mh.error.textContent = "";
+    mhSetVis(mh.qr, false); mh.qr.innerHTML = "";
+    mhSetVis(mh.consumed, false);
+    mhSetVis(mh.footer, false);
+  }
+  function mhOpen() {
+    mh.open = true; mhSetVis(mh.overlay, true); mhReset(); mhGenerate();
+  }
+  function mhClose() {
+    mh.open = false; mhStopTimers(); mhSetVis(mh.overlay, false); mhReset();
+  }
+  function mhFmt(sec) {
+    const m = String(Math.floor(sec/60)).padStart(2,"0");
+    const s = String(sec%60).padStart(2,"0");
+    return m+":"+s;
+  }
+  async function mhGenerate() {
+    mhReset();
+    try {
+      const d = await api("/api/mobile-handoff/generate", { method: "POST", headers: {"X-FF-Token": TOKEN} });
+      if (!d || d.err) throw new Error(d && d.err ? d.err : "unknown");
+      mh.token = d.token;
+      mh.remaining = d.expires_in_seconds || 300;
+      // Fetch QR SVG (locally proxied to cloud) and inject.
+      const qrResp = await fetch(`/api/mobile-handoff/qr?tk=${encodeURIComponent(TOKEN)}&token=${encodeURIComponent(mh.token)}`);
+      if (!qrResp.ok) throw new Error("qr_fetch_failed");
+      const svg = await qrResp.text();
+      mhSetVis(mh.loading, false);
+      mh.qr.innerHTML = svg;
+      mhSetVis(mh.qr, true);
+      mhSetVis(mh.footer, true);
+      mh.time.textContent = mhFmt(mh.remaining);
+      mh.time.classList.remove("low");
+      mh.tickId = setInterval(() => {
+        mh.remaining = Math.max(0, mh.remaining - 1);
+        mh.time.textContent = mhFmt(mh.remaining);
+        if (mh.remaining < 60) mh.time.classList.add("low");
+        if (mh.remaining <= 0) { mhStopTimers(); mhShowError("Il QR e scaduto. Rigenera."); }
+      }, 1000);
+      mh.pollId = setInterval(mhPoll, 2000);
+    } catch (e) {
+      mhShowError((e && e.message === "rate_limited") ? "Troppi QR generati. Riprova tra un'ora." : "Errore nella generazione del QR");
+    }
+  }
+  function mhShowError(msg) {
+    mhStopTimers();
+    mhSetVis(mh.loading, false);
+    mhSetVis(mh.qr, false);
+    mhSetVis(mh.footer, false);
+    mh.error.textContent = msg;
+    mhSetVis(mh.error, true);
+  }
+  async function mhPoll() {
+    if (!mh.token || !mh.open) return;
+    try {
+      const d = await api(`/api/mobile-handoff/status?magic=${encodeURIComponent(mh.token)}`);
+      if (!d || d.err) return;
+      if (d.used) {
+        mhStopTimers();
+        const label = d.device_label || "Dispositivo";
+        mh.deviceLabel.textContent = label + " ha effettuato l'accesso";
+        mhSetVis(mh.qr, false);
+        mhSetVis(mh.footer, false);
+        mhSetVis(mh.error, false);
+        mhSetVis(mh.consumed, true);
+        toast("Nuovo device connesso: " + label, "ok");
+        // Also trigger Windows native toast via local endpoint.
+        try { fetch(`/api/mobile-handoff/notify?tk=${encodeURIComponent(TOKEN)}&device=${encodeURIComponent(label)}`, { method: "POST" }); } catch(e){}
+        setTimeout(() => { if (mh.open) mhClose(); }, 2600);
+      } else if (d.expired) {
+        mhStopTimers();
+        mhShowError("Il QR e scaduto. Rigenera.");
+      }
+    } catch(e) {}
+  }
+  if (mh.btn)      mh.btn.addEventListener("click", mhOpen);
+  if (mh.closeBtn) mh.closeBtn.addEventListener("click", mhClose);
+  if (mh.regenBtn) mh.regenBtn.addEventListener("click", mhGenerate);
+  if (mh.overlay)  mh.overlay.addEventListener("click", (e) => { if (e.target === mh.overlay) mhClose(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && mh.open) mhClose(); });
+
   refreshState();
   setInterval(pollLog, 400);
 })();
@@ -2218,6 +2467,49 @@ function Show-WebGui {
           $body = Read-Body $ctx | ConvertFrom-Json
           $script:LIVE_SYNC = [bool]$body.enabled
           Send-Json $ctx @{ ok = $true; enabled = $script:LIVE_SYNC }
+        }
+        elseif ($path -eq '/api/mobile-handoff/generate' -and $method -eq 'POST') {
+          # Proxy to cloud: generate a 5-min single-use magic-link for mobile QR handoff.
+          try {
+            $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/magic-link" -Method Post -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 10
+            Send-Json $ctx $resp
+          } catch {
+            $code = try { [int]$_.Exception.Response.StatusCode.value__ } catch { 0 }
+            if ($code -eq 429) { Send-Json $ctx @{ err = 'rate_limited' } 429 }
+            else { Send-Json $ctx @{ err = 'cloud_unreachable' } 502 }
+          }
+        }
+        elseif ($path -eq '/api/mobile-handoff/qr' -and $method -eq 'GET') {
+          # Proxy to cloud: fetch QR SVG for the magic token.
+          $magic = $req.QueryString['token']
+          if ([string]::IsNullOrWhiteSpace($magic)) { $ctx.Response.StatusCode = 400; $ctx.Response.Close() }
+          else {
+            try {
+              $svg = Invoke-RestMethod -Uri "$BACKEND/api/agent/magic-qr?token=$([Uri]::EscapeDataString($magic))" -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 10
+              $bytes = [System.Text.Encoding]::UTF8.GetBytes([string]$svg)
+              $ctx.Response.ContentType = 'image/svg+xml'
+              $ctx.Response.Headers.Add('Cache-Control','no-store')
+              $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+              $ctx.Response.Close()
+            } catch { $ctx.Response.StatusCode = 502; $ctx.Response.Close() }
+          }
+        }
+        elseif ($path -eq '/api/mobile-handoff/status' -and $method -eq 'GET') {
+          # Public poll: has the magic link been consumed yet?
+          $magic = $req.QueryString['magic']
+          if ([string]::IsNullOrWhiteSpace($magic)) { Send-Json $ctx @{ err = 'missing_token' } 400 }
+          else {
+            try {
+              $resp = Invoke-RestMethod -Uri "$BACKEND/api/auth/magic-status/$([Uri]::EscapeDataString($magic))" -TimeoutSec 6
+              Send-Json $ctx $resp
+            } catch { Send-Json $ctx @{ err = 'cloud_unreachable' } 502 }
+          }
+        }
+        elseif ($path -eq '/api/mobile-handoff/notify' -and $method -eq 'POST') {
+          # Fire a native Windows toast notification (BurntToast if available, else balloon).
+          $device = $req.QueryString['device']; if ([string]::IsNullOrWhiteSpace($device)) { $device = 'Dispositivo' }
+          try { Show-DeviceToast $device } catch {}
+          Send-Json $ctx @{ ok = $true }
         }
         elseif ($path -eq '/api/restore' -and $method -eq 'POST') {
           WebLog 'Ripristino dal backup...'; $msg = Invoke-Restore; WebLog ('  ' + $msg)
