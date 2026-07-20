@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -9,12 +10,12 @@ import {
 import api from "@/lib/api";
 
 const DIFFICULTY_STYLES = {
-  facile:    { color: "text-[#00FF66]", label: "Facile" },
-  easy:      { color: "text-[#00FF66]", label: "Easy" },
-  medio:     { color: "text-[#E5FF00]", label: "Medio" },
-  medium:    { color: "text-[#E5FF00]", label: "Medium" },
-  avanzato:  { color: "text-[#FF6A00]", label: "Avanzato" },
-  advanced:  { color: "text-[#FF6A00]", label: "Advanced" },
+  facile:    { color: "text-[#00FF66]", key: "easy" },
+  easy:      { color: "text-[#00FF66]", key: "easy" },
+  medio:     { color: "text-[#E5FF00]", key: "medium" },
+  medium:    { color: "text-[#E5FF00]", key: "medium" },
+  avanzato:  { color: "text-[#FF6A00]", key: "advanced" },
+  advanced:  { color: "text-[#FF6A00]", key: "advanced" },
 };
 
 const KIND_ICONS = {
@@ -25,15 +26,18 @@ const KIND_ICONS = {
   manual: Sparkles,
 };
 
-function relTimeIt(iso) {
+function relTime(iso, t) {
   if (!iso) return "";
   const d = new Date(iso).getTime();
   const diff = (Date.now() - d) / 1000;
-  if (diff < 60) return "adesso";
-  if (diff < 3600) return `${Math.floor(diff / 60)} min fa`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} h fa`;
+  if (diff < 60) return t("diagnose.just_now");
+  if (diff < 3600) return `${Math.floor(diff / 60)} ${t("diagnose.min_ago")}`;
+  if (diff < 86400) {
+    const h = Math.floor(diff / 3600);
+    return `${h} ${t(h === 1 ? "diagnose.hour_ago" : "diagnose.hours_ago")}`;
+  }
   const days = Math.floor(diff / 86400);
-  return `${days} ${days === 1 ? "giorno" : "giorni"} fa`;
+  return `${days} ${t("diagnose.days_ago")}`;
 }
 
 /**
@@ -42,6 +46,8 @@ function relTimeIt(iso) {
  * renders each action with impact + difficulty + concrete CTAs.
  */
 export default function DiagnosePanel({ hasSpecs }) {
+  const { t, i18n } = useTranslation();
+  const isEn = (i18n.resolvedLanguage || i18n.language || "it").toLowerCase().startsWith("en");
   const [state, setState] = useState("idle");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -90,14 +96,15 @@ export default function DiagnosePanel({ hasSpecs }) {
     setState("loading");
     setError("");
     try {
-      const { data } = await api.post("/advisor/diagnose");
+      const lang = (i18n.resolvedLanguage || i18n.language || "it").slice(0, 2);
+      const { data } = await api.post("/advisor/diagnose", { lang });
       setResult(data);
       setCreatedAt(new Date().toISOString());
       setSavedIds(new Set());
       setFeedback({});
       setState("done");
     } catch (e) {
-      setError(e?.response?.data?.detail || "Errore durante la diagnosi");
+      setError(e?.response?.data?.detail || t("diagnose.error_default"));
       setState("error");
     }
   };
@@ -112,11 +119,11 @@ export default function DiagnosePanel({ hasSpecs }) {
         if (isActive) next.delete(slug); else next.add(slug);
         return next;
       });
-      toast.success(isActive ? "Segnato come non attivo" : "Segnato come già attivo", {
-        description: isActive ? "" : "L'AI ne terrà conto nelle prossime diagnosi",
+      toast.success(isActive ? t("diagnose.toast_marked_inactive") : t("diagnose.toast_marked_active"), {
+        description: isActive ? "" : (isEn ? "AI will consider this in future diagnoses" : "L'AI ne terrà conto nelle prossime diagnosi"),
       });
     } catch {
-      toast.error("Impossibile aggiornare lo stato");
+      toast.error(t("diagnose.toast_mark_fail"));
     }
   };
 
@@ -131,9 +138,9 @@ export default function DiagnosePanel({ hasSpecs }) {
         rating,
       });
       setFeedback((prev) => ({ ...prev, [key]: rating }));
-      toast.success(rating === "up" ? "Feedback registrato 👍" : "Feedback registrato 👎");
+      toast.success(rating === "up" ? t("diagnose.toast_feedback_up") : t("diagnose.toast_feedback_down"));
     } catch {
-      toast.error("Feedback fallito");
+      toast.error(t("diagnose.toast_feedback_fail"));
     }
   };
 
@@ -148,10 +155,10 @@ export default function DiagnosePanel({ hasSpecs }) {
         source: "advisor_diagnose",
       });
       setSavedIds((s) => new Set([...s, action.title]));
-      toast.success("Azione salvata", { description: "La trovi nella tua Dashboard" });
+      toast.success(t("diagnose.toast_saved"), { description: t("diagnose.toast_saved_desc") });
       return data;
     } catch {
-      toast.error("Salvataggio fallito");
+      toast.error(t("diagnose.toast_save_fail"));
     }
   };
 
@@ -181,10 +188,12 @@ export default function DiagnosePanel({ hasSpecs }) {
                 // AI COACH · KILLER FEATURE
               </div>
               <h3 className="font-display font-black text-xl tracking-tighter text-white mb-0.5">
-                Diagnosi PC AI
+                {t("diagnose.title")}
               </h3>
               <p className="text-zinc-400 text-sm">
-                Un click. 3-5 azioni prioritizzate solo per il tuo hardware: impatto stimato, difficoltà, applica in un tap.
+                {isEn
+                  ? "One click. 3-5 prioritized actions just for your hardware: estimated impact, difficulty, apply in a tap."
+                  : "Un click. 3-5 azioni prioritizzate solo per il tuo hardware: impatto stimato, difficoltà, applica in un tap."}
               </p>
             </div>
             <ChevronRight size={20} className="text-[#E5FF00] group-hover:translate-x-1 transition-transform" />
@@ -199,9 +208,9 @@ export default function DiagnosePanel({ hasSpecs }) {
         >
           <Loader2 size={32} className="text-[#E5FF00] animate-spin" />
           <div className="text-sm text-zinc-300 font-mono uppercase tracking-widest">
-            L'AI sta analizzando il tuo PC...
+            {isEn ? "AI is analyzing your PC..." : "L'AI sta analizzando il tuo PC..."}
           </div>
-          <div className="text-xs text-zinc-500">Health checks, benchmark trend, hardware, tweak</div>
+          <div className="text-xs text-zinc-500">{isEn ? "Health checks, benchmark trend, hardware, tweaks" : "Health checks, benchmark trend, hardware, tweak"}</div>
         </div>
       )}
 
@@ -212,14 +221,14 @@ export default function DiagnosePanel({ hasSpecs }) {
         >
           <AlertTriangle size={20} className="text-[#FF3B30] shrink-0 mt-0.5" />
           <div className="flex-1">
-            <div className="font-semibold text-[#FF3B30] mb-1">Diagnosi fallita</div>
+            <div className="font-semibold text-[#FF3B30] mb-1">{isEn ? "Diagnosis failed" : "Diagnosi fallita"}</div>
             <div className="text-sm text-zinc-400 mb-3">{error}</div>
             <button
               onClick={run}
               className="text-xs font-mono uppercase tracking-widest text-[#E5FF00] hover:underline"
               data-testid="diagnose-retry"
             >
-              Riprova →
+              {isEn ? "Retry →" : "Riprova →"}
             </button>
           </div>
           <button onClick={dismiss} className="text-zinc-500 hover:text-white">
@@ -231,6 +240,7 @@ export default function DiagnosePanel({ hasSpecs }) {
       {state === "done" && result && (
         <div className="border border-[#00E0FF]/40 bg-gradient-to-br from-[#00E0FF]/5 to-transparent" data-testid="diagnose-result">
           <DiagnoseHeader
+            t={t}
             result={result}
             createdAt={createdAt}
             collapsed={collapsed}
@@ -245,6 +255,7 @@ export default function DiagnosePanel({ hasSpecs }) {
             {(result.actions || []).map((a, i) => (
               <DiagnoseAction
                 key={a.title || i}
+                t={t}
                 index={i}
                 action={a}
                 isActive={appliedSlugs.has(toSlug(a.title))}
@@ -268,9 +279,9 @@ export default function DiagnosePanel({ hasSpecs }) {
               className="inline-flex items-center gap-1.5 text-zinc-500 hover:text-[#E5FF00] font-mono uppercase tracking-widest transition-colors"
               data-testid="diagnose-again"
             >
-              <RefreshCw size={11} /> Rigenera
+              <RefreshCw size={11} /> {t("diagnose.regenerate")}
             </button>
-            <span className="text-zinc-600 font-mono">Generato da FrameForge AI</span>
+            <span className="text-zinc-600 font-mono">{t("diagnose.footer")}</span>
           </div>
           )}
         </div>
@@ -283,6 +294,7 @@ export default function DiagnosePanel({ hasSpecs }) {
 // -------------------- Sub-components (kept in-file to preserve one-import contract) --------------------
 
 function DiagnoseEmpty() {
+  const { t } = useTranslation();
   return (
     <div
       className="mb-6 border border-[#E5FF00]/30 bg-gradient-to-br from-[#E5FF00]/10 to-transparent p-5"
@@ -294,18 +306,17 @@ function DiagnoseEmpty() {
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-display font-black text-lg tracking-tight text-white mb-1">
-            Diagnosi PC AI
+            {t("diagnose.title")}
           </h3>
           <p className="text-zinc-400 text-sm mb-3">
-            Collega prima il tuo PC per ottenere una diagnosi personalizzata: 3-5 azioni prioritizzate
-            con impatto stimato su FPS, latenza e temperature.
+            {t("diagnose.empty_desc")}
           </p>
           <Link
             to="/app/desktop"
             className="inline-flex items-center gap-1.5 border border-[#E5FF00]/50 text-[#E5FF00] hover:bg-[#E5FF00]/10 px-4 py-2 text-xs font-mono uppercase tracking-widest transition-colors"
             data-testid="diagnose-connect-cta"
           >
-            <MonitorDown size={13} /> Connetti il PC →
+            <MonitorDown size={13} /> {t("diagnose.connect_cta")} →
           </Link>
         </div>
       </div>
@@ -313,16 +324,17 @@ function DiagnoseEmpty() {
   );
 }
 
-function DiagnoseHeader({ result, createdAt, collapsed, outcome, onToggleCollapsed, onDismiss }) {
+function DiagnoseHeader({ t, result, createdAt, collapsed, outcome, onToggleCollapsed, onDismiss }) {
+  const collapseLabel = collapsed ? t("diagnose.toggle_expand") : t("diagnose.toggle_collapse");
   return (
     <div className="p-5 border-b border-[#1A1A24] flex items-start gap-3">
       <button
         onClick={onToggleCollapsed}
         className="w-10 h-10 bg-[#00E0FF]/15 border border-[#00E0FF]/40 flex items-center justify-center shrink-0 hover:bg-[#00E0FF]/25 transition-colors group"
         data-testid="diagnose-collapse-toggle"
-        aria-label={collapsed ? "Espandi diagnosi" : "Comprimi diagnosi"}
+        aria-label={collapseLabel}
         aria-expanded={!collapsed}
-        title={collapsed ? "Espandi diagnosi" : "Comprimi diagnosi"}
+        title={collapseLabel}
       >
         {collapsed
           ? <ChevronRight size={18} className="text-[#00E0FF] group-hover:translate-x-0.5 transition-transform" />
@@ -332,11 +344,11 @@ function DiagnoseHeader({ result, createdAt, collapsed, outcome, onToggleCollaps
         onClick={onToggleCollapsed}
         className="flex-1 min-w-0 text-left"
         data-testid="diagnose-header-clickable"
-        aria-label={collapsed ? "Espandi diagnosi" : "Comprimi diagnosi"}
+        aria-label={collapseLabel}
       >
         <div className="flex items-center gap-2 flex-wrap mb-1">
           <div className="text-[10px] font-mono uppercase tracking-widest text-[#00E0FF]">
-            // DIAGNOSI · {(result.actions || []).length} AZIONI
+            {t("diagnose.header_prefix")} · {(result.actions || []).length} {t("diagnose.header_actions")}
           </div>
           {createdAt && (
             <span
@@ -344,17 +356,17 @@ function DiagnoseHeader({ result, createdAt, collapsed, outcome, onToggleCollaps
               data-testid="diagnose-timestamp"
               title={new Date(createdAt).toLocaleString()}
             >
-              · generata {relTimeIt(createdAt)}
+              · {t("diagnose.header_generated")} {relTime(createdAt, t)}
             </span>
           )}
           {collapsed && (
             <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 border border-[#2A2A35] px-1.5 py-0.5">
-              Compressa
+              {t("diagnose.collapsed_badge")}
             </span>
           )}
         </div>
         <p className="text-sm text-zinc-200 leading-relaxed">
-          {result.summary || "Ecco le azioni consigliate dall'AI per il tuo PC."}
+          {result.summary || t("diagnose.summary_fallback")}
         </p>
         {outcome?.available && outcome.delta !== 0 && (
           <div
@@ -364,10 +376,9 @@ function DiagnoseHeader({ result, createdAt, collapsed, outcome, onToggleCollaps
                 : "border-[#FF3B30]/40 bg-[#FF3B30]/10 text-[#FF3B30]"
             }`}
             data-testid="outcome-badge"
-            title="Delta benchmark tra prima e dopo l'ultima diagnosi"
           >
             {outcome.delta > 0 ? <ThumbsUp size={10} /> : <ThumbsDown size={10} />}
-            Dopo l'ultima diagnosi: {outcome.delta > 0 ? "+" : ""}{outcome.delta} punti benchmark
+            {t("diagnose.outcome_after")} {outcome.delta > 0 ? "+" : ""}{outcome.delta} {t("diagnose.outcome_points")}
           </div>
         )}
       </button>
@@ -375,7 +386,7 @@ function DiagnoseHeader({ result, createdAt, collapsed, outcome, onToggleCollaps
         onClick={onDismiss}
         className="text-zinc-500 hover:text-white shrink-0"
         data-testid="diagnose-close"
-        aria-label="Chiudi"
+        aria-label={t("diagnose.close")}
       >
         <X size={16} />
       </button>
@@ -383,9 +394,10 @@ function DiagnoseHeader({ result, createdAt, collapsed, outcome, onToggleCollaps
   );
 }
 
-function DiagnoseAction({ index, action, isActive, isSaved, feedback, verifyOpen, onToggleVerify, onApply, onToggleApplied, onSubmitFeedback }) {
+function DiagnoseAction({ t, index, action, isActive, isSaved, feedback, verifyOpen, onToggleVerify, onApply, onToggleApplied, onSubmitFeedback }) {
   const Icon = KIND_ICONS[action.kind] || Zap;
   const diff = DIFFICULTY_STYLES[(action.difficulty || "").toLowerCase()] || DIFFICULTY_STYLES.facile;
+  const diffLabel = t(`diagnose.difficulty_${diff.key}`);
   return (
     <div
       className={`p-5 transition-colors ${isActive ? "bg-[#00FF66]/5" : "hover:bg-[#0F0F12]"}`}
@@ -402,9 +414,9 @@ function DiagnoseAction({ index, action, isActive, isSaved, feedback, verifyOpen
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <h4 className={`font-display font-black text-base tracking-tight ${isActive ? "text-zinc-400 line-through" : "text-white"}`}>{action.title}</h4>
             {isActive ? (
-              <span className="text-[10px] font-mono uppercase tracking-widest text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-1.5">GIÀ ATTIVO</span>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-1.5">{t("diagnose.already_active")}</span>
             ) : (
-              <span className={`text-[10px] font-mono uppercase tracking-widest ${diff.color}`}>{diff.label}</span>
+              <span className={`text-[10px] font-mono uppercase tracking-widest ${diff.color}`}>{diffLabel}</span>
             )}
           </div>
           {!isActive && action.impact && (
@@ -421,7 +433,7 @@ function DiagnoseAction({ index, action, isActive, isSaved, feedback, verifyOpen
                 className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-[#00E0FF] transition-colors"
                 data-testid={`diagnose-action-${index}-verify-toggle`}
               >
-                <Eye size={11} /> Come verificare se è già attivo
+                <Eye size={11} /> {t("diagnose.verify_toggle")}
                 <ChevronRight size={11} className={`transition-transform ${verifyOpen ? "rotate-90" : ""}`} />
               </button>
               {verifyOpen && (
@@ -440,7 +452,7 @@ function DiagnoseAction({ index, action, isActive, isSaved, feedback, verifyOpen
                   data-testid={`diagnose-action-${index}-apply`}
                   className="inline-flex items-center gap-1.5 bg-[#E5FF00] text-black font-bold px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest hover:bg-white transition-colors"
                 >
-                  <MonitorDown size={12} /> {action.cta || "Apri agent"}
+                  <MonitorDown size={12} /> {action.cta || t("diagnose.cta_apply_default")}
                 </Link>
                 <button
                   onClick={() => onApply(action)}
@@ -448,7 +460,7 @@ function DiagnoseAction({ index, action, isActive, isSaved, feedback, verifyOpen
                   data-testid={`diagnose-action-${index}-save`}
                   className="inline-flex items-center gap-1.5 border border-[#2A2A35] hover:border-[#00E0FF] text-zinc-300 hover:text-[#00E0FF] px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {isSaved ? <><Check size={12} /> Salvata</> : <><Bookmark size={12} /> Salva</>}
+                  {isSaved ? <><Check size={12} /> {t("diagnose.saved")}</> : <><Bookmark size={12} /> {t("diagnose.save")}</>}
                 </button>
               </>
             )}
@@ -461,7 +473,7 @@ function DiagnoseAction({ index, action, isActive, isSaved, feedback, verifyOpen
                   : "border-[#2A2A35] hover:border-[#00FF66] text-zinc-400 hover:text-[#00FF66]"
               }`}
             >
-              <CheckCircle2 size={12} /> {isActive ? "Attivo" : "Segna già attivo"}
+              <CheckCircle2 size={12} /> {isActive ? t("diagnose.mark_inactive") : t("diagnose.mark_active")}
             </button>
 
             <div className="flex items-center gap-0.5 ml-auto">
@@ -476,7 +488,7 @@ function DiagnoseAction({ index, action, isActive, isSaved, feedback, verifyOpen
               <button
                 onClick={() => onSubmitFeedback(action, "down")}
                 data-testid={`diagnose-action-${index}-thumb-down`}
-                aria-label="Non utile"
+                aria-label={t("diagnose.thumb_not_useful")}
                 className={`p-1.5 border transition-colors ${feedback === "down" ? "border-[#FF3B30] bg-[#FF3B30]/10 text-[#FF3B30]" : "border-transparent text-zinc-600 hover:text-[#FF3B30] hover:border-[#2A2A35]"}`}
               >
                 <ThumbsDown size={12} />

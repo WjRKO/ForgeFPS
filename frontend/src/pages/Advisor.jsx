@@ -146,7 +146,8 @@ export default function Advisor() {
       // Load follow-ups after successful stream
       const targetSid = sid || sessionId;
       if (targetSid) {
-        api.post(`/advisor/followups?session_id=${targetSid}`).then(({ data }) => {
+        const lng = (i18n.resolvedLanguage || i18n.language || "it").slice(0, 2);
+        api.post(`/advisor/followups?session_id=${targetSid}&lang=${lng}`).then(({ data }) => {
           setFollowups(data?.suggestions || []);
         }).catch(() => {});
       }
