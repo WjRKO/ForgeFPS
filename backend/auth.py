@@ -224,6 +224,57 @@ def build_auth_router(db):
     async def me(user: dict = Depends(get_current_user)):
         return public_user(user)
 
+    @router.post("/magic-link")
+    async def create_magic_link(user: dict = Depends(get_current_user)):
+        """Generate a one-time 5-minute token for 'Continue on mobile' QR flow.
+        Rate-limited to 5 per user per hour."""
+        import secrets as _secrets
+        now = datetime.now(timezone.utc)
+        one_hour_ago = (now - timedelta(hours=1)).isoformat()
+        recent_count = await db.magic_tokens.count_documents({
+            "user_id": str(user["_id"]),
+            "created_at": {"$gte": one_hour_ago},
+        })
+        if recent_count >= 5:
+            raise HTTPException(status_code=429, detail="Too many magic links. Try again in an hour.")
+        token = _secrets.token_urlsafe(32)
+        ttl_seconds = 300  # 5 minutes
+        expires_at = (now + timedelta(seconds=ttl_seconds)).isoformat()
+        await db.magic_tokens.insert_one({
+            "token": token,
+            "user_id": str(user["_id"]),
+            "expires_at": expires_at,
+            "created_at": now.isoformat(),
+            "used": False,
+        })
+        return {"token": token, "expires_in_seconds": ttl_seconds}
+
+    @router.post("/consume-magic")
+    async def consume_magic_link(data: dict, response: Response):
+        """Consume a magic link token, set auth cookies, return user profile.
+        Single-use, 5-minute TTL enforced."""
+        token = (data or {}).get("token", "").strip()
+        if not token:
+            raise HTTPException(status_code=400, detail="Missing token")
+        rec = await db.magic_tokens.find_one_and_update(
+            {"token": token, "used": False},
+            {"$set": {"used": True, "used_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        if not rec:
+            raise HTTPException(status_code=401, detail="Link expired or already used")
+        try:
+            expires_at = datetime.fromisoformat(rec["expires_at"].replace("Z", "+00:00"))
+        except Exception:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        if expires_at < datetime.now(timezone.utc):
+            raise HTTPException(status_code=401, detail="Link expired")
+        user = await db.users.find_one({"_id": ObjectId(rec["user_id"])})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        uid = str(user["_id"])
+        set_auth_cookies(response, create_access_token(uid, user["email"]), create_refresh_token(uid))
+        return public_user(user)
+
     @router.post("/refresh")
     async def refresh(request: Request, response: Response):
         token = request.cookies.get("refresh_token")

@@ -814,6 +814,33 @@ User ha postato secrets pubblici (CLIENT_SECRET, BOT_TOKEN, WEBHOOK URLs). Deve 
 - MOD: /app/memory/PRD.md
 
 ### 2026-07-20 (28) - Step 2 GUI Profili + Live Sync toggle nella GUI Sicura
+_(dettagli riassunti nel finish summary della sessione: tab "Profili Cloud" nel `ps_agent.py` che pesca da `/api/agent/profiles`, toggle "Sync Cloud" con dot pulsante verde, push telemetria opportunistico throttled 3s dentro `/api/log`, endpoint locali `/api/profiles-cloud` e `/api/live-sync`, funzione `Push-LiveSample` che riusa `Get-TelemetrySample`)_
+
+### 2026-07-20 (29) - QR "Continua sul telefono" (Magic Link handoff)
+- **Backend** (`auth.py`):
+  - `POST /api/auth/magic-link` (auth cookie richiesta): genera token cryptographically-secure via `secrets.token_urlsafe(32)`, TTL 5 min, salvato in `db.magic_tokens` con `{token, user_id, expires_at, created_at, used}`. Rate limit 5/user/ora (429 se superato).
+  - `POST /api/auth/consume-magic` (pubblico): atomicamente marca il token come `used=true` via `find_one_and_update`, verifica TTL, carica user da MongoDB, setta cookie JWT standard, ritorna `public_user()`. Single-use enforced.
+- **Frontend**:
+  - Nuova route `/auth/mobile?t=<token>` (`AuthMobile.jsx`): consuma il token via `POST /consume-magic`, redirect a `/app` on success. Su errore mostra pagina "Link scaduto o già usato" con CTA login.
+  - Nuovo componente `MobileHandoffModal.jsx`: overlay z-100 con QR SVG (libreria `qrcode.react` 4.2.0 aggiunta come dep), countdown live `mm:ss` (rosso sotto 60s), pulsante "Rigenera", auto-rigenera all'apertura del modal. Click-outside-to-close. Testid: `mobile-handoff-modal`, `mobile-handoff-qr`, `mobile-handoff-countdown`, `mobile-handoff-close`, `mobile-handoff-regenerate`, `mobile-handoff-retry`, `mobile-handoff-error`.
+  - Integrazione in `Dashboard.jsx`: bottone "Continua sul telefono" (icona Smartphone lucide, border cyan) accanto al PageHeader. Testid: `continue-on-mobile-btn`.
+- **Verificato end-to-end**:
+  - curl `POST /magic-link` → `{token, expires_in_seconds:300}` ✅
+  - curl `POST /consume-magic` prima chiamata → 200 con user profile + cookies settati ✅
+  - Seconda chiamata stesso token → 401 "Link expired or already used" ✅ (single-use enforced)
+  - Token invalido → 401 ✅
+  - Playwright: click bottone → modal apre con QR + countdown "05:00"
+- **Sicurezza**: token 32 byte urlsafe (256 bit entropia), TTL 5 min, single-use atomic via find_one_and_update, rate limit 5/h/user, richiede JWT valido per generazione.
+- **Nessuna regressione**: 48/48 test verdi (agent_script, secure_ps, alerts_fps, account_endpoints).
+
+## FILE MODIFICATI/CREATI (sessione 29)
+- MOD: /app/backend/auth.py (2 endpoint magic-link + consume-magic)
+- CREATO: /app/frontend/src/pages/AuthMobile.jsx (route /auth/mobile consumer)
+- CREATO: /app/frontend/src/components/MobileHandoffModal.jsx (QR modal componente)
+- MOD: /app/frontend/src/pages/Dashboard.jsx (import + bottone + state modal)
+- MOD: /app/frontend/src/App.js (nuova route /auth/mobile)
+- MOD: /app/frontend/package.json (aggiunta dep qrcode.react@4.2.0)
+- MOD: /app/memory/PRD.md
 - **Nuova tab "Profili Cloud"** in `ps_agent.py`:
   - `CATS` esteso con `{key:"profiles", label:"Profili Cloud"}`; state esteso con `profiles: null`
   - `renderTabs()` gestisce case profili (mostra count profili invece di `todo/total` tweak)
