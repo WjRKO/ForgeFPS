@@ -327,7 +327,7 @@ export default function MyPc() {
             <ScoreRing score={health.score} grade={t(`mypcpage.health.grade.${health.grade_key}`, health.grade)} />
             <div className="flex-1 w-full grid sm:grid-cols-2 gap-2">
               {health.checks.map((c, i) => (
-                <div key={i} data-testid={`check-${i}`} className="flex items-start gap-2 bg-black border border-[#1A1A24] p-3">
+                <div key={c.id || i} data-testid={`check-${i}`} className="flex items-start gap-2 bg-black border border-[#1A1A24] p-3">
                   {STATUS_ICON[c.status]}
                   <div className="min-w-0">
                     <div className="text-sm text-zinc-200">{t(`mypcpage.health.label.${c.id}`, c.label)}</div>
@@ -393,7 +393,7 @@ export default function MyPc() {
           <div>
             <div className="p-4 text-sm text-zinc-300 border-b border-[#1A1A24] bg-black">{startup.summary}</div>
             {startup.items.map((it, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 border-b border-[#1A1A24]" data-testid={`startup-item-${i}`}>
+              <div key={it.name || i} className="flex items-center gap-3 p-3 border-b border-[#1A1A24]" data-testid={`startup-item-${i}`}>
                 <span className={`text-xs font-bold uppercase px-2 py-0.5 shrink-0 ${it.recommendation === "disabilita" ? "bg-[#FF3B30]/20 text-[#FF3B30]" : it.recommendation === "mantieni" ? "bg-[#00FF66]/20 text-[#00FF66]" : "bg-[#E5FF00]/20 text-[#E5FF00]"}`}>{it.recommendation}</span>
                 <div className="flex-1 min-w-0"><div className="text-sm truncate">{it.name}</div><div className="text-xs text-zinc-500">{it.reason}</div></div>
               </div>

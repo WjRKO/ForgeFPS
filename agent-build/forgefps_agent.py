@@ -858,5 +858,8 @@ if __name__ == "__main__":
             pass
         sys.exit(0)
     while True:
-        os.system("cls")
+        try:
+            subprocess.run(["cmd", "/c", "cls"], check=False)
+        except Exception:
+            pass
         menu()

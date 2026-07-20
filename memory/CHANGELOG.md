@@ -1,5 +1,46 @@
 # FrameForge — Changelog
 
+## v0.6.11 — 2026-07-20 · Code Quality Sweep
+### Fixed
+- **`routers/pc.py:43`**: `hashlib.md5(...)` → `hashlib.sha256(...)` per il nome del file di cache
+  del ZIP agent. Non era usato in modo crypto-sensitive (solo naming determin.), ma migra a
+  algoritmo moderno. Vecchia cache `/tmp/forgefps-agent-cache-*` invalidata al restart.
+- **`agent-build/forgefps_agent.py:861`**: `os.system("cls")` → `subprocess.run(["cmd","/c","cls"])`.
+  Zero rischio di shell injection nel caso originale (stringa statica), ma allinea a best practice.
+- **`Advisor.jsx:83`, `Admin.jsx:29-30`, `BuildGenerator.jsx:70`**: aggiunti `console.warn` nei
+  catch precedentemente vuoti dove il debug e' utile (load sessions/stats/users/builds).
+- **React key stabili invece di array index**:
+  - `Games.jsx:272,354,399`: session_id/game name/preset name
+  - `MyPc.jsx:330,396`: check.id / startup.item.name
+  - `Upgrade.jsx:93,142`: category-index composite / preset name
+  Migliora riconciliazione React quando le liste cambiano ordine.
+
+### Investigated as false positive (NO changes)
+- `ps_agent.py:1878` "hardcoded secret" → e' il placeholder JS `const TOKEN = "__TOKEN__"` che
+  PowerShell sostituisce a runtime con `$sessionToken` locale univoco per l'utente. Nessun
+  segreto nel codice sorgente.
+- `i18n.js:298, :846` "API keys" → traduzioni UI per il modulo auth (labels come "Password",
+  "Email"). Il tool ha matchato le parole chiave "auth"/"password" nella stringa.
+- `MyPc.jsx:84` SVG circles key={i} → lista fissa di N punti grafico che non si riordina mai;
+  index e' il key semanticamente corretto.
+
+### Skipped (require dedicated planning, on backlog)
+- `auth.py:175` build_auth_router complexity 51: refactoring auth richiede
+  `integration_playbook_expert_v2` per policy interna. Da fare in sprint dedicato.
+- 68 hook dependencies missing: molti sono pattern intenzionali (api client stabile). Fix
+  automatico rischia infinite render loops. Da valutare caso per caso.
+- Component size (Games.jsx 415 righe, DiagnosePanel 244 righe): refactoring senza cambio
+  funzionale, basso ROI in questa fase.
+- Type hints backend: nice-to-have.
+
+### Files touched
+- `backend/routers/pc.py`
+- `agent-build/forgefps_agent.py`
+- `frontend/src/pages/Advisor.jsx`, `Admin.jsx`, `BuildGenerator.jsx`
+- `frontend/src/pages/Games.jsx`, `MyPc.jsx`, `Upgrade.jsx`
+
+---
+
 ## v0.6.10 — 2026-07-20 · ZIP personalizzato + token persistente (`.exe` v0.6.8)
 ### Added — Part A (backend + frontend, live subito)
 - **Backend `routers/pc.py`**:

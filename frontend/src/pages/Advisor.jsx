@@ -80,7 +80,8 @@ export default function Advisor() {
   const autoSent = useRef(false);
 
   const loadSessions = async () => {
-    try { const { data } = await api.get("/advisor/sessions"); setSessions(data); } catch {}
+    try { const { data } = await api.get("/advisor/sessions"); setSessions(data); }
+    catch (e) { console.warn("[Advisor] loadSessions failed", e); }
   };
   useEffect(() => {
     loadSessions();

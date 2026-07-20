@@ -26,8 +26,10 @@ export default function Admin() {
   const [busy, setBusy] = useState({});
 
   const load = async () => {
-    try { const { data } = await api.get("/admin/stats"); setStats(data); } catch {}
-    try { const { data } = await api.get("/admin/users"); setUsers(data); } catch {}
+    try { const { data } = await api.get("/admin/stats"); setStats(data); }
+    catch (e) { console.warn("[Admin] load stats failed", e); }
+    try { const { data } = await api.get("/admin/users"); setUsers(data); }
+    catch (e) { console.warn("[Admin] load users failed", e); }
   };
   useEffect(() => { load(); }, []);
 

@@ -40,7 +40,7 @@ AGENT_ZIP_UPSTREAM = os.environ.get(
     "AGENT_ZIP_UPSTREAM",
     "https://github.com/WjRKO/ForgeFPS/releases/download/v0.6.8/forgefps-agent.zip",
 )
-_AGENT_ZIP_CACHE_PATH = f"/tmp/forgefps-agent-cache-{hashlib.md5(AGENT_ZIP_UPSTREAM.encode()).hexdigest()[:10]}.zip"
+_AGENT_ZIP_CACHE_PATH = f"/tmp/forgefps-agent-cache-{hashlib.sha256(AGENT_ZIP_UPSTREAM.encode()).hexdigest()[:10]}.zip"
 
 
 def _render_launcher_bat(token: str, backend: str, standalone: bool) -> bytes:

@@ -67,7 +67,10 @@ export default function BuildGenerator() {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState([]);
 
-  const loadSaved = async () => { try { const { data } = await api.get("/builds"); setSaved(data); } catch {} };
+  const loadSaved = async () => {
+    try { const { data } = await api.get("/builds"); setSaved(data); }
+    catch (e) { console.warn("[BuildGenerator] loadSaved failed", e); }
+  };
   useEffect(() => { loadSaved(); }, []);
 
   const generate = async () => {
