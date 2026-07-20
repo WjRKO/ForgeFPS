@@ -77,15 +77,16 @@ export default function Games() {
   useEffect(() => {
     loadGames();
     loadPrematch();
-    api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {});
-    api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
-    api.get("/profiles/templates").then(({ data }) => { setTemplates(data.templates || []); setCatalog(data.catalog || []); }).catch(() => {});
+    api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch((e) => console.error("load pc-specs failed", e));
+    api.get("/agent/token").then(({ data }) => setToken(data.token)).catch((e) => console.error("load agent token failed", e));
+    api.get("/profiles/templates").then(({ data }) => { setTemplates(data.templates || []); setCatalog(data.catalog || []); }).catch((e) => console.error("load templates failed", e));
     api.get("/booster").then(({ data }) => {
       setBoostCfg({ set_power: data.set_power !== false, boost_priority: data.boost_priority !== false, purge_ram: data.purge_ram !== false });
       const apps = data.close_apps || [];
       setBoostGroups(Object.fromEntries(APP_GROUPS.map((g) => [g.id, g.procs.every((p) => apps.includes(p)) && g.procs.length > 0])));
-    }).catch(() => {});
-    api.get("/booster/sessions").then(({ data }) => setBoostSessions(data.sessions || [])).catch(() => {});
+    }).catch((e) => console.error("load booster failed", e));
+    api.get("/booster/sessions").then(({ data }) => setBoostSessions(data.sessions || [])).catch((e) => console.error("load booster sessions failed", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot init on mount; loaders are stable inline fns
   }, []);
 
   const saveBoostConfig = async () => {

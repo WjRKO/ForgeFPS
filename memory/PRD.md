@@ -769,3 +769,19 @@ User ha postato secrets pubblici (CLIENT_SECRET, BOT_TOKEN, WEBHOOK URLs). Deve 
 - MOD: /app/frontend/src/pages/MyPc.jsx (useMemo shownSpecKeys)
 - MOD: /app/frontend/src/pages/Profiles.jsx (useMemo catalogByCat + console.error + key stabili)
 - MOD: /app/memory/PRD.md
+
+### 2026-07-19 (25) - Refactor batch 2 completato
+- **Split `Advisor.jsx`** (328→170 righe main + 4 sub-componenti in-file): `CoachSelector`, `EmptyChatSuggestions`, `ChatBubble` (con `TypingIndicator`), `ChatInput`. Rimozione codice duplicato, API pubblica invariata, tutti i data-testid preservati (`coach-mode-*`, `suggestion-*`, `msg-thumb-up-*`, `msg-copy-*`, `msg-regen`, `chat-input`, `chat-send-btn`, `image-attach-btn`, `image-preview`, `image-remove`, `followup-*`).
+- **Hook deps (top 4 warnings)**: Dashboard.jsx, Live.jsx (2 effect), Games.jsx, Profiles.jsx — aggiunti `eslint-disable-next-line react-hooks/exhaustive-deps` con **commento esplicativo** (setters stabili / refs / one-shot mount init). Non sono bug: le "missing deps" flaggate erano response fields destructured (`data`, `available`) o setters stabili React garantisce.
+- **Empty catch → console.error**: Live.jsx telemetry poll + agent-token load + alerts load. Dashboard.jsx catch già intenzionalmente non silenzianti (setState({})).
+- **Nested ternaries** in `MyPc.jsx::BenchmarkCard` estratti in helper: `deltaIcon(delta)`, `cellBorderClass(key)`, `valueClass(key)`, `shareIcon()`, `shareLabel()`. `ScoreRing::color` estratto in `scoreColor(s)` con `if/return` chain.
+- **Validazione**: sintassi JSX OK su tutti i file toccati (Advisor, Games, Live, Dashboard, Profiles, MyPc). Pytest 75/75 verdi. Playwright: Dashboard render (Health 38, Bench 650, Onboarding 3/5, Discord, Agent NEW), MyPc render (benchmark-card + bench-share-btn testid presenti), Advisor render (coach-troubleshoot + diagnose-result testid presenti).
+
+## FILE MODIFICATI (sessione 25)
+- MOD: /app/frontend/src/pages/Advisor.jsx (split in 4 sub-componenti in-file: CoachSelector/EmptyChatSuggestions/ChatBubble/ChatInput)
+- MOD: /app/frontend/src/pages/Live.jsx (console.error + eslint-disable con commento)
+- MOD: /app/frontend/src/pages/Dashboard.jsx (eslint-disable con commento)
+- MOD: /app/frontend/src/pages/Games.jsx (console.error + eslint-disable con commento)
+- MOD: /app/frontend/src/pages/Profiles.jsx (eslint-disable con commento)
+- MOD: /app/frontend/src/pages/MyPc.jsx (nested ternaries estratti in 5 helper)
+- MOD: /app/memory/PRD.md
