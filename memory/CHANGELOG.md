@@ -1,5 +1,37 @@
 # FrameForge — Changelog
 
+## v0.6.8 — 2026-07-20 · Build `--onedir` (fix falsi positivi AV)
+### Changed
+- **`agent-build/build.bat` + `build.ps1`**: PyInstaller `--onefile` → **`--onedir`**, poi
+  `Compress-Archive` in `forgefps-agent.zip`. Output finale: cartella locale + ZIP + SHA256 stampato.
+- **`agent-build/github-workflow-build-nosign.yml`**: build onedir + zip step + SHA256 sul ZIP.
+- **`agent-build/github-workflow-build-sign.yml`**: firma solo `.exe` interno via SignPath, poi
+  ricomprimi in ZIP e pubblica.
+- **`frontend/src/config/agent.js`**: URL → `.../forgefps-agent.zip`, versione `v0.6.7`, campo
+  `AGENT_EXE_FORMAT="zip"`.
+- **`DesktopAgent.jsx`**: label bottone "Scarica FrameForge (ZIP)", istruzioni "estrai lo ZIP →
+  entra nella cartella → doppio click", nota antivirus riscritta ("niente più falsi positivi
+  euristici come nelle build --onefile precedenti").
+- **`Guide.jsx`**: primo step di quick-start aggiornato con "estrai lo ZIP → apri PowerShell nella
+  cartella".
+
+### Added
+- **`agent-build/VENDOR_FALSE_POSITIVE.md`**: testi standardizzati pronti da inviare per
+  segnalare falsi positivi a Microsoft (WDSI), Kaspersky, Bitdefender, Norton, ESET. Include
+  timeline attesa (1-7 giorni per vendor).
+- **`agent-build/REBUILD_v0.6.7.md`**: procedura completa build + test + pubblicazione release.
+
+### Verified
+- Smoke test frontend `/app/desktop`: badge, URL, label bottone, istruzioni tutte aggiornate.
+
+### Post-deploy TODO utente
+Dopo aver eseguito la build su Windows e caricato il ZIP sulla GitHub Release v0.6.7:
+1. Copia lo SHA256 stampato a video.
+2. Aggiorna `AGENT_EXE_SHA256` in `/app/frontend/src/config/agent.js`.
+3. Redeploy del frontend.
+
+---
+
 ## v0.6.7 — 2026-07-20 · Report PDF con grafico Health Score
 ### Added
 - **`Report.jsx` `exportPdf`**: fetch parallelo di `/api/health-history` insieme a `html-to-image` + `jspdf`.

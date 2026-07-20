@@ -1,83 +1,91 @@
-# FrameForge — Build dell'app desktop (.exe)
+# FrameForge — Build dell'app desktop (cartella + ZIP)
 
-Questo kit produce **`forgefps-agent.exe`**: un eseguibile Windows standalone, senza token
-incorporato (il token si passa a runtime), così il file è generico, verificabile e firmabile.
+Questo kit produce **`forgefps-agent.zip`**: un archivio Windows contenente la cartella
+`forgefps-agent/` con `forgefps-agent.exe` + le DLL affiancate. Il token non è incorporato
+(si passa a runtime) e la cartella è verificabile via SHA256.
+
+## Novità v0.6.7 — **build `--onedir`** (elimina i falsi positivi antivirus)
+Da questa release **NON** usiamo più `--onefile`: PyInstaller onefile è un archivio
+auto-estraente e Windows Defender lo classifica euristicamente come "dropper". Con
+`--onedir` produciamo una cartella con `.exe` + DLL: nessun stub SFX, nessun unpacking a
+runtime, **niente falsi positivi** anche senza firma Authenticode.
+
+Se qualche vendor secondario dovesse ancora flaggarci, i testi pronti per la segnalazione
+sono in [`VENDOR_FALSE_POSITIVE.md`](VENDOR_FALSE_POSITIVE.md) (Microsoft, Kaspersky,
+Bitdefender, Norton, ESET).
 
 ## Novità v0.6 (Boost Adattivo + Benchmark v2)
-- **Tweak adattivi**: l'agent rileva Laptop/Desktop, RAM totale e SSD/HDD e adatta le ottimizzazioni
-  (es. su laptop usa *High Performance* invece di *Ultimate* per proteggere batteria e temperature;
-  disattiva SysMain e verifica il TRIM **solo** su SSD; tiene il kernel in RAM solo con 16GB+).
-- **Nuovi tweak**: Fullscreen Optimizations OFF, Power Throttling OFF (solo desktop),
-  QoS 20% rimosso, Edge preload OFF.
-- **Benchmark v2**: latenza DPC/scheduler (p95), scrittura disco REALE (fsync, no cache),
-  4K random IOPS, jitter ping su 10 campioni, tempo di avvio Windows e **SCORE 0-100** confrontabile.
+- **Tweak adattivi**: l'agent rileva Laptop/Desktop, RAM totale e SSD/HDD e adatta le ottimizzazioni.
+- **Nuovi tweak**: Fullscreen Optimizations OFF, Power Throttling OFF (solo desktop), Edge preload OFF.
+- **Benchmark v2**: latenza DPC/scheduler (p95), 4K random IOPS, jitter ping, tempo di avvio Windows, SCORE 0-100.
 
 ## Novità v0.5 (GUI sicura)
-L'agent ora apre una **GUI sicura** (opzione **G** nel menu, o `--mode securegui`): per **ogni** tweak
-mostra **Problema trovato → Motivo → Modifica proposta → Impatto stimato** con un pulsante **Applica**
-per singolo tweak. **Backup automatico** e **Ripristina tutto** sempre disponibili. La GUI **non tocca MAI**
-Windows Defender, Firewall o servizi di sicurezza (guardrail integrati). Ricompila e ripubblica per aggiornare.
-
+L'agent apre una **GUI sicura** (opzione **G**, o `--mode securegui`): per **ogni** tweak
+mostra **Problema trovato → Motivo → Modifica proposta → Impatto stimato** con un pulsante
+**Applica** per singolo tweak. Backup automatico e "Ripristina tutto" sempre disponibili.
+La GUI **non tocca MAI** Windows Defender, Firewall o servizi di sicurezza.
 
 ## Cosa contiene
-- `forgefps_agent.py` — sorgente dell'agent (backend già impostato su `https://forgefps.dev`)
-- `build.bat` / `build.ps1` — script di build con PyInstaller + calcolo SHA256
-- `version_info.txt` — metadati versione dell'.exe (riducono i falsi positivi antivirus)
-- `sign.bat` — firma locale dell'.exe con signtool (per Certum/SimplySign o .pfx)
-- `github-workflow-build-sign.yml` — workflow GitHub Actions per build + firma gratuita via SignPath (OSS)
-- `SIGNING_AND_TRUST.md` — **guida completa** ai 3 percorsi per togliere antivirus/SmartScreen (Microsoft / Certum / SignPath)
+- `forgefps_agent.py` — sorgente dell'agent (backend impostato su `https://forgefps.dev`)
+- `build.bat` / `build.ps1` — script di build **`--onedir`** con PyInstaller + ZIP + SHA256
+- `version_info.txt` — metadati versione dell'.exe (CompanyName, InternalName, OriginalFilename)
+- `sign.bat` — firma locale dell'.exe con signtool
+- `github-workflow-build-nosign.yml` — GitHub Actions per build **--onedir + ZIP** senza firma
+- `github-workflow-build-sign.yml` — GitHub Actions per build + firma via SignPath (OSS)
+- `SIGNING_AND_TRUST.md` — guida ai 3 percorsi per togliere gli avvisi (Microsoft / Certum / SignPath)
+- `VENDOR_FALSE_POSITIVE.md` — **testi pronti** per segnalare falsi positivi ai principali AV
 - `README.md` — questa guida
-
-## ⚠️ L'antivirus segnala un virus? (FALSO POSITIVO)
-Gli eseguibili creati con **PyInstaller** vengono **spessissimo** segnalati come malware da Windows Defender
-e altri antivirus, anche quando sono puliti al 100%. È un **falso positivo euristico** (il bootloader di
-PyInstaller è usato anche da malware reale, quindi i motori lo flaggano "per precauzione"). Il codice è
-in chiaro in `forgefps_agent.py`: puoi leggerlo tutto.
-
-**Cosa abbiamo già fatto per ridurlo:** `build.bat`/`build.ps1` ora aggiungono i **metadati versione**
-(`version_info.txt`) e disattivano **UPX** (`--noupx`): due accorgimenti che abbassano molto le segnalazioni.
-
-**Come eliminarlo del tutto (in ordine di efficacia):**
-1. **Firma Authenticode** (soluzione definitiva): un `.exe` firmato non viene flaggato e sparisce anche SmartScreen.
-   Certificati: DigiCert/Sectigo (a pagamento) oppure gratis per progetti open-source via **SignPath.io** o **Certum Open Source**.
-2. **Segnala il falso positivo a Microsoft**: https://www.microsoft.com/wdsi/filesubmission
-   (carichi l'.exe come "software non dannoso"; di solito lo mettono in whitelist in 1-3 giorni e Defender smette di bloccarlo per tutti).
-3. **Verifica su VirusTotal**: https://www.virustotal.com — carichi l'.exe e vedi quali/quanti motori lo flaggano.
-   Se sono pochi motori minori è quasi certamente un falso positivo.
-4. **Alternativa immediata senza .exe**: usa il **Metodo sicuro** nella pagina *Collega il PC* (scarichi lo `.ps1`,
-   verifichi l'hash, lo esegui): lo script PowerShell non viene flaggato come l'.exe e puoi leggerlo prima di eseguirlo.
 
 ## Prerequisiti (una tantum)
 1. Un PC **Windows 10/11**
 2. **Python 3.10+** → https://www.python.org/downloads/ (spunta "Add Python to PATH")
 
 ## Build (2 minuti)
-Apri la cartella e lancia:
 ```
 build.bat
 ```
 (oppure `powershell -ExecutionPolicy Bypass -File build.ps1`)
 
-Al termine trovi l'eseguibile in **`dist\forgefps-agent.exe`** e a schermo vedrai il suo **SHA256**.
+Al termine trovi:
+- **`dist\forgefps-agent\`** — cartella con l'.exe + DLL (installazione locale)
+- **`dist\forgefps-agent.zip`** — archivio da caricare in Release (SHA256 stampato a video)
 
 ## Distribuzione
-1. Crea una **GitHub Release** e allega `forgefps-agent.exe`.
-2. Nella descrizione della release incolla il **checksum SHA256** stampato dal build.
-3. Comunicami l'URL del file (es. `https://github.com/<tuo-utente>/forgefps/releases/download/vX/forgefps-agent.exe`):
-   collegherò il pulsante **"Scarica FrameForge"** nella pagina *Connect PC* a quel link e mostrerò il checksum.
+1. Crea una **GitHub Release** e allega `forgefps-agent.zip`.
+2. Nella descrizione della release incolla il **checksum SHA256** del ZIP.
+3. Aggiorna `frontend/src/config/agent.js` con URL + SHA256 + versione + data:
+   ```js
+   export const AGENT_EXE_URL = "https://github.com/<user>/ForgeFPS/releases/download/vX.Y.Z/forgefps-agent.zip";
+   export const AGENT_EXE_SHA256 = "<sha256 del zip>";
+   export const AGENT_EXE_VERSION = "vX.Y.Z";
+   export const AGENT_EXE_DATE = "YYYY-MM-DD";
+   ```
 
 ## Uso da parte dell'utente finale
 ```
-forgefps-agent.exe --token IL_TUO_TOKEN
+# 1) Estrai forgefps-agent.zip (Explorer > Extract All)
+# 2) Apri la cartella forgefps-agent
+# 3) Doppio click su forgefps-agent.exe -> menu interattivo
+#    oppure da PowerShell:
+.\forgefps-agent.exe --token IL_TUO_TOKEN --mode optimize
 ```
-Il token si trova nella pagina **Collega il PC** dell'account. Modalità opzionale: `--mode optimize|sync|benchmark|monitor|prematch|restore`.
+
+Il token si trova nella pagina **Collega il PC** dell'account. Modalità: `optimize | sync |
+benchmark | monitor | prematch | restore | securegui`.
 
 ## Avviso SmartScreen (atteso, senza firma)
 Al primo avvio Windows mostra *"App non riconosciuta"* → **Ulteriori informazioni → Esegui comunque**.
-Per rimuovere l'avviso serve la firma **Authenticode** (fase successiva):
+Per rimuovere l'avviso serve la firma **Authenticode**:
 
 ### Firma digitale (opzionale, richiede certificato di code-signing)
 ```
-signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /a dist\forgefps-agent.exe
+signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /a dist\forgefps-agent\forgefps-agent.exe
 ```
-Serve un certificato EV/OV da un'autorità (DigiCert, Sectigo, ...). Con la firma, lo SmartScreen sparisce.
+Firma solo l'.exe interno alla cartella, poi ricomprimi in `.zip` prima di caricare sulla Release.
+
+## Perché non `--onefile`?
+- Onefile crea un archivio auto-estraente: al primo avvio l'.exe estrae DLL/pyd in `%TEMP%\_MEIxxxxxx\`.
+- Questo pattern è **identico** a quello di alcuni dropper reali → Windows Defender lo flagga euristicamente
+  con nomi come `Trojan:Win32/Wacatac.B!ml`, `Trojan:Script/Sabsik.FL.A!ml`, ecc.
+- Onedir invece è una cartella normale con .exe + DLL affiancate: **zero heuristic hits** su Defender.
+- Costo: l'utente deve estrarre uno ZIP prima di lanciare — pareggiato dal fatto che ORA il download non viene bloccato.
