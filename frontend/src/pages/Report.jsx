@@ -26,6 +26,8 @@ const DICT = {
     notes_ph: "Es. Boost eseguito il... Interventi: piano energetico, DNS Cloudflare, bufferbloat SQM. Consigli: aggiornare driver GPU.",
     pdf_title: "Report Ottimizzazione PC",
     pdf_notes_head: "Note",
+    pdf_chart_title: "Health Score — ultimi 90 giorni",
+    pdf_chart_empty: "Nessuno storico Health Score disponibile.",
     captured: "Snapshot salvato",
     err: "Errore",
     report_title: "Report Ottimizzazione PC",
@@ -66,6 +68,8 @@ const DICT = {
     notes_ph: "E.g. Boost done on... Applied: power plan, Cloudflare DNS, bufferbloat SQM. Recommendations: update GPU drivers.",
     pdf_title: "PC Optimization Report",
     pdf_notes_head: "Notes",
+    pdf_chart_title: "Health Score — last 90 days",
+    pdf_chart_empty: "No Health Score history available yet.",
     captured: "Snapshot saved",
     err: "Error",
     report_title: "PC Optimization Report",
@@ -118,6 +122,106 @@ function Cell({ value, unit }) {
   );
 }
 
+/**
+ * Render the Health Score history chart as a PNG dataURL.
+ * Pure Canvas 2D — no recharts dependency for offscreen rendering.
+ * points: [{score:number, created_at:iso}, ...] sorted asc by date.
+ */
+function renderHealthChart(points, { title, empty }) {
+  const W = 1400, H = 520;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  // background
+  ctx.fillStyle = "#0A0A0C"; ctx.fillRect(0, 0, W, H);
+  // subtle grid glow
+  const grad = ctx.createRadialGradient(W * 0.15, 0, 0, W * 0.15, 0, W * 0.7);
+  grad.addColorStop(0, "rgba(229,255,0,0.09)");
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+  // title
+  ctx.fillStyle = "#E5FF00";
+  ctx.font = "700 22px Helvetica, Arial, sans-serif";
+  ctx.fillText(title, 40, 44);
+  // valid points
+  const valid = (points || [])
+    .map((p) => ({ score: Number(p.score), ts: Date.parse(p.created_at) }))
+    .filter((p) => Number.isFinite(p.score) && Number.isFinite(p.ts));
+  if (valid.length === 0) {
+    ctx.fillStyle = "#7a7a85";
+    ctx.font = "500 18px Helvetica, Arial, sans-serif";
+    ctx.fillText(empty, 40, H / 2);
+    return canvas.toDataURL("image/png");
+  }
+  // chart area
+  const padL = 60, padR = 30, padT = 90, padB = 60;
+  const cw = W - padL - padR, ch = H - padT - padB;
+  const tMin = valid[0].ts, tMax = valid[valid.length - 1].ts;
+  const tSpan = Math.max(1, tMax - tMin);
+  const yMax = 100, yMin = 0;
+  // horizontal gridlines every 20 pts
+  ctx.strokeStyle = "#1A1A24"; ctx.lineWidth = 1;
+  ctx.fillStyle = "#52525b";
+  ctx.font = "500 13px Helvetica, Arial, sans-serif";
+  for (let v = 0; v <= 100; v += 20) {
+    const y = padT + ch - ((v - yMin) / (yMax - yMin)) * ch;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + cw, y); ctx.stroke();
+    ctx.fillText(String(v), 20, y + 4);
+  }
+  // x-axis: first / mid / last date
+  ctx.fillStyle = "#7a7a85";
+  const fmt = (ts) => {
+    const d = new Date(ts);
+    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
+  ctx.textAlign = "left";  ctx.fillText(fmt(tMin), padL, H - 25);
+  ctx.textAlign = "center"; ctx.fillText(fmt((tMin + tMax) / 2), padL + cw / 2, H - 25);
+  ctx.textAlign = "right"; ctx.fillText(fmt(tMax), padL + cw, H - 25);
+  ctx.textAlign = "left";
+  // area fill under the line
+  ctx.beginPath();
+  valid.forEach((p, i) => {
+    const x = padL + ((p.ts - tMin) / tSpan) * cw;
+    const y = padT + ch - ((p.score - yMin) / (yMax - yMin)) * ch;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  const last = valid[valid.length - 1], first = valid[0];
+  ctx.lineTo(padL + ((last.ts - tMin) / tSpan) * cw, padT + ch);
+  ctx.lineTo(padL + ((first.ts - tMin) / tSpan) * cw, padT + ch);
+  ctx.closePath();
+  const areaGrad = ctx.createLinearGradient(0, padT, 0, padT + ch);
+  areaGrad.addColorStop(0, "rgba(229,255,0,0.28)");
+  areaGrad.addColorStop(1, "rgba(229,255,0,0.02)");
+  ctx.fillStyle = areaGrad; ctx.fill();
+  // line
+  ctx.beginPath();
+  valid.forEach((p, i) => {
+    const x = padL + ((p.ts - tMin) / tSpan) * cw;
+    const y = padT + ch - ((p.score - yMin) / (yMax - yMin)) * ch;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = "#E5FF00"; ctx.lineWidth = 3; ctx.stroke();
+  // points
+  valid.forEach((p) => {
+    const x = padL + ((p.ts - tMin) / tSpan) * cw;
+    const y = padT + ch - ((p.score - yMin) / (yMax - yMin)) * ch;
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = "#E5FF00"; ctx.fill();
+    ctx.strokeStyle = "#0A0A0C"; ctx.lineWidth = 2; ctx.stroke();
+  });
+  // last point label
+  const lx = padL + ((last.ts - tMin) / tSpan) * cw;
+  const ly = padT + ch - ((last.score - yMin) / (yMax - yMin)) * ch;
+  ctx.fillStyle = "#0A0A0C"; ctx.fillRect(lx - 34, ly - 34, 68, 22);
+  ctx.strokeStyle = "#E5FF00"; ctx.lineWidth = 1; ctx.strokeRect(lx - 34, ly - 34, 68, 22);
+  ctx.fillStyle = "#E5FF00";
+  ctx.font = "700 14px Helvetica, Arial, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(`${Math.round(last.score)}/100`, lx, ly - 18);
+  ctx.textAlign = "left";
+  return canvas.toDataURL("image/png");
+}
+
 export default function Report() {
   const { i18n } = useTranslation();
   const c = DICT[i18n.language && i18n.language.startsWith("en") ? "en" : "it"];
@@ -165,11 +269,16 @@ export default function Report() {
     if (!cardRef.current) return;
     setBusy("pdf");
     try {
-      const [{ toPng }, { jsPDF }] = await Promise.all([import("html-to-image"), import("jspdf")]);
+      const [{ toPng }, { jsPDF }, historyRes] = await Promise.all([
+        import("html-to-image"),
+        import("jspdf"),
+        api.get("/health-history").catch(() => ({ data: { points: [] } })),
+      ]);
       const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, backgroundColor: "#0A0A0C", cacheBust: true });
       const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
       const doc = new jsPDF({ unit: "pt", format: "a4" });
       const pw = doc.internal.pageSize.getWidth();
+      const ph = doc.internal.pageSize.getHeight();
       const margin = 40;
       const cw = pw - margin * 2;
       // header
@@ -182,15 +291,33 @@ export default function Report() {
       const ih = (img.height / img.width) * cw;
       doc.addImage(dataUrl, "PNG", margin, 90, cw, ih);
       let y = 90 + ih + 28;
+      // Health Score history chart (canvas → PNG)
+      const chartUrl = renderHealthChart(historyRes.data?.points || [], {
+        title: c.pdf_chart_title,
+        empty: c.pdf_chart_empty,
+      });
+      const chartH = cw * (520 / 1400); // preserve aspect ratio 1400x520
+      const footerY = ph - 40;
+      if (y + chartH + 30 > footerY) { doc.addPage(); y = 60; }
+      doc.setDrawColor(42, 42, 53); doc.setLineWidth(0.5);
+      doc.rect(margin, y, cw, chartH);
+      doc.addImage(chartUrl, "PNG", margin, y, cw, chartH);
+      y += chartH + 24;
       if (notes.trim()) {
+        if (y + 60 > footerY) { doc.addPage(); y = 60; }
         doc.setTextColor(20, 20, 20); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
         doc.text(c.pdf_notes_head, margin, y); y += 18;
         doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(60, 60, 60);
         const lines = doc.splitTextToSize(notes.trim(), cw);
         doc.text(lines, margin, y);
       }
-      doc.setTextColor(150, 150, 150); doc.setFontSize(9);
-      doc.text(c.footer, margin, doc.internal.pageSize.getHeight() - 24);
+      // Footer on every page
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        doc.setTextColor(150, 150, 150); doc.setFontSize(9); doc.setFont("helvetica", "normal");
+        doc.text(c.footer, margin, ph - 24);
+      }
       doc.save("frameforge-report.pdf");
       toast.success(c.exported);
     } catch (e) { console.error("report pdf failed", e); toast.error(c.err); } finally { setBusy(""); }

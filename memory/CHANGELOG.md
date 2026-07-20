@@ -1,5 +1,28 @@
 # FrameForge — Changelog
 
+## v0.6.7 — 2026-07-20 · Report PDF con grafico Health Score
+### Added
+- **`Report.jsx` `exportPdf`**: fetch parallelo di `/api/health-history` insieme a `html-to-image` + `jspdf`.
+- **Nuova funzione `renderHealthChart(points, {title, empty})`**: pure Canvas 2D (1400x520), disegna:
+  - background nero con radial-glow accent giallo, titolo "Health Score — ultimi 90 giorni"
+  - griglia orizzontale 0/20/40/60/80/100
+  - area-fill sotto la linea (gradient giallo → trasparente)
+  - linea principale gialla accent con punti evidenziati
+  - box badge sull'ultimo punto con `{score}/100`
+  - date labels (dd/mm) su asse X per primo/mid/ultimo punto
+  - Fallback: se la history è vuota, mostra "Nessuno storico disponibile"
+- **Layout PDF**: aggiunta pagina extra se il grafico non entra sotto la card; footer disegnato su ogni pagina.
+- **i18n**: nuove chiavi `pdf_chart_title` e `pdf_chart_empty` per IT/EN.
+
+### Tested
+- Playwright end-to-end: seed 30 punti `health_history` → export PDF → renderizzato in PNG con PyMuPDF: chart presente con dati corretti, badge "88/100" sull'ultimo punto, date labels 21/06 → 20/07.
+- Caso vuoto (0 punti): fallback empty renderizzato correttamente.
+
+### Files touched
+- `frontend/src/pages/Report.jsx` (+ ~110 righe)
+
+---
+
 ## v0.6.6 — 2026-07-20 · Cross-device Magic Link Notification + Desktop GUI QR
 ### Added
 - **Backend `auth.py`**
