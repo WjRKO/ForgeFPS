@@ -214,8 +214,7 @@ export default function Account() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo mount, i18n t() e' stabile durante il redirect
   }, []);
   const connectDiscord = () => {
-    const base = process.env.REACT_APP_BACKEND_URL || "";
-    window.location.href = `${base}/api/discord/connect`;
+    window.location.href = `${window.location.origin}/api/discord/connect`;
   };
   const disconnectDiscord = async () => {
     if (!window.confirm(t("account.discord_disconnect_confirm"))) return;
