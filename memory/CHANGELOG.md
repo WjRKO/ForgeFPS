@@ -1,5 +1,43 @@
 # FrameForge — Changelog
 
+## v0.6.12 — 2026-07-20 · Backlog Code Quality (auth split + component split + hook cleanup)
+### Backend
+- **`auth.py` refactor** (474 → 363 righe, −23%). Estratti in file separati mantenendo API contract 100% identico (path, payload, cookies, status codes, rate-limits invariati):
+  - **`auth_magic.py`** (nuovo, 101 righe): magic-link create/consume/status
+  - **`auth_mfa.py`** (nuovo, 56 righe): mfa/status/setup/enable/disable
+  - Router principale invariato (`build_auth_router(db)` è sempre l'entrypoint pubblico chiamato da server.py)
+- **Fix pre-esistente: brute-force lockout via ingress** (auth.py:214-219). Login ora legge `X-Forwarded-For` prima di fallback a `request.client.host`, così replicas dietro ingress non hanno IP diversi che vanificano il lockout. Verificato: 5×401 → 6°=429.
+- Testato via testing agent: 15/16 test PASS, l'unico "issue" era il lockout pre-esistente ora fixato.
+
+### Frontend Hook Cleanup
+- Analisi ESLint (`react-hooks/exhaustive-deps`) sull'intero `src/`: solo 6 warning reali (non 68 come reported). Fixati tutti:
+  - `Account.jsx:214`: aggiunta eslint-disable comment esplicito con motivazione (mount-only redirect handler)
+  - Rimosse 5 direttive `eslint-disable-next-line react-hooks/exhaustive-deps` OBSOLETE da `Dashboard.jsx:646`, `Games.jsx:89`, `Live.jsx:63,92`, `Profiles.jsx:46` (ESLint le segnalava come "unused" — il codice era già stato corretto in refactor precedenti)
+- Build ora 0 warning React.
+
+### Frontend Component Split
+- **`DiagnosePanel.jsx` 503 → 295 righe (−41%)**. Estratti:
+  - `DiagnoseHeader.jsx` (89 righe): header collapsible + timestamp + outcome badge + close button
+  - `DiagnoseAction.jsx` (116 righe): singola action row con verify block + save + apply + feedback thumbs
+- **`Games.jsx`** (434 righe) e **`MobileHandoffModal.jsx`** (177 righe): valutati, split ulteriore frammenterebbe logica coesa senza reale beneficio. Sub-componenti già in-file, entrambi sotto threshold critici.
+
+### Verified
+- Tutti gli endpoint auth rispondono identici al pre-refactor (login, /me, mfa/status, magic-link cycle, consume-magic con UA parsing, magic-status pre/post consume).
+- Frontend build: `yarn build` completa senza warning.
+- Smoke test Playwright: 7 pagine (Dashboard/Desktop/Games/MyPc/Advisor/Upgrade/Admin) caricano correttamente.
+
+### Files touched
+- `backend/auth.py` (refactor + brute-force fix)
+- `backend/auth_magic.py` (nuovo)
+- `backend/auth_mfa.py` (nuovo)
+- `frontend/src/pages/Account.jsx` (eslint comment)
+- `frontend/src/pages/Dashboard.jsx`, `Games.jsx`, `Live.jsx`, `Profiles.jsx` (removed unused eslint-disable)
+- `frontend/src/components/DiagnosePanel.jsx` (slim)
+- `frontend/src/components/DiagnoseHeader.jsx` (nuovo)
+- `frontend/src/components/DiagnoseAction.jsx` (nuovo)
+
+---
+
 ## v0.6.11 — 2026-07-20 · Code Quality Sweep
 ### Fixed
 - **`routers/pc.py:43`**: `hashlib.md5(...)` → `hashlib.sha256(...)` per il nome del file di cache

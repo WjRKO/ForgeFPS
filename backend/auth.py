@@ -213,7 +213,10 @@ def build_auth_router(db):
     @router.post("/login")
     async def login(data: LoginInput, request: Request, response: Response):
         email = data.email.lower()
-        ip = request.client.host if request.client else "unknown"
+        # Preferisci X-Forwarded-For (dietro ingress/reverse-proxy) per non contare
+        # ogni replica come utente diverso e permettere il brute-force lockout.
+        xff = request.headers.get("x-forwarded-for", "")
+        ip = xff.split(",")[0].strip() if xff else (request.client.host if request.client else "unknown")
         identifier = f"{ip}:{email}"
         previous_attempt = await _enforce_login_lockout(db, identifier)
         user = await db.users.find_one({"email": email})

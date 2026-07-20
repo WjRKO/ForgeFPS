@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Sparkles, Stethoscope, ChevronRight, Loader2, AlertTriangle, RefreshCw,
+  X, MonitorDown,
 } from "lucide-react";
 import api from "@/lib/api";
 import DiagnoseHeader, { relTime } from "./DiagnoseHeader";
