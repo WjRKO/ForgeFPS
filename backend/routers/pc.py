@@ -162,7 +162,7 @@ def build(get_current_user):
         Il ZIP base viene fetchato UNA volta da GitHub e messo in cache locale.
         Ad ogni richiesta iniettiamo `forgefps-agent/Avvia-FrameForge.bat` con
         il token dell'utente autenticato: un solo download, un solo doppio click."""
-        from fastapi.responses import StreamingResponse
+        from fastapi.responses import Response as _Resp
         token = await get_or_create_agent_token(str(user["_id"]))
         backend = os.environ.get("FRONTEND_URL", "https://forgefps.dev").rstrip("/")
         base_zip = await _ensure_agent_zip_cached()
@@ -170,11 +170,17 @@ def build(get_current_user):
         buf = io.BytesIO(base_zip)
         with zipfile.ZipFile(buf, "a", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("forgefps-agent/Avvia-FrameForge.bat", bat_bytes)
-        buf.seek(0)
-        return StreamingResponse(
-            buf, media_type="application/zip",
+        payload = buf.getvalue()
+        # IMPORTANTE: usa Response (non StreamingResponse) per settare
+        # Content-Length automaticamente. StreamingResponse con BytesIO senza
+        # length header viene troncata da Cloudflare/ingress (bug segnalato dagli
+        # utenti: ZIP arrivava a ~30% e 7-Zip rilevava "Fine dei dati inattesa").
+        return _Resp(
+            content=payload,
+            media_type="application/zip",
             headers={
                 "Content-Disposition": 'attachment; filename="forgefps-agent.zip"',
+                "Content-Length": str(len(payload)),
                 "Cache-Control": "no-store",
             },
         )
