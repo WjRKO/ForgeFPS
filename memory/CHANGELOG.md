@@ -1,5 +1,51 @@
 # FrameForge — Changelog
 
+## v0.6.10 — 2026-07-20 · ZIP personalizzato + token persistente (`.exe` v0.6.8)
+### Added — Part A (backend + frontend, live subito)
+- **Backend `routers/pc.py`**:
+  - `_render_launcher_bat(token, backend, standalone)`: helper condiviso per generare
+    launcher `.bat` con token pre-compilato.
+  - `_ensure_agent_zip_cached()`: fetch una tantum del ZIP generico da GitHub, cache in
+    `/tmp/forgefps-agent-cache-<hash>.zip` (invalidata se corrotta).
+  - Nuovo endpoint `GET /api/agent/download-zip` (auth JWT): apre il ZIP cache in memoria,
+    inietta `forgefps-agent/Avvia-FrameForge.bat` con token e backend URL dell'utente, e lo
+    restituisce come `application/zip` (~9.1 MB). ~3s primo hit, ~2.8s cachato.
+- **Frontend `DesktopAgent.jsx`**: bottone principale non punta più a GitHub, ma fa richiesta
+  autenticata a `/agent/download-zip`. Rimosso il secondo bottone `.bat`. Nuovo copy:
+  "ZIP has your token baked in: extract, open the folder and double-click Avvia-FrameForge.bat".
+- **`Guide.jsx`**: primo step di quick-start aggiornato per riflettere il nuovo flusso "un
+  download, un doppio-click" (niente più PowerShell manuale).
+
+### Added — Part B (client-side .exe, richiede rebuild v0.6.8)
+- **`agent-build/forgefps_agent.py` (v0.6.8)**:
+  - Nuove funzioni `_token_store_path`, `_load_saved_token`, `_save_token`, `_forget_saved_token`.
+  - Alla prima esecuzione senza `--token`, chiede il token una volta e lo salva in
+    `%APPDATA%\FrameForge\token.dat` (per-utente NTFS, no ACL manuali).
+  - Alle esecuzioni successive: token letto da disco, GUI parte istantaneamente.
+  - Se il token viene passato via CLI e differisce da quello salvato, il file viene aggiornato:
+    così anche il doppio-click diretto sull'.exe funziona subito dopo il primo lancio.
+
+### UX flow
+Prima: scarica → estrai → apri terminale → incolla comando con token.
+Adesso: **scarica il ZIP dal tuo account → estrai → doppio-click su `Avvia-FrameForge.bat` → GUI parte**.
+
+### Post-deploy TODO utente (per Part B)
+Rebuild + release v0.6.8 su GitHub:
+1. Copia il file aggiornato `forgefps_agent.py` in root del repo pubblico ForgeFPS
+2. Bump `AGENT_VERSION = "0.6.8"` gia' presente
+3. Crea tag `v0.6.8` (browser: https://github.com/WjRKO/ForgeFPS/releases/new)
+4. Aspetta workflow build verde
+5. Aggiorna `AGENT_ZIP_UPSTREAM` in backend/routers/pc.py + `AGENT_EXE_URL` e `AGENT_EXE_SHA256`
+   in frontend/src/config/agent.js con la nuova versione.
+
+### Files touched
+- `backend/routers/pc.py` (+ ~85 righe: helpers + 2 nuovi endpoint)
+- `frontend/src/pages/DesktopAgent.jsx` (refactor bottone download)
+- `frontend/src/pages/Guide.jsx` (step 2-3 quick-start)
+- `agent-build/forgefps_agent.py` (+ ~55 righe token storage, bump 0.6.0 -> 0.6.8)
+
+---
+
 ## v0.6.9 — 2026-07-20 · Launcher `.bat` per-utente (GUI in un click)
 ### Added
 - **Backend `routers/pc.py`**: nuovo endpoint `GET /api/agent/launcher-bat` (auth JWT cookie).

@@ -1,5 +1,7 @@
+import io
 import os
 import hashlib
+import zipfile
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Header
@@ -31,6 +33,80 @@ def _iso_age(ts):
         return (datetime.now(timezone.utc) - datetime.fromisoformat(ts)).total_seconds()
     except Exception:
         return 1e9
+
+
+# GitHub Release del ZIP generico dell'agent. Aggiornare a ogni bump di versione.
+AGENT_ZIP_UPSTREAM = os.environ.get(
+    "AGENT_ZIP_UPSTREAM",
+    "https://github.com/WjRKO/ForgeFPS/releases/download/v0.6.7/forgefps-agent.zip",
+)
+_AGENT_ZIP_CACHE_PATH = f"/tmp/forgefps-agent-cache-{hashlib.md5(AGENT_ZIP_UPSTREAM.encode()).hexdigest()[:10]}.zip"
+
+
+def _render_launcher_bat(token: str, backend: str, standalone: bool) -> bytes:
+    """Genera il contenuto di un launcher Windows .bat con token pre-compilato.
+
+    standalone=True: file esterno da posizionare accanto al ZIP estratto (cerca
+        'forgefps-agent\\forgefps-agent.exe' relativo alla propria directory).
+    standalone=False: file DENTRO la cartella 'forgefps-agent/' del ZIP
+        (lancia 'forgefps-agent.exe' dalla stessa directory).
+    """
+    if standalone:
+        pre = [
+            "cd /d \"%~dp0\"",
+            "if not exist \"forgefps-agent\\forgefps-agent.exe\" (",
+            "  echo.",
+            "  echo [ERRORE] Cartella 'forgefps-agent' non trovata.",
+            "  echo Estrai prima forgefps-agent.zip in questa stessa cartella,",
+            "  echo poi rilancia questo file.",
+            "  echo.",
+            "  pause",
+            "  exit /b 1",
+            ")",
+            "cd forgefps-agent",
+        ]
+    else:
+        pre = ["cd /d \"%~dp0\""]
+    lines = [
+        "@echo off",
+        "REM FrameForge - Launcher personale (contiene il tuo token privato)",
+        "REM Doppio click qui: la GUI sicura parte automaticamente.",
+        "setlocal",
+        *pre,
+        f'forgefps-agent.exe --backend "{backend}" --token {token} --mode securegui',
+        "if errorlevel 1 (",
+        "  echo.",
+        "  echo L'agent si e' chiuso con errore. Premi INVIO per uscire.",
+        "  pause",
+        ")",
+        "endlocal",
+        "",
+    ]
+    return "\r\n".join(lines).encode("utf-8")
+
+
+async def _ensure_agent_zip_cached() -> bytes:
+    """Fetch (una sola volta) il ZIP dell'agent da GitHub e caching su disco.
+    Le chiamate successive lo servono dal filesystem. Se il file cache manca o
+    e' inconsistente, viene ri-scaricato."""
+    if os.path.exists(_AGENT_ZIP_CACHE_PATH):
+        try:
+            with open(_AGENT_ZIP_CACHE_PATH, "rb") as fh:
+                data = fh.read()
+            zipfile.ZipFile(io.BytesIO(data)).close()  # sanity
+            return data
+        except Exception:
+            try: os.unlink(_AGENT_ZIP_CACHE_PATH)
+            except Exception: pass
+    import httpx as _httpx
+    async with _httpx.AsyncClient(follow_redirects=True, timeout=60) as client:
+        resp = await client.get(AGENT_ZIP_UPSTREAM)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Upstream ZIP fetch failed ({resp.status_code})")
+        data = resp.content
+    with open(_AGENT_ZIP_CACHE_PATH, "wb") as fh:
+        fh.write(data)
+    return data
 
 
 async def _build_agent_script(user_id: str, profile: str = "") -> str:
@@ -70,39 +146,35 @@ def build(get_current_user):
         from fastapi.responses import Response as _Resp
         token = await get_or_create_agent_token(str(user["_id"]))
         backend = os.environ.get("FRONTEND_URL", "https://forgefps.dev").rstrip("/")
-        # Windows batch: CR+LF line endings, no shebang.
-        lines = [
-            "@echo off",
-            "REM FrameForge - Launcher personale (contiene il tuo token privato)",
-            "REM Mettimi accanto alla cartella 'forgefps-agent' estratta dal ZIP.",
-            "REM Poi doppio click qui: la GUI sicura parte automaticamente.",
-            "setlocal",
-            "cd /d \"%~dp0\"",
-            "if not exist \"forgefps-agent\\forgefps-agent.exe\" (",
-            "  echo.",
-            "  echo [ERRORE] Cartella 'forgefps-agent' non trovata.",
-            "  echo Estrai prima forgefps-agent.zip in questa stessa cartella,",
-            "  echo poi rilancia questo file.",
-            "  echo.",
-            "  pause",
-            "  exit /b 1",
-            ")",
-            "cd forgefps-agent",
-            f'forgefps-agent.exe --backend "{backend}" --token {token} --mode securegui',
-            "if errorlevel 1 (",
-            "  echo.",
-            "  echo L'agent si e' chiuso con errore. Premi INVIO per uscire.",
-            "  pause",
-            ")",
-            "endlocal",
-            "",
-        ]
-        body = "\r\n".join(lines).encode("utf-8")
+        body = _render_launcher_bat(token, backend, standalone=True)
         return _Resp(
             content=body,
             media_type="application/octet-stream",
             headers={
                 "Content-Disposition": 'attachment; filename="forgefps-launcher.bat"',
+                "Cache-Control": "no-store",
+            },
+        )
+
+    @r.get("/agent/download-zip")
+    async def agent_download_zip(user: dict = Depends(get_current_user)):
+        """Scarica il ZIP dell'agent con dentro un launcher personalizzato.
+        Il ZIP base viene fetchato UNA volta da GitHub e messo in cache locale.
+        Ad ogni richiesta iniettiamo `forgefps-agent/Avvia-FrameForge.bat` con
+        il token dell'utente autenticato: un solo download, un solo doppio click."""
+        from fastapi.responses import StreamingResponse
+        token = await get_or_create_agent_token(str(user["_id"]))
+        backend = os.environ.get("FRONTEND_URL", "https://forgefps.dev").rstrip("/")
+        base_zip = await _ensure_agent_zip_cached()
+        bat_bytes = _render_launcher_bat(token, backend, standalone=False)
+        buf = io.BytesIO(base_zip)
+        with zipfile.ZipFile(buf, "a", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("forgefps-agent/Avvia-FrameForge.bat", bat_bytes)
+        buf.seek(0)
+        return StreamingResponse(
+            buf, media_type="application/zip",
+            headers={
+                "Content-Disposition": 'attachment; filename="forgefps-agent.zip"',
                 "Cache-Control": "no-store",
             },
         )

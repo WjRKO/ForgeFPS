@@ -26,26 +26,80 @@ _args, _ = _parser.parse_known_args()
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.6.0"
+AGENT_VERSION = "0.6.8"
 BACKUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "boostpc_backup.json")
 
-if not AGENT_TOKEN or AGENT_TOKEN.startswith("__"):
-    print("=" * 50)
-    print("  FrameForge Desktop Agent")
-    print("=" * 50)
-    print("Incolla il tuo token (pagina 'Collega il PC' del tuo account) e premi INVIO.")
-    print("Paste your token (from the 'Connect PC' page) and press ENTER.")
+# Persistent token storage in %APPDATA%\FrameForge\token.dat (v0.6.8+).
+# Se l'utente non passa --token via CLI, provo a leggerlo da disco. Se non c'e',
+# lo chiedo una volta e lo salvo. Cosi dal secondo doppio-click in poi la GUI
+# parte senza prompt (Steam/Discord-like UX).
+def _token_store_path() -> str:
+    base = os.environ.get("APPDATA") or os.path.expanduser("~")
+    return os.path.join(base, "FrameForge", "token.dat")
+
+
+def _load_saved_token() -> str:
     try:
-        AGENT_TOKEN = input("Token > ").strip()
+        p = _token_store_path()
+        if os.path.exists(p):
+            with open(p, "r", encoding="utf-8") as fh:
+                t = fh.read().strip()
+            if t and not t.startswith("__"):
+                return t
     except Exception:
-        AGENT_TOKEN = ""
-    if not AGENT_TOKEN:
-        print("Nessun token inserito. / No token provided.")
+        pass
+    return ""
+
+
+def _save_token(token: str) -> None:
+    try:
+        p = _token_store_path()
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write(token)
+        # NTFS: %APPDATA% e' gia' per-utente, non serve chmod.
+    except Exception:
+        pass
+
+
+def _forget_saved_token() -> None:
+    try:
+        p = _token_store_path()
+        if os.path.exists(p):
+            os.unlink(p)
+    except Exception:
+        pass
+
+
+if not AGENT_TOKEN or AGENT_TOKEN.startswith("__"):
+    saved = _load_saved_token()
+    if saved:
+        AGENT_TOKEN = saved
+        print("[FrameForge] Token caricato da %APPDATA%\\FrameForge\\token.dat")
+    else:
+        print("=" * 50)
+        print("  FrameForge Desktop Agent")
+        print("=" * 50)
+        print("Incolla il tuo token (pagina 'Collega il PC' del tuo account) e premi INVIO.")
+        print("Paste your token (from the 'Connect PC' page) and press ENTER.")
+        print("Il token verra' salvato in %APPDATA%\\FrameForge\\ per i prossimi avvii.")
         try:
-            input("Premi INVIO per chiudere... / Press ENTER to close...")
+            AGENT_TOKEN = input("Token > ").strip()
         except Exception:
-            pass
-        sys.exit(1)
+            AGENT_TOKEN = ""
+        if not AGENT_TOKEN:
+            print("Nessun token inserito. / No token provided.")
+            try:
+                input("Premi INVIO per chiudere... / Press ENTER to close...")
+            except Exception:
+                pass
+            sys.exit(1)
+        _save_token(AGENT_TOKEN)
+elif AGENT_TOKEN and not AGENT_TOKEN.startswith("__"):
+    # Token fornito da CLI (es. lancio via .bat generato): salvalo se differisce
+    # da quello persistito, cosi anche il doppio-click diretto sull'.exe funziona.
+    if _load_saved_token() != AGENT_TOKEN:
+        _save_token(AGENT_TOKEN)
 
 
 def is_admin():
