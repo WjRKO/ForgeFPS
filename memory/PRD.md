@@ -786,7 +786,20 @@ User ha postato secrets pubblici (CLIENT_SECRET, BOT_TOKEN, WEBHOOK URLs). Deve 
 - MOD: /app/frontend/src/pages/MyPc.jsx (nested ternaries estratti in 5 helper)
 - MOD: /app/memory/PRD.md
 
-### 2026-07-19 (26) - Refactor batch 3 (chiusura task rimandate)
+### 2026-07-20 (27) - Enhancement Backup panel + Step 1 agent-authed profiles
+- **`GET /api/agent/profiles`** in `routers/pc.py`: nuovo endpoint agent-authenticated via `X-Agent-Token` (stesso pattern collaudato di /api/agent/report-specs, /api/agent/telemetry). Ritorna `{profiles, templates, catalog}`. Testato end-to-end con curl: 200 OK con auth valida, 401 con auth invalida.
+- **Backup badge → dropdown** in `ps_agent.py` (GUI Sicura):
+  - PowerShell backend: aggiunto `backup_ids = @($script:BK.Keys)` a 4 endpoint locali (/api/state, /api/apply, /api/apply-one, /api/restore) — ora il frontend riceve la lista degli ID reversibili
+  - HTML: badge trasformato in role="button" con panel `#backupPanel` (hidden by default), lista `#backupList` con item testid `backup-item-<id>`
+  - CSS: nuovo styling per panel (absolute positioning, max-height + scroll, hover state, disabled state quando 0)
+  - JS: `renderBackupPanel()` mappa `state.backup_ids` → nomi friendly via `state.tweaks.find(t => t.id === id).name`. Toggle su click + keyboard (Enter/Space). Click-outside-to-close.
+  - Sync in tutti i flow: applySelected, applyOne, doRestore (reset a [] dopo ripristino totale)
+- **Nessuna regressione**: 24/24 test agent_script + secure_ps verdi, 68/68 test non-LLM verdi
+
+## FILE MODIFICATI (sessione 27)
+- MOD: /app/backend/routers/pc.py (agent_list_profiles endpoint + import TWEAK_CATALOG/TEMPLATES)
+- MOD: /app/backend/ps_agent.py (backup dropdown: PS backend + HTML + CSS + JS)
+- MOD: /app/memory/PRD.md
 - **Type hints `models.py`**: 100% coverage. `list` → `list[str]`/`list[dict[str, Any]]`, `dict` → `dict[str, Any]`. Colpiti 20 Pydantic model — migliore IDE support, catch di errori a compile-time. Testato con instanziazione: OK.
 - **Array-index-keys eliminati** (top 7 hot spot):
   - `Landing.jsx`: 5 posti (msgs chat mockup, bullets FeatureRow, trust strip, steps how-it-works, features showcase) → `key={m.text}`, `key={b}`, `key={s.l}`, `key={s.t}`, `key={f.t}`
@@ -799,3 +812,93 @@ User ha postato secrets pubblici (CLIENT_SECRET, BOT_TOKEN, WEBHOOK URLs). Deve 
 - MOD: /app/frontend/src/pages/Landing.jsx (5 array-index-key fix)
 - MOD: /app/frontend/src/pages/Commands.jsx (2 array-index-key fix)
 - MOD: /app/memory/PRD.md
+
+### 2026-07-20 (28) - Step 2 GUI Profili + Live Sync toggle nella GUI Sicura
+_(dettagli riassunti nel finish summary della sessione: tab "Profili Cloud" nel `ps_agent.py` che pesca da `/api/agent/profiles`, toggle "Sync Cloud" con dot pulsante verde, push telemetria opportunistico throttled 3s dentro `/api/log`, endpoint locali `/api/profiles-cloud` e `/api/live-sync`, funzione `Push-LiveSample` che riusa `Get-TelemetrySample`)_
+
+### 2026-07-20 (29) - QR "Continua sul telefono" (Magic Link handoff)
+- **Backend** (`auth.py`):
+  - `POST /api/auth/magic-link` (auth cookie richiesta): genera token cryptographically-secure via `secrets.token_urlsafe(32)`, TTL 5 min, salvato in `db.magic_tokens` con `{token, user_id, expires_at, created_at, used}`. Rate limit 5/user/ora (429 se superato).
+  - `POST /api/auth/consume-magic` (pubblico): atomicamente marca il token come `used=true` via `find_one_and_update`, verifica TTL, carica user da MongoDB, setta cookie JWT standard, ritorna `public_user()`. Single-use enforced.
+- **Frontend**:
+  - Nuova route `/auth/mobile?t=<token>` (`AuthMobile.jsx`): consuma il token via `POST /consume-magic`, redirect a `/app` on success. Su errore mostra pagina "Link scaduto o già usato" con CTA login.
+  - Nuovo componente `MobileHandoffModal.jsx`: overlay z-100 con QR SVG (libreria `qrcode.react` 4.2.0 aggiunta come dep), countdown live `mm:ss` (rosso sotto 60s), pulsante "Rigenera", auto-rigenera all'apertura del modal. Click-outside-to-close. Testid: `mobile-handoff-modal`, `mobile-handoff-qr`, `mobile-handoff-countdown`, `mobile-handoff-close`, `mobile-handoff-regenerate`, `mobile-handoff-retry`, `mobile-handoff-error`.
+  - Integrazione in `Dashboard.jsx`: bottone "Continua sul telefono" (icona Smartphone lucide, border cyan) accanto al PageHeader. Testid: `continue-on-mobile-btn`.
+- **Verificato end-to-end**:
+  - curl `POST /magic-link` → `{token, expires_in_seconds:300}` ✅
+  - curl `POST /consume-magic` prima chiamata → 200 con user profile + cookies settati ✅
+  - Seconda chiamata stesso token → 401 "Link expired or already used" ✅ (single-use enforced)
+  - Token invalido → 401 ✅
+  - Playwright: click bottone → modal apre con QR + countdown "05:00"
+- **Sicurezza**: token 32 byte urlsafe (256 bit entropia), TTL 5 min, single-use atomic via find_one_and_update, rate limit 5/h/user, richiede JWT valido per generazione.
+- **Nessuna regressione**: 48/48 test verdi (agent_script, secure_ps, alerts_fps, account_endpoints).
+
+## FILE MODIFICATI/CREATI (sessione 29)
+- MOD: /app/backend/auth.py (2 endpoint magic-link + consume-magic)
+- CREATO: /app/frontend/src/pages/AuthMobile.jsx (route /auth/mobile consumer)
+- CREATO: /app/frontend/src/components/MobileHandoffModal.jsx (QR modal componente)
+- MOD: /app/frontend/src/pages/Dashboard.jsx (import + bottone + state modal)
+- MOD: /app/frontend/src/App.js (nuova route /auth/mobile)
+- MOD: /app/frontend/package.json (aggiunta dep qrcode.react@4.2.0)
+- MOD: /app/memory/PRD.md
+- **Nuova tab "Profili Cloud"** in `ps_agent.py`:
+  - `CATS` esteso con `{key:"profiles", label:"Profili Cloud"}`; state esteso con `profiles: null`
+  - `renderTabs()` gestisce case profili (mostra count profili invece di `todo/total` tweak)
+  - `renderCards()` fa early-return a `renderProfilesTab(el)` quando `activeCat === "profiles"`
+  - `loadProfiles()`: chiama `/api/profiles-cloud` locale (proxy al cloud); gestisce loading/error state
+  - `renderProfilesTab()`: due sezioni ("I MIEI PROFILI" e "TEMPLATE COMMUNITY") con card che mostrano fino a 6 nomi tweak + "+N" se piu. Testid `profile-<id>`, `profile-template-<id>`, `apply-*`, `section-my-profiles`, `section-templates`
+  - `applyProfile(tweakIds)`: seleziona i tweak matching nella lista locale (`state.tweaks` filtered per compatibilita HW `!t.fit.skip`), jump a tab Gaming, toast di conferma con conteggio matched
+- **Nuovo endpoint PowerShell `/api/profiles-cloud`** (GET): proxy con `Invoke-RestMethod` a `$BACKEND/api/agent/profiles` usando header `X-Agent-Token`. Fallback a payload vuoto se cloud unreachable.
+- **Live Sync toggle** nell'header:
+  - Nuovo `<label class="live-sync-toggle">` con input checkbox `#liveSyncToggle`, dot pulse animato quando ON (verde `--ok`)
+  - Nuovo endpoint PS `/api/live-sync` (POST): flip `$script:LIVE_SYNC` bool
+  - Nuova funzione PS `Push-LiveSample`: chiama `Get-TelemetrySample` (già esistente per benchmark) e la invia a `$BACKEND/api/agent/telemetry`
+  - Push opportunistico dentro `/api/log` (già pollato dal frontend ogni 400ms): throttle a 3s via `$script:LIVE_LAST_TS`
+  - Toggle wired via `_liveToggle.addEventListener("change", ...)`: POST + toast di conferma
+- **CSS aggiunto**: `.header-actions`, `.live-sync-toggle`, `.live-sync-dot` con `@keyframes pulse`, `.profile-card`, `.profile-section-title`
+- **Nessuna regressione**: 24/24 test agent_script + secure_ps verdi. Sintassi ps_agent.py OK.
+
+**Note deployment**: `ps_agent.py` è servito dal backend cloud (`/api/agent/script`). Al prossimo redeploy prod la GUI ha subito le nuove feature. Serve un test in VM Windows per verificare:
+1. La tab Profili carica → cards visibili
+2. Click "Applica profilo" → tweak selezionati nella tab Gaming
+3. Toggle "Sync Cloud" ON → dot verde pulsante, dati visibili su `/app/live` da altro device
+4. Toggle OFF → dot grigio, stop stream
+
+## FILE MODIFICATI (sessione 28)
+- MOD: /app/backend/ps_agent.py (tab Profili + Live Sync toggle + relativi endpoint PS)
+- MOD: /app/memory/PRD.md
+
+
+---
+
+## Sessione 29 (2026-07-20) — v0.6.6
+
+### Feature: Cross-device Magic Link Notification + QR dentro GUI Desktop
+Utente ha richiesto due estensioni al flusso Magic Link introdotto in v0.6.5:
+1. **Notifica quando il mobile fa scan del QR** (feedback real-time all'origine)
+2. **Bottone "Continua sul Telefono" dentro la GUI Sicura desktop** (funziona anche senza aprire il browser)
+Scelta utente: toast web + **notifica Windows nativa** nella GUI (BurntToast/tray balloon fallback).
+
+### Backend
+- `auth.py`: helper `_parse_device_label(ua)`, `consume-magic` ora salva UA/label, nuovo `GET /api/auth/magic-status/{token}` pubblico.
+- `routers/pc.py`: nuovi `POST /api/agent/magic-link` e `GET /api/agent/magic-qr` (auth X-Agent-Token, condividono rate-limit 5/h con endpoint web).
+
+### Frontend
+- `MobileHandoffModal.jsx`: polling 2s + stato "consumed" + toast + auto-close (fix race con effect separato).
+
+### Desktop GUI (`ps_agent.py`)
+- Bottone "Continua sul Telefono" nell'header.
+- Modal QR interno alla GUI Edge WebView, con auto-close e stato Device connesso.
+- 4 endpoint locali PS proxied al cloud.
+- `Show-DeviceToast` in background job → notifica Windows nativa.
+
+### Testing
+- iteration_26.json: 17/17 backend PASS, frontend end-to-end verificato (compresa auto-close bug fixata post-review).
+
+### File toccati sessione 29
+- MOD: /app/backend/auth.py
+- MOD: /app/backend/routers/pc.py
+- MOD: /app/backend/ps_agent.py (~200 righe aggiunte HTML+CSS+JS+PowerShell)
+- MOD: /app/frontend/src/components/MobileHandoffModal.jsx
+- NEW: /app/memory/CHANGELOG.md
+- NEW: /app/backend/tests/test_magic_link_mobile_handoff.py (dal testing agent)

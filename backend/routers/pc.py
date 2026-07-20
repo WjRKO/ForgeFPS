@@ -1,6 +1,6 @@
 import os
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi.responses import PlainTextResponse
@@ -12,7 +12,7 @@ from helpers import specs_to_text, compute_health, get_or_create_agent_token, gr
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
 from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput
-from routers.profiles import resolve_tweak_ids
+from routers.profiles import resolve_tweak_ids, TWEAK_CATALOG, TEMPLATES
 from routers.advisor import _check_ai_rate_limit
 
 # Default background processes closed by "Prima del match" (must stay in sync with frontend groups)
@@ -61,6 +61,71 @@ def build(get_current_user):
     @r.get("/agent/token")
     async def agent_token(user: dict = Depends(get_current_user)):
         return {"token": await get_or_create_agent_token(str(user["_id"]))}
+
+    @r.get("/agent/profiles")
+    async def agent_list_profiles(x_agent_token: str = Header(default="")):
+        """Ritorna i profili dell'utente + catalog per la GUI desktop.
+        Autenticata via X-Agent-Token (stesso pattern di /api/agent/report-specs)."""
+        rec = await db.agent_tokens.find_one({"token": x_agent_token})
+        if not rec:
+            raise HTTPException(status_code=401, detail="Token agent non valido")
+        uid = rec["user_id"]
+        profiles = await db.game_profiles.find({"user_id": uid}, {"_id": 0}).sort("updated_at", -1).to_list(100)
+        return {"profiles": profiles, "templates": TEMPLATES, "catalog": TWEAK_CATALOG}
+
+    @r.post("/agent/magic-link")
+    async def agent_magic_link(x_agent_token: str = Header(default="")):
+        """Genera un magic link mono-uso (5min) per la GUI desktop.
+        Autenticato via X-Agent-Token: la GUI locale non ha cookie utente."""
+        import secrets as _secrets
+        rec = await db.agent_tokens.find_one({"token": x_agent_token})
+        if not rec:
+            raise HTTPException(status_code=401, detail="Token agent non valido")
+        uid = rec["user_id"]
+        now = datetime.now(timezone.utc)
+        # Rate limit: 5/hour per user (stesso limite dell'endpoint web).
+        one_hour_ago = (now - timedelta(hours=1)).isoformat()
+        recent_count = await db.magic_tokens.count_documents({
+            "user_id": uid, "created_at": {"$gte": one_hour_ago},
+        })
+        if recent_count >= 5:
+            raise HTTPException(status_code=429, detail="Troppi magic link. Riprova tra un'ora.")
+        token = _secrets.token_urlsafe(32)
+        ttl_seconds = 300
+        expires_at = (now + timedelta(seconds=ttl_seconds)).isoformat()
+        await db.magic_tokens.insert_one({
+            "token": token, "user_id": uid,
+            "expires_at": expires_at, "created_at": now.isoformat(),
+            "used": False, "source": "desktop_gui",
+        })
+        frontend = os.environ.get("FRONTEND_URL", "").rstrip("/")
+        mobile_url = f"{frontend}/auth/mobile?t={token}"
+        return {
+            "token": token,
+            "expires_in_seconds": ttl_seconds,
+            "mobile_url": mobile_url,
+        }
+
+    @r.get("/agent/magic-qr")
+    async def agent_magic_qr(token: str, x_agent_token: str = Header(default="")):
+        """Genera QR SVG per il magic link (per la GUI desktop che non ha JS libraries).
+        Autenticato via X-Agent-Token; il token DEV corrispondere allo stesso user."""
+        import qrcode as _qr
+        import qrcode.image.svg as _qrsvg
+        from fastapi.responses import Response as _Resp
+        rec = await db.agent_tokens.find_one({"token": x_agent_token})
+        if not rec:
+            raise HTTPException(status_code=401, detail="Token agent non valido")
+        magic = await db.magic_tokens.find_one({"token": token, "user_id": rec["user_id"]})
+        if not magic:
+            raise HTTPException(status_code=404, detail="Magic token non trovato")
+        frontend = os.environ.get("FRONTEND_URL", "").rstrip("/")
+        url = f"{frontend}/auth/mobile?t={token}"
+        img = _qr.make(url, image_factory=_qrsvg.SvgPathImage, box_size=8, border=1)
+        buf = __import__("io").BytesIO()
+        img.save(buf)
+        return _Resp(content=buf.getvalue(), media_type="image/svg+xml",
+                     headers={"Cache-Control": "no-store"})
 
     @r.post("/agent/report-specs")
     async def report_specs(data: SpecsInput, x_agent_token: str = Header(default="")):

@@ -291,8 +291,11 @@ def build(get_current_user):
             "created_at": doc.get("created_at"),
         }
 
+    class DiagnoseInput(BaseModel):
+        lang: str = "it"
+
     @r.post("/diagnose")
-    async def diagnose_pc(user: dict = Depends(get_current_user)):
+    async def diagnose_pc(data: DiagnoseInput | None = None, user: dict = Depends(get_current_user)):
         """Genera una diagnosi strutturata: 3-5 azioni prioritizzate per il PC dell'utente.
         Ritorna JSON. Rate limited come chat."""
         uid = str(user["_id"])
@@ -321,6 +324,14 @@ def build(get_current_user):
         if community:
             extra_context += "\n\n[COMMUNITY - utenti con hardware simile hanno applicato queste azioni]:\n"
             extra_context += "\n".join(community)
+        lang = (data.lang if data else "it") or "it"
+        is_en = lang.startswith("en")
+        difficulty_values = "easy|medium|advanced" if is_en else "facile|medio|avanzato"
+        lang_instruction = (
+            "Respond in English only. All strings in the JSON (summary, title, description, verify, impact, cta) MUST be in English."
+            if is_en else
+            "Rispondi in italiano. Tutte le stringhe del JSON (summary, title, description, verify, impact, cta) DEVONO essere in italiano."
+        )
         prompt = (
             "Analizza in maniera strutturata il PC dell'utente e proponi 3-5 azioni "
             "concrete e prioritizzate per migliorarne performance/latenza/stabilita' in gaming e streaming.\n"
@@ -334,7 +345,7 @@ def build(get_current_user):
             "      \"description\": \"2-4 frasi che spiegano cosa fare e perche'\",\n"
             "      \"verify\": \"1-2 frasi: come verificare se e' gia' attivo (percorso Windows Settings o comando PowerShell/registry)\",\n"
             "      \"impact\": \"stima misurabile (es. '+5-10% FPS', '-10 ms latency', '-5\\u00b0C GPU')\",\n"
-            "      \"difficulty\": \"facile|medio|avanzato\",\n"
+            f"      \"difficulty\": \"{difficulty_values}\",\n"
             "      \"kind\": \"tweak|driver|hardware|maintenance|manual\",\n"
             "      \"cta\": \"testo del pulsante consigliato (max 25 char)\",\n"
             "      \"priority\": 1\n"
@@ -343,10 +354,10 @@ def build(get_current_user):
             "}\n"
             "Priorita' 1 = massima. Ordina per priorita' decrescente. Usa il contesto PC reale. Il campo "
             "'verify' e' SEMPRE obbligatorio e concreto (percorso o comando). Non ripetere azioni gia' "
-            "applicate. Rispondi in italiano."
+            f"applicate. {lang_instruction}"
         )
         try:
-            raw = await ai_engine.one_shot_advisor(prompt, specs_text=specs_text + extra_context, lang="it")
+            raw = await ai_engine.one_shot_advisor(prompt, specs_text=specs_text + extra_context, lang=lang)
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Errore AI: {str(e)[:200]}")
         raw = (raw or "").strip()
@@ -427,7 +438,7 @@ def build(get_current_user):
 
 
     @r.post("/followups")
-    async def generate_followups(session_id: str, user: dict = Depends(get_current_user)):
+    async def generate_followups(session_id: str, lang: str = "it", user: dict = Depends(get_current_user)):
         """Genera 3 follow-up brevi dopo l'ultima risposta AI di una sessione."""
         uid = str(user["_id"])
         history = await db.chat_messages.find(
@@ -436,7 +447,7 @@ def build(get_current_user):
         if not history:
             return {"suggestions": []}
         try:
-            sug = await ai_engine.generate_followups(history, lang="it")
+            sug = await ai_engine.generate_followups(history, lang=lang)
         except Exception as e:
             return {"suggestions": [], "error": str(e)[:200]}
         return {"suggestions": sug}

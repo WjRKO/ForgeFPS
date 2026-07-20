@@ -6,11 +6,12 @@ import {
   LineChart, Cpu, MessageSquareCode, PiggyBank, ArrowRight, Zap,
   MonitorDown, Gauge, Gamepad2, Activity, TrendingUp, TrendingDown,
   MessagesSquare, CheckCircle2, Circle, Share2, Bell, Download,
-  Sparkles, ShieldCheck, Wifi,
+  Sparkles, ShieldCheck, Wifi, Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import MobileHandoffModal from "@/components/MobileHandoffModal";
 import {
   PageHeader, EmptyState, HealthRing, Sparkline, HUDCard, Badge, SkeletonCard,
   stagger, item,
@@ -632,6 +633,7 @@ export default function Dashboard() {
   const [bench, setBench] = useState(null);
   const [discord, setDiscord] = useState(null);
   const [notifs, setNotifs] = useState(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     api.get("/stats").then(({ data }) => setStats(data)).catch(() => setStats({}));
@@ -697,7 +699,18 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <PageHeader eyebrow={t("dashboard.eyebrow")} title={greeting} />
+      <MobileHandoffModal open={mobileOpen} onClose={() => setMobileOpen(false)} />
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <PageHeader eyebrow={t("dashboard.eyebrow")} title={greeting} />
+        <button
+          onClick={() => setMobileOpen(true)}
+          data-testid="continue-on-mobile-btn"
+          className="mt-2 inline-flex items-center gap-2 border border-[#00E0FF]/40 hover:border-[#00E0FF] text-[#00E0FF] hover:bg-[#00E0FF]/10 px-4 py-2 text-xs font-mono uppercase tracking-widest transition-colors"
+          title="Apri la Dashboard sul telefono con un QR code"
+        >
+          <Smartphone size={13} /> {en ? "Continue on mobile" : "Continua sul telefono"}
+        </button>
+      </div>
 
       {isBrandNew && <HeroEmpty t={t} />}
 

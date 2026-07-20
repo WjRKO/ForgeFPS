@@ -613,6 +613,14 @@ function Send-Telemetry($sample) {
   $body = @{ sample = $sample } | ConvertTo-Json -Depth 5 -Compress
   try { Invoke-RestMethod -Uri "$BACKEND/api/agent/telemetry" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
 }
+function Push-LiveSample {
+  # Lightweight sample sent to cloud when Live Sync toggle is ON.
+  # Reuses Get-TelemetrySample which already handles CPU/GPU/RAM/temps via WMI+LHM.
+  try {
+    $sample = Get-TelemetrySample
+    if ($sample) { Send-Telemetry $sample }
+  } catch {}
+}
 
 # ---------------- FPS via PresentMon (opzionale, richiede admin) ----------------
 $script:PM_EXE = Join-Path $env:TEMP 'PresentMon.exe'
@@ -1239,6 +1247,8 @@ function Show-WebGui {
   foreach ($t in $script:TWEAKS) { $f = 'ok'; if ($t.fit) { $f = & $t.fit }; if (-not $f) { $f = 'ok' }; $script:FITMAP[$t.id] = $f }
   $script:WEBLOG = New-Object System.Collections.ArrayList
   $script:APPLYING = $false
+  $script:LIVE_SYNC = $false
+  $script:LIVE_LAST_TS = 0
 
   # Session token random per gli endpoint locali
   $chars = [char[]](([byte][char]"A"..[byte][char]"Z") + ([byte][char]"a"..[byte][char]"z") + ([byte][char]"0"..[byte][char]"9"))
@@ -1278,6 +1288,35 @@ function Show-WebGui {
     $tk = $ctx.Request.QueryString["tk"]
     if (-not $tk) { $tk = $ctx.Request.Headers["X-FF-Token"] }
     return ($tk -eq $sess)
+  }
+  function Show-DeviceToast($device) {
+    # Native Windows toast for "new device connected" magic-link cross-device scan.
+    # Fire in a background thread so the HTTP handler returns instantly.
+    $title = 'FrameForge - Nuovo device connesso'
+    $body  = "$device ha effettuato l'accesso al tuo account tramite QR"
+    try {
+      Start-Job -ScriptBlock {
+        param($t, $b)
+        try {
+          if (Get-Command -Name New-BurntToastNotification -ErrorAction SilentlyContinue) {
+            New-BurntToastNotification -Text $t, $b | Out-Null
+            return
+          }
+        } catch {}
+        try {
+          Add-Type -AssemblyName System.Windows.Forms | Out-Null
+          $ni = New-Object System.Windows.Forms.NotifyIcon
+          $ni.Icon = [System.Drawing.SystemIcons]::Information
+          $ni.BalloonTipTitle = $t
+          $ni.BalloonTipText  = $b
+          $ni.Visible = $true
+          $ni.ShowBalloonTip(6000)
+          Start-Sleep -Seconds 7
+          $ni.Visible = $false
+          $ni.Dispose()
+        } catch {}
+      } -ArgumentList $title, $body | Out-Null
+    } catch {}
   }
   function Get-TweakDto {
     $arr = @()
@@ -1369,6 +1408,180 @@ function Show-WebGui {
   .backup-badge {
     font-size: 11px; padding: 6px 12px; border: 1px solid var(--info);
     color: var(--info); font-family: "Consolas", monospace;
+    cursor: pointer; user-select: none; transition: background 0.15s;
+  }
+  .backup-badge:hover, .backup-badge:focus-visible { background: rgba(0, 224, 255, 0.08); outline: none; }
+  .backup-badge.disabled { opacity: 0.5; cursor: not-allowed; }
+  .backup-panel {
+    position: absolute; top: calc(100% + 6px); right: 28px;
+    min-width: 320px; max-width: 420px; max-height: 400px; overflow-y: auto;
+    background: var(--bg); border: 1px solid var(--info);
+    padding: 12px 14px; z-index: 100; box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  }
+  .backup-panel[hidden] { display: none; }
+  .backup-panel-title {
+    font-family: "Consolas", monospace; font-size: 10px;
+    color: var(--info); text-transform: uppercase; letter-spacing: 0.15em;
+    margin-bottom: 10px;
+  }
+  .backup-list { list-style: none; margin: 0; padding: 0; }
+  .backup-list li {
+    padding: 6px 0; border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--fg); display: flex; align-items: center; gap: 8px;
+  }
+  .backup-list li:last-child { border-bottom: none; }
+  .backup-list li::before {
+    content: "\2713"; color: var(--ok); font-weight: 700; font-size: 11px;
+  }
+  .backup-list li.empty {
+    color: var(--muted); font-style: italic; justify-content: center; padding: 12px 0;
+  }
+  .backup-list li.empty::before { content: ""; }
+  .backup-panel-hint {
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+    font-size: 10px; color: var(--muted); line-height: 1.4;
+  }
+  header > div:has(> .backup-badge) { position: relative; }
+
+  /* Header actions: live sync toggle + backup badge grouped */
+  .header-actions {
+    display: flex; align-items: center; gap: 12px; position: relative;
+  }
+  .live-sync-toggle {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border: 1px solid var(--border);
+    font-size: 11px; font-family: "Consolas", monospace;
+    color: var(--muted); cursor: pointer; user-select: none;
+    transition: all 0.15s;
+  }
+  .live-sync-toggle:hover { border-color: var(--ok); color: var(--fg); }
+  .live-sync-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+  .live-sync-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted); transition: all 0.2s;
+    box-shadow: 0 0 0 0 rgba(0, 255, 102, 0);
+  }
+  .live-sync-toggle input:checked ~ .live-sync-dot {
+    background: var(--ok);
+    box-shadow: 0 0 12px 2px rgba(0, 255, 102, 0.55);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  .live-sync-toggle input:checked ~ .live-sync-text { color: var(--ok); }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 8px 1px rgba(0, 255, 102, 0.45); }
+    50%      { box-shadow: 0 0 16px 3px rgba(0, 255, 102, 0.75); }
+  }
+
+  /* Continua sul Telefono button + Magic Link modal */
+  .mobile-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border: 1px solid var(--accent); background: transparent;
+    color: var(--accent); font-family: "Consolas", monospace;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .mobile-btn:hover { background: var(--accent); color: #000; }
+  .mobile-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .mobile-btn-icon { font-size: 14px; line-height: 1; }
+
+  .mh-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.82);
+    z-index: 200; display: flex; align-items: center; justify-content: center;
+    padding: 20px; backdrop-filter: blur(6px);
+  }
+  .mh-overlay[hidden] { display: none; }
+  .mh-modal {
+    max-width: 440px; width: 100%; background: #0F0F12;
+    border: 1px solid #2A2A35; padding: 28px 26px 20px; position: relative;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+  }
+  .mh-close {
+    position: absolute; top: 10px; right: 12px; background: none; border: none;
+    color: #7a7a85; font-size: 22px; line-height: 1; cursor: pointer;
+  }
+  .mh-close:hover { color: var(--fg); }
+  .mh-eyebrow {
+    font-family: "Consolas", monospace; font-size: 10px; letter-spacing: 0.2em;
+    color: var(--accent); margin-bottom: 8px;
+  }
+  .mh-title {
+    font-size: 20px; margin: 0 0 6px; color: var(--fg); font-weight: 900; letter-spacing: -0.01em;
+  }
+  .mh-sub { font-size: 13px; color: #a1a1aa; margin: 0 0 18px; line-height: 1.5; }
+  .mh-body {
+    min-height: 240px; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 14px;
+  }
+  .mh-loading { color: var(--muted); font-family: "Consolas", monospace; font-size: 12px; }
+  .mh-error {
+    color: #FF3B30; font-size: 13px; text-align: center; padding: 12px; line-height: 1.5;
+  }
+  .mh-qr { background: #fff; padding: 14px; }
+  .mh-qr svg { display: block; width: 220px; height: 220px; }
+  .mh-consumed { text-align: center; }
+  .mh-check {
+    width: 64px; height: 64px; margin: 0 auto 12px;
+    border-radius: 50%; background: rgba(0,255,102,0.12); color: var(--ok);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 40px; line-height: 1;
+    box-shadow: 0 0 24px 4px rgba(0,255,102,0.35);
+  }
+  .mh-consumed-title { font-size: 18px; font-weight: 900; color: var(--fg); margin-bottom: 4px; }
+  .mh-consumed-sub { font-size: 13px; color: #a1a1aa; }
+  .mh-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 12px; border-top: 1px solid #1A1A24; margin-bottom: 12px;
+  }
+  .mh-countdown {
+    font-family: "Consolas", monospace; font-size: 11px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+  }
+  .mh-time { color: var(--ok); margin-left: 8px; }
+  .mh-time.low { color: #FF3B30; }
+  .mh-regen {
+    background: none; border: 1px solid #2A2A35; color: var(--muted);
+    padding: 6px 12px; font-family: "Consolas", monospace; font-size: 10px;
+    letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer;
+  }
+  .mh-regen:hover { color: var(--accent); border-color: var(--accent); }
+  .mh-safety {
+    font-size: 10px; color: #52525b; line-height: 1.5;
+    padding-top: 12px; border-top: 1px solid #1A1A24;
+  }
+  .mh-safety strong { color: #a1a1aa; }
+
+  /* Profili tab: cards per applicare preset dal cloud */
+  .profile-card {
+    background: var(--card); border: 1px solid var(--border);
+    padding: 16px; transition: border-color 0.15s;
+  }
+  .profile-card:hover { border-color: var(--accent); }
+  .profile-card h3 {
+    font-size: 15px; margin: 0 0 6px; color: var(--fg);
+  }
+  .profile-card .profile-meta {
+    font-size: 11px; color: var(--muted); font-family: "Consolas", monospace;
+    letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 8px;
+  }
+  .profile-card .profile-tweaks {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px;
+  }
+  .profile-card .profile-tweaks span {
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    padding: 2px 8px; font-size: 10px; color: var(--muted);
+  }
+  .profile-card .profile-apply {
+    background: var(--accent); color: #000; border: none;
+    padding: 8px 14px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.15em; cursor: pointer; text-transform: uppercase;
+    font-family: "Consolas", monospace;
+  }
+  .profile-card .profile-apply:hover { background: #fff; }
+  .profile-section-title {
+    grid-column: 1 / -1; font-family: "Consolas", monospace;
+    font-size: 10px; color: var(--accent); letter-spacing: 0.2em;
+    text-transform: uppercase; padding: 12px 0 4px;
+    border-bottom: 1px solid var(--border);
   }
 
   .preset-bar {
@@ -1586,7 +1799,23 @@ function Show-WebGui {
         <div class="hw-line" id="hwLine">PC: rilevamento in corso...</div>
         <div class="admin-line" id="adminLine"></div>
       </div>
-      <div class="backup-badge" id="backupBadge">Backup: 0</div>
+      <div class="header-actions">
+        <button type="button" class="mobile-btn" id="mobileHandoffBtn" data-testid="mobile-handoff-btn" title="Apri la Dashboard sul telefono senza login">
+          <span class="mobile-btn-icon" aria-hidden="true">&#9990;</span>
+          <span>Continua sul Telefono</span>
+        </button>
+        <label class="live-sync-toggle" data-testid="live-sync-label" title="Invia CPU/GPU/RAM/temp in tempo reale al Command Center cloud">
+          <input type="checkbox" id="liveSyncToggle" data-testid="live-sync-toggle" />
+          <span class="live-sync-dot" aria-hidden="true"></span>
+          <span class="live-sync-text">Sync Cloud</span>
+        </label>
+        <div class="backup-badge" id="backupBadge" data-testid="backup-badge" role="button" tabindex="0" title="Clicca per vedere la lista">Backup: 0</div>
+        <div class="backup-panel" id="backupPanel" data-testid="backup-panel" hidden>
+          <div class="backup-panel-title">Modifiche reversibili</div>
+          <ul id="backupList" class="backup-list"></ul>
+          <div class="backup-panel-hint">Usa "RIPRISTINA TUTTO" in fondo per riportare il PC allo stato iniziale.</div>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -1618,6 +1847,32 @@ function Show-WebGui {
 
   <div class="toast" id="toast"></div>
 
+  <div class="mh-overlay" id="mobileHandoffOverlay" hidden data-testid="mobile-handoff-overlay">
+    <div class="mh-modal" role="dialog" aria-modal="true" aria-labelledby="mhTitle" data-testid="mobile-handoff-modal">
+      <button type="button" class="mh-close" id="mhClose" aria-label="Chiudi" data-testid="mobile-handoff-close">&times;</button>
+      <div class="mh-eyebrow">// CONTINUA SUL TELEFONO</div>
+      <h2 class="mh-title" id="mhTitle">Apri la Dashboard sul mobile</h2>
+      <p class="mh-sub">Scansiona il QR con la fotocamera del telefono. Ti collegherai automaticamente al tuo account, senza login.</p>
+      <div class="mh-body" id="mhBody">
+        <div class="mh-loading" id="mhLoading">Generazione QR sicuro...</div>
+        <div class="mh-error" id="mhError" hidden></div>
+        <div class="mh-qr" id="mhQr" hidden></div>
+        <div class="mh-consumed" id="mhConsumed" hidden>
+          <div class="mh-check">&#10003;</div>
+          <div class="mh-consumed-title">Device connesso</div>
+          <div class="mh-consumed-sub" id="mhDeviceLabel">Dispositivo</div>
+        </div>
+      </div>
+      <div class="mh-footer" id="mhFooter" hidden>
+        <div class="mh-countdown"><span>Scade tra</span> <span class="mh-time" id="mhTime">05:00</span></div>
+        <button type="button" class="mh-regen" id="mhRegen" data-testid="mobile-handoff-regenerate">Rigenera</button>
+      </div>
+      <div class="mh-safety">
+        <strong>Sicurezza:</strong> il link scade in 5 minuti ed &egrave; a uso singolo.
+      </div>
+    </div>
+  </div>
+
 <script>
 (function(){
   const TOKEN = "__TOKEN__";
@@ -1625,9 +1880,10 @@ function Show-WebGui {
     { key: "gaming",  label: "Gaming & FPS" },
     { key: "input",   label: "Latenza & Input" },
     { key: "network", label: "Rete & Streaming" },
-    { key: "system",  label: "Sistema & Debloat" }
+    { key: "system",  label: "Sistema & Debloat" },
+    { key: "profiles", label: "Profili Cloud" }
   ];
-  let state = { tweaks: [], hw: {}, admin: false, backup: 0, presets: {} };
+  let state = { tweaks: [], hw: {}, admin: false, backup: 0, backup_ids: [], presets: {}, profiles: null };
   let selected = new Set();
   let activeCat = "gaming";
   let searchQ = "";
@@ -1661,16 +1917,26 @@ function Show-WebGui {
   function renderTabs() {
     const el = document.getElementById("tabs");
     el.innerHTML = CATS.map(c => {
+      if (c.key === "profiles") {
+        const count = state.profiles?.profiles?.length ?? "…";
+        return `<button class="tab ${c.key === activeCat ? "active" : ""}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${count}</span></button>`;
+      }
       const inCat = state.tweaks.filter(t => t.cat === c.key && !t.fit.skip);
       const todo = inCat.filter(t => !isApplied(t)).length;
       const total = inCat.length;
       return `<button class="tab ${c.key === activeCat ? "active" : ""}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${todo}/${total}</span></button>`;
     }).join("");
-    [...el.querySelectorAll(".tab")].forEach(b => b.onclick = () => { activeCat = b.dataset.cat; renderTabs(); renderCards(); });
+    [...el.querySelectorAll(".tab")].forEach(b => b.onclick = () => {
+      activeCat = b.dataset.cat;
+      if (activeCat === "profiles" && !state.profiles) loadProfiles();
+      renderTabs();
+      renderCards();
+    });
   }
 
   function renderCards() {
     const el = document.getElementById("cards");
+    if (activeCat === "profiles") { renderProfilesTab(el); return; }
     const items = state.tweaks.filter(t => t.cat === activeCat).filter(t => {
       if (!searchQ) return true;
       const q = searchQ.toLowerCase();
@@ -1727,6 +1993,69 @@ function Show-WebGui {
   function updateSelCount() {
     document.getElementById("selCount").innerHTML = `<b>${selected.size}</b> tweak selezionati`;
   }
+
+  // -------- Cloud profiles tab --------
+  async function loadProfiles() {
+    const el = document.getElementById("cards");
+    if (activeCat === "profiles") el.innerHTML = `<div class="empty">Caricamento profili dal cloud…</div>`;
+    try {
+      const d = await api("/api/profiles-cloud");
+      state.profiles = d && !d.err ? d : { profiles: [], templates: [], catalog: [], err: d?.err };
+    } catch (e) {
+      state.profiles = { profiles: [], templates: [], catalog: [], err: "network" };
+    }
+    if (activeCat === "profiles") { renderTabs(); renderCards(); }
+  }
+
+  function renderProfilesTab(el) {
+    const p = state.profiles;
+    if (!p) { el.innerHTML = `<div class="empty">Caricamento profili…</div>`; loadProfiles(); return; }
+    if (p.err) { el.innerHTML = `<div class="empty">Cloud non raggiungibile. Verifica la connessione internet e riprova.</div>`; return; }
+    const catalogMap = {};
+    (p.catalog || []).forEach(c => { catalogMap[c.id] = c.name; });
+    const cardHtml = (item, opts) => {
+      const isTemplate = !!opts.template;
+      const tweakIds = item.tweak_ids || [];
+      const names = tweakIds.map(id => catalogMap[id]).filter(Boolean).slice(0, 6);
+      const extra = tweakIds.length > 6 ? ` <span>+${tweakIds.length - 6}</span>` : "";
+      const meta = isTemplate ? `📚 Template community · ${tweakIds.length} tweak` : `👤 Il tuo profilo · ${tweakIds.length} tweak`;
+      const testid = isTemplate ? `profile-template-${item.id}` : `profile-${item.id}`;
+      return `<div class="profile-card" data-testid="${testid}">
+        <h3>${esc(item.name || item.game_name || 'Senza nome')}</h3>
+        <div class="profile-meta">${meta}</div>
+        <div class="profile-tweaks">${names.map(n => `<span>${esc(n)}</span>`).join("")}${extra}</div>
+        <button class="profile-apply" data-testid="apply-${testid}" onclick='applyProfile(${JSON.stringify(tweakIds)})'>Applica profilo</button>
+      </div>`;
+    };
+    let html = "";
+    if ((p.profiles || []).length) {
+      html += `<div class="profile-section-title" data-testid="section-my-profiles">// I MIEI PROFILI</div>`;
+      html += p.profiles.map(pr => cardHtml(pr, { template: false })).join("");
+    } else {
+      html += `<div class="profile-section-title">// I MIEI PROFILI</div><div class="empty" style="grid-column: 1 / -1;">Nessun profilo personale ancora. Creane uno su forgefps.dev/app/profiles.</div>`;
+    }
+    if ((p.templates || []).length) {
+      html += `<div class="profile-section-title" data-testid="section-templates">// TEMPLATE COMMUNITY</div>`;
+      html += p.templates.map(t => cardHtml(t, { template: true })).join("");
+    }
+    el.innerHTML = html;
+  }
+
+  window.applyProfile = function(tweakIds) {
+    if (!Array.isArray(tweakIds) || !tweakIds.length) return;
+    // Select the tweaks in the local catalog matching this profile.
+    selected.clear();
+    let matched = 0;
+    for (const id of tweakIds) {
+      if (state.tweaks.find(t => t.id === id && !t.fit.skip)) { selected.add(id); matched++; }
+    }
+    if (!matched) { toast("Nessun tweak compatibile con il tuo hardware", "err"); return; }
+    toast(`Profilo caricato: ${matched} tweak selezionati`, "ok");
+    // Jump to Gaming tab so the user sees what got selected.
+    activeCat = "gaming";
+    renderTabs(); renderCards(); updateSelCount();
+  };
+
   function renderHeader() {
     const hw = state.hw || {};
     const gpuTxt = hw.gpu || "?";
@@ -1739,6 +2068,44 @@ function Show-WebGui {
     if (state.admin) { adm.className = "admin-line ok"; adm.textContent = "Amministratore: SI - tutte le ottimizzazioni disponibili."; }
     else { adm.className = "admin-line no"; adm.textContent = "Amministratore: NO - alcune opzioni non verranno applicate."; }
     document.getElementById("backupBadge").textContent = `Backup: ${state.backup} modifiche reversibili`;
+    renderBackupPanel();
+  }
+
+  // Populate the backup dropdown with the names of the tweaks currently reversible.
+  function renderBackupPanel() {
+    const badge = document.getElementById("backupBadge");
+    const list = document.getElementById("backupList");
+    if (!list) return;
+    const ids = Array.isArray(state.backup_ids) ? state.backup_ids : [];
+    // ID -> friendly name via existing tweaks catalog.
+    const items = ids.map(id => {
+      const tw = state.tweaks.find(t => t.id === id);
+      return { id, name: tw ? tw.name : id };
+    });
+    list.innerHTML = "";
+    if (items.length === 0) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = "Nessuna modifica applicata ancora.";
+      list.appendChild(li);
+      badge.classList.add("disabled");
+    } else {
+      badge.classList.remove("disabled");
+      for (const it of items) {
+        const li = document.createElement("li");
+        li.setAttribute("data-testid", `backup-item-${it.id}`);
+        li.textContent = it.name;
+        list.appendChild(li);
+      }
+    }
+  }
+
+  function toggleBackupPanel(force) {
+    const panel = document.getElementById("backupPanel");
+    if (!panel) return;
+    const willOpen = typeof force === "boolean" ? force : panel.hasAttribute("hidden");
+    if (willOpen) panel.removeAttribute("hidden");
+    else panel.setAttribute("hidden", "");
   }
 
   function applyPreset(key) {
@@ -1782,7 +2149,7 @@ function Show-WebGui {
     const d = await api("/api/state");
     state.tweaks = d.tweaks || [];
     state.hw = d.hw || {}; state.admin = !!d.admin;
-    state.backup = d.backup || 0; state.presets = d.presets || {};
+    state.backup = d.backup || 0; state.backup_ids = d.backup_ids || []; state.presets = d.presets || {};
     renderHeader(); renderTabs(); renderCards();
     if (showToast) toast("Aggiornato", "ok");
   }
@@ -1792,14 +2159,14 @@ function Show-WebGui {
     setApplying(true);
     const bench = document.getElementById("benchToggle").checked;
     const d = await api("/api/apply", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ ids: Array.from(selected), benchmark: bench }) });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; renderHeader(); renderCards(); }
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; renderHeader(); renderCards(); }
     setApplying(false);
     toast("Ottimizzazioni applicate", "ok");
   }
   async function applyOne(id) {
     setApplying(true);
     const d = await api("/api/apply-one", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ id }) });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; renderHeader(); renderCards(); }
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; renderHeader(); renderCards(); }
     setApplying(false);
     toast("Applicato");
   }
@@ -1807,7 +2174,7 @@ function Show-WebGui {
     if (!confirm("Ripristinare TUTTE le modifiche dal backup?")) return;
     setApplying(true);
     const d = await api("/api/restore", { method: "POST", headers:{"X-FF-Token":TOKEN} });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = 0; renderHeader(); renderCards(); }
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = 0; state.backup_ids = []; renderHeader(); renderCards(); }
     setApplying(false);
     toast("Ripristino completato", "ok");
   }
@@ -1817,9 +2184,146 @@ function Show-WebGui {
   document.getElementById("applyBtn").onclick = applySelected;
   document.getElementById("restoreBtn").onclick = doRestore;
   document.getElementById("searchBox").oninput = e => { searchQ = e.target.value; renderCards(); };
+
+  // Live Sync toggle: streams telemetry to cloud when ON.
+  const _liveToggle = document.getElementById("liveSyncToggle");
+  if (_liveToggle) {
+    _liveToggle.addEventListener("change", async () => {
+      try {
+        const d = await api("/api/live-sync", { method: "POST", headers: {"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ enabled: _liveToggle.checked }) });
+        if (d && d.ok) toast(d.enabled ? "Sync Cloud attivo · dati in streaming" : "Sync Cloud disattivato", d.enabled ? "ok" : null);
+      } catch { _liveToggle.checked = !_liveToggle.checked; toast("Errore attivazione sync", "err"); }
+    });
+  }
+
+  // Backup badge toggle: open panel with reversible tweaks list.
+  const _backupBadge = document.getElementById("backupBadge");
+  if (_backupBadge) {
+    _backupBadge.addEventListener("click", () => toggleBackupPanel());
+    _backupBadge.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleBackupPanel(); }
+    });
+    document.addEventListener("click", (e) => {
+      const panel = document.getElementById("backupPanel");
+      if (!panel || panel.hasAttribute("hidden")) return;
+      if (!panel.contains(e.target) && e.target !== _backupBadge) toggleBackupPanel(false);
+    });
+  }
   window.addEventListener("beforeunload", () => {
     try { navigator.sendBeacon(`/api/close?tk=${encodeURIComponent(TOKEN)}`, ""); } catch(e){}
   });
+
+  // -------- Mobile Handoff (Continua sul Telefono) --------
+  const mh = {
+    btn: document.getElementById("mobileHandoffBtn"),
+    overlay: document.getElementById("mobileHandoffOverlay"),
+    closeBtn: document.getElementById("mhClose"),
+    regenBtn: document.getElementById("mhRegen"),
+    loading: document.getElementById("mhLoading"),
+    error: document.getElementById("mhError"),
+    qr: document.getElementById("mhQr"),
+    consumed: document.getElementById("mhConsumed"),
+    deviceLabel: document.getElementById("mhDeviceLabel"),
+    footer: document.getElementById("mhFooter"),
+    time: document.getElementById("mhTime"),
+    token: "",
+    remaining: 0,
+    tickId: 0,
+    pollId: 0,
+    open: false,
+  };
+  function mhSetVis(node, visible) {
+    if (!node) return;
+    if (visible) node.removeAttribute("hidden"); else node.setAttribute("hidden", "");
+  }
+  function mhStopTimers() {
+    if (mh.tickId) { clearInterval(mh.tickId); mh.tickId = 0; }
+    if (mh.pollId) { clearInterval(mh.pollId); mh.pollId = 0; }
+  }
+  function mhReset() {
+    mhStopTimers();
+    mh.token = ""; mh.remaining = 0;
+    mhSetVis(mh.loading, true);
+    mhSetVis(mh.error, false); mh.error.textContent = "";
+    mhSetVis(mh.qr, false); mh.qr.innerHTML = "";
+    mhSetVis(mh.consumed, false);
+    mhSetVis(mh.footer, false);
+  }
+  function mhOpen() {
+    mh.open = true; mhSetVis(mh.overlay, true); mhReset(); mhGenerate();
+  }
+  function mhClose() {
+    mh.open = false; mhStopTimers(); mhSetVis(mh.overlay, false); mhReset();
+  }
+  function mhFmt(sec) {
+    const m = String(Math.floor(sec/60)).padStart(2,"0");
+    const s = String(sec%60).padStart(2,"0");
+    return m+":"+s;
+  }
+  async function mhGenerate() {
+    mhReset();
+    try {
+      const d = await api("/api/mobile-handoff/generate", { method: "POST", headers: {"X-FF-Token": TOKEN} });
+      if (!d || d.err) throw new Error(d && d.err ? d.err : "unknown");
+      mh.token = d.token;
+      mh.remaining = d.expires_in_seconds || 300;
+      // Fetch QR SVG (locally proxied to cloud) and inject.
+      const qrResp = await fetch(`/api/mobile-handoff/qr?tk=${encodeURIComponent(TOKEN)}&token=${encodeURIComponent(mh.token)}`);
+      if (!qrResp.ok) throw new Error("qr_fetch_failed");
+      const svg = await qrResp.text();
+      mhSetVis(mh.loading, false);
+      mh.qr.innerHTML = svg;
+      mhSetVis(mh.qr, true);
+      mhSetVis(mh.footer, true);
+      mh.time.textContent = mhFmt(mh.remaining);
+      mh.time.classList.remove("low");
+      mh.tickId = setInterval(() => {
+        mh.remaining = Math.max(0, mh.remaining - 1);
+        mh.time.textContent = mhFmt(mh.remaining);
+        if (mh.remaining < 60) mh.time.classList.add("low");
+        if (mh.remaining <= 0) { mhStopTimers(); mhShowError("Il QR e scaduto. Rigenera."); }
+      }, 1000);
+      mh.pollId = setInterval(mhPoll, 2000);
+    } catch (e) {
+      mhShowError((e && e.message === "rate_limited") ? "Troppi QR generati. Riprova tra un'ora." : "Errore nella generazione del QR");
+    }
+  }
+  function mhShowError(msg) {
+    mhStopTimers();
+    mhSetVis(mh.loading, false);
+    mhSetVis(mh.qr, false);
+    mhSetVis(mh.footer, false);
+    mh.error.textContent = msg;
+    mhSetVis(mh.error, true);
+  }
+  async function mhPoll() {
+    if (!mh.token || !mh.open) return;
+    try {
+      const d = await api(`/api/mobile-handoff/status?magic=${encodeURIComponent(mh.token)}`);
+      if (!d || d.err) return;
+      if (d.used) {
+        mhStopTimers();
+        const label = d.device_label || "Dispositivo";
+        mh.deviceLabel.textContent = label + " ha effettuato l'accesso";
+        mhSetVis(mh.qr, false);
+        mhSetVis(mh.footer, false);
+        mhSetVis(mh.error, false);
+        mhSetVis(mh.consumed, true);
+        toast("Nuovo device connesso: " + label, "ok");
+        // Also trigger Windows native toast via local endpoint.
+        try { fetch(`/api/mobile-handoff/notify?tk=${encodeURIComponent(TOKEN)}&device=${encodeURIComponent(label)}`, { method: "POST" }); } catch(e){}
+        setTimeout(() => { if (mh.open) mhClose(); }, 2600);
+      } else if (d.expired) {
+        mhStopTimers();
+        mhShowError("Il QR e scaduto. Rigenera.");
+      }
+    } catch(e) {}
+  }
+  if (mh.btn)      mh.btn.addEventListener("click", mhOpen);
+  if (mh.closeBtn) mh.closeBtn.addEventListener("click", mhClose);
+  if (mh.regenBtn) mh.regenBtn.addEventListener("click", mhGenerate);
+  if (mh.overlay)  mh.overlay.addEventListener("click", (e) => { if (e.target === mh.overlay) mhClose(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && mh.open) mhClose(); });
 
   refreshState();
   setInterval(pollLog, 400);
@@ -1894,6 +2398,7 @@ function Show-WebGui {
         elseif ($path -eq '/api/state' -and $method -eq 'GET') {
           $dto = @{
             hw = $script:HW; admin = $isAdmin; backup = $script:BK.Count
+            backup_ids = @($script:BK.Keys)
             tweaks = Get-TweakDto
             presets = @{
               competitive = @($script:PRESETS.competitivo)
@@ -1909,7 +2414,15 @@ function Show-WebGui {
           if ($script:WEBLOG.Count -gt $since) {
             $slice = @($script:WEBLOG.GetRange($since, $script:WEBLOG.Count - $since))
           }
-          Send-Json $ctx @{ logs = $slice; total = $script:WEBLOG.Count; applying = $script:APPLYING }
+          # Opportunistic live-telemetry push (throttled 3s).
+          if ($script:LIVE_SYNC) {
+            $now = [int](Get-Date -UFormat %s)
+            if (($now - $script:LIVE_LAST_TS) -ge 3) {
+              $script:LIVE_LAST_TS = $now
+              try { Push-LiveSample } catch {}
+            }
+          }
+          Send-Json $ctx @{ logs = $slice; total = $script:WEBLOG.Count; applying = $script:APPLYING; live_sync = $script:LIVE_SYNC }
         }
         elseif ($path -eq '/api/apply' -and $method -eq 'POST') {
           $body = Read-Body $ctx | ConvertFrom-Json
@@ -1932,17 +2445,75 @@ function Show-WebGui {
           Send-Data (Get-Specs) (Get-Health) (Get-StartupList)
           WebLog 'FATTO. Dati inviati a FrameForge. Riavvio consigliato.'
           $script:APPLYING = $false
-          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; before = $before; after = $after }
+          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = @($script:BK.Keys); before = $before; after = $after }
         }
         elseif ($path -eq '/api/apply-one' -and $method -eq 'POST') {
           $body = Read-Body $ctx | ConvertFrom-Json
           $t = $script:TWMAP[$body.id]
           if ($t) { WebLog ("-> {0}" -f $t.name); & $t.apply; Save-Backup }
-          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count }
+          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = @($script:BK.Keys) }
+        }
+        elseif ($path -eq '/api/profiles-cloud' -and $method -eq 'GET') {
+          # Proxy to FrameForge cloud: /api/agent/profiles (X-Agent-Token auth).
+          try {
+            $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/profiles" -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 8
+            Send-Json $ctx $resp
+          } catch {
+            Send-Json $ctx @{ err = "cloud unreachable"; profiles = @(); templates = @(); catalog = @() }
+          }
+        }
+        elseif ($path -eq '/api/live-sync' -and $method -eq 'POST') {
+          # Toggle live telemetry stream to cloud on/off.
+          $body = Read-Body $ctx | ConvertFrom-Json
+          $script:LIVE_SYNC = [bool]$body.enabled
+          Send-Json $ctx @{ ok = $true; enabled = $script:LIVE_SYNC }
+        }
+        elseif ($path -eq '/api/mobile-handoff/generate' -and $method -eq 'POST') {
+          # Proxy to cloud: generate a 5-min single-use magic-link for mobile QR handoff.
+          try {
+            $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/magic-link" -Method Post -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 10
+            Send-Json $ctx $resp
+          } catch {
+            $code = try { [int]$_.Exception.Response.StatusCode.value__ } catch { 0 }
+            if ($code -eq 429) { Send-Json $ctx @{ err = 'rate_limited' } 429 }
+            else { Send-Json $ctx @{ err = 'cloud_unreachable' } 502 }
+          }
+        }
+        elseif ($path -eq '/api/mobile-handoff/qr' -and $method -eq 'GET') {
+          # Proxy to cloud: fetch QR SVG for the magic token.
+          $magic = $req.QueryString['token']
+          if ([string]::IsNullOrWhiteSpace($magic)) { $ctx.Response.StatusCode = 400; $ctx.Response.Close() }
+          else {
+            try {
+              $svg = Invoke-RestMethod -Uri "$BACKEND/api/agent/magic-qr?token=$([Uri]::EscapeDataString($magic))" -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 10
+              $bytes = [System.Text.Encoding]::UTF8.GetBytes([string]$svg)
+              $ctx.Response.ContentType = 'image/svg+xml'
+              $ctx.Response.Headers.Add('Cache-Control','no-store')
+              $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+              $ctx.Response.Close()
+            } catch { $ctx.Response.StatusCode = 502; $ctx.Response.Close() }
+          }
+        }
+        elseif ($path -eq '/api/mobile-handoff/status' -and $method -eq 'GET') {
+          # Public poll: has the magic link been consumed yet?
+          $magic = $req.QueryString['magic']
+          if ([string]::IsNullOrWhiteSpace($magic)) { Send-Json $ctx @{ err = 'missing_token' } 400 }
+          else {
+            try {
+              $resp = Invoke-RestMethod -Uri "$BACKEND/api/auth/magic-status/$([Uri]::EscapeDataString($magic))" -TimeoutSec 6
+              Send-Json $ctx $resp
+            } catch { Send-Json $ctx @{ err = 'cloud_unreachable' } 502 }
+          }
+        }
+        elseif ($path -eq '/api/mobile-handoff/notify' -and $method -eq 'POST') {
+          # Fire a native Windows toast notification (BurntToast if available, else balloon).
+          $device = $req.QueryString['device']; if ([string]::IsNullOrWhiteSpace($device)) { $device = 'Dispositivo' }
+          try { Show-DeviceToast $device } catch {}
+          Send-Json $ctx @{ ok = $true }
         }
         elseif ($path -eq '/api/restore' -and $method -eq 'POST') {
           WebLog 'Ripristino dal backup...'; $msg = Invoke-Restore; WebLog ('  ' + $msg)
-          Send-Json $ctx @{ ok = $true; message = $msg; tweaks = Get-TweakDto; backup = $script:BK.Count }
+          Send-Json $ctx @{ ok = $true; message = $msg; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = @($script:BK.Keys) }
         }
         elseif ($path -eq '/api/close') {
           Send-Json $ctx @{ ok = $true }

@@ -1,7 +1,7 @@
 # FrameForge — Roadmap
 
 > Priorità: **P0** = blocker/prossimo sprint · **P1** = alta · **P2** = media · **P3** = nice-to-have.
-> Aggiornato al **2026-07-19** dopo release **v0.6.5** (AI Diagnostics + Learning Loop + Multi-modal Chat + Discord auto-sync).
+> Aggiornato al **2026-07-20** dopo release **v0.6.6** (Cross-device Magic Link Notification + QR dentro GUI Desktop).
 
 ---
 

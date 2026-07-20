@@ -1,27 +1,35 @@
 # ============================================================
-#  FrameForge - Build dell'agent Windows come .exe standalone
+#  FrameForge - Build dell'agent Windows come cartella + ZIP
 #  Esegui su Windows:  powershell -ExecutionPolicy Bypass -File build.ps1
-#  I flag (metadati versione + no UPX) riducono molto i FALSI POSITIVI
-#  degli antivirus sugli eseguibili PyInstaller.
+#
+#  Da v0.6.7 usiamo --onedir invece di --onefile: PyInstaller
+#  onefile e' un archivio auto-estraente e Windows Defender lo
+#  classifica euristicamente come "dropper". La build --onedir
+#  produce una cartella con .exe + DLL affiancate, che passa
+#  senza falsi positivi anche senza firma Authenticode.
 # ============================================================
 
-Write-Host "[1/4] Installo PyInstaller..." -ForegroundColor Cyan
+Write-Host "[1/5] Installo PyInstaller..." -ForegroundColor Cyan
 python -m pip install --upgrade pip pyinstaller
 
-Write-Host "[2/4] Pulisco build precedenti..." -ForegroundColor Cyan
+Write-Host "[2/5] Pulisco build precedenti..." -ForegroundColor Cyan
 if (Test-Path build) { Remove-Item build -Recurse -Force }
 if (Test-Path dist)  { Remove-Item dist  -Recurse -Force }
 
-Write-Host "[3/4] Costruisco forgefps-agent.exe (con metadati, senza UPX)..." -ForegroundColor Cyan
-pyinstaller --onefile --name forgefps-agent --console --noupx --clean `
+Write-Host "[3/5] Costruisco la cartella dist\forgefps-agent\ (onedir, metadati, no UPX)..." -ForegroundColor Cyan
+pyinstaller --onedir --name forgefps-agent --console --noupx --clean `
   --version-file version_info.txt forgefps_agent.py
 
-Write-Host "[4/4] Checksum SHA256:" -ForegroundColor Cyan
-Get-FileHash .\dist\forgefps-agent.exe -Algorithm SHA256 | Format-List
+Write-Host "[4/5] Comprimo dist\forgefps-agent\ in forgefps-agent.zip..." -ForegroundColor Cyan
+Compress-Archive -Path 'dist\forgefps-agent' -DestinationPath 'dist\forgefps-agent.zip' -Force
 
-Write-Host "`nFATTO. Eseguibile: dist\forgefps-agent.exe" -ForegroundColor Green
-Write-Host "Avvialo con:  .\forgefps-agent.exe --token IL_TUO_TOKEN" -ForegroundColor Yellow
-Write-Host "`nSe un antivirus lo segnala (falso positivo tipico di PyInstaller):" -ForegroundColor DarkYellow
-Write-Host "  1) Firma l'exe con un certificato Authenticode (soluzione definitiva)"
-Write-Host "  2) Segnala il falso positivo: https://www.microsoft.com/wdsi/filesubmission"
+Write-Host "[5/5] Checksum SHA256 del ZIP:" -ForegroundColor Cyan
+Get-FileHash .\dist\forgefps-agent.zip -Algorithm SHA256 | Format-List
+
+Write-Host "`nFATTO. Distribuisci: dist\forgefps-agent.zip" -ForegroundColor Green
+Write-Host "Uso finale: unzip -> apri la cartella -> forgefps-agent.exe --token IL_TUO_TOKEN" -ForegroundColor Yellow
+
+Write-Host "`nSe un antivirus lo segnala ancora (raro con --onedir):" -ForegroundColor DarkYellow
+Write-Host "  1) Segnala il falso positivo a Microsoft: https://www.microsoft.com/wdsi/filesubmission"
+Write-Host "  2) Vedi VENDOR_FALSE_POSITIVE.md per i testi pronti da inviare a Kaspersky, Bitdefender, Norton, ESET"
 Write-Host "  3) Verifica su https://www.virustotal.com quali motori lo flaggano"
