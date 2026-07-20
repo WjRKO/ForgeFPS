@@ -1,5 +1,24 @@
 # FrameForge — Changelog
 
+## v0.6.15 — 2026-07-20 · Fix Discord #changelog auto-announcer
+### Fixed
+- **`/app/data/releases.json`**: il manifest si fermava a v0.6.5. Aggiunte le 6 versioni
+  user-facing pubblicate da allora: 0.6.6 (cross-device notifications), 0.6.7 (report PDF
+  con grafico Health Score), 0.6.8 (build --onedir contro falsi positivi AV), 0.6.10 (ZIP
+  personalizzato + token persistente), 0.6.13 (fix ZIP troncato), 0.6.14 (fix Coach EN +
+  UX credito LLM).
+- Il release_announcer al prossimo boot backend PROD posta i 6 embed mancanti sul canale
+  Discord `#changelog-automatico` (idempotente via `db.announced_releases`).
+
+### Verified
+- iteration_31.json: 6/6 acceptance criteria. Manifest 12 versioni, announce_new_releases()
+  posta 6 al primo run e 0 al secondo. announce_release_by_version force-re-announce OK.
+
+### Files touched
+- `/app/data/releases.json` (+6 entries)
+
+---
+
 ## v0.6.14 — 2026-07-20 · Bug fixes multipli + UX budget LLM
 ### Fixed
 - **QR Desktop GUI non si generava** (`ps_agent.py`): `Invoke-RestMethod` su
