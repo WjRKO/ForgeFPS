@@ -38,7 +38,7 @@ def _iso_age(ts):
 # GitHub Release del ZIP generico dell'agent. Aggiornare a ogni bump di versione.
 AGENT_ZIP_UPSTREAM = os.environ.get(
     "AGENT_ZIP_UPSTREAM",
-    "https://github.com/WjRKO/ForgeFPS/releases/download/v0.6.7/forgefps-agent.zip",
+    "https://github.com/WjRKO/ForgeFPS/releases/download/v0.6.8/forgefps-agent.zip",
 )
 _AGENT_ZIP_CACHE_PATH = f"/tmp/forgefps-agent-cache-{hashlib.md5(AGENT_ZIP_UPSTREAM.encode()).hexdigest()[:10]}.zip"
 
