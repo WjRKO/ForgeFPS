@@ -1100,20 +1100,33 @@ const resources = {
   },
 };
 
+// Smart fallback: pick English for any non-Italian browser locale so speakers
+// of DE/FR/ES/EN/… get English instead of Italian on first visit.
+const _navLang = (typeof navigator !== "undefined" && (navigator.language || navigator.userLanguage) || "").toLowerCase();
+const _smartFallback = _navLang.startsWith("it") ? "it" : "en";
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
     resources,
-    fallbackLng: "it",
+    fallbackLng: _smartFallback,
     supportedLngs: ["it", "en"],
     load: "languageOnly",
     detection: {
-      order: ["localStorage", "navigator"],
+      order: ["localStorage", "navigator", "htmlTag"],
       lookupLocalStorage: "boostpc_lang",
       caches: ["localStorage"],
     },
     interpolation: { escapeValue: false },
+    react: { useSuspense: false },
   });
+
+// Keep <html lang="…"> in sync (SEO + a11y) whenever the user switches.
+if (typeof document !== "undefined") {
+  const _syncHtmlLang = (lng) => { document.documentElement.setAttribute("lang", (lng || "it").slice(0, 2)); };
+  _syncHtmlLang(i18n.resolvedLanguage || i18n.language);
+  i18n.on("languageChanged", _syncHtmlLang);
+}
 
 export default i18n;

@@ -10,12 +10,12 @@ MODEL_NAME = "claude-sonnet-4-6"
 AI_TIMEOUT = 45
 
 ADVISOR_SYSTEM = (
-    "Sei BOOST AI, un esperto assistente italiano di ottimizzazione PC per gamer e streamer. "
-    "Dai consigli pratici, precisi e passo-passo su: tweak di Windows, impostazioni GPU (NVIDIA/AMD), "
-    "OBS/streaming, gestione temperature, overclock sicuro, driver, avvio e background apps, latenza e FPS. "
-    "Rispondi sempre in italiano, in modo conciso e tecnico ma comprensibile. Formatta le risposte in Markdown: "
-    "usa grassetto, titoli, elenchi puntati e passi numerati. Quando dai comandi Windows, mettili in blocchi di "
-    "codice PowerShell (```powershell ... ```). Se un'azione è rischiosa, avvisa l'utente. Non inventare comandi inesistenti."
+    "You are BOOST AI, an expert PC optimization assistant for gamers and streamers. "
+    "Provide practical, precise and step-by-step advice on: Windows tweaks, GPU settings (NVIDIA/AMD), "
+    "OBS/streaming, temperature management, safe overclocking, drivers, startup and background apps, latency and FPS. "
+    "Be concise, technical yet accessible. Format responses in Markdown: use bold, headings, bullet lists and numbered steps. "
+    "When providing Windows commands, wrap them in PowerShell code blocks (```powershell ... ```). "
+    "If an action is risky, warn the user. Never invent commands that don't exist."
 )
 
 BENCH_SYSTEM = (
@@ -54,9 +54,11 @@ def build_chat(session_id: str, system: str = ADVISOR_SYSTEM) -> LlmChat:
 
 async def stream_advisor(session_id: str, history: list, message: str, specs_text: str = "", lang: str = "it", image_data_url: str = ""):
     system = ADVISOR_SYSTEM
+    # Language directive: explicit, always present (Claude follows the last relevant instruction).
     if (lang or "it").startswith("en"):
-        system += ("\n\nIMPORTANT: The user selected ENGLISH. Reply ENTIRELY in English "
-                   "(keep the same Markdown formatting and PowerShell code blocks).")
+        system += "\n\nLANGUAGE: Reply ENTIRELY in English. Keep Markdown formatting and PowerShell code blocks."
+    else:
+        system += "\n\nLINGUA: Rispondi INTERAMENTE in italiano. Mantieni il Markdown e i blocchi di codice PowerShell."
     if specs_text:
         system += ("\n\n[CONTESTO PC DELL'UTENTE - usa questi dati REALI per consigli su misura. "
                    "Fai riferimento PROATTIVO a Health Score, problemi rilevati, temperature, benchmark e "
@@ -92,17 +94,26 @@ async def generate_followups(history: list, lang: str = "it") -> list:
     if not history:
         return []
     recent = history[-6:]
-    convo = "\n".join(f"{'Utente' if m['role']=='user' else 'AI'}: {(m['content'] or '')[:400]}" for m in recent)
-    system = (
-        "Sei un assistente che genera 3 possibili domande di FOLLOW-UP che l'utente potrebbe fare "
-        "dopo la conversazione. Devono essere BREVI (max 8 parole), specifiche al contesto, e ognuna "
-        "deve aprire una direzione diversa (approfondimento tecnico, azione pratica, confronto). "
-        "Rispondi ESCLUSIVAMENTE con 3 righe, una per riga, senza numerazione, senza altro testo."
-    )
-    if (lang or "it").startswith("en"):
-        system += " Reply in English."
+    is_en = (lang or "it").startswith("en")
+    convo = "\n".join(f"{'User' if m['role']=='user' else 'AI'}: {(m['content'] or '')[:400]}" for m in recent)
+    if is_en:
+        system = (
+            "You generate 3 possible FOLLOW-UP questions the user might ask next. "
+            "Each must be SHORT (max 8 words), specific to the context, and each should open a different "
+            "direction (technical deep-dive, practical action, comparison). "
+            "Reply ONLY with 3 lines, one per line, no numbering, no other text. Language: English."
+        )
+        prompt = f"Conversation:\n{convo}\n\n3 follow-ups:"
+    else:
+        system = (
+            "Sei un assistente che genera 3 possibili domande di FOLLOW-UP che l'utente potrebbe fare "
+            "dopo la conversazione. Devono essere BREVI (max 8 parole), specifiche al contesto, e ognuna "
+            "deve aprire una direzione diversa (approfondimento tecnico, azione pratica, confronto). "
+            "Rispondi ESCLUSIVAMENTE con 3 righe, una per riga, senza numerazione, senza altro testo. Lingua: italiano."
+        )
+        prompt = f"Conversazione:\n{convo}\n\n3 follow-up:"
     chat = build_chat(str(uuid.uuid4()), system)
-    text = await _collect(chat, f"Conversazione:\n{convo}\n\n3 follow-up:")
+    text = await _collect(chat, prompt)
     lines = [ln.strip("-* \t") for ln in (text or "").strip().split("\n") if ln.strip()]
     return lines[:3]
 
