@@ -178,8 +178,8 @@ function MaintenanceCard() {
       <p className="text-xs text-zinc-400 mb-3 leading-relaxed">{t("commands.maint_desc")}</p>
 
       <div className="grid sm:grid-cols-2 gap-2 mb-4">
-        {MAINT.map((m, i) => (
-          <div key={i} className="flex items-center gap-2 text-xs text-zinc-400"><Check size={12} className="text-[#00FF66] shrink-0" /> {isEn() ? m.label_en : m.label}</div>
+        {MAINT.map((m) => (
+          <div key={m.label} className="flex items-center gap-2 text-xs text-zinc-400"><Check size={12} className="text-[#00FF66] shrink-0" /> {isEn() ? m.label_en : m.label}</div>
         ))}
       </div>
 
@@ -353,7 +353,7 @@ export default function Commands() {
                   </span>
                   <span className="text-[10px] font-mono text-zinc-500">{cat.items.length}</span>
                 </div>
-                <div>{cat.items.map((it, i) => <CmdRow key={i} item={it} onAsk={askAI} />)}</div>
+                <div>{cat.items.map((it) => <CmdRow key={it.cmd || it.label} item={it} onAsk={askAI} />)}</div>
               </div>
             ))
           )}

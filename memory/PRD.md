@@ -785,3 +785,17 @@ User ha postato secrets pubblici (CLIENT_SECRET, BOT_TOKEN, WEBHOOK URLs). Deve 
 - MOD: /app/frontend/src/pages/Profiles.jsx (eslint-disable con commento)
 - MOD: /app/frontend/src/pages/MyPc.jsx (nested ternaries estratti in 5 helper)
 - MOD: /app/memory/PRD.md
+
+### 2026-07-19 (26) - Refactor batch 3 (chiusura task rimandate)
+- **Type hints `models.py`**: 100% coverage. `list` → `list[str]`/`list[dict[str, Any]]`, `dict` → `dict[str, Any]`. Colpiti 20 Pydantic model — migliore IDE support, catch di errori a compile-time. Testato con instanziazione: OK.
+- **Array-index-keys eliminati** (top 7 hot spot):
+  - `Landing.jsx`: 5 posti (msgs chat mockup, bullets FeatureRow, trust strip, steps how-it-works, features showcase) → `key={m.text}`, `key={b}`, `key={s.l}`, `key={s.t}`, `key={f.t}`
+  - `Commands.jsx`: 2 posti (MAINT items, CmdRow list) → `key={m.label}`, `key={it.cmd || it.label}`
+- **Skippato con giustificazione**: split `Games.jsx` (405 righe) — dopo analisi ha 7+ props condivise tra le sezioni FPS estimate/rec preset, richiede prop-drilling estensivo e sarebbe più regressione che valore. Meglio task dedicato con testing agent per validare.
+- **Validato**: pytest 75/75, sintassi Python + JSX OK, Playwright Landing (hero "Find the bottlenecks" + telemetry preview 92 HEALTH + tweaks 35/35) + Commands (maint-download testid presente).
+
+## FILE MODIFICATI (sessione 26)
+- MOD: /app/backend/models.py (type hints 100%)
+- MOD: /app/frontend/src/pages/Landing.jsx (5 array-index-key fix)
+- MOD: /app/frontend/src/pages/Commands.jsx (2 array-index-key fix)
+- MOD: /app/memory/PRD.md

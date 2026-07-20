@@ -141,7 +141,7 @@ function AdvisorChat() {
   return (
     <div className="bg-[#0F0F12] border border-[#1A1A24] p-4 space-y-3">
       {msgs.map((m, i) => (
-        <motion.div key={i} {...fadeUp} transition={{ delay: 0.1 + i * 0.25, ease: EASE }}
+        <motion.div key={`${m.who}-${m.text.slice(0, 20)}`} {...fadeUp} transition={{ delay: 0.1 + i * 0.25, ease: EASE }}
           className={`flex ${m.who === "ai" ? "justify-start" : "justify-end"}`}>
           <div className={`max-w-[85%] px-3 py-2 text-xs leading-relaxed border ${m.who === "ai" ? "bg-[#00E0FF]/10 border-[#00E0FF]/30 text-zinc-200" : "bg-black border-[#2A2A35] text-zinc-400"}`}>
             {m.text}
@@ -255,8 +255,8 @@ function FeatureRow({ eyebrow, title, desc, bullets, accent, reverse, mockup }) 
         <h3 className="font-display font-black text-2xl sm:text-3xl tracking-tighter mb-4">{title}</h3>
         <p className="text-zinc-400 text-base leading-relaxed mb-5 max-w-lg">{desc}</p>
         <ul className="space-y-2.5">
-          {bullets.map((b, i) => (
-            <li key={i} className="flex items-center gap-3 text-sm text-zinc-300">
+          {bullets.map((b) => (
+            <li key={b} className="flex items-center gap-3 text-sm text-zinc-300">
               <span className="w-5 h-5 border flex items-center justify-center shrink-0" style={{ borderColor: accent }}>
                 <Check size={12} style={{ color: accent }} />
               </span>
@@ -363,7 +363,7 @@ export default function Landing() {
       <section className="border-y border-[#1A1A24] bg-[#050505]">
         <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4">
           {trust.map((s, i) => (
-            <div key={i} className={`p-6 text-center ${i < 3 ? "md:border-r" : ""} ${i < 2 ? "border-r" : ""} ${i < 2 ? "border-b md:border-b-0" : ""} border-[#1A1A24]`}>
+            <div key={s.l} className={`p-6 text-center ${i < 3 ? "md:border-r" : ""} ${i < 2 ? "border-r" : ""} ${i < 2 ? "border-b md:border-b-0" : ""} border-[#1A1A24]`}>
               <div className="font-display font-black text-3xl sm:text-4xl tracking-tighter" style={{ color: s.c }}><Counter value={s.v} /></div>
               <div className="text-xs font-mono uppercase tracking-widest text-zinc-500 mt-1">{s.l}</div>
             </div>
@@ -384,7 +384,7 @@ export default function Landing() {
         </motion.div>
         <div className="grid md:grid-cols-3 gap-4">
           {steps.map((s, i) => (
-            <motion.div key={i} {...fadeUp} transition={{ delay: i * 0.12, ease: EASE }}
+            <motion.div key={s.t} {...fadeUp} transition={{ delay: i * 0.12, ease: EASE }}
               className="group bg-[#0F0F12] border border-[#1A1A24] border-l-2 border-l-transparent hover:border-l-[#E5FF00] hover:-translate-y-1 transition-all duration-300 p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="w-11 h-11 border border-[#2A2A35] flex items-center justify-center text-[#E5FF00]"><s.i size={20} className="icon-pop" /></div>
@@ -405,7 +405,7 @@ export default function Landing() {
         </motion.div>
         <div className="space-y-20 lg:space-y-28">
           {features.map((f, i) => (
-            <FeatureRow key={i} eyebrow={f.eyebrow} title={f.t} desc={f.d} bullets={f.b} accent={f.accent} reverse={i % 2 === 1} mockup={f.m} />
+            <FeatureRow key={f.t} eyebrow={f.eyebrow} title={f.t} desc={f.d} bullets={f.b} accent={f.accent} reverse={i % 2 === 1} mockup={f.m} />
           ))}
         </div>
       </section>

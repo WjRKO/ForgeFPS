@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
@@ -17,7 +17,7 @@ class BuildInput(BaseModel):
 
 class TrackComponentsInput(BaseModel):
     group: str
-    components: list
+    components: list[dict[str, Any]]
 
 
 class TrackInput(BaseModel):
@@ -42,17 +42,17 @@ class SearchInput(BaseModel):
 
 
 class PushSubInput(BaseModel):
-    subscription: dict
+    subscription: dict[str, Any]
 
 
 class SpecsInput(BaseModel):
-    data: Optional[dict] = None
-    health: Optional[dict] = None
-    startup: Optional[list] = None
-    benchmark: Optional[dict] = None
-    games: Optional[list] = None
-    running_apps: Optional[list] = None
-    boost_session: Optional[dict] = None
+    data: Optional[dict[str, Any]] = None
+    health: Optional[dict[str, Any]] = None
+    startup: Optional[list[dict[str, Any]]] = None
+    benchmark: Optional[dict[str, Any]] = None
+    games: Optional[list[str]] = None
+    running_apps: Optional[list[str]] = None
+    boost_session: Optional[dict[str, Any]] = None
 
 
 class GoalInput(BaseModel):
@@ -61,7 +61,7 @@ class GoalInput(BaseModel):
 
 
 class PcSpecsInput(BaseModel):
-    data: dict
+    data: dict[str, Any]
     source: Optional[str] = "manual"
 
 
@@ -75,16 +75,16 @@ class RoleInput(BaseModel):
 
 
 class TelemetryInput(BaseModel):
-    sample: dict
+    sample: dict[str, Any]
 
 
 class NetResultInput(BaseModel):
-    result: dict
+    result: dict[str, Any]
 
 
 class ProfileInput(BaseModel):
     game_name: str
-    tweak_ids: list = []
+    tweak_ids: list[str] = []
 
 
 class AlertInput(BaseModel):
@@ -94,12 +94,12 @@ class AlertInput(BaseModel):
 
 
 class PrematchInput(BaseModel):
-    close_apps: list = []
+    close_apps: list[str] = []
     set_power: bool = True
 
 
 class BoosterInput(BaseModel):
-    close_apps: list = []
+    close_apps: list[str] = []
     set_power: bool = True
     boost_priority: bool = True
     purge_ram: bool = True
