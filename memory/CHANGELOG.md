@@ -1,5 +1,33 @@
 # FrameForge — Changelog
 
+## v0.6.9 — 2026-07-20 · Launcher `.bat` per-utente (GUI in un click)
+### Added
+- **Backend `routers/pc.py`**: nuovo endpoint `GET /api/agent/launcher-bat` (auth JWT cookie).
+  Ritorna un piccolo file Windows batch con il token dell'utente pre-compilato e la logica
+  di auto-lancio della GUI sicura dentro la cartella `forgefps-agent/` estratta.
+  Content-Disposition: attachment con filename `forgefps-launcher.bat`.
+- **`DesktopAgent.jsx`**: secondo bottone "SCARICA LAUNCHER (BAT)" sotto quello del ZIP,
+  con etichetta "Doppio-click = GUI istantanea, zero token da incollare".
+
+### Why
+Il .exe distribuito sul repo pubblico GitHub è un binario **generico** condiviso da tutti gli
+utenti: non può contenere il token privato di ciascuno. Prima l'utente doveva incollare il
+token a mano ad ogni avvio. Ora scarica una-tantum un `.bat` da 200 byte con il proprio
+token, lo mette accanto al ZIP estratto, e la GUI parte senza prompt.
+
+### Sicurezza
+- Il `.bat` è protetto dietro autenticazione (endpoint chiede JWT valido).
+- Il token dentro il file coincide con quello mostrato in chiaro nella pagina "Collega il PC",
+  quindi non aggiunge nuovi vettori di attacco.
+- L'utente può revocare il token in qualsiasi momento dalle Impostazioni → il `.bat` scaricato
+  smetterà di funzionare all'istante.
+
+### Files touched
+- `backend/routers/pc.py` (+ ~35 righe)
+- `frontend/src/pages/DesktopAgent.jsx` (+ ~25 righe, nuovo bottone + label)
+
+---
+
 ## v0.6.8 — 2026-07-20 · Build `--onedir` (fix falsi positivi AV)
 ### Changed
 - **`agent-build/build.bat` + `build.ps1`**: PyInstaller `--onefile` → **`--onedir`**, poi

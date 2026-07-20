@@ -62,6 +62,51 @@ def build(get_current_user):
     async def agent_token(user: dict = Depends(get_current_user)):
         return {"token": await get_or_create_agent_token(str(user["_id"]))}
 
+    @r.get("/agent/launcher-bat")
+    async def agent_launcher_bat(user: dict = Depends(get_current_user)):
+        """Genera un launcher Windows .bat per-utente con token pre-compilato.
+        L'utente lo scarica una volta e lo mette accanto al ZIP estratto:
+        doppio click -> la GUI parte senza dover incollare il token ogni volta."""
+        from fastapi.responses import Response as _Resp
+        token = await get_or_create_agent_token(str(user["_id"]))
+        backend = os.environ.get("FRONTEND_URL", "https://forgefps.dev").rstrip("/")
+        # Windows batch: CR+LF line endings, no shebang.
+        lines = [
+            "@echo off",
+            "REM FrameForge - Launcher personale (contiene il tuo token privato)",
+            "REM Mettimi accanto alla cartella 'forgefps-agent' estratta dal ZIP.",
+            "REM Poi doppio click qui: la GUI sicura parte automaticamente.",
+            "setlocal",
+            "cd /d \"%~dp0\"",
+            "if not exist \"forgefps-agent\\forgefps-agent.exe\" (",
+            "  echo.",
+            "  echo [ERRORE] Cartella 'forgefps-agent' non trovata.",
+            "  echo Estrai prima forgefps-agent.zip in questa stessa cartella,",
+            "  echo poi rilancia questo file.",
+            "  echo.",
+            "  pause",
+            "  exit /b 1",
+            ")",
+            "cd forgefps-agent",
+            f'forgefps-agent.exe --backend "{backend}" --token {token} --mode securegui',
+            "if errorlevel 1 (",
+            "  echo.",
+            "  echo L'agent si e' chiuso con errore. Premi INVIO per uscire.",
+            "  pause",
+            ")",
+            "endlocal",
+            "",
+        ]
+        body = "\r\n".join(lines).encode("utf-8")
+        return _Resp(
+            content=body,
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": 'attachment; filename="forgefps-launcher.bat"',
+                "Cache-Control": "no-store",
+            },
+        )
+
     @r.get("/agent/profiles")
     async def agent_list_profiles(x_agent_token: str = Header(default="")):
         """Ritorna i profili dell'utente + catalog per la GUI desktop.

@@ -122,6 +122,7 @@ const SECURE = {
   it: {
     exe_badge: "Nuovo", exe_title: "App desktop con un click", exe_desc: "Scarica lo ZIP dell'app Windows, estrailo e avvia forgefps-agent.exe. Da v0.6.7 usiamo il pacchetto onedir: niente falso positivo su Windows Defender.",
     exe_btn: "Scarica FrameForge (ZIP)", exe_run: "Estrai lo ZIP, entra nella cartella e doppio click su forgefps-agent.exe — oppure da terminale:", exe_sha: "SHA256 del ZIP", exe_vt: "Verifica questo file su VirusTotal",
+    bat_btn: "Scarica launcher (.bat)", bat_hint: "Mettilo accanto al ZIP estratto: doppio click = GUI istantanea, zero token da incollare.",
     warn_title: "Importante: a quale server si collega l'app?",
     warn_desc_a: "Per impostazione predefinita l'.exe si collega a",
     warn_desc_b: "(produzione). Il token deve provenire dallo stesso sito a cui punta l'app: se lo copi da un ambiente diverso vedrai «Token non valido».",
@@ -139,6 +140,7 @@ const SECURE = {
   en: {
     exe_badge: "New", exe_title: "One-click desktop app", exe_desc: "Download the Windows app ZIP, extract it and run forgefps-agent.exe. Since v0.6.7 we ship an onedir bundle: no more Windows Defender false positive.",
     exe_btn: "Download FrameForge (ZIP)", exe_run: "Extract the ZIP, open the folder and double-click forgefps-agent.exe — or from a terminal:", exe_sha: "ZIP SHA256", exe_vt: "Check this file on VirusTotal",
+    bat_btn: "Download launcher (.bat)", bat_hint: "Drop it next to the extracted ZIP: double-click = instant GUI, no token to paste.",
     warn_title: "Important: which server does the app connect to?",
     warn_desc_a: "By default the .exe connects to",
     warn_desc_b: "(production). The token must come from the same site the app points to: if you copy it from a different environment you'll see \u201cInvalid token\u201d.",
@@ -330,6 +332,25 @@ export default function DesktopAgent() {
               className="flex items-center justify-center gap-2 bg-[#00E0FF] text-black font-bold py-3 text-sm uppercase tracking-wide hover:bg-[#33e8ff] transition-colors w-full">
               <Download size={16} /> {s.exe_btn}
             </a>
+
+            <button type="button" data-testid="bat-download-btn"
+              onClick={async () => {
+                try {
+                  const resp = await api.get("/agent/launcher-bat", { responseType: "blob" });
+                  const url = window.URL.createObjectURL(resp.data);
+                  const a = document.createElement("a");
+                  a.href = url; a.download = "forgefps-launcher.bat";
+                  document.body.appendChild(a); a.click(); a.remove();
+                  window.URL.revokeObjectURL(url);
+                  trackConversion("agent_launcher_download");
+                } catch (e) {
+                  toast.error(en ? "Failed to generate launcher" : "Errore nella generazione del launcher");
+                }
+              }}
+              className="mt-2 flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold py-2.5 text-sm uppercase tracking-wide hover:bg-[#f0ff33] transition-colors w-full">
+              <Terminal size={14} /> {s.bat_btn}
+            </button>
+            <p className="mt-1.5 text-[10px] text-zinc-500 leading-relaxed px-1" data-testid="bat-hint">{s.bat_hint}</p>
 
             <a href={AGENT_RELEASES_URL} target="_blank" rel="noreferrer" data-testid="exe-releases-link"
               className="mt-2 flex items-center justify-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-[#00E0FF] transition-colors">
