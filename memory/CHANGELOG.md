@@ -1,5 +1,34 @@
 # FrameForge — Changelog
 
+## v0.6.14 — 2026-07-20 · Bug fixes multipli + UX budget LLM
+### Fixed
+- **QR Desktop GUI non si generava** (`ps_agent.py`): `Invoke-RestMethod` su
+  Content-Type `image/svg+xml` auto-parsava il body come XML object perdendo il
+  markup. Switch a `Invoke-WebRequest -UseBasicParsing` con `.RawContentStream.ToArray()`
+  per proxare i bytes SVG intatti. **Richiede rebuild .exe v0.6.9** per l'utente finale.
+- **AI Coach default rispondeva solo in italiano** (`ai_engine.stream_advisor`): il
+  blocco `[CONTESTO PC DELL'UTENTE ...]` iniettato nel system prompt era hardcoded
+  in italiano anche con `lang='en'`. Le istruzioni miste (system EN + contesto IT)
+  confondevano Claude che fallback in italiano. Ora bilingue: `[USER PC CONTEXT ...]`
+  in inglese quando `lang='en'`, headers 'User' / 'New message' bilingue.
+- **UX budget LLM esaurito** (`routers/pc.py` fps_estimate + startup_analyze): quando
+  il budget Emergent Universal Key e' scaduto, LiteLLM ritorna un errore tecnico che
+  causava un Cloudflare 502 grezzo sulla pagina Gaming. Ora intercettiamo
+  `"Budget ... exceeded"` e ritorniamo HTTP 402 con detail user-friendly
+  "Credito LLM esaurito. Ricarica da Profilo -> Universal Key -> Add Balance."
+
+### Verified
+- Testing agent iteration_30.json: **7/7 PASS**.
+- prompt bilingue verificato via monkeypatched build_chat.
+- QR fix testabile solo su Windows (utente lo verifichera' dopo rebuild v0.6.9).
+
+### Files touched
+- `backend/ps_agent.py` (Invoke-WebRequest per SVG QR)
+- `backend/ai_engine.py` (stream_advisor bilingue)
+- `backend/routers/pc.py` (402 friendly per budget)
+
+---
+
 ## v0.6.13 — 2026-07-20 · Fix ZIP troncato al download (Cloudflare/ingress)
 ### Fixed
 - **`routers/pc.py:agent_download_zip`**: `StreamingResponse(BytesIO(...))` → `Response(content=payload,
