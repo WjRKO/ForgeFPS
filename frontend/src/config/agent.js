@@ -3,12 +3,14 @@
 // eliminare i falsi positivi euristici di Windows Defender sul bootloader PyInstaller.
 // Da v0.6.8 l'.exe salva il token in %APPDATA%\FrameForge\token.dat: primo lancio
 // chiede il token una volta, poi la GUI parte istantaneamente senza prompt.
+// Da v0.7.0 l'.exe registra il protocollo `frameforge://` in HKCU al primo avvio:
+// da lì in poi i bottoni della dashboard possono aprire la GUI senza download.
 //
 // AGGIORNARE dopo ogni release: URL, SHA256, versione, data.
-export const AGENT_EXE_URL = "https://github.com/WjRKO/ForgeFPS/releases/download/v0.6.8/forgefps-agent.zip";
-export const AGENT_EXE_SHA256 = "27e912ebb236ec4fed2f3453c763d6048105920200bfeec7768d9204bb0faf0c";
-export const AGENT_EXE_VERSION = "v0.6.8";
-export const AGENT_EXE_DATE = "2026-07-20";
+export const AGENT_EXE_URL = "https://github.com/WjRKO/ForgeFPS/releases/download/v0.7.0/forgefps-agent.zip";
+export const AGENT_EXE_SHA256 = "d1afd88b430427efd09064e570f7c53b196a713b768e046eb4b214f78685d898";
+export const AGENT_EXE_VERSION = "v0.7.0";
+export const AGENT_EXE_DATE = "2026-02-21";
 export const AGENT_EXE_FORMAT = "zip"; // "zip" (onedir) | legacy: "exe" (onefile)
 export const AGENT_RELEASES_URL = "https://github.com/WjRKO/ForgeFPS/releases";
 export const AGENT_REPO_URL = "https://github.com/WjRKO/ForgeFPS";

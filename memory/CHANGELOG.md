@@ -1,5 +1,25 @@
 # FrameForge — Changelog
 
+## v0.7.0 (Frontend config) — 2026-02-21 · Bump versione + SHA256
+### Changed
+- `frontend/src/config/agent.js` aggiornato:
+  - URL → `.../releases/download/v0.7.0/forgefps-agent.zip`
+  - SHA256 → `d1afd88b430427efd09064e570f7c53b196a713b768e046eb4b214f78685d898`
+  - VERSION → `v0.7.0`, DATE → `2026-02-21`
+- `data/releases.json`: aggiunta entry v0.7.0 → verrà annunciata dal Discord
+  release announcer al prossimo tick.
+- Preview verificato via screenshot: sticky panel mostra versione, data e
+  SHA corretti; il bottone "Download FrameForge" scarica dall'endpoint
+  `/agent/download-zip` (che internamente pesca dal GitHub v0.7.0).
+
+### To-do
+- **Produzione**: click su "Redeploy" nella UI Emergent per pushare la
+  nuova versione su forgefps.dev.
+- Step 2 (frontend cleanup / nuovi bottoni "Ottimizza / Monitor / ...")
+  disponibile subito dopo il redeploy.
+
+
+
 ## v0.7.0 — 2026-02-XX · Custom URL protocol `frameforge://` (Step 1)
 ### Added
 - **Endpoint `GET /api/agent/launch-uri?mode=<mode>`** in `backend/routers/pc.py`:

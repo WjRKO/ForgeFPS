@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.7.0",
+    "date": "2026-02-21",
+    "title": "Un click e l'app parte: zero download",
+    "notes_md": "- **Bottone dalla dashboard → GUI si apre**: dopo aver installato la v0.7.0 una volta sola, i bottoni della dashboard aprono direttamente la GUI locale. Basta scaricare uno ZIP ogni volta\n- Come funziona: la v0.7.0 registra il protocollo `frameforge://` in Windows (nel tuo profilo utente, senza permessi admin). Da lì in poi la web app gli dice cosa fare via URL firmato\n- **Sicurezza**: ogni URL è firmato HMAC-SHA256 col tuo token e scade dopo 60 secondi. URL di un altro account o modificati vengono rifiutati\n- Aggiornati: si prendi lo ZIP v0.7.0 dalla release GitHub, estrai e apri `Avvia-FrameForge.bat` una volta\n",
+    "url": "https://forgefps.dev/changelog"
+  },
+  {
     "version": "0.6.14",
     "date": "2026-07-20",
     "title": "Fix bug + UX credito LLM piu' chiaro",
