@@ -1,5 +1,30 @@
 # FrameForge — Changelog
 
+## v0.7.3 (Rebuild fixed) — 2026-02-21 · Workflow CI ora usa `agent-build/`
+### Fixed
+- **Root cause definitivo**: `.github/workflows/build.yml` sul repo GitHub
+  eseguiva PyInstaller dalla root del repo invece che da `agent-build/`.
+  Il repo ha due copie storiche dei file (root + agent-build/): PyInstaller
+  compilava le versioni OLD (v0.4.5.0 / v0.6.8) mentre agent-build/ conteneva
+  le versioni nuove (v0.7.0).
+- Fix workflow: aggiunto `working-directory: agent-build` a tutti gli step di
+  build/zip/hash + path corretto `agent-build/dist/forgefps-agent.zip` nel
+  release artifact.
+- Aggiornato `AGENT_EXE_SHA256` in `agent.js` a
+  `d524e50a323608f8994a0b1c23169c95df3079820cc5a4004350adf3011aea5c`.
+
+### Verified (E2E)
+- Estratto `forgefps_agent.pyc` dal ZIP servito da
+  `/api/agent/download-zip`: contiene `AGENT_VERSION = "0.7.0"`,
+  `register_frameforge_protocol`, `parse_and_verify_uri`, e le stringhe
+  `frameforge://` (4 occ) + `--register-protocol`.
+- PE metadata dell'exe = `FileVersion 0.7.0.0` (era 0.4.5.0).
+
+### Todo utente
+- Redeploy produzione (forgefps.dev) per aggiornare il SHA e il config.
+
+
+
 ## v0.7.2 (Backend hotfix) — 2026-02-21 · Endpoint download-zip -> v0.7.0
 ### Fixed
 - **Root cause segnalato dall'utente**: `.\forgefps-agent.exe --register-protocol`
