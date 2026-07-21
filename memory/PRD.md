@@ -902,3 +902,22 @@ Scelta utente: toast web + **notifica Windows nativa** nella GUI (BurntToast/tra
 - MOD: /app/frontend/src/components/MobileHandoffModal.jsx
 - NEW: /app/memory/CHANGELOG.md
 - NEW: /app/backend/tests/test_magic_link_mobile_handoff.py (dal testing agent)
+
+### 2026-02-22 — Fase 3 (Benchmark contestuale) + Fase 4 (Storico visual) — DONE
+- Backend routers/pc.py:
+  - GET /api/benchmarks/fleet-percentile (fleet + similar-hardware percentile + before/after delta)
+  - GET /api/benchmarks/guardrails (server-side: game/stream/recorder detection su running_apps)
+  - GET /api/benchmarks/history?days=30 (serie temporale con stats)
+  - GET /api/pc/sync-history?days=7 (timeline da health_history + by_day heatmap)
+- Frontend:
+  - components/FleetPercentileCard.jsx, BenchmarkSparkline.jsx, SyncTimeline.jsx
+  - pages/Benchmark.jsx: guardedLaunch chiama guardrails prima del silent-launch → toast.warning se game/stream attivo (fail-open)
+  - pages/MyPc.jsx: SyncTimeline sotto HealthHistoryCard
+- Scelta utente: A (solo server-side, no rebuild .exe)
+- Testing: iteration_33.json — backend 14/14, frontend 100% (guardrail toast + card verificati)
+
+### Prossimo
+- P1: Lifecycle "Ferma Monitor" (kill signal all'agent per fermare loop infinito)
+- P1: Alert Salute Storica (notifica quando health score < media 30gg)
+- P2: Checklist tweak nel Report PDF
+- P3: Stripe billing + Google Ads conv + testimonial GitHub stars

@@ -1,5 +1,52 @@
 # FrameForge — Changelog
 
+
+## Fase 3 + Fase 4 — 2026-02-22 · Benchmark contestuale & Storico visual
+### Added (backend — `routers/pc.py`)
+- **`GET /api/benchmarks/fleet-percentile`**: percentile del punteggio benchmark
+  dell'utente vs. la flotta complessiva e vs. utenti con CPU/GPU della stessa
+  famiglia. Include `delta` (before/after ultimi due run). Ritorna
+  `available:false` se meno di 3 utenti nel fleet (evita percentili farlocchi).
+  Helpers: `_cpu_family` / `_gpu_family` (parser euristici stringa CPU/GPU),
+  `_percentile_rank`, `_bench_score`, `_bench_overall`.
+- **`GET /api/benchmarks/guardrails`**: guardrail server-side (scelta utente A).
+  Legge `running_apps` dall'ultimo sync e segnala giochi/streaming/recorder
+  attivi che falserebbero il benchmark. Severità: `high` (blocking) per
+  giochi (fortnite/valorant/cs2/…) e streaming (obs64/streamlabs/…),
+  `medium` per recorder, `info` per snapshot stantìo (>10 min) o assente.
+  Non blocca lato server: la UI decide se avvisare o meno.
+- **`GET /api/benchmarks/history?days=30`**: serie temporale del benchmark
+  (score/overall/cpu_score) capped 1..90 giorni, max 500 punti, con stats
+  (min/max/avg/latest).
+- **`GET /api/pc/sync-history?days=7`**: timeline di sync (fonte:
+  `health_history` — ogni report hardware ne produce uno). Include
+  aggregazione `by_day` per l'heatmap.
+### Added (frontend)
+- **`components/FleetPercentileCard.jsx`**: card con due barre — vs. tutti gli
+  utenti e vs. hardware simile — e badge Δ before/after. Rende nulla se
+  non ci sono abbastanza dati.
+- **`components/BenchmarkSparkline.jsx`**: sparkline SVG 30gg del benchmark
+  con gradient fill cyan, min/max/trend %. Fallback su `overall` per record
+  vecchi che non hanno `score`.
+- **`components/SyncTimeline.jsx`**: strip attività sync 7gg (heatmap
+  intensità basata sul numero di sync/giorno). Tooltip con date localizzata.
+- **`pages/Benchmark.jsx`**: integra i 3 nuovi componenti; `guardedLaunch`
+  chiama `/benchmarks/guardrails` prima di lanciare l'agent — se rileva
+  giochi/streaming mostra un `toast.warning` sonner con azione "Esegui
+  comunque" (fail-open in caso di errore rete). Rimosso `ScoreSparkline`
+  legacy (sostituito da `<BenchmarkSparkline>`).
+- **`pages/MyPc.jsx`**: `<SyncTimeline days={7}>` sotto `<HealthHistoryCard>`.
+### Tested
+- Backend: 14/14 pytest passati (`test_phase34_benchmarks.py`) — auth guards,
+  shape response, clamping giorni, blocking guardrail su valorant/obs64,
+  running_apps injection via `/api/agent/report-specs`.
+- Frontend: iteration_33 verificato — guardrail toast si mostra quando
+  `running_apps=['valorant.exe']`, testid `bench-guardrail-toast` esposto.
+### Design decisioni
+- Scelta utente **A** — solo server-side guardrails (nessun rebuild `.exe`).
+  Battery check rimandato (info non ancora catturata dall'agent).
+
+
 ## Fase 2 polish — 2026-02-21 · Hint browser popup one-shot
 ### Added
 - **`<BrowserPopupHint>`** (`components/BrowserPopupHint.jsx`):
