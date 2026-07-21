@@ -734,3 +734,16 @@ Precedenti release documentate in `PRD.md`.
 ### Verified
 - Frontend compila pulito, 4 route (`/app`, `/app/live`, `/app/pc`, `/app/benchmark`) navigano senza errori console.
 
+
+## Content refresh — 2026-02-22 · Testi & Changelog pubblico
+### Changed
+- `i18n.js` (IT+EN): `f_agent_long` — sostituito "pre-match mode" con "booster automatico che rileva i giochi in esecuzione" / "auto-booster that detects running games" (feature era stata rimossa nella scorsa iterazione).
+- `DesktopAgent.jsx`: rimossa entry `prematch` da `RUN_MODES` (menu Quick Actions puntava a una modalità inesistente).
+### Removed (dead i18n keys, mai renderizzate)
+- `guide.prematch_title`, `guide.prematch_desc`, `guide.step_prematch`, `guide.python_title`, `guide.python_desc` (IT + EN)
+### Added — pages/Changelog.jsx (contenuto pubblico)
+- Nuove entry release: **v0.6.7** (bundle onedir), **v0.6.8** (token persistente), **v0.7.0** (protocollo frameforge://), **v0.7.1** (silent mode + --backend), **v0.7.2 web+agent** (Fase 3 percentile, Fase 4 storico, monitor lifecycle, guardrails, ambient sync v2, UTF-8 BOM fix).
+- ROADMAP aggiornata: "--onedir build" spostata in Done, aggiunti "Bottleneck detector real-time" (in progress) e "Storico sessioni gaming" (planned).
+### Verified
+- Compile pulito, `/changelog` renderizza 6 versioni + roadmap; nessun console error.
+
