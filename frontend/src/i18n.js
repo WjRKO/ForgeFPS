@@ -113,7 +113,7 @@ const resources = {
         pc_hw: "Hardware",
       },
       gaming: { tab_games: "I miei giochi", tab_profiles: "Profili Gioco" },
-      mypc: { tab_overview: "Panoramica", tab_live: "Monitoraggio Live" },
+      mypc: { tab_overview: "Panoramica", tab_live: "Monitoraggio Live", tab_benchmark: "Benchmark" },
       grp: { browser: "Browser", chat: "Chat & Voce (Discord, Teams...)", media: "Musica & Media (Spotify...)", cloud: "Sync cloud (OneDrive, Drive...)", launcher: "Launcher (Epic Games)", other: "Utility (CCleaner, Cortana...)" },
       tracker: {
         eyebrow: "// Price Tracker", title: "Prezzi", subtitle: "Traccia i tuoi prodotti e ricevi avvisi quando calano.",
@@ -667,7 +667,7 @@ const resources = {
         pc_hw: "Hardware",
       },
       gaming: { tab_games: "My games", tab_profiles: "Game Profiles" },
-      mypc: { tab_overview: "Overview", tab_live: "Live Monitoring" },
+      mypc: { tab_overview: "Overview", tab_live: "Live Monitoring", tab_benchmark: "Benchmark" },
       grp: { browser: "Browsers", chat: "Chat & Voice (Discord, Teams...)", media: "Music & Media (Spotify...)", cloud: "Cloud sync (OneDrive, Drive...)", launcher: "Launcher (Epic Games)", other: "Utilities (CCleaner, Cortana...)" },
       tracker: {
         eyebrow: "// Price Tracker", title: "Prices", subtitle: "Track your products and get alerts when prices drop.",
