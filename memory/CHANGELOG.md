@@ -1,5 +1,30 @@
 # FrameForge — Changelog
 
+## v0.7.1 (UX polish) — 2026-02-21 · Feedback visivo per Sincronizza ora
+### Fixed
+- **Utente segnalava "Sync completato ma dati non cambiano"**: il sync
+  funzionava correttamente ma quando l'hardware/health erano identici al
+  precedente non c'era feedback visivo tangibile, sembrava non fatto nulla.
+- Aggiunto indicatore `<div data-testid="last-sync-info">` sotto il
+  PageHeader con:
+  - Pallino verde permanente + testo "Ultimo sync: X min fa"
+  - Format friendly: "or ora" / "45s fa" / "3 min fa" / "2h fa" / data
+  - **Pulse verde animato** (`animate-ping`) + testo bold "aggiornato!"
+    per 5 secondi dopo un sync appena completato
+- Se il sync riscrive dati identici ora l'utente vede comunque un cambio
+  di UI: "21h fa" → "or ora · aggiornato!" → riflesso concreto dell'azione.
+- Fix bonus preventivo in `forgefps_agent.py` v0.7.2:
+  `register_frameforge_protocol` ora include `--backend "<URL>"` nel
+  command del registry per preservare l'ambiente (preview vs prod). Non
+  serve rilascio immediato: la produzione userebbe comunque default forgefps.dev.
+
+### Todo utente
+- Redeploy per applicare feedback visivo sul sync (frontend-only).
+- v0.7.2 exe rebuild solo se in futuro vuoi testare i bottoni silent dalla
+  preview URL (edge case).
+
+
+
 ## v0.7.1 (Hotfix) — 2026-02-21 · Sync silent polling: fix nome campo
 ### Fixed
 - **Sincronizza ora non completava mai**: il polling in `MyPc.jsx` verificava
