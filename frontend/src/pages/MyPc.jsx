@@ -9,6 +9,7 @@ import SpecsForm from "@/components/SpecsForm";
 import HealthHistoryCard from "@/components/HealthHistoryCard";
 import { PageHeader } from "@/components/hud";
 import { useSilentLaunch } from "@/hooks/useSilentLaunch";
+import BrowserPopupHint from "@/components/BrowserPopupHint";
 
 const SPEC_KEYS = ["os", "cpu", "gpu", "ram", "disk", "motherboard", "resolution"];
 const specLabel = (t, k) => ({ os: t("mypcpage.sl_os"), cpu: "CPU", gpu: "GPU", ram: "RAM", disk: t("mypcpage.sl_disk"), motherboard: t("mypcpage.sl_mb"), resolution: t("mypcpage.sl_res") }[k]);
@@ -195,6 +196,8 @@ export default function MyPc() {
           </div>
         );
       })()}
+
+      <BrowserPopupHint testid="mypc-popup-hint" />
 
       {health && (
         <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick p-6 mb-4">

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import api from "@/lib/api";
 import { SessionSummary } from "./SessionSummary";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
+import BrowserPopupHint from "@/components/BrowserPopupHint";
 
 const freshAcc = () => ({ startTs: null, lastTs: null, fps: [], cpuTempMax: 0, gpuTempMax: 0, cpuSum: 0, cpuN: 0, gpuSum: 0, gpuN: 0, latSum: 0, latN: 0, latMax: 0, games: {}, samples: 0 });
 
@@ -134,6 +135,7 @@ export default function Live() {
             className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2.5 text-sm hover:bg-[#D4EE00] transition-colors mb-3">
             <PlayCircle size={16} /> {t("live.launch_btn", { defaultValue: "Avvia monitor sul PC" })}
           </button>
+          <BrowserPopupHint testid="live-popup-hint" />
           <details className="text-xs text-zinc-500">
             <summary className="cursor-pointer hover:text-zinc-300 transition-colors">
               {t("live.manual_cmd", { defaultValue: "Preferisci copiare il comando manualmente?" })}

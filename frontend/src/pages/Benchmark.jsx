@@ -6,6 +6,7 @@ import i18n from "@/i18n";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { PageHeader } from "@/components/hud";
 import { useSilentLaunch } from "@/hooks/useSilentLaunch";
+import BrowserPopupHint from "@/components/BrowserPopupHint";
 
 const BENCH_METRICS = [
   { key: "score", lk: "m_score", unit: "/100", higherBetter: true },
@@ -245,6 +246,8 @@ export default function Benchmark() {
             {t("bench.refresh", { defaultValue: "Ricarica" })}
           </button>
         </>} />
+
+      <BrowserPopupHint testid="bench-popup-hint" />
 
       {bench && bench.latest ? (
         <BenchmarkCard bench={bench} />

@@ -1,5 +1,27 @@
 # FrameForge — Changelog
 
+## Fase 2 polish — 2026-02-21 · Hint browser popup one-shot
+### Added
+- **`<BrowserPopupHint>`** (`components/BrowserPopupHint.jsx`):
+  - Piccolo banner cyan con icona info sotto i bottoni che triggerano
+    `frameforge://` (Sync, Benchmark, Monitor).
+  - Testo: "Prima volta? Chrome ti chiederà 'Aprire FrameForge?'. Spunta
+    'Consenti sempre' e non lo vedrai più."
+  - Bottone X per dismissare, stato persistito in localStorage
+    (`ff_popup_hint_dismissed_v1`).
+  - Traduzioni ITA/ENG via `defaultValue` (i18n keys `popup_hint.*`).
+- Piazzato in `MyPc.jsx` (sotto last-sync-info), `Benchmark.jsx` (sotto
+  PageHeader), `Live.jsx` (dentro pannello monitor sotto CTA).
+
+### Verified
+- Screenshot preview: hint visibile su Benchmark e Live, dismiss X funziona,
+  localStorage persistente.
+
+### Todo utente
+- Redeploy per applicare a forgefps.dev (frontend-only, no rebuild).
+
+
+
 ## Fase 2 — Sync ambientale (~1.5h effort) — 2026-02-21
 ### Added
 - **Hook `useAutoSync`** (`hooks/useAutoSync.js`):
