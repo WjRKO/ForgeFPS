@@ -91,6 +91,7 @@ function App() {
                 <Route path="tracker/:id" element={<ProductDetail />} />
                 <Route path="pc" element={<MyPcHub initialTab="overview" />} />
                 <Route path="live" element={<MyPcHub initialTab="live" />} />
+                <Route path="benchmark" element={<MyPcHub initialTab="benchmark" />} />
                 <Route path="network" element={<Network />} />
                 <Route path="gaming" element={<Gaming initialTab="games" />} />
                 <Route path="profiles" element={<Gaming initialTab="profiles" />} />

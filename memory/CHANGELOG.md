@@ -1,5 +1,70 @@
 # FrameForge — Changelog
 
+## v0.7.4 (UX cleanup) — 2026-02-21 · Consolidato Pre-match → Game Booster
+### Removed
+- **QuickStart hero** (2 CTA "Installa FrameForge" + "Dashboard web") sopra le
+  Quick Actions in `/app/desktop`: ridondante coi bottoni sottostanti e col
+  pannello sticky di destra. Ora la pagina apre direttamente sulla griglia
+  6 (ora 5) di Quick Actions.
+- **Bottone "Prima del match"** dalle Quick Actions: modalita' `prematch`
+  faceva le stesse cose del `booster` (chiudi app, powercfg, priorita').
+  Rimane come `mode` dietro le quinte per compat script Windows.
+- **Wizard "auto vs manual"** e **card Pre-match** dalla pagina `/app/games`:
+  eliminata la scelta perche' c'e' un solo path (Booster). Meno decisioni,
+  meno frizione al primo utilizzo.
+- Removed unused React state: `boostMode`, `chooseMode`, `resetMode`,
+  `boostGroups`, `groups`, `showConfig`, `savingCfg`, `saveConfig`,
+  `setPower`, `BOOST_MODE_KEY` (localStorage). Removed unused icons:
+  `Rocket`, `Target`, `ChevronDown`, `ChevronUp`, `RotateCcw`.
+
+### Changed — Game Booster "Personalizza cosa chiudere"
+- **Prima**: 6 checkbox generiche (Browser, Chat, Media, Cloud, Launcher,
+  Altro). L'utente selezionava categorie senza sapere cosa avesse in
+  esecuzione davvero.
+- **Adesso**: lista dinamica delle app effettivamente in esecuzione sul PC
+  (da `pc_specs.running_apps` popolato dal Desktop Agent). Ogni app ha
+  checkbox individuale + nome friendly (`APP_LABELS`: Chrome, Edge,
+  Discord, Spotify, OneDrive, Epic Games Launcher, ecc.) + process name
+  in monofont.
+- Bottone "aggiorna" per rileggere lo state; placeholder se nessuna app
+  rilevata ("Avvia Desktop Agent con Ottimizza o Sync per aggiornare").
+- Salva su `close_apps` come lista piatta di process names (era: unione
+  dei processi delle categorie ticked).
+- Nuove chiavi i18n (IT/EN): `booster_no_running`, `booster_running_count`
+  con plurali, `booster_will_close` con plurali, `refresh_short`.
+
+### Files
+- `frontend/src/pages/DesktopAgent.jsx`
+- `frontend/src/pages/Games.jsx`
+- `frontend/src/i18n.js`
+
+
+
+## v0.7.3 (Rebuild fixed) — 2026-02-21 · Workflow CI ora usa `agent-build/`
+### Fixed
+- **Root cause definitivo**: `.github/workflows/build.yml` sul repo GitHub
+  eseguiva PyInstaller dalla root del repo invece che da `agent-build/`.
+  Il repo ha due copie storiche dei file (root + agent-build/): PyInstaller
+  compilava le versioni OLD (v0.4.5.0 / v0.6.8) mentre agent-build/ conteneva
+  le versioni nuove (v0.7.0).
+- Fix workflow: aggiunto `working-directory: agent-build` a tutti gli step di
+  build/zip/hash + path corretto `agent-build/dist/forgefps-agent.zip` nel
+  release artifact.
+- Aggiornato `AGENT_EXE_SHA256` in `agent.js` a
+  `d524e50a323608f8994a0b1c23169c95df3079820cc5a4004350adf3011aea5c`.
+
+### Verified (E2E)
+- Estratto `forgefps_agent.pyc` dal ZIP servito da
+  `/api/agent/download-zip`: contiene `AGENT_VERSION = "0.7.0"`,
+  `register_frameforge_protocol`, `parse_and_verify_uri`, e le stringhe
+  `frameforge://` (4 occ) + `--register-protocol`.
+- PE metadata dell'exe = `FileVersion 0.7.0.0` (era 0.4.5.0).
+
+### Todo utente
+- Redeploy produzione (forgefps.dev) per aggiornare il SHA e il config.
+
+
+
 ## v0.7.2 (Backend hotfix) — 2026-02-21 · Endpoint download-zip -> v0.7.0
 ### Fixed
 - **Root cause segnalato dall'utente**: `.\forgefps-agent.exe --register-protocol`
