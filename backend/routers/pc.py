@@ -310,6 +310,253 @@ def build(get_current_user):
         history = await db.benchmarks.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(10)
         return {"latest": (doc or {}).get("benchmark"), "history": history}
 
+    def _bench_score(bench: dict) -> int | None:
+        if not bench:
+            return None
+        s = bench.get("score")
+        if s is None:
+            s = (bench.get("after") or {}).get("score")
+        try:
+            return int(s) if s is not None else None
+        except Exception:
+            return None
+
+    def _bench_overall(bench: dict) -> int | None:
+        if not bench:
+            return None
+        v = bench.get("overall") or (bench.get("after") or {}).get("overall")
+        try:
+            return int(v) if v is not None else None
+        except Exception:
+            return None
+
+    def _cpu_family(cpu_str: str | None) -> str | None:
+        s = (cpu_str or "").lower()
+        if not s:
+            return None
+        if "ultra" in s:
+            for t in ("9", "7", "5", "3"):
+                if f"ultra {t}" in s or f"ultra{t}" in s:
+                    return f"intel-ultra-{t}"
+        if "ryzen" in s or "amd" in s:
+            for t in ("9", "7", "5", "3"):
+                if f"ryzen {t}" in s or f"ryzen{t}" in s:
+                    return f"ryzen-{t}"
+        for t in ("i9", "i7", "i5", "i3"):
+            if t in s:
+                return f"intel-{t}"
+        return None
+
+    def _gpu_family(gpu_str: str | None) -> str | None:
+        s = (gpu_str or "").lower()
+        if not s:
+            return None
+        if "rtx" in s:
+            for gen in ("50", "40", "30", "20"):
+                if f"rtx {gen}" in s or f"rtx{gen}" in s:
+                    return f"rtx-{gen}"
+            return "rtx"
+        if "gtx" in s:
+            return "gtx"
+        if "arc" in s and "intel" in s:
+            return "intel-arc"
+        if "rx" in s:
+            for gen in ("9", "8", "7", "6", "5"):
+                if f"rx {gen}" in s or f"rx{gen}" in s:
+                    return f"radeon-rx-{gen}000"
+            return "radeon-rx"
+        return None
+
+    def _percentile_rank(scores: list[int], my_score: int) -> int:
+        """Return integer percentile 0..100. 90 => faster than 90% of the fleet."""
+        if not scores:
+            return 0
+        below = sum(1 for s in scores if s < my_score)
+        return int(round(100 * below / len(scores)))
+
+    @r.get("/benchmarks/fleet-percentile")
+    async def benchmarks_fleet_percentile(user: dict = Depends(get_current_user)):
+        """Ranks the user's latest benchmark score against the fleet and against
+        users with similar CPU/GPU family. Returns null percentiles if not enough
+        data is available (fleet<3 or similar<3)."""
+        uid = str(user["_id"])
+        doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "benchmark": 1, "data": 1})
+        if not doc:
+            return {"available": False}
+        my_score = _bench_score(doc.get("benchmark"))
+        if my_score is None:
+            return {"available": False}
+        data = doc.get("data") or {}
+        cpu_fam = _cpu_family(data.get("cpu"))
+        gpu_fam = _gpu_family(data.get("gpu"))
+
+        cursor = db.pc_specs.find(
+            {"benchmark": {"$exists": True}, "user_id": {"$ne": uid}},
+            {"_id": 0, "benchmark": 1, "data": 1})
+        fleet: list[dict] = []
+        async for row in cursor:
+            s = _bench_score(row.get("benchmark"))
+            if s is None:
+                continue
+            fleet.append({"score": s, "data": row.get("data") or {}})
+
+        fleet_scores = [x["score"] for x in fleet]
+        fleet_percentile = _percentile_rank(fleet_scores, my_score) if len(fleet_scores) >= 3 else None
+
+        similar_scores: list[int] = []
+        if cpu_fam or gpu_fam:
+            for x in fleet:
+                d = x["data"]
+                if cpu_fam and _cpu_family(d.get("cpu")) == cpu_fam:
+                    similar_scores.append(x["score"])
+                elif gpu_fam and _gpu_family(d.get("gpu")) == gpu_fam:
+                    similar_scores.append(x["score"])
+        similar_percentile = _percentile_rank(similar_scores, my_score) if len(similar_scores) >= 3 else None
+
+        # Delta before/after: compare last two benchmarks in db.benchmarks
+        last_two = await db.benchmarks.find(
+            {"user_id": uid}, {"_id": 0}
+        ).sort("created_at", -1).to_list(2)
+        delta = None
+        if len(last_two) == 2:
+            cur_s = _bench_score(last_two[0])
+            prev_s = _bench_score(last_two[1])
+            if cur_s is not None and prev_s not in (None, 0):
+                pct = round(((cur_s - prev_s) / prev_s) * 100, 1)
+                delta = {"current": cur_s, "previous": prev_s, "delta_pct": pct,
+                         "improved": cur_s >= prev_s,
+                         "previous_ts": last_two[1].get("ts") or last_two[1].get("created_at")}
+
+        return {
+            "available": True,
+            "my_score": my_score,
+            "my_overall": _bench_overall(doc.get("benchmark")),
+            "fleet_percentile": fleet_percentile,
+            "fleet_count": len(fleet_scores),
+            "similar_percentile": similar_percentile,
+            "similar_count": len(similar_scores),
+            "cpu_family": cpu_fam,
+            "gpu_family": gpu_fam,
+            "delta": delta,
+        }
+
+    # Guardrails: server-side check on the last synced running_apps.
+    # Prevents users from starting a benchmark while a game or a stream is running.
+    _GAME_KEYWORDS = (
+        "fortnite", "valorant", "riotclientservices", "leagueoflegends", "league of legends",
+        "cs2", "csgo", "counter-strike", "dota2", "overwatch", "apex", "gta5", "gta v",
+        "rocketleague", "warthunder", "warzone", "modernwarfare", "call of duty",
+        "battlefield", "rainbowsix", "r6", "eldenring", "witcher", "minecraft",
+        "starfield", "cyberpunk", "baldursgate", "pubg", "genshin", "roblox",
+    )
+    _STREAM_KEYWORDS = ("obs64", "obs32", "obs.exe", "streamlabs", "xsplit",
+                        "twitchstudio", "vmix", "wirecast")
+    _RECORDER_KEYWORDS = ("nvidia broadcast", "shadowplay", "gamebar", "bandicam",
+                          "fraps", "geforce experience")
+
+    @r.get("/benchmarks/guardrails")
+    async def benchmarks_guardrails(user: dict = Depends(get_current_user)):
+        """Server-side guardrails based on the last known running_apps snapshot.
+        Returns warnings but never blocks: the frontend decides whether to nudge
+        the user before starting a benchmark."""
+        uid = str(user["_id"])
+        doc = await db.pc_specs.find_one({"user_id": uid},
+                                         {"_id": 0, "running_apps": 1, "running_at": 1})
+        running = [str(a).lower() for a in (doc or {}).get("running_apps") or []]
+        warnings: list[dict] = []
+
+        def _match(keywords):
+            for a in running:
+                for k in keywords:
+                    if k in a:
+                        return a
+            return None
+
+        game = _match(_GAME_KEYWORDS)
+        stream = _match(_STREAM_KEYWORDS)
+        recorder = _match(_RECORDER_KEYWORDS)
+        if game:
+            warnings.append({"key": "game_running", "detail": game, "severity": "high"})
+        if stream:
+            warnings.append({"key": "stream_running", "detail": stream, "severity": "high"})
+        if recorder:
+            warnings.append({"key": "recorder_running", "detail": recorder, "severity": "medium"})
+
+        running_at = (doc or {}).get("running_at")
+        age = None
+        if running_at:
+            age = int(_iso_age(running_at))
+            if age > 600:
+                warnings.append({"key": "stale_snapshot", "detail": age, "severity": "info"})
+        elif not running:
+            warnings.append({"key": "no_snapshot", "detail": None, "severity": "info"})
+
+        blocking = any(w["severity"] == "high" for w in warnings)
+        return {
+            "ok": not blocking,
+            "blocking": blocking,
+            "warnings": warnings,
+            "running_at": running_at,
+            "running_age_s": age,
+        }
+
+    @r.get("/benchmarks/history")
+    async def benchmarks_history(days: int = 30, user: dict = Depends(get_current_user)):
+        """Time series of the user's benchmark score/overall over the past N days.
+        Used by the Benchmark page sparkline. Capped at 90 days, 500 points."""
+        uid = str(user["_id"])
+        days = max(1, min(90, int(days or 30)))
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        rows = await db.benchmarks.find(
+            {"user_id": uid, "created_at": {"$gte": cutoff}},
+            {"_id": 0, "user_id": 0}
+        ).sort("created_at", 1).to_list(500)
+        points = []
+        for row in rows:
+            after = row.get("after") or row
+            points.append({
+                "ts": row.get("created_at") or row.get("ts"),
+                "score": _bench_score(row),
+                "overall": _bench_overall(row),
+                "cpu_score": after.get("cpu_score"),
+            })
+        # Compute simple stats for the header
+        vals = [p["score"] for p in points if p["score"] is not None]
+        stats = None
+        if vals:
+            stats = {
+                "count": len(vals),
+                "min": min(vals),
+                "max": max(vals),
+                "avg": int(round(sum(vals) / len(vals))),
+                "latest": vals[-1],
+            }
+        return {"points": points, "days": days, "stats": stats}
+
+    @r.get("/pc/sync-history")
+    async def pc_sync_history(days: int = 7, user: dict = Depends(get_current_user)):
+        """Timeline of the user's recent syncs, sourced from health_history since
+        each hardware sync produces a health record. Used by the MyPc dashboard."""
+        uid = str(user["_id"])
+        days = max(1, min(30, int(days or 7)))
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        rows = await db.health_history.find(
+            {"user_id": uid, "created_at": {"$gte": cutoff}},
+            {"_id": 0, "user_id": 0}
+        ).sort("created_at", 1).to_list(200)
+        events = [{
+            "ts": r.get("created_at"),
+            "score": r.get("score"),
+            "grade": r.get("grade"),
+        } for r in rows if r.get("created_at")]
+        # Bucket by day for a mini heatmap in the frontend
+        buckets: dict[str, int] = {}
+        for e in events:
+            day = e["ts"][:10]
+            buckets[day] = buckets.get(day, 0) + 1
+        return {"events": events, "days": days,
+                "by_day": [{"day": d, "count": c} for d, c in sorted(buckets.items())]}
+
     async def _gather_snapshot(uid: str) -> dict:
         """Snapshot the current key performance metrics for a Before/After report."""
         snap = {"captured_at": now_iso(), "health_score": None, "health_grade": None,
