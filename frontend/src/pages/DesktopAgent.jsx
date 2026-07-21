@@ -191,6 +191,21 @@ export default function DesktopAgent() {
     }).catch(() => {});
   }, []);
 
+  const handleDownloadZip = async () => {
+    trackConversion("agent_download");
+    toast(en ? "Preparing your personalized ZIP..." : "Preparo il tuo ZIP personalizzato...");
+    try {
+      const resp = await api.get("/agent/download-zip", { responseType: "blob", timeout: 60000 });
+      const url = window.URL.createObjectURL(resp.data);
+      const a = document.createElement("a");
+      a.href = url; a.download = "forgefps-agent.zip";
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(en ? "Download failed. Retry in a moment." : "Download fallito. Riprova tra un momento.");
+    }
+  };
+
   const tk = token || "IL_TUO_TOKEN";
   const isProd = (BACKEND || "").includes("forgefps.dev");
   const exeCmd = isProd
@@ -206,6 +221,42 @@ export default function DesktopAgent() {
         <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("desktop.eyebrow")}</div>
         <h1 className="font-display font-black text-3xl tracking-tighter">{t("desktop.title")}</h1>
         <p className="text-zinc-500 text-sm mt-2 max-w-2xl">{s.exe_desc}</p>
+      </div>
+
+      {/* Quick Start: due CTA prominenti visibili al primo colpo d'occhio */}
+      <div className="mb-6 grid sm:grid-cols-2 gap-3" data-testid="quickstart-hero">
+        <button
+          type="button"
+          onClick={handleDownloadZip}
+          data-testid="quickstart-connect-btn"
+          className="group flex items-center gap-4 bg-gradient-to-br from-[#00E0FF]/10 to-[#0F0F12] border border-[#00E0FF]/40 hover:border-[#00E0FF] px-5 py-4 text-left transition-all"
+        >
+          <div className="w-11 h-11 border border-[#00E0FF]/40 bg-black/30 flex items-center justify-center shrink-0 group-hover:bg-[#00E0FF]/10 transition-colors">
+            <MonitorDown size={20} className="text-[#00E0FF]" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-[#00E0FF] mb-0.5">01 · {en ? "Get started" : "Inizia qui"}</div>
+            <div className="font-display font-bold text-base text-white">{en ? "Connect your PC" : "Collega il tuo PC"}</div>
+            <div className="text-xs text-zinc-500 leading-snug mt-0.5">{en ? "Download the personalized ZIP — token baked in, zero prompts." : "Scarica lo ZIP personalizzato — token già dentro, zero richieste."}</div>
+          </div>
+          <Download size={18} className="text-[#00E0FF] shrink-0 group-hover:translate-x-0.5 transition-transform" />
+        </button>
+
+        <Link
+          to="/app/live"
+          data-testid="quickstart-monitor-btn"
+          className="group flex items-center gap-4 bg-gradient-to-br from-[#E5FF00]/10 to-[#0F0F12] border border-[#E5FF00]/40 hover:border-[#E5FF00] px-5 py-4 text-left transition-all"
+        >
+          <div className="w-11 h-11 border border-[#E5FF00]/40 bg-black/30 flex items-center justify-center shrink-0 group-hover:bg-[#E5FF00]/10 transition-colors">
+            <Activity size={20} className="text-[#E5FF00]" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-[#E5FF00] mb-0.5">02 · {en ? "Live view" : "Vista live"}</div>
+            <div className="font-display font-bold text-base text-white">{en ? "Start monitoring" : "Avvia monitoraggio"}</div>
+            <div className="text-xs text-zinc-500 leading-snug mt-0.5">{en ? "Watch CPU, GPU, RAM, temps and FPS in real time." : "Vedi CPU, GPU, RAM, temperature e FPS in tempo reale."}</div>
+          </div>
+          <Gauge size={18} className="text-[#E5FF00] shrink-0 group-hover:translate-x-0.5 transition-transform" />
+        </Link>
       </div>
 
       <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start">
@@ -331,20 +382,7 @@ export default function DesktopAgent() {
             <AgentPreview label={en ? "Live GUI preview" : "Anteprima GUI live"} />
 
             <button type="button" data-testid="exe-download-btn"
-              onClick={async () => {
-                trackConversion("agent_download");
-                toast(en ? "Preparing your personalized ZIP..." : "Preparo il tuo ZIP personalizzato...");
-                try {
-                  const resp = await api.get("/agent/download-zip", { responseType: "blob", timeout: 60000 });
-                  const url = window.URL.createObjectURL(resp.data);
-                  const a = document.createElement("a");
-                  a.href = url; a.download = "forgefps-agent.zip";
-                  document.body.appendChild(a); a.click(); a.remove();
-                  window.URL.revokeObjectURL(url);
-                } catch (e) {
-                  toast.error(en ? "Download failed. Retry in a moment." : "Download fallito. Riprova tra un momento.");
-                }
-              }}
+              onClick={handleDownloadZip}
               className="flex items-center justify-center gap-2 bg-[#00E0FF] text-black font-bold py-3 text-sm uppercase tracking-wide hover:bg-[#33e8ff] transition-colors w-full">
               <Download size={16} /> {s.exe_btn}
             </button>

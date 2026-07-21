@@ -1,5 +1,19 @@
 # FrameForge — Changelog
 
+## v0.6.18 — 2026-02-XX · Quick Start hero su pagina Collega PC
+### Added
+- **Hero band con due CTA prominenti** in cima a `/app/desktop`
+  (`DesktopAgent.jsx`): visibile al primo utente senza scroll o accordion:
+  - **01 · Collega il tuo PC** (ciano): scarica lo ZIP personalizzato.
+  - **02 · Avvia monitoraggio** (giallo): naviga a `/app/live` per la telemetria.
+- Estratta la logica di download in `handleDownloadZip` per riuso tra hero
+  e sticky panel di destra.
+- Testid: `quickstart-hero`, `quickstart-connect-btn`, `quickstart-monitor-btn`.
+- Verificato via screenshot preview: hero renderizza correttamente sopra il
+  banner "Important: which server" senza rompere il layout esistente.
+
+
+
 ## v0.6.17 — 2026-02-XX · Fix caratteri glitchati nella GUI Desktop
 ### Fixed
 - **UTF-8 BOM su `/api/agent/script`**: Windows PowerShell 5.1 (default su Win10/11)
