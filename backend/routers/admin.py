@@ -77,4 +77,32 @@ def build(get_current_user):
             "total_notifications": await db.notifications.count_documents({}),
         }
 
+    @r.post("/releases/mark-announced")
+    async def mark_releases_announced(data: dict, admin: dict = Depends(require_admin)):
+        """Marca una lista di versioni come gia' annunciate su Discord senza postare.
+        Utile per il primo redeploy dopo aver aggiunto molte release al manifest:
+        eviti che il release_announcer spammi il canale con embed vecchi.
+        Body: {"versions": ["0.6.6", "0.6.7", ...]}"""
+        from datetime import datetime, timezone
+        versions = (data or {}).get("versions") or []
+        if not isinstance(versions, list) or not versions:
+            raise HTTPException(status_code=400, detail="Body deve essere {'versions': ['x.y.z', ...]}")
+        now = datetime.now(timezone.utc).isoformat()
+        marked, already = [], []
+        for v in versions:
+            v = str(v).strip()
+            if not v:
+                continue
+            existing = await db.announced_releases.find_one({"_id": v})
+            if existing:
+                already.append(v)
+            else:
+                await db.announced_releases.insert_one({
+                    "_id": v, "announced_at": now,
+                    "title": f"marked by admin {admin['email']}",
+                    "date": "", "source": "admin_skip",
+                })
+                marked.append(v)
+        return {"marked_as_announced": marked, "already_announced": already}
+
     return r

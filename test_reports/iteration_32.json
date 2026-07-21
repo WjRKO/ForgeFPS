@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 32: tested new admin endpoint POST /api/admin/releases/mark-announced. All 8 pytest cases passed (auth, success, idempotency, validation, DB side-effect, integration with monkeypatched post_release).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/admin/releases/mark-announced", "issue": "str(v).strip() coerces non-string entries: None becomes literal 'None', numbers become their string repr. Only empty strings are filtered. Requested behaviour was 'ignore invalid entries and process only valid strings'. If strict typing is desired, filter with isinstance(v, str) first."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_mark_announced.py",
+    "/app/test_reports/pytest/mark_announced.xml"
+  ],
+  "action_items": [
+    "Optional: tighten input validation in mark_releases_announced to keep only isinstance(v, str) entries and drop coerced None/int values (currently accepted)."
+  ],
+  "critical_code_review_comments": [
+    "admin.py mark_releases_announced: uses raw `dict` body instead of a Pydantic model — no schema enforcement, and str(v) coerces any type. Consider a Pydantic model MarkAnnouncedInput(versions: List[str])",
+    "Endpoint accepts unbounded list length — no cap on `versions` size; consider max_length to prevent abuse."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_mark_announced.py"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "n/a"},
+  "test_credentials": "admin@boostpc.io / 4zWK4o_xSw5prU-2b7w9dQ (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "During integration test only, inserts 0.6.0-0.6.5 with source='test_setup', all cleaned up in teardown. All test-* and 0.6.6-0.6.14 entries removed post-run (verified empty).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Endpoint POST /api/admin/releases/mark-announced is fully working. Uses raw dict body (not Pydantic). Insert schema: {_id: version, announced_at: iso, title: 'marked by admin <email>', date: '', source: 'admin_skip'}. announce_new_releases() correctly skips based on _id presence — source flag has no impact on skip logic."
+}
