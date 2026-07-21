@@ -1,0 +1,33 @@
+{
+  "summary": "Tested new monitor lifecycle (Phase A live REC control + Phase E preflight modal). Backend: 9/9 pytest passing. Frontend: full E2E happy path passing — preflight opens/close/cancel, all 4 pf-check-* rows render, MonitorLiveControl appears after telemetry injection, launch button is hidden in live state, Stop toggles server-side stop_requested and telemetry.stop=true, stop-pending-hint appears.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Live", "issues": ["Recharts prints repeated width(-1)/height(-1) warnings on the chart container before first data point. Cosmetic only — not a functional bug, but noisy in console."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_monitor_lifecycle.py",
+    "/app/test_reports/pytest/monitor_lifecycle.xml"
+  ],
+  "action_items": [
+    "Note for main agent: the review request stated route '/app/pc/live' but the actual App.js route is '/app/live' (MyPcHub initialTab='live'). Not a bug — just correct the doc/spec if needed.",
+    "Optional: silence Recharts width(-1)/height(-1) warnings by giving the chart wrapper an explicit initial minHeight or by rendering it only after mount."
+  ],
+  "critical_code_review_comments": [
+    "Preflight `bad` check would block confirm (canProceed=false); currently only pf-check-heavy can go 'bad' when >2 heavy apps are detected. UX-wise fine, just document that scenario.",
+    "MonitorLiveControl.stopPending relies on client-side 15s timer; once user leaves and re-enters live page while stop_requested is still true on server, the hint won't show. Consider reading /api/monitor/state on mount to hydrate stopRequestedAt from requested_at.",
+    "Live.jsx polls /pc-telemetry every 1s indefinitely; no visibility-change pause. Minor perf note."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_monitor_lifecycle.py (new)"
+  ],
+  "success_rate": { "backend": "100% (9/9)", "frontend": "100% (all flows verified)" },
+  "test_credentials": "admin@boostpc.io / 4zWK4o_xSw5prU-2b7w9dQ (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Injected 5 telemetry samples via POST /api/agent/telemetry with X-Agent-Token to simulate live state; reset stop flag at end.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Live page route is /app/live (not /app/pc/live). To simulate live state without the .exe agent: login as admin, GET /api/agent/token, then POST /api/agent/telemetry {sample:{ts,...}} with X-Agent-Token header. Frontend flips to MonitorLiveControl within ~1s. Always POST /api/monitor/reset at the end to clear the stop flag for the admin user."
+}

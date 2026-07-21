@@ -7,6 +7,8 @@ import api from "@/lib/api";
 import { SessionSummary } from "./SessionSummary";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
+import MonitorPreflight from "@/components/MonitorPreflight";
+import MonitorLiveControl from "@/components/MonitorLiveControl";
 
 const freshAcc = () => ({ startTs: null, lastTs: null, fps: [], cpuTempMax: 0, gpuTempMax: 0, cpuSum: 0, cpuN: 0, gpuSum: 0, gpuN: 0, latSum: 0, latN: 0, latMax: 0, games: {}, samples: 0 });
 
@@ -54,6 +56,8 @@ export default function Live() {
   const [token, setToken] = useState("");
   const [alerts, setAlerts] = useState({ enabled: true, cpu_max: 90, gpu_max: 85 });
   const [summary, setSummary] = useState(null);
+  const [preflightOpen, setPreflightOpen] = useState(false);
+  const [launching, setLaunching] = useState(false);
   const acc = useRef(freshAcc());
   const seenRef = useRef(new Set());
   const timer = useRef(null);
@@ -114,24 +118,20 @@ export default function Live() {
         </div>
       </div>
 
-      {!data.live && (
+      {data.live ? (
+        <MonitorLiveControl
+          startedAt={acc.current.startTs}
+          sampleCount={acc.current.samples}
+          game={last.game}
+        />
+      ) : (
         <div className="bg-[#0F0F12] border border-[#E5FF00]/40 p-5 mb-6">
           <p className="text-sm text-zinc-300 mb-1 font-semibold">{t("live.start_title")}</p>
           <p className="text-xs text-zinc-500 mb-3">{t("live.start_desc")}</p>
           <button
             type="button"
             data-testid="monitor-launch-btn"
-            onClick={async () => {
-              try {
-                const { data } = await api.get("/agent/launch-uri?mode=monitor");
-                if (!data?.uri) throw new Error("no uri");
-                window.location.href = data.uri;
-                toast(t("live.launching", { defaultValue: "Apertura del monitor sul PC..." }));
-              } catch (e) {
-                console.error("monitor launch failed", e);
-                toast.error(t("live.launch_failed", { defaultValue: "Impossibile aprire. Hai installato FrameForge?" }));
-              }
-            }}
+            onClick={() => setPreflightOpen(true)}
             className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2.5 text-sm hover:bg-[#D4EE00] transition-colors mb-3">
             <PlayCircle size={16} /> {t("live.launch_btn", { defaultValue: "Avvia monitor sul PC" })}
           </button>
@@ -146,6 +146,30 @@ export default function Live() {
           </details>
         </div>
       )}
+
+      <MonitorPreflight
+        open={preflightOpen}
+        launching={launching}
+        onClose={() => { if (!launching) setPreflightOpen(false); }}
+        onConfirm={async () => {
+          setLaunching(true);
+          try {
+            // Clear any stale stop flag from a previous session so the new
+            // monitor doesn't exit on its first tick.
+            await api.post("/monitor/reset").catch(() => {});
+            const { data: u } = await api.get("/agent/launch-uri?mode=monitor");
+            if (!u?.uri) throw new Error("no uri");
+            window.location.href = u.uri;
+            toast(t("live.launching", { defaultValue: "Apertura del monitor sul PC..." }));
+            setPreflightOpen(false);
+          } catch (e) {
+            console.error("monitor launch failed", e);
+            toast.error(t("live.launch_failed", { defaultValue: "Impossibile aprire. Hai installato FrameForge?" }));
+          } finally {
+            setLaunching(false);
+          }
+        }}
+      />
 
       <MetricGroup title={t("live.grp_perf")}>
         <Stat icon={Gamepad2} label={last.game ? `FPS · ${last.game}` : "FPS"} value={last.fps} unit="" accent="text-[#00FF66]" testid="stat-fps" />

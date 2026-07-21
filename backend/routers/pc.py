@@ -629,7 +629,44 @@ def build(get_current_user):
              "$push": {"samples": {"$each": [sample], "$slice": -300}}},
             upsert=True)
         await _check_temp_alerts(rec["user_id"], sample)
+        # Return stop signal: the agent's monitor loop reads this and exits cleanly
+        # when the user clicks "Stop" on the web dashboard.
+        ctrl = await db.monitor_control.find_one({"user_id": rec["user_id"]}, {"_id": 0}) or {}
+        return {"ok": True, "stop": bool(ctrl.get("stop_requested"))}
+
+    @r.post("/monitor/stop")
+    async def monitor_stop(user: dict = Depends(get_current_user)):
+        """Web dashboard: request the local monitor loop to exit cleanly.
+        The agent polls /api/agent/telemetry every second and reads the `stop`
+        field in the response. Requires agent script from the current backend
+        (delivered fresh on every launch via /api/agent/script, so no .exe
+        rebuild is needed)."""
+        uid = str(user["_id"])
+        await db.monitor_control.update_one(
+            {"user_id": uid},
+            {"$set": {"user_id": uid, "stop_requested": True, "requested_at": now_iso()}},
+            upsert=True)
         return {"ok": True}
+
+    @r.post("/monitor/reset")
+    async def monitor_reset(user: dict = Depends(get_current_user)):
+        """Clears the stop flag before starting a new monitor session so the
+        agent doesn't exit immediately if the previous stop was never acked."""
+        uid = str(user["_id"])
+        await db.monitor_control.update_one(
+            {"user_id": uid},
+            {"$set": {"user_id": uid, "stop_requested": False, "reset_at": now_iso()}},
+            upsert=True)
+        return {"ok": True}
+
+    @r.get("/monitor/state")
+    async def monitor_state(user: dict = Depends(get_current_user)):
+        uid = str(user["_id"])
+        doc = await db.monitor_control.find_one({"user_id": uid},
+                                                {"_id": 0, "user_id": 0}) or {}
+        return {"stop_requested": bool(doc.get("stop_requested")),
+                "requested_at": doc.get("requested_at"),
+                "reset_at": doc.get("reset_at")}
 
     @r.get("/pc-telemetry")
     async def pc_telemetry(user: dict = Depends(get_current_user)):

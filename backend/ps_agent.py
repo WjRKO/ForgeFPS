@@ -611,14 +611,20 @@ function Get-TelemetrySample {
 }
 function Send-Telemetry($sample) {
   $body = @{ sample = $sample } | ConvertTo-Json -Depth 5 -Compress
-  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/telemetry" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+  try {
+    $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/telemetry" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body
+    # Backend signals a graceful stop when the user clicks Stop on the web
+    # dashboard. Monitor loop reads this and breaks (see MODE=monitor).
+    if ($resp -and $resp.stop) { return $true }
+  } catch {}
+  return $false
 }
 function Push-LiveSample {
   # Lightweight sample sent to cloud when Live Sync toggle is ON.
   # Reuses Get-TelemetrySample which already handles CPU/GPU/RAM/temps via WMI+LHM.
   try {
     $sample = Get-TelemetrySample
-    if ($sample) { Send-Telemetry $sample }
+    if ($sample) { Send-Telemetry $sample | Out-Null }
   } catch {}
 }
 
@@ -2975,7 +2981,7 @@ if ($MODE -eq 'bufferbloat') {
 
 
 if ($MODE -eq 'monitor') {
-  Say "`n[*] Monitoraggio live avviato. Lascia aperta questa finestra. Premi Ctrl+C per fermare." 'Cyan'
+  Say "`n[*] Monitoraggio live avviato. Lascia aperta questa finestra. Premi Ctrl+C per fermare (o Stop dal browser)." 'Cyan'
   Say '   Apri FrameForge -> Live per i grafici in tempo reale.' 'DarkGray'
   Start-Fps
   $noFpsCount = 0
@@ -2985,12 +2991,16 @@ if ($MODE -eq 'monitor') {
       $f = Get-Fps
       if ($f) { $s.fps = $f.fps; $s.game = $f.game; if ($null -ne $f.latency_ms) { $s.latency_ms = $f.latency_ms }; $noFpsCount = 0 }
       elseif ($script:PM_ON) { $noFpsCount++; if ($noFpsCount -eq 10) { Show-FpsDiag } }
-      Send-Telemetry $s
+      $stopFromWeb = Send-Telemetry $s
       $g = if ($s.ContainsKey('gpu_util')) { ("GPU {0}% {1}C {2}MHz" -f $s.gpu_util, $s.gpu_temp, $s.gpu_clock) } else { 'GPU n/d' }
       $ct = if ($s.ContainsKey('cpu_temp')) { ("{0}C" -f $s.cpu_temp) } else { '' }
       $lt = if ($s.ContainsKey('latency_ms')) { (" {0}ms" -f $s.latency_ms) } else { '' }
       $fp = if ($s.ContainsKey('fps')) { (" | {0} FPS ({1}){2}" -f $s.fps, $s.game, $lt) } else { '' }
       Say ("   CPU {0}% {1} | RAM {2}% | {3}{4}" -f $s.cpu_util, $ct, $s.ram_used_pct, $g, $fp)
+      if ($stopFromWeb) {
+        Say "`n[i] Stop richiesto dal browser. Chiudo il monitor..." 'Yellow'
+        break
+      }
       Start-Sleep -Milliseconds 1000
     }
   } finally { Stop-Fps }
