@@ -1,5 +1,43 @@
 # FrameForge — Changelog
 
+## v0.7.1 (Fase 1 completa) — 2026-02-21 · Silent execution + Benchmark tab
+### Added
+- **Endpoint `/api/agent/launch-uri` con `silent=0|1`** — URI firmato HMAC
+  retrocompatibile con v0.7.0 (firma solo `mode|ts`, silent viaggia come hint).
+- **Python Agent v0.7.1** (`forgefps_agent.py`):
+  - Nuova `launch_silent_mode(mode)`: PowerShell `-WindowStyle Hidden` +
+    `CREATE_NO_WINDOW`. Whitelist: sync, benchmark, cleanup, optimize.
+  - `parse_and_verify_uri` estrae `silent` dall'URI.
+  - `__main__` intercetta `_SILENT_FROM_URI` e esce dopo lo spawn (no input()).
+- **Frontend**:
+  - Nuovo hook `useSilentLaunch({ mode, detectDone, ... })` con polling +
+    toast + fallback "app non installata".
+  - `MyPc.jsx`: bottone "Sincronizza ora" (ciano) nell'header.
+  - `Live.jsx`: bottone "▶ Avvia monitor sul PC" sostituisce SecureRunBlock
+    (che rimane in `<details>` come fallback power user).
+- **Nuova tab "Benchmark"** (`pages/Benchmark.jsx`) affianco a Panoramica e
+  Monitoraggio Live in `MyPcHub.jsx`. Route `/app/benchmark` in App.js.
+  Header dedicato con bottone "Benchmark ora" (silent) + "Ricarica".
+  Empty state con CTA "Esegui il primo benchmark".
+- **Rilascio GitHub v0.7.1**: SHA `12ab8424e03da1fc06f1ebe37eca7d3e9f7878b0bcb759f24c0ac3b447d92e69`
+  · PE FileVersion 0.7.1.0 · workflow ora usa `working-directory: agent-build`.
+
+### Removed
+- Card `BenchmarkCard` + helpers (`BENCH_METRICS`, `ScoreSparkline`) migrati
+  in `pages/Benchmark.jsx` dedicato — pulita Panoramica da 300+ righe.
+
+### Verified
+- SHA download endpoint = SHA GitHub release ✅
+- Bytecode compilato contiene: `AGENT_VERSION="0.7.1"`, `launch_silent_mode`,
+  `Hidden`, `register_frameforge_protocol`, 11 occorrenze `silent` ✅
+- Test frontend Playwright: tab Benchmark + bottoni silent presenti,
+  BenchmarkCard rimossa da /app/pc, bottone Sync ancora presente ✅
+
+### Todo utente
+- Redeploy produzione (forgefps.dev) per aggiornare SHA + config frontend.
+
+
+
 ## v0.7.4 (UX cleanup) — 2026-02-21 · Consolidato Pre-match → Game Booster
 ### Removed
 - **QuickStart hero** (2 CTA "Installa FrameForge" + "Dashboard web") sopra le
