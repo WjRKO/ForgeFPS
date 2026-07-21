@@ -1,5 +1,38 @@
 # FrameForge — Changelog
 
+## v0.7.1 (Step 2 Frontend) — 2026-02-21 · Quick Actions con protocollo frameforge://
+### Added
+- **Griglia Quick Actions** in `DesktopAgent.jsx` con 6 bottoni colorati:
+  Optimize, Live monitor, Benchmark, Pre-match, Game Booster, Restore.
+- Ogni bottone chiama `GET /api/agent/launch-uri?mode=<mode>`, riceve un URI
+  firmato HMAC e naviga a `window.location.href = uri` per aprire la GUI
+  locale via protocollo custom `frameforge://` (v0.7.0+ dell'exe).
+- Fallback UX: se la tab rimane visibile dopo 2s (`document.visibilityState`),
+  toast "Non hai ancora l'app? Scarica FrameForge qui sotto" per ricordare
+  di installare la v0.7.0 la prima volta.
+- Anti-doppio-click: `launching` state con reset dopo 1s.
+- Testid: `quick-actions`, `quick-action-{optimize,monitor,benchmark,prematch,booster,restore}`.
+
+### Changed
+- Il primo hero "Install FrameForge" ora ha copy piu' chiara ("Prima volta →
+  Download the ZIP once. Registers frameforge:// on Windows") — separa il
+  first-install dal daily-use.
+- Hero secondario "Web dashboard" (era "Start monitoring") linka a `/app/live`
+  per la telemetria via sito, distinguendo dal monitor via app locale.
+
+### Verified
+- Screenshot preview: griglia 3x2 con colori distintivi, hover states,
+  responsive (2 col mobile, 3 col desktop).
+- Chiamata reale HTTP 200 su `/api/agent/launch-uri?mode=optimize`
+  osservata via Playwright.
+
+### Note
+- La v0.7.0 dell'exe deve essere installata dagli utenti (una tantum) prima
+  che i bottoni possano aprire l'app. Se non installata, il click fallisce
+  silenziosamente e appare il toast fallback.
+
+
+
 ## v0.7.0 (Frontend config) — 2026-02-21 · Bump versione + SHA256
 ### Changed
 - `frontend/src/config/agent.js` aggiornato:
