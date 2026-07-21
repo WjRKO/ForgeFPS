@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.7.1",
+    "date": "2026-02-21",
+    "title": "Doppio click e la GUI si apre",
+    "notes_md": "- **Addio menu testuale**: aprendo `forgefps-agent.exe` (o `Avvia-FrameForge.bat`) la GUI sicura parte direttamente. Niente piu' schermata nera con lista di comandi\n- Tutti i comandi del vecchio menu sono gia' presenti come tweak card dentro la GUI (Pulizia temp, Piano energetico, Mostra processi pesanti, Sync hardware/salute, Benchmark, Ripristina)\n- Per power user / debug: si puo' ancora forzare il menu con `forgefps-agent.exe --menu`\n- Compatibile con la registrazione automatica del protocollo `frameforge://` introdotta nella v0.7.0\n",
+    "url": "https://forgefps.dev/changelog"
+  },
+  {
     "version": "0.7.0",
     "date": "2026-02-21",
     "title": "Un click e l'app parte: zero download",

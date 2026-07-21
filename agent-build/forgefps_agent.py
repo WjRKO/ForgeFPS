@@ -24,15 +24,19 @@ import urllib.request
 _parser = argparse.ArgumentParser(description="FrameForge Desktop Agent")
 _parser.add_argument("--token", default=os.environ.get("FORGEFPS_TOKEN", "__AGENT_TOKEN__"))
 _parser.add_argument("--backend", default=os.environ.get("FORGEFPS_BACKEND", "https://forgefps.dev"))
-_parser.add_argument("--mode", default="optimize")
+_parser.add_argument("--mode", default="securegui",
+                     help="Modalita' di lancio: securegui (default, apre la GUI locale) | "
+                          "optimize | sync | benchmark | prematch | booster | restore | menu")
 _parser.add_argument("--uri", default="", help="URI custom-protocol firmato (frameforge://launch?...)")
 _parser.add_argument("--register-protocol", action="store_true",
                      help="Registra frameforge:// nel registro utente e esce (idempotente)")
+_parser.add_argument("--menu", action="store_true",
+                     help="Forza il menu testuale interattivo (per power user / debug)")
 _args, _ = _parser.parse_known_args()
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.7.0"
+AGENT_VERSION = "0.7.1"
 BACKUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "boostpc_backup.json")
 
 # Persistent token storage in %APPDATA%\FrameForge\token.dat (v0.6.8+).
@@ -989,7 +993,9 @@ if __name__ == "__main__":
         register_frameforge_protocol(silent=True)
     except Exception:
         pass
-    # Modalita' non interattive dirette (es. --mode securegui / optimize / sync)
+    # Modalita' non interattive dirette (es. --mode securegui / optimize / sync).
+    # Default = securegui: aprire l'exe (doppio click / .bat) NON mostra piu' il
+    # menu testuale ma va dritto alla GUI. Per il menu, usare --menu o --mode menu.
     if _args.mode in ("securegui", "gui"):
         launch_secure_gui()
         try:
@@ -997,9 +1003,19 @@ if __name__ == "__main__":
         except Exception:
             pass
         sys.exit(0)
-    while True:
-        try:
-            subprocess.run(["cmd", "/c", "cls"], check=False)
-        except Exception:
-            pass
-        menu()
+    if _args.menu or _args.mode == "menu":
+        while True:
+            try:
+                subprocess.run(["cmd", "/c", "cls"], check=False)
+            except Exception:
+                pass
+            menu()
+    # Modes espliciti non-GUI (optimize / sync / benchmark / booster / restore /
+    # prematch): li mappiamo su securegui che gestisce il flusso completo tramite
+    # la webview locale. Se in futuro vorremo mode-CLI headless, li dispatcheremo qui.
+    launch_secure_gui()
+    try:
+        input("\nPremi INVIO per chiudere...")
+    except Exception:
+        pass
+    sys.exit(0)
