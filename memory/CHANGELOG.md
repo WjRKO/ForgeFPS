@@ -1,5 +1,27 @@
 # FrameForge — Changelog
 
+## v0.7.2 (Backend hotfix) — 2026-02-21 · Endpoint download-zip -> v0.7.0
+### Fixed
+- **Root cause segnalato dall'utente**: `.\forgefps-agent.exe --register-protocol`
+  apriva il menu interattivo invece di registrare il protocollo. Motivo:
+  `/api/agent/download-zip` in `backend/routers/pc.py` (const `AGENT_ZIP_UPSTREAM`)
+  scaricava ancora `v0.6.8`. La v0.6.8 non ha il flag `--register-protocol`
+  quindi `parse_known_args` lo ignorava silenziosamente.
+- Bumpato URL upstream a `v0.7.0`. Cache backend ricalcola l'hash del path
+  automaticamente (nuovo file di cache, nessun cleanup manuale necessario).
+- Verificato: `sha256sum(cache) == d1afd88b430427efd09064e570f7c53b196a713b768e046eb4b214f78685d898`
+  (match esatto SHA della release GitHub v0.7.0).
+
+### Fix secondario in `forgefps_agent.py`
+- `--register-protocol` non deve mai bloccare sul prompt del token: se
+  `token.dat` non esiste, salta il prompt e procede alla registrazione
+  (scrivere in HKCU non richiede token).
+
+### Todo utente
+- Redeploy produzione (forgefps.dev) per pushare il fix upstream URL.
+
+
+
 ## v0.7.1 (Step 2 Frontend) — 2026-02-21 · Quick Actions con protocollo frameforge://
 ### Added
 - **Griglia Quick Actions** in `DesktopAgent.jsx` con 6 bottoni colorati:
