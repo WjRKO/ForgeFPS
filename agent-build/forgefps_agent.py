@@ -178,9 +178,13 @@ if not AGENT_TOKEN or AGENT_TOKEN.startswith("__"):
         AGENT_TOKEN = saved
         print("[FrameForge] Token caricato da %APPDATA%\\FrameForge\\token.dat")
     else:
+        # --register-protocol e' un'operazione stand-alone: non serve token per
+        # scrivere nel registro utente. Salta il prompt e vai al main.
+        if _args.register_protocol:
+            AGENT_TOKEN = ""  # placeholder, verra' ignorato
         # Se stiamo per gestire un URI ma non c'e' un token salvato, non possiamo
         # verificare la firma: guida l'utente al primo setup.
-        if _args.uri:
+        elif _args.uri:
             print("[FrameForge] Nessun token salvato: prima apri l'app dalla dashboard")
             print("             (scarica lo ZIP da 'Collega il PC'), poi il bottone")
             print("             'Avvia' funzionera' senza download.")
@@ -189,24 +193,25 @@ if not AGENT_TOKEN or AGENT_TOKEN.startswith("__"):
             except Exception:
                 pass
             sys.exit(1)
-        print("=" * 50)
-        print("  FrameForge Desktop Agent")
-        print("=" * 50)
-        print("Incolla il tuo token (pagina 'Collega il PC' del tuo account) e premi INVIO.")
-        print("Paste your token (from the 'Connect PC' page) and press ENTER.")
-        print("Il token verra' salvato in %APPDATA%\\FrameForge\\ per i prossimi avvii.")
-        try:
-            AGENT_TOKEN = input("Token > ").strip()
-        except Exception:
-            AGENT_TOKEN = ""
-        if not AGENT_TOKEN:
-            print("Nessun token inserito. / No token provided.")
+        else:
+            print("=" * 50)
+            print("  FrameForge Desktop Agent")
+            print("=" * 50)
+            print("Incolla il tuo token (pagina 'Collega il PC' del tuo account) e premi INVIO.")
+            print("Paste your token (from the 'Connect PC' page) and press ENTER.")
+            print("Il token verra' salvato in %APPDATA%\\FrameForge\\ per i prossimi avvii.")
             try:
-                input("Premi INVIO per chiudere... / Press ENTER to close...")
+                AGENT_TOKEN = input("Token > ").strip()
             except Exception:
-                pass
-            sys.exit(1)
-        _save_token(AGENT_TOKEN)
+                AGENT_TOKEN = ""
+            if not AGENT_TOKEN:
+                print("Nessun token inserito. / No token provided.")
+                try:
+                    input("Premi INVIO per chiudere... / Press ENTER to close...")
+                except Exception:
+                    pass
+                sys.exit(1)
+            _save_token(AGENT_TOKEN)
 elif AGENT_TOKEN and not AGENT_TOKEN.startswith("__"):
     # Token fornito da CLI (es. lancio via .bat generato): salvalo se differisce
     # da quello persistito, cosi anche il doppio-click diretto sull'.exe funziona.

@@ -1,5 +1,80 @@
 # FrameForge — Changelog
 
+## v0.7.2 (Backend hotfix) — 2026-02-21 · Endpoint download-zip -> v0.7.0
+### Fixed
+- **Root cause segnalato dall'utente**: `.\forgefps-agent.exe --register-protocol`
+  apriva il menu interattivo invece di registrare il protocollo. Motivo:
+  `/api/agent/download-zip` in `backend/routers/pc.py` (const `AGENT_ZIP_UPSTREAM`)
+  scaricava ancora `v0.6.8`. La v0.6.8 non ha il flag `--register-protocol`
+  quindi `parse_known_args` lo ignorava silenziosamente.
+- Bumpato URL upstream a `v0.7.0`. Cache backend ricalcola l'hash del path
+  automaticamente (nuovo file di cache, nessun cleanup manuale necessario).
+- Verificato: `sha256sum(cache) == d1afd88b430427efd09064e570f7c53b196a713b768e046eb4b214f78685d898`
+  (match esatto SHA della release GitHub v0.7.0).
+
+### Fix secondario in `forgefps_agent.py`
+- `--register-protocol` non deve mai bloccare sul prompt del token: se
+  `token.dat` non esiste, salta il prompt e procede alla registrazione
+  (scrivere in HKCU non richiede token).
+
+### Todo utente
+- Redeploy produzione (forgefps.dev) per pushare il fix upstream URL.
+
+
+
+## v0.7.1 (Step 2 Frontend) — 2026-02-21 · Quick Actions con protocollo frameforge://
+### Added
+- **Griglia Quick Actions** in `DesktopAgent.jsx` con 6 bottoni colorati:
+  Optimize, Live monitor, Benchmark, Pre-match, Game Booster, Restore.
+- Ogni bottone chiama `GET /api/agent/launch-uri?mode=<mode>`, riceve un URI
+  firmato HMAC e naviga a `window.location.href = uri` per aprire la GUI
+  locale via protocollo custom `frameforge://` (v0.7.0+ dell'exe).
+- Fallback UX: se la tab rimane visibile dopo 2s (`document.visibilityState`),
+  toast "Non hai ancora l'app? Scarica FrameForge qui sotto" per ricordare
+  di installare la v0.7.0 la prima volta.
+- Anti-doppio-click: `launching` state con reset dopo 1s.
+- Testid: `quick-actions`, `quick-action-{optimize,monitor,benchmark,prematch,booster,restore}`.
+
+### Changed
+- Il primo hero "Install FrameForge" ora ha copy piu' chiara ("Prima volta →
+  Download the ZIP once. Registers frameforge:// on Windows") — separa il
+  first-install dal daily-use.
+- Hero secondario "Web dashboard" (era "Start monitoring") linka a `/app/live`
+  per la telemetria via sito, distinguendo dal monitor via app locale.
+
+### Verified
+- Screenshot preview: griglia 3x2 con colori distintivi, hover states,
+  responsive (2 col mobile, 3 col desktop).
+- Chiamata reale HTTP 200 su `/api/agent/launch-uri?mode=optimize`
+  osservata via Playwright.
+
+### Note
+- La v0.7.0 dell'exe deve essere installata dagli utenti (una tantum) prima
+  che i bottoni possano aprire l'app. Se non installata, il click fallisce
+  silenziosamente e appare il toast fallback.
+
+
+
+## v0.7.0 (Frontend config) — 2026-02-21 · Bump versione + SHA256
+### Changed
+- `frontend/src/config/agent.js` aggiornato:
+  - URL → `.../releases/download/v0.7.0/forgefps-agent.zip`
+  - SHA256 → `d1afd88b430427efd09064e570f7c53b196a713b768e046eb4b214f78685d898`
+  - VERSION → `v0.7.0`, DATE → `2026-02-21`
+- `data/releases.json`: aggiunta entry v0.7.0 → verrà annunciata dal Discord
+  release announcer al prossimo tick.
+- Preview verificato via screenshot: sticky panel mostra versione, data e
+  SHA corretti; il bottone "Download FrameForge" scarica dall'endpoint
+  `/agent/download-zip` (che internamente pesca dal GitHub v0.7.0).
+
+### To-do
+- **Produzione**: click su "Redeploy" nella UI Emergent per pushare la
+  nuova versione su forgefps.dev.
+- Step 2 (frontend cleanup / nuovi bottoni "Ottimizza / Monitor / ...")
+  disponibile subito dopo il redeploy.
+
+
+
 ## v0.7.0 — 2026-02-XX · Custom URL protocol `frameforge://` (Step 1)
 ### Added
 - **Endpoint `GET /api/agent/launch-uri?mode=<mode>`** in `backend/routers/pc.py`:
