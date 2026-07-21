@@ -254,42 +254,6 @@ export default function DesktopAgent() {
         <p className="text-zinc-500 text-sm mt-2 max-w-2xl">{s.exe_desc}</p>
       </div>
 
-      {/* Quick Start: due CTA prominenti visibili al primo colpo d'occhio */}
-      <div className="mb-6 grid sm:grid-cols-2 gap-3" data-testid="quickstart-hero">
-        <button
-          type="button"
-          onClick={handleDownloadZip}
-          data-testid="quickstart-connect-btn"
-          className="group flex items-center gap-4 bg-gradient-to-br from-[#00E0FF]/10 to-[#0F0F12] border border-[#00E0FF]/40 hover:border-[#00E0FF] px-5 py-4 text-left transition-all"
-        >
-          <div className="w-11 h-11 border border-[#00E0FF]/40 bg-black/30 flex items-center justify-center shrink-0 group-hover:bg-[#00E0FF]/10 transition-colors">
-            <MonitorDown size={20} className="text-[#00E0FF]" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-[#00E0FF] mb-0.5">01 · {en ? "First time" : "Prima volta"}</div>
-            <div className="font-display font-bold text-base text-white">{en ? "Install FrameForge" : "Installa FrameForge"}</div>
-            <div className="text-xs text-zinc-500 leading-snug mt-0.5">{en ? "Download the ZIP once. Registers frameforge:// on Windows." : "Scarica lo ZIP una volta. Registra frameforge:// su Windows."}</div>
-          </div>
-          <Download size={18} className="text-[#00E0FF] shrink-0 group-hover:translate-x-0.5 transition-transform" />
-        </button>
-
-        <Link
-          to="/app/live"
-          data-testid="quickstart-monitor-btn"
-          className="group flex items-center gap-4 bg-gradient-to-br from-[#E5FF00]/10 to-[#0F0F12] border border-[#E5FF00]/40 hover:border-[#E5FF00] px-5 py-4 text-left transition-all"
-        >
-          <div className="w-11 h-11 border border-[#E5FF00]/40 bg-black/30 flex items-center justify-center shrink-0 group-hover:bg-[#E5FF00]/10 transition-colors">
-            <Activity size={20} className="text-[#E5FF00]" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-[#E5FF00] mb-0.5">02 · {en ? "Live view" : "Vista live"}</div>
-            <div className="font-display font-bold text-base text-white">{en ? "Web dashboard" : "Dashboard web"}</div>
-            <div className="text-xs text-zinc-500 leading-snug mt-0.5">{en ? "See CPU, GPU, RAM, temps and FPS on the site." : "Vedi CPU, GPU, RAM, temperature e FPS sul sito."}</div>
-          </div>
-          <Gauge size={18} className="text-[#E5FF00] shrink-0 group-hover:translate-x-0.5 transition-transform" />
-        </Link>
-      </div>
-
       {/* Quick Actions: bottoni che aprono la GUI locale via frameforge:// (v0.7.0+) */}
       <div className="mb-6" data-testid="quick-actions">
         <div className="flex items-baseline justify-between mb-3">
@@ -311,7 +275,6 @@ export default function DesktopAgent() {
             { mode: "optimize",  icon: Zap,        label_it: "Ottimizza",         label_en: "Optimize",           color: "#E5FF00" },
             { mode: "monitor",   icon: LineChart,  label_it: "Monitor live",      label_en: "Live monitor",       color: "#00E0FF" },
             { mode: "benchmark", icon: Gauge,      label_it: "Benchmark",         label_en: "Benchmark",          color: "#00FF66" },
-            { mode: "prematch",  icon: Target,     label_it: "Prima del match",   label_en: "Pre-match",          color: "#FF6BFF" },
             { mode: "booster",   icon: PlayCircle, label_it: "Game Booster",      label_en: "Game Booster",       color: "#FFAA00" },
             { mode: "restore",   icon: RotateCcw,  label_it: "Ripristina",        label_en: "Restore",            color: "#FF3860" },
           ].map(({ mode, icon: Icon, label_it, label_en, color }) => (

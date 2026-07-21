@@ -1,5 +1,45 @@
 # FrameForge — Changelog
 
+## v0.7.4 (UX cleanup) — 2026-02-21 · Consolidato Pre-match → Game Booster
+### Removed
+- **QuickStart hero** (2 CTA "Installa FrameForge" + "Dashboard web") sopra le
+  Quick Actions in `/app/desktop`: ridondante coi bottoni sottostanti e col
+  pannello sticky di destra. Ora la pagina apre direttamente sulla griglia
+  6 (ora 5) di Quick Actions.
+- **Bottone "Prima del match"** dalle Quick Actions: modalita' `prematch`
+  faceva le stesse cose del `booster` (chiudi app, powercfg, priorita').
+  Rimane come `mode` dietro le quinte per compat script Windows.
+- **Wizard "auto vs manual"** e **card Pre-match** dalla pagina `/app/games`:
+  eliminata la scelta perche' c'e' un solo path (Booster). Meno decisioni,
+  meno frizione al primo utilizzo.
+- Removed unused React state: `boostMode`, `chooseMode`, `resetMode`,
+  `boostGroups`, `groups`, `showConfig`, `savingCfg`, `saveConfig`,
+  `setPower`, `BOOST_MODE_KEY` (localStorage). Removed unused icons:
+  `Rocket`, `Target`, `ChevronDown`, `ChevronUp`, `RotateCcw`.
+
+### Changed — Game Booster "Personalizza cosa chiudere"
+- **Prima**: 6 checkbox generiche (Browser, Chat, Media, Cloud, Launcher,
+  Altro). L'utente selezionava categorie senza sapere cosa avesse in
+  esecuzione davvero.
+- **Adesso**: lista dinamica delle app effettivamente in esecuzione sul PC
+  (da `pc_specs.running_apps` popolato dal Desktop Agent). Ogni app ha
+  checkbox individuale + nome friendly (`APP_LABELS`: Chrome, Edge,
+  Discord, Spotify, OneDrive, Epic Games Launcher, ecc.) + process name
+  in monofont.
+- Bottone "aggiorna" per rileggere lo state; placeholder se nessuna app
+  rilevata ("Avvia Desktop Agent con Ottimizza o Sync per aggiornare").
+- Salva su `close_apps` come lista piatta di process names (era: unione
+  dei processi delle categorie ticked).
+- Nuove chiavi i18n (IT/EN): `booster_no_running`, `booster_running_count`
+  con plurali, `booster_will_close` con plurali, `refresh_short`.
+
+### Files
+- `frontend/src/pages/DesktopAgent.jsx`
+- `frontend/src/pages/Games.jsx`
+- `frontend/src/i18n.js`
+
+
+
 ## v0.7.3 (Rebuild fixed) — 2026-02-21 · Workflow CI ora usa `agent-build/`
 ### Fixed
 - **Root cause definitivo**: `.github/workflows/build.yml` sul repo GitHub
