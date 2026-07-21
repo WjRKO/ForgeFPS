@@ -1,30 +1,72 @@
 [
   {
+    "version": "0.6.14",
+    "date": "2026-07-20",
+    "title": "Fix bug + UX credito LLM piu' chiaro",
+    "notes_md": "- **QR nella GUI Desktop**: risolto il bug per cui il codice QR 'Continua sul telefono' non appariva nel programma installato\n- **AI Coach in inglese**: ora rispondi in inglese anche se scegli il coach di default (prima rispondeva sempre in italiano)\n- **Messaggio credito LLM esaurito**: se hai finito il budget, appare un messaggio chiaro invece dell'errore tecnico Cloudflare 502 nella sezione Gaming\n",
+    "url": "https://forgefps.dev/changelog"
+  },
+  {
+    "version": "0.6.13",
+    "date": "2026-07-20",
+    "title": "Fix download ZIP corrotto",
+    "notes_md": "- **ZIP dell'agent ora scarica intero**: risolto il bug per cui il ZIP arrivava a meta' (~30%) e 7-Zip diceva 'Fine dei dati inattesa'\n- Ora il download completa sempre a 9.1 MB integri con SHA256 verificabile\n",
+    "url": "https://forgefps.dev/changelog"
+  },
+  {
+    "version": "0.6.10",
+    "date": "2026-07-20",
+    "title": "Un click e la GUI parte: ZIP personale + token persistente",
+    "notes_md": "- **Un solo download, un solo doppio-click**: scarichi il ZIP dal tuo account, estrai, doppio click su 'Avvia-FrameForge.bat' e la GUI parte senza incollare nulla\n- **Token salvato per sempre**: da questa release il .exe ricorda il tuo token in `%APPDATA%\\FrameForge\\token.dat`, quindi anche il doppio click sull'.exe da solo apre la GUI istantaneamente\n- Come Steam/Discord: incolli il token una volta e non ti chiede piu' nulla\n",
+    "url": "https://forgefps.dev/changelog"
+  },
+  {
+    "version": "0.6.8",
+    "date": "2026-07-20",
+    "title": "Build --onedir: basta falsi positivi Windows Defender",
+    "notes_md": "- **Niente piu' 'App bloccata' di Windows Defender**: la build passa da onefile a onedir (cartella con .exe + DLL). Zero heuristic hits, il download non viene piu' rifiutato\n- Costo per te: uno step di unzip prima del primo lancio. Vantaggio: funziona su tutti i PC senza chiedere permessi speciali\n- Se qualche vendor secondario dovesse ancora flaggarci, testi pronti per la segnalazione a Microsoft/Kaspersky/Bitdefender/Norton/ESET nel repo\n",
+    "url": "https://forgefps.dev/changelog"
+  },
+  {
+    "version": "0.6.7",
+    "date": "2026-07-20",
+    "title": "Report PDF con grafico Health Score",
+    "notes_md": "- **Grafico Health Score negli ultimi 90 giorni** dentro il PDF esportato\n- Perfetto per creator/tecnici che vogliono mostrare al cliente l'andamento del PC prima e dopo il boost\n- Fallback pulito se non hai ancora abbastanza storico\n",
+    "url": "https://forgefps.dev/changelog"
+  },
+  {
+    "version": "0.6.6",
+    "date": "2026-07-20",
+    "title": "Continua sul telefono: notifiche cross-device + QR anche nella GUI",
+    "notes_md": "- **Notifica quando fai scan del QR**: appena il telefono scansiona il codice, vedi toast web + notifica Windows nativa 'Nuovo device connesso: Android'\n- **Bottone QR anche dentro la GUI Desktop**: apri l'app locale, click su 'Continua sul Telefono' e vai sul telefono senza aprire il browser\n- QR valido 5 minuti, uso singolo\n",
+    "url": "https://forgefps.dev/changelog"
+  },
+  {
     "version": "0.6.5",
     "date": "2026-07-19",
     "title": "AI Advisor che impara + chat multi-modale",
-    "notes_md": "- **La Diagnosi PC si ricorda**: torni sulla pagina Advisor dopo aver cliccato altrove e ritrovi l'ultima diagnosi salvata, con badge \u00abgenerata Xh fa\u00bb\n- **Feedback \ud83d\udc4d/\ud83d\udc4e** su ogni azione della diagnosi e su ogni risposta della chat AI: alimenta il miglioramento continuo del sistema\n- **\u00abGi\u00e0 attivo\u00bb badge sulle diagnosi**: segna un tweak come gi\u00e0 applicato e l'AI non lo riproporr\u00e0 pi\u00f9 nelle prossime diagnosi\n- **Come verificare**: ogni azione della diagnosi ora include una mini-guida espandibile con percorso Windows o comando PowerShell per verificare se \u00e8 gi\u00e0 attiva\n- **Community insights**: l'AI riceve un riassunto dei tweak applicati dagli altri utenti con hardware simile al tuo\n- **Outcome tracking**: badge \u00abDopo l'ultima diagnosi: +7 punti benchmark\u00bb quando l'AI vede miglioramenti misurabili\n- **Chat multi-modale**: allega uno screenshot (Task Manager, MSI Afterburner, BSOD, gioco) e l'AI lo analizza direttamente\n- **Modalit\u00e0 Coach**: 5 personas selezionabili dalla chat (Default, \ud83c\udfae FPS, \ud83c\udfac Streaming, \ud83d\udee0\ufe0f Troubleshoot, \ud83d\udcb0 Build)\n- **Follow-up chips**: 3 suggerimenti cliccabili dopo ogni risposta AI\n- **Rigenera / Copia** su ogni bolla AI",
+    "notes_md": "- **La Diagnosi PC si ricorda**: torni sulla pagina Advisor dopo aver cliccato altrove e ritrovi l'ultima diagnosi salvata, con badge «generata Xh fa»\n- **Feedback 👍/👎** su ogni azione della diagnosi e su ogni risposta della chat AI: alimenta il miglioramento continuo del sistema\n- **«Già attivo» badge sulle diagnosi**: segna un tweak come già applicato e l'AI non lo riproporrà più nelle prossime diagnosi\n- **Come verificare**: ogni azione della diagnosi ora include una mini-guida espandibile con percorso Windows o comando PowerShell per verificare se è già attiva\n- **Community insights**: l'AI riceve un riassunto dei tweak applicati dagli altri utenti con hardware simile al tuo\n- **Outcome tracking**: badge «Dopo l'ultima diagnosi: +7 punti benchmark» quando l'AI vede miglioramenti misurabili\n- **Chat multi-modale**: allega uno screenshot (Task Manager, MSI Afterburner, BSOD, gioco) e l'AI lo analizza direttamente\n- **Modalità Coach**: 5 personas selezionabili dalla chat (Default, 🎮 FPS, 🎬 Streaming, 🛠️ Troubleshoot, 💰 Build)\n- **Follow-up chips**: 3 suggerimenti cliccabili dopo ogni risposta AI\n- **Rigenera / Copia** su ogni bolla AI",
     "url": "https://forgefps.dev/changelog"
   },
   {
     "version": "0.6.4",
     "date": "2026-07-19",
-    "title": "AI Advisor \u00abDiagnosi PC\u00bb + community Discord",
-    "notes_md": "- **AI Advisor \u00abDiagnosi PC\u00bb**: un click e l'AI produce 3-5 azioni prioritizzate su misura del tuo hardware, con impatto stimato (+X FPS, -Y ms), difficolt\u00e0 e CTA per applicarle subito con l'agent\n- L'AI Advisor ora riceve anche **trend benchmark**, **health issues attivi** e **tracker summary**: risposte molto pi\u00f9 personalizzate\n- **Salva per dopo** sulle azioni AI: crea una todo list che trovi in Dashboard\n- **Nuovi slash command Discord**: `/help` (rich), `/come-iniziare`, `/ruoli`, `/canali` \u2014 mini-guide per i nuovi membri\n- **`/apply-creator`** con approvazione staff: candidati al ruolo Creator Verified con link Twitch/YouTube/Kick\n- Ruolo **Boosted PC** ora si sincronizza sempre (anche se linki Discord dopo)\n- **Fix**: email contatto footer \u2192 `forgefps.support@gmail.com` con copia negli appunti al click",
+    "title": "AI Advisor «Diagnosi PC» + community Discord",
+    "notes_md": "- **AI Advisor «Diagnosi PC»**: un click e l'AI produce 3-5 azioni prioritizzate su misura del tuo hardware, con impatto stimato (+X FPS, -Y ms), difficoltà e CTA per applicarle subito con l'agent\n- L'AI Advisor ora riceve anche **trend benchmark**, **health issues attivi** e **tracker summary**: risposte molto più personalizzate\n- **Salva per dopo** sulle azioni AI: crea una todo list che trovi in Dashboard\n- **Nuovi slash command Discord**: `/help` (rich), `/come-iniziare`, `/ruoli`, `/canali` — mini-guide per i nuovi membri\n- **`/apply-creator`** con approvazione staff: candidati al ruolo Creator Verified con link Twitch/YouTube/Kick\n- Ruolo **Boosted PC** ora si sincronizza sempre (anche se linki Discord dopo)\n- **Fix**: email contatto footer → `forgefps.support@gmail.com` con copia negli appunti al click",
     "url": "https://forgefps.dev/changelog"
   },
   {
     "version": "0.6.3",
     "date": "2026-07-18",
     "title": "Footer, community e link Discord invito",
-    "notes_md": "- **Footer ridisegnato** con nuova colonna **Community** (Discord con contatore live \"XX online adesso\", GitHub, Segnala un bug, email di contatto)\n- **Nuova pagina Termini di servizio** (`/terms`) con 9 sezioni bilingue\n- **Legal row** in fondo: cookie policy, termini, privacy sempre a portata di click\n- Firma **\"Costruito con \u2764\ufe0f da un gamer per gamer\"**\n- Link **Guida** aggiunto al footer (era invisibile)\n- **Fix**: pulsante \"Apri il server\" nella Dashboard ora punta all'invito Discord reale (era placeholder)\n- **Fix**: controlli anti-duplicato per gli annunci changelog automatici su Discord (auto-detect preview vs produzione)",
+    "notes_md": "- **Footer ridisegnato** con nuova colonna **Community** (Discord con contatore live \"XX online adesso\", GitHub, Segnala un bug, email di contatto)\n- **Nuova pagina Termini di servizio** (`/terms`) con 9 sezioni bilingue\n- **Legal row** in fondo: cookie policy, termini, privacy sempre a portata di click\n- Firma **\"Costruito con ❤️ da un gamer per gamer\"**\n- Link **Guida** aggiunto al footer (era invisibile)\n- **Fix**: pulsante \"Apri il server\" nella Dashboard ora punta all'invito Discord reale (era placeholder)\n- **Fix**: controlli anti-duplicato per gli annunci changelog automatici su Discord (auto-detect preview vs produzione)",
     "url": "https://forgefps.dev/changelog"
   },
   {
     "version": "0.6.2",
     "date": "2026-07-18",
     "title": "Dashboard Command Center + preview GUI agent",
-    "notes_md": "- **Dashboard \"Command Center\" ridisegnata**: Health Score del PC in evidenza, trend benchmark con mini-grafico, feed attivit\u00e0 unificato (cali prezzo + benchmark + nuove versioni agent)\n- **Checklist onboarding** sempre visibile: 5 step con progress bar animata che si nasconde quando completi tutto\n- **Preview GIF/video della GUI agent** nella pagina Desktop Agent: vedi l'app in azione prima di scaricarla\n- **Empty state migliorati**: nuovi utenti vedono 3 CTA giganti invece di card vuote\n- **Saluto contestuale**: mostra health score o totale risparmiato appena hai dati\n- Bottone \"Condividi score\" ora accessibile direttamente dalla Dashboard",
+    "notes_md": "- **Dashboard \"Command Center\" ridisegnata**: Health Score del PC in evidenza, trend benchmark con mini-grafico, feed attività unificato (cali prezzo + benchmark + nuove versioni agent)\n- **Checklist onboarding** sempre visibile: 5 step con progress bar animata che si nasconde quando completi tutto\n- **Preview GIF/video della GUI agent** nella pagina Desktop Agent: vedi l'app in azione prima di scaricarla\n- **Empty state migliorati**: nuovi utenti vedono 3 CTA giganti invece di card vuote\n- **Saluto contestuale**: mostra health score o totale risparmiato appena hai dati\n- Bottone \"Condividi score\" ora accessibile direttamente dalla Dashboard",
     "url": "https://forgefps.dev/changelog"
   },
   {

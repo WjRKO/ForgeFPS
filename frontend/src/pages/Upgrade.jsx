@@ -90,7 +90,7 @@ export default function Upgrade() {
                 <p className="text-sm text-zinc-400 mt-2">{upg.assessment}</p>
               </div>
               {upg.recommendations.map((r, i) => (
-                <div key={i} className="border border-[#1A1A24] p-3 mb-2 row-hover" data-testid={`upg-rec-${i}`}>
+                <div key={`${r.category}-${i}`} className="border border-[#1A1A24] p-3 mb-2 row-hover" data-testid={`upg-rec-${i}`}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs uppercase tracking-widest text-[#E5FF00]">{r.category}</span>
                     <span className={`text-xs font-bold uppercase px-2 py-0.5 ${PRIO[r.priority] || "bg-zinc-700/30 text-zinc-400"}`}>{t(`upgrade.prio.${r.priority}`, r.priority)}</span>
@@ -139,7 +139,7 @@ export default function Upgrade() {
               <div className="text-sm text-zinc-300 mb-3">{fps.game} · {fps.resolution} <span className="text-xs text-zinc-500">({t("common.reliability")} {fps.confidence})</span></div>
               <div className="space-y-2">
                 {fps.estimates.map((e, i) => (
-                  <div key={i} data-testid={`fps-bar-${i}`}>
+                  <div key={e.preset || i} data-testid={`fps-bar-${i}`}>
                     <div className="flex justify-between text-xs mb-1"><span className="text-zinc-400">{e.preset}</span><span className="font-bold text-zinc-100">{e.fps} FPS</span></div>
                     <div className="h-2 bg-black border border-[#1A1A24]">
                       <div className="h-full" style={{ width: `${(e.fps / maxFps) * 100}%`, background: e.fps >= 60 ? "#00FF66" : e.fps >= 30 ? "#E5FF00" : "#FF3B30" }} />

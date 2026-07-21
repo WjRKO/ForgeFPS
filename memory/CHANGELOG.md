@@ -1,5 +1,230 @@
 # FrameForge — Changelog
 
+## v0.7.0 — 2026-02-XX · Custom URL protocol `frameforge://` (Step 1)
+### Added
+- **Endpoint `GET /api/agent/launch-uri?mode=<mode>`** in `backend/routers/pc.py`:
+  ritorna un URI firmato HMAC-SHA256 tipo `frameforge://launch?mode=optimize&ts=<epoch>&sig=<hex>`.
+  Chiave HMAC = `agent_token` dell'utente (offline-verifiable dal client).
+  Modes ammesse: optimize, sync, benchmark, monitor, prematch, booster, restore, gui.
+  ts scade in 60s (anti-replay). Auth required (JWT cookie).
+- **Registrazione protocollo Windows** in `agent-build/forgefps_agent.py` (bump v0.7.0):
+  - `register_frameforge_protocol()` scrive in `HKCU\Software\Classes\frameforge`
+    (no admin) e mappa a `"exe" --uri "%1"`. Idempotente.
+  - Chiamata silenziosa best-effort ad ogni avvio; flag `--register-protocol`
+    per repair manuale.
+  - `parse_and_verify_uri()` valida HMAC + freshness locale col token in
+    `%APPDATA%\FrameForge\token.dat`. Rifiuta URI di altri utenti (bad sig),
+    URI vecchi (> 60s) e URI manomessi.
+  - Nuovo flag `--uri "frameforge://..."`: quando il browser invoca il
+    protocollo l'exe estrae la mode e apre direttamente la GUI sicura.
+- **Test regressione**: `backend/tests/test_agent_launch_uri.py` (14 casi:
+  auth, tutte le mode, mode invalida, verifica firma, rifiuto chiave sbagliata,
+  freshness ts). Tutti PASSED.
+
+### Notes
+- Step 1 (backend + Python launcher) completo. Step 2 (frontend cleanup: nuovi
+  bottoni Quick Actions + detection app installata + accordion Metodo Sicuro
+  collassato) rimane da implementare dopo il rebuild dell'exe e la release GitHub.
+- Version_info.txt bumpato a 0.7.0.0 per metadata dell'exe.
+
+
+
+## v0.6.18 — 2026-02-XX · Quick Start hero su pagina Collega PC
+### Added
+- **Hero band con due CTA prominenti** in cima a `/app/desktop`
+  (`DesktopAgent.jsx`): visibile al primo utente senza scroll o accordion:
+  - **01 · Collega il tuo PC** (ciano): scarica lo ZIP personalizzato.
+  - **02 · Avvia monitoraggio** (giallo): naviga a `/app/live` per la telemetria.
+- Estratta la logica di download in `handleDownloadZip` per riuso tra hero
+  e sticky panel di destra.
+- Testid: `quickstart-hero`, `quickstart-connect-btn`, `quickstart-monitor-btn`.
+- Verificato via screenshot preview: hero renderizza correttamente sopra il
+  banner "Important: which server" senza rompere il layout esistente.
+
+
+
+## v0.6.17 — 2026-02-XX · Fix caratteri glitchati nella GUI Desktop
+### Fixed
+- **UTF-8 BOM su `/api/agent/script`**: Windows PowerShell 5.1 (default su Win10/11)
+  legge i file `.ps1` senza BOM usando il codepage ANSI di sistema (Windows-1252),
+  causando mojibake per caratteri UTF-8 come `📚 👤 · …` presenti nella sezione
+  Profili e nei toast Sync Cloud dell'Edge WebView GUI.
+- Fix: prepend `\ufeff` (BOM UTF-8, bytes `EF BB BF`) alla `PlainTextResponse`
+  di `/api/agent/script` + `media_type="text/plain; charset=utf-8"`.
+- `/api/agent/script-info` allineato: SHA256 calcolato sui bytes BOM-inclusi
+  per non rompere l'integrity check lato client.
+- File: `backend/routers/pc.py` (agent_script + agent_script_info).
+- Verificato via curl: risposta ora inizia con `EF BB BF` + 168288 byte di script.
+
+
+
+## v0.6.16 — 2026-07-20 · Endpoint admin skip-annuncio release
+### Added
+- **`POST /api/admin/releases/mark-announced`** (auth admin): accetta
+  `{"versions": ["x.y.z", ...]}` e inserisce le entries in `db.announced_releases`
+  con `source: "admin_skip"` senza chiamare Discord. Idempotente: entries gia'
+  presenti finiscono in `already_announced`. Uso: dopo aggiunta massiva di release
+  al manifest, marchi le vecchie come "gia' annunciate" per evitare 6 embed in fila
+  sul canale changelog al primo redeploy.
+- Validazione: body vuoto o `versions` non-list ritorna 400. Entries non-string
+  vengono ignorate (isinstance check).
+
+### Verified
+- iteration_32.json: 8/8 acceptance criteria PASS. Auth (401/403), idempotenza,
+  validation, DB side-effect (source=admin_skip), integration con
+  `announce_new_releases()` monkeypatched (dopo mark di 5 versioni, posta solo
+  la 6a rimasta).
+- Minor issue fixato post-test: isinstance(v, str) invece di str(v).strip() per
+  evitare coercion di None/numeri a stringhe.
+
+### Files touched
+- `backend/routers/admin.py` (+ nuovo endpoint)
+
+---
+
+## v0.6.15 — 2026-07-20 · Fix Discord #changelog auto-announcer
+### Fixed
+- **`/app/data/releases.json`**: il manifest si fermava a v0.6.5. Aggiunte le 6 versioni
+  user-facing pubblicate da allora: 0.6.6 (cross-device notifications), 0.6.7 (report PDF
+  con grafico Health Score), 0.6.8 (build --onedir contro falsi positivi AV), 0.6.10 (ZIP
+  personalizzato + token persistente), 0.6.13 (fix ZIP troncato), 0.6.14 (fix Coach EN +
+  UX credito LLM).
+- Il release_announcer al prossimo boot backend PROD posta i 6 embed mancanti sul canale
+  Discord `#changelog-automatico` (idempotente via `db.announced_releases`).
+
+### Verified
+- iteration_31.json: 6/6 acceptance criteria. Manifest 12 versioni, announce_new_releases()
+  posta 6 al primo run e 0 al secondo. announce_release_by_version force-re-announce OK.
+
+### Files touched
+- `/app/data/releases.json` (+6 entries)
+
+---
+
+## v0.6.14 — 2026-07-20 · Bug fixes multipli + UX budget LLM
+### Fixed
+- **QR Desktop GUI non si generava** (`ps_agent.py`): `Invoke-RestMethod` su
+  Content-Type `image/svg+xml` auto-parsava il body come XML object perdendo il
+  markup. Switch a `Invoke-WebRequest -UseBasicParsing` con `.RawContentStream.ToArray()`
+  per proxare i bytes SVG intatti. **Richiede rebuild .exe v0.6.9** per l'utente finale.
+- **AI Coach default rispondeva solo in italiano** (`ai_engine.stream_advisor`): il
+  blocco `[CONTESTO PC DELL'UTENTE ...]` iniettato nel system prompt era hardcoded
+  in italiano anche con `lang='en'`. Le istruzioni miste (system EN + contesto IT)
+  confondevano Claude che fallback in italiano. Ora bilingue: `[USER PC CONTEXT ...]`
+  in inglese quando `lang='en'`, headers 'User' / 'New message' bilingue.
+- **UX budget LLM esaurito** (`routers/pc.py` fps_estimate + startup_analyze): quando
+  il budget Emergent Universal Key e' scaduto, LiteLLM ritorna un errore tecnico che
+  causava un Cloudflare 502 grezzo sulla pagina Gaming. Ora intercettiamo
+  `"Budget ... exceeded"` e ritorniamo HTTP 402 con detail user-friendly
+  "Credito LLM esaurito. Ricarica da Profilo -> Universal Key -> Add Balance."
+
+### Verified
+- Testing agent iteration_30.json: **7/7 PASS**.
+- prompt bilingue verificato via monkeypatched build_chat.
+- QR fix testabile solo su Windows (utente lo verifichera' dopo rebuild v0.6.9).
+
+### Files touched
+- `backend/ps_agent.py` (Invoke-WebRequest per SVG QR)
+- `backend/ai_engine.py` (stream_advisor bilingue)
+- `backend/routers/pc.py` (402 friendly per budget)
+
+---
+
+## v0.6.13 — 2026-07-20 · Fix ZIP troncato al download (Cloudflare/ingress)
+### Fixed
+- **`routers/pc.py:agent_download_zip`**: `StreamingResponse(BytesIO(...))` → `Response(content=payload,
+  headers={"Content-Length": str(len(payload)), ...})`.
+- **Root cause**: `StreamingResponse` con BytesIO senza `Content-Length` header esplicito veniva
+  troncato dal reverse-proxy in mezzo (Cloudflare/ingress). L'utente riceveva ~2.8 MB dei 9.1 MB
+  attesi e 7-Zip segnalava "Fine dei dati inattesa" con corruzione di `_ssl.pyd`.
+- **Fix verificato dal testing agent** (iteration_29.json, 4/4 PASS): Content-Length header
+  9128837 bytes esatti, `zipfile.testzip()` = None (integro), 60 entries + Avvia-FrameForge.bat,
+  `_ssl.pyd` legge 179432 bytes puliti.
+
+### Files touched
+- `backend/routers/pc.py`
+
+---
+
+## v0.6.12 — 2026-07-20 · Backlog Code Quality (auth split + component split + hook cleanup)
+### Backend
+- **`auth.py` refactor** (474 → 363 righe, −23%). Estratti in file separati mantenendo API contract 100% identico (path, payload, cookies, status codes, rate-limits invariati):
+  - **`auth_magic.py`** (nuovo, 101 righe): magic-link create/consume/status
+  - **`auth_mfa.py`** (nuovo, 56 righe): mfa/status/setup/enable/disable
+  - Router principale invariato (`build_auth_router(db)` è sempre l'entrypoint pubblico chiamato da server.py)
+- **Fix pre-esistente: brute-force lockout via ingress** (auth.py:214-219). Login ora legge `X-Forwarded-For` prima di fallback a `request.client.host`, così replicas dietro ingress non hanno IP diversi che vanificano il lockout. Verificato: 5×401 → 6°=429.
+- Testato via testing agent: 15/16 test PASS, l'unico "issue" era il lockout pre-esistente ora fixato.
+
+### Frontend Hook Cleanup
+- Analisi ESLint (`react-hooks/exhaustive-deps`) sull'intero `src/`: solo 6 warning reali (non 68 come reported). Fixati tutti:
+  - `Account.jsx:214`: aggiunta eslint-disable comment esplicito con motivazione (mount-only redirect handler)
+  - Rimosse 5 direttive `eslint-disable-next-line react-hooks/exhaustive-deps` OBSOLETE da `Dashboard.jsx:646`, `Games.jsx:89`, `Live.jsx:63,92`, `Profiles.jsx:46` (ESLint le segnalava come "unused" — il codice era già stato corretto in refactor precedenti)
+- Build ora 0 warning React.
+
+### Frontend Component Split
+- **`DiagnosePanel.jsx` 503 → 295 righe (−41%)**. Estratti:
+  - `DiagnoseHeader.jsx` (89 righe): header collapsible + timestamp + outcome badge + close button
+  - `DiagnoseAction.jsx` (116 righe): singola action row con verify block + save + apply + feedback thumbs
+- **`Games.jsx`** (434 righe) e **`MobileHandoffModal.jsx`** (177 righe): valutati, split ulteriore frammenterebbe logica coesa senza reale beneficio. Sub-componenti già in-file, entrambi sotto threshold critici.
+
+### Verified
+- Tutti gli endpoint auth rispondono identici al pre-refactor (login, /me, mfa/status, magic-link cycle, consume-magic con UA parsing, magic-status pre/post consume).
+- Frontend build: `yarn build` completa senza warning.
+- Smoke test Playwright: 7 pagine (Dashboard/Desktop/Games/MyPc/Advisor/Upgrade/Admin) caricano correttamente.
+
+### Files touched
+- `backend/auth.py` (refactor + brute-force fix)
+- `backend/auth_magic.py` (nuovo)
+- `backend/auth_mfa.py` (nuovo)
+- `frontend/src/pages/Account.jsx` (eslint comment)
+- `frontend/src/pages/Dashboard.jsx`, `Games.jsx`, `Live.jsx`, `Profiles.jsx` (removed unused eslint-disable)
+- `frontend/src/components/DiagnosePanel.jsx` (slim)
+- `frontend/src/components/DiagnoseHeader.jsx` (nuovo)
+- `frontend/src/components/DiagnoseAction.jsx` (nuovo)
+
+---
+
+## v0.6.11 — 2026-07-20 · Code Quality Sweep
+### Fixed
+- **`routers/pc.py:43`**: `hashlib.md5(...)` → `hashlib.sha256(...)` per il nome del file di cache
+  del ZIP agent. Non era usato in modo crypto-sensitive (solo naming determin.), ma migra a
+  algoritmo moderno. Vecchia cache `/tmp/forgefps-agent-cache-*` invalidata al restart.
+- **`agent-build/forgefps_agent.py:861`**: `os.system("cls")` → `subprocess.run(["cmd","/c","cls"])`.
+  Zero rischio di shell injection nel caso originale (stringa statica), ma allinea a best practice.
+- **`Advisor.jsx:83`, `Admin.jsx:29-30`, `BuildGenerator.jsx:70`**: aggiunti `console.warn` nei
+  catch precedentemente vuoti dove il debug e' utile (load sessions/stats/users/builds).
+- **React key stabili invece di array index**:
+  - `Games.jsx:272,354,399`: session_id/game name/preset name
+  - `MyPc.jsx:330,396`: check.id / startup.item.name
+  - `Upgrade.jsx:93,142`: category-index composite / preset name
+  Migliora riconciliazione React quando le liste cambiano ordine.
+
+### Investigated as false positive (NO changes)
+- `ps_agent.py:1878` "hardcoded secret" → e' il placeholder JS `const TOKEN = "__TOKEN__"` che
+  PowerShell sostituisce a runtime con `$sessionToken` locale univoco per l'utente. Nessun
+  segreto nel codice sorgente.
+- `i18n.js:298, :846` "API keys" → traduzioni UI per il modulo auth (labels come "Password",
+  "Email"). Il tool ha matchato le parole chiave "auth"/"password" nella stringa.
+- `MyPc.jsx:84` SVG circles key={i} → lista fissa di N punti grafico che non si riordina mai;
+  index e' il key semanticamente corretto.
+
+### Skipped (require dedicated planning, on backlog)
+- `auth.py:175` build_auth_router complexity 51: refactoring auth richiede
+  `integration_playbook_expert_v2` per policy interna. Da fare in sprint dedicato.
+- 68 hook dependencies missing: molti sono pattern intenzionali (api client stabile). Fix
+  automatico rischia infinite render loops. Da valutare caso per caso.
+- Component size (Games.jsx 415 righe, DiagnosePanel 244 righe): refactoring senza cambio
+  funzionale, basso ROI in questa fase.
+- Type hints backend: nice-to-have.
+
+### Files touched
+- `backend/routers/pc.py`
+- `agent-build/forgefps_agent.py`
+- `frontend/src/pages/Advisor.jsx`, `Admin.jsx`, `BuildGenerator.jsx`
+- `frontend/src/pages/Games.jsx`, `MyPc.jsx`, `Upgrade.jsx`
+
+---
+
 ## v0.6.10 — 2026-07-20 · ZIP personalizzato + token persistente (`.exe` v0.6.8)
 ### Added — Part A (backend + frontend, live subito)
 - **Backend `routers/pc.py`**:

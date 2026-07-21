@@ -1,0 +1,21 @@
+{
+  "summary": "Iteration 28 - post-deployment-fix sanity. All 10 tests PASS. Verified: backend reachable, admin login + cookie, /api/auth/me, /api/auth/mfa/status, POST /api/auth/magic-link (returns token+expires_in_seconds), GET /api/agent/download-zip (>8MB, contains forgefps-agent/Avvia-FrameForge.bat), GET /api/agent/launcher-bat (token embedded). Fix-specific checks: /app/.gitignore has no .env/.env.*/*.env lines; /app/backend/.env has MONGO_URL+DB_NAME, /app/frontend/.env has REACT_APP_BACKEND_URL; frontend build uses window.location.origin+/api/discord/connect and no longer contains process.env.REACT_APP_BACKEND_URL||\"\" pattern for that URL. No regressions from the two deployment fixes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_deploy_fix_sanity.py",
+    "/app/test_reports/pytest/iter28_sanity.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Account.jsx:216-218 fix is correct (window.location.origin) — but note the app has axios base_url pointing to REACT_APP_BACKEND_URL and Discord OAuth callback returns to same-origin. If the deployed frontend is served from a different origin than the API, the Discord OAuth flow may set cookies for the wrong domain. Verify FRONTEND_URL/API origin alignment in Cloud Build env.",
+    "Older iteration_27 note about brute-force lockout (X-Forwarded-For) still open — not part of this iteration's scope but remains a real issue."
+  ],
+  "updated_files": ["/app/backend/tests/test_deploy_fix_sanity.py"],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "not tested (per request)"},
+  "test_credentials": "admin@boostpc.io / 4zWK4o_xSw5prU-2b7w9dQ",
+  "seed_data_creation": "None. test_magic_link_creation pre-cleans db.magic_tokens for admin to avoid rate-limit collisions.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Deployment fix sanity fully green. Run: pytest backend/tests/test_deploy_fix_sanity.py -n 0. All auth core, agent zip/launcher endpoints, and codebase-level checks pass. The Discord OAuth full flow was intentionally skipped (would need DISCORD_CLIENT_ID env)."
+}

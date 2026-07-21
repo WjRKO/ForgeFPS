@@ -1,0 +1,22 @@
+{
+  "summary": "Backend-only test of Discord release announcer fix. All acceptance criteria verified: manifest has 12 versions (6 new + 6 old), announce_new_releases() posted exactly 6 new versions on 1st run, 0 on 2nd run (idempotent), announce_release_by_version('0.6.14', force=True) called post_release once and returned ok, unknown version returns error, old versions still in manifest. post_release was monkeypatched to avoid real Discord webhook calls.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_release_announcer.py",
+    "/app/test_reports/pytest/release_announcer.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "release_announcer.announce_release_by_version: if post_release returns False and the entry was NOT previously announced, we don't insert into announced_releases (correct). But if already-announced and force=True and post fails, function returns False with no rollback — OK.",
+    "announce_new_releases correctly imports post_release at module scope; monkeypatching services.release_announcer.post_release works. discord_webhooks.post_release directly would NOT be patched — kept in mind when patching."
+  ],
+  "updated_files": ["/app/backend/tests/test_release_announcer.py"],
+  "success_rate": {"backend": "100%", "frontend": "N/A"},
+  "test_credentials": "N/A - uses db directly",
+  "seed_data_creation": "Cleaned db.announced_releases for 6 new versions before test to make results deterministic; test then re-populates them. Old-version entries in DB are untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_release_announcer.py uses asyncio.run() with a single loop to avoid motor 'event loop closed' issues under pytest-xdist. Runs with pytest -n 0 or default. Fix (adding 6 new versions to /app/data/releases.json) is verified.",
+  "rca of the issue": "Root cause was correctly identified by dev: manifest /app/data/releases.json stopped at 0.6.5. Added 6 missing entries (0.6.6, 0.6.7, 0.6.8, 0.6.10, 0.6.13, 0.6.14) with title/date/notes_md/url. Announcer logic in services/release_announcer.py was already correct: it iterates manifest, skips versions already in db.announced_releases, calls post_release then records the announcement — fully idempotent."
+}

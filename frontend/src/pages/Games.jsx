@@ -86,7 +86,6 @@ export default function Games() {
       setBoostGroups(Object.fromEntries(APP_GROUPS.map((g) => [g.id, g.procs.every((p) => apps.includes(p)) && g.procs.length > 0])));
     }).catch((e) => console.error("load booster failed", e));
     api.get("/booster/sessions").then(({ data }) => setBoostSessions(data.sessions || [])).catch((e) => console.error("load booster sessions failed", e));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot init on mount; loaders are stable inline fns
   }, []);
 
   const saveBoostConfig = async () => {
@@ -269,7 +268,7 @@ export default function Games() {
             <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{t("games.booster_sessions")}</div>
             <div className="space-y-1">
               {boostSessions.slice(0, 5).map((s, i) => (
-                <div key={i} className="flex items-center justify-between text-xs bg-black/40 border border-[#1A1A24] px-3 py-1.5" data-testid={`booster-session-${i}`}>
+                <div key={s.session_id || `${s.game}-${s.started_at || i}`} className="flex items-center justify-between text-xs bg-black/40 border border-[#1A1A24] px-3 py-1.5" data-testid={`booster-session-${i}`}>
                   <span className="text-zinc-200 font-semibold">{s.game}</span>
                   <span className="text-zinc-500">{Math.round((s.duration_s || 0) / 60)} {t("games.booster_min")} · {(s.actions || []).length} {t("games.booster_actions")}</span>
                 </div>
@@ -351,7 +350,7 @@ export default function Games() {
           ) : (
             <div className="flex flex-wrap gap-2">
               {games.map((g, i) => (
-                <button key={i} data-testid={`game-chip-${i}`} onClick={() => estimate(g)}
+                <button key={g} data-testid={`game-chip-${i}`} onClick={() => estimate(g)}
                   className={`text-xs px-3 py-1.5 border transition-colors ${game === g ? "bg-[#E5FF00] text-black border-[#E5FF00] font-bold" : "border-[#2A2A35] text-zinc-300 hover:border-[#E5FF00]"}`}>
                   {g}
                 </button>
@@ -396,7 +395,7 @@ export default function Games() {
               <div className="text-sm text-zinc-300 mb-3">{fps.game} · {fps.resolution} <span className="text-xs text-zinc-500">({t("common.reliability")} {fps.confidence})</span></div>
               <div className="space-y-2">
                 {fps.estimates.map((e, i) => (
-                  <div key={i} data-testid={`fps-bar-${i}`}>
+                  <div key={e.preset || i} data-testid={`fps-bar-${i}`}>
                     <div className="flex justify-between text-xs mb-1"><span className="text-zinc-400">{e.preset}</span><span className="font-bold text-zinc-100">{e.fps} FPS</span></div>
                     <div className="h-2 bg-black border border-[#1A1A24]">
                       <div className="h-full" style={{ width: `${(e.fps / maxFps) * 100}%`, background: e.fps >= 60 ? "#00FF66" : e.fps >= 30 ? "#E5FF00" : "#FF3B30" }} />

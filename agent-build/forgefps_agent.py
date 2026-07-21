@@ -15,18 +15,24 @@ import subprocess
 import tempfile
 import ctypes
 import re
+import hmac
+import hashlib
 import argparse
+import urllib.parse
 import urllib.request
 
 _parser = argparse.ArgumentParser(description="FrameForge Desktop Agent")
 _parser.add_argument("--token", default=os.environ.get("FORGEFPS_TOKEN", "__AGENT_TOKEN__"))
 _parser.add_argument("--backend", default=os.environ.get("FORGEFPS_BACKEND", "https://forgefps.dev"))
 _parser.add_argument("--mode", default="optimize")
+_parser.add_argument("--uri", default="", help="URI custom-protocol firmato (frameforge://launch?...)")
+_parser.add_argument("--register-protocol", action="store_true",
+                     help="Registra frameforge:// nel registro utente e esce (idempotente)")
 _args, _ = _parser.parse_known_args()
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.6.8"
+AGENT_VERSION = "0.7.0"
 BACKUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "boostpc_backup.json")
 
 # Persistent token storage in %APPDATA%\FrameForge\token.dat (v0.6.8+).
@@ -71,12 +77,118 @@ def _forget_saved_token() -> None:
         pass
 
 
+# ---------------------------------------------------------------------------
+# Custom URL protocol: frameforge://
+# Registrato in HKCU (no admin), permette al browser di lanciare l'agent con
+# parametri firmati HMAC. La chiave HMAC e' il token stesso dell'utente, gia'
+# salvato in %APPDATA%\FrameForge\token.dat: il server firma con lo stesso
+# token, quindi la verifica avviene offline senza mai esporre segreti.
+# ---------------------------------------------------------------------------
+_PROTOCOL = "frameforge"
+_URI_MAX_AGE_SEC = 60
+
+
+def _agent_exe_path() -> str:
+    """Percorso dell'exe attualmente in esecuzione (o dello script .py in dev)."""
+    if getattr(sys, "frozen", False):
+        return sys.executable
+    return os.path.abspath(sys.argv[0])
+
+
+def register_frameforge_protocol(silent: bool = True) -> bool:
+    """Registra frameforge:// come URL Protocol per l'utente corrente (HKCU).
+    Idempotente: se gia' registrato con lo stesso path non fa nulla. Ritorna True se ok."""
+    if not sys.platform.startswith("win"):
+        return False
+    try:
+        import winreg  # type: ignore
+    except Exception:
+        if not silent:
+            print("[FrameForge] winreg non disponibile su questa piattaforma.")
+        return False
+    exe = _agent_exe_path()
+    # "%1" contiene l'URI completo passato dal browser
+    command = f'"{exe}" --uri "%1"'
+    root = winreg.HKEY_CURRENT_USER
+    base = r"Software\Classes\%s" % _PROTOCOL
+    try:
+        # Cerca se e' gia' registrato con lo stesso command → skip
+        try:
+            k = winreg.OpenKey(root, base + r"\shell\open\command", 0, winreg.KEY_READ)
+            existing, _ = winreg.QueryValueEx(k, None)
+            winreg.CloseKey(k)
+            if existing == command:
+                return True
+        except OSError:
+            pass
+        # Scrivi/aggiorna
+        with winreg.CreateKey(root, base) as k:
+            winreg.SetValueEx(k, None, 0, winreg.REG_SZ, "URL:FrameForge Protocol")
+            winreg.SetValueEx(k, "URL Protocol", 0, winreg.REG_SZ, "")
+        with winreg.CreateKey(root, base + r"\DefaultIcon") as k:
+            winreg.SetValueEx(k, None, 0, winreg.REG_SZ, f'"{exe}",0')
+        with winreg.CreateKey(root, base + r"\shell\open\command") as k:
+            winreg.SetValueEx(k, None, 0, winreg.REG_SZ, command)
+        if not silent:
+            print(f"[FrameForge] Protocollo {_PROTOCOL}:// registrato -> {exe}")
+        return True
+    except Exception as e:
+        if not silent:
+            print(f"[FrameForge] Impossibile registrare protocollo: {e}")
+        return False
+
+
+def parse_and_verify_uri(uri: str, agent_token: str):
+    """Parsa un URI 'frameforge://launch?mode=...&ts=...&sig=...' e verifica la firma
+    HMAC-SHA256 usando agent_token come chiave. Ritorna dict con 'mode' oppure None."""
+    if not uri or not uri.lower().startswith(f"{_PROTOCOL}://"):
+        return None
+    try:
+        p = urllib.parse.urlparse(uri)
+        # Su Windows il browser puo' passare l'URI con eventuale slash finale: normalizziamo
+        qs = urllib.parse.parse_qs(p.query or "")
+        mode = (qs.get("mode") or [""])[0]
+        ts_str = (qs.get("ts") or [""])[0]
+        sig = (qs.get("sig") or [""])[0]
+        if not mode or not ts_str or not sig:
+            return None
+        ts = int(ts_str)
+        # Anti-replay: URI valido per 60s (permette anche piccolo clock skew)
+        now = int(time.time())
+        if abs(now - ts) > _URI_MAX_AGE_SEC:
+            print(f"[FrameForge] URI scaduto (age={now - ts}s). Riprova dal browser.")
+            return None
+        expected = hmac.new(
+            agent_token.encode("utf-8"),
+            f"{mode}|{ts}".encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        if not hmac.compare_digest(expected, sig):
+            print("[FrameForge] Firma URI non valida. Ignoro (possibile URI di un altro account).")
+            return None
+        return {"mode": mode, "ts": ts}
+    except Exception as e:
+        print(f"[FrameForge] Errore parsing URI: {e}")
+        return None
+
+
 if not AGENT_TOKEN or AGENT_TOKEN.startswith("__"):
     saved = _load_saved_token()
     if saved:
         AGENT_TOKEN = saved
         print("[FrameForge] Token caricato da %APPDATA%\\FrameForge\\token.dat")
     else:
+        # Se stiamo per gestire un URI ma non c'e' un token salvato, non possiamo
+        # verificare la firma: guida l'utente al primo setup.
+        if _args.uri:
+            print("[FrameForge] Nessun token salvato: prima apri l'app dalla dashboard")
+            print("             (scarica lo ZIP da 'Collega il PC'), poi il bottone")
+            print("             'Avvia' funzionera' senza download.")
+            try:
+                input("Premi INVIO per chiudere...")
+            except Exception:
+                pass
+            sys.exit(1)
         print("=" * 50)
         print("  FrameForge Desktop Agent")
         print("=" * 50)
@@ -100,6 +212,19 @@ elif AGENT_TOKEN and not AGENT_TOKEN.startswith("__"):
     # da quello persistito, cosi anche il doppio-click diretto sull'.exe funziona.
     if _load_saved_token() != AGENT_TOKEN:
         _save_token(AGENT_TOKEN)
+
+# Se l'utente ha lanciato con --uri "frameforge://...", verifica la firma e
+# imposta la mode: la GUI si aprira' direttamente sull'azione richiesta.
+if _args.uri:
+    payload = parse_and_verify_uri(_args.uri, AGENT_TOKEN)
+    if payload:
+        _args.mode = payload["mode"]
+        # Se la mode e' 'gui' o 'optimize' apriamo direttamente la finestra sicura
+        if _args.mode in ("gui", "optimize"):
+            _args.mode = "securegui"
+    else:
+        # URI non valido -> apri la GUI normale in modalita' securegui
+        _args.mode = "securegui"
 
 
 def is_admin():
@@ -849,6 +974,16 @@ if __name__ == "__main__":
     if not sys.platform.startswith("win"):
         print("Questo agent e' progettato per Windows.")
         sys.exit(1)
+    # Registrazione esplicita e uscita (es. installer / repair)
+    if _args.register_protocol:
+        ok = register_frameforge_protocol(silent=False)
+        sys.exit(0 if ok else 1)
+    # Registrazione silenziosa best-effort al primo avvio: cosi il bottone
+    # "Avvia" della dashboard funziona senza download da qui in avanti.
+    try:
+        register_frameforge_protocol(silent=True)
+    except Exception:
+        pass
     # Modalita' non interattive dirette (es. --mode securegui / optimize / sync)
     if _args.mode in ("securegui", "gui"):
         launch_secure_gui()
@@ -858,5 +993,8 @@ if __name__ == "__main__":
             pass
         sys.exit(0)
     while True:
-        os.system("cls")
+        try:
+            subprocess.run(["cmd", "/c", "cls"], check=False)
+        except Exception:
+            pass
         menu()

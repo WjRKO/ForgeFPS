@@ -43,7 +43,6 @@ export default function Profiles() {
     api.get("/profiles/templates").then(({ data }) => { setTemplates(data.templates); setCatalog(data.catalog); }).catch((e) => console.error("load templates failed", e));
     api.get("/agent/token").then(({ data }) => setToken(data.token)).catch((e) => console.error("load agent token failed", e));
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot init; `load` is a stable inline closure
   }, []);
 
   const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));

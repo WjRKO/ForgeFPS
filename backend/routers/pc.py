@@ -1,5 +1,7 @@
 import io
 import os
+import hmac
+import time
 import hashlib
 import zipfile
 from datetime import datetime, timezone, timedelta
@@ -38,9 +40,9 @@ def _iso_age(ts):
 # GitHub Release del ZIP generico dell'agent. Aggiornare a ogni bump di versione.
 AGENT_ZIP_UPSTREAM = os.environ.get(
     "AGENT_ZIP_UPSTREAM",
-    "https://github.com/WjRKO/ForgeFPS/releases/download/v0.6.7/forgefps-agent.zip",
+    "https://github.com/WjRKO/ForgeFPS/releases/download/v0.6.8/forgefps-agent.zip",
 )
-_AGENT_ZIP_CACHE_PATH = f"/tmp/forgefps-agent-cache-{hashlib.md5(AGENT_ZIP_UPSTREAM.encode()).hexdigest()[:10]}.zip"
+_AGENT_ZIP_CACHE_PATH = f"/tmp/forgefps-agent-cache-{hashlib.sha256(AGENT_ZIP_UPSTREAM.encode()).hexdigest()[:10]}.zip"
 
 
 def _render_launcher_bat(token: str, backend: str, standalone: bool) -> bytes:
@@ -162,7 +164,7 @@ def build(get_current_user):
         Il ZIP base viene fetchato UNA volta da GitHub e messo in cache locale.
         Ad ogni richiesta iniettiamo `forgefps-agent/Avvia-FrameForge.bat` con
         il token dell'utente autenticato: un solo download, un solo doppio click."""
-        from fastapi.responses import StreamingResponse
+        from fastapi.responses import Response as _Resp
         token = await get_or_create_agent_token(str(user["_id"]))
         backend = os.environ.get("FRONTEND_URL", "https://forgefps.dev").rstrip("/")
         base_zip = await _ensure_agent_zip_cached()
@@ -170,11 +172,17 @@ def build(get_current_user):
         buf = io.BytesIO(base_zip)
         with zipfile.ZipFile(buf, "a", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("forgefps-agent/Avvia-FrameForge.bat", bat_bytes)
-        buf.seek(0)
-        return StreamingResponse(
-            buf, media_type="application/zip",
+        payload = buf.getvalue()
+        # IMPORTANTE: usa Response (non StreamingResponse) per settare
+        # Content-Length automaticamente. StreamingResponse con BytesIO senza
+        # length header viene troncata da Cloudflare/ingress (bug segnalato dagli
+        # utenti: ZIP arrivava a ~30% e 7-Zip rilevava "Fine dei dati inattesa").
+        return _Resp(
+            content=payload,
+            media_type="application/zip",
             headers={
                 "Content-Disposition": 'attachment; filename="forgefps-agent.zip"',
+                "Content-Length": str(len(payload)),
                 "Cache-Control": "no-store",
             },
         )
@@ -536,7 +544,11 @@ def build(get_current_user):
         try:
             return await ai_engine.estimate_fps(specs_to_text(specs) if specs else "", data.game, data.resolution)
         except Exception as e:
-            raise HTTPException(status_code=502, detail=str(e))
+            msg = str(e)
+            if "Budget" in msg and "exceeded" in msg:
+                raise HTTPException(status_code=402,
+                    detail="Credito LLM esaurito. Ricarica da Profilo -> Universal Key -> Add Balance.")
+            raise HTTPException(status_code=502, detail=msg)
 
     @r.post("/startup/analyze")
     async def startup_analyze(user: dict = Depends(get_current_user)):
@@ -547,7 +559,11 @@ def build(get_current_user):
         try:
             return await ai_engine.analyze_startup(startup)
         except Exception as e:
-            raise HTTPException(status_code=502, detail=str(e))
+            msg = str(e)
+            if "Budget" in msg and "exceeded" in msg:
+                raise HTTPException(status_code=402,
+                    detail="Credito LLM esaurito. Ricarica da Profilo -> Universal Key -> Add Balance.")
+            raise HTTPException(status_code=502, detail=msg)
 
     @r.get("/desktop-agent/download")
     async def download_agent(user: dict = Depends(get_current_user)):
@@ -564,7 +580,9 @@ def build(get_current_user):
                 "Write-Host '[FrameForge] Token non valido. Riapri la pagina Collega il PC.' -ForegroundColor Red",
                 media_type="text/plain")
         script = await _build_agent_script(rec["user_id"], profile)
-        return PlainTextResponse(script, media_type="text/plain",
+        # Prepend UTF-8 BOM: Windows PowerShell 5.1 legge i .ps1 senza BOM in ANSI (Windows-1252),
+        # causando caratteri glitchati per emoji/UTF-8 (es. · … 📚 👤). Il BOM forza UTF-8.
+        return PlainTextResponse("\ufeff" + script, media_type="text/plain; charset=utf-8",
                                  headers={"Content-Disposition": "attachment; filename=forgefps.ps1"})
 
     @r.get("/agent/script-info")
@@ -572,7 +590,29 @@ def build(get_current_user):
         rec = await db.agent_tokens.find_one({"token": t})
         user_id = rec["user_id"] if rec else str(user["_id"])
         script = await _build_agent_script(user_id, profile)
-        data = script.encode("utf-8")
+        # Include UTF-8 BOM per allinearsi al byte stream servito da /agent/script
+        data = ("\ufeff" + script).encode("utf-8")
         return {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data), "filename": "forgefps.ps1"}
+
+    # Modalita' accettate dal Desktop Agent quando aperto via protocollo frameforge://
+    _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "monitor", "prematch", "booster", "restore", "gui"}
+
+    @r.get("/agent/launch-uri")
+    async def agent_launch_uri(mode: str = "optimize", user: dict = Depends(get_current_user)):
+        """Genera un URI custom-protocol firmato con HMAC del token dell'utente.
+        Il Desktop Agent (v0.7.0+) registra il protocollo 'frameforge://' su Windows;
+        quando l'utente clicca un bottone nella dashboard il browser passa questo URI
+        all'exe locale, che verifica la firma con il proprio token e apre la GUI.
+        """
+        if mode not in _ALLOWED_URI_MODES:
+            raise HTTPException(status_code=400, detail=f"mode non valido. Ammessi: {sorted(_ALLOWED_URI_MODES)}")
+        token = await get_or_create_agent_token(str(user["_id"]))
+        ts = int(time.time())
+        # HMAC su "mode|ts" con il token come chiave. Il client (agent) ha lo stesso token
+        # salvato in %APPDATA%\FrameForge\token.dat e puo' verificare offline.
+        msg = f"{mode}|{ts}".encode("utf-8")
+        sig = hmac.new(token.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+        uri = f"frameforge://launch?mode={mode}&ts={ts}&sig={sig}"
+        return {"uri": uri, "mode": mode, "ts": ts, "expires_in": 60}
 
     return r
