@@ -164,7 +164,6 @@ const RUN_MODES = [
   { m: "sync", it: "Rileva hardware/salute", en: "Detect hardware/health" },
   { m: "benchmark", it: "Benchmark prima/dopo", en: "Before/after benchmark" },
   { m: "monitor", it: "Monitor live", en: "Live monitor" },
-  { m: "prematch", it: "Prima del match", en: "Pre-match" },
   { m: "booster", it: "Game Booster (sorveglia e boosta i giochi)", en: "Game Booster (watch & boost games)" },
   { m: "restore", it: "Ripristina i tweak", en: "Restore tweaks" },
 ];

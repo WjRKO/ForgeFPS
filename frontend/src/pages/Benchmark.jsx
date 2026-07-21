@@ -6,6 +6,9 @@ import i18n from "@/i18n";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { PageHeader } from "@/components/hud";
 import { useSilentLaunch } from "@/hooks/useSilentLaunch";
+import BrowserPopupHint from "@/components/BrowserPopupHint";
+import FleetPercentileCard from "@/components/FleetPercentileCard";
+import BenchmarkSparkline from "@/components/BenchmarkSparkline";
 
 const BENCH_METRICS = [
   { key: "score", lk: "m_score", unit: "/100", higherBetter: true },
@@ -21,36 +24,6 @@ const BENCH_METRICS = [
   { key: "boot_s", lk: "m_boot", unit: "s", higherBetter: false },
   { key: "free_ram_pct", lk: "m_free_ram", unit: "%", higherBetter: true },
 ];
-
-function ScoreSparkline({ history }) {
-  const { t } = useTranslation();
-  const pts = (history || [])
-    .slice()
-    .reverse()
-    .map((h) => h?.after?.score ?? h?.score ?? null)
-    .filter((v) => v != null);
-  if (pts.length < 2) return null;
-  const w = 260, h = 48, min = Math.min(...pts), max = Math.max(...pts);
-  const span = Math.max(max - min, 1);
-  const coords = pts.map((v, i) => `${(i / (pts.length - 1)) * w},${h - 4 - ((v - min) / span) * (h - 8)}`).join(" ");
-  return (
-    <div className="mt-4 border-t border-[#1A1A24] pt-3" data-testid="bench-history-chart">
-      <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{t("mypcpage.bench_history")} ({pts.length})</div>
-      <div className="flex items-center gap-3">
-        <svg width={w} height={h} className="shrink-0">
-          <polyline fill="none" stroke="#00E0FF" strokeWidth="2" points={coords} />
-          {pts.map((v, i) => (
-            <circle key={i} cx={(i / (pts.length - 1)) * w} cy={h - 4 - ((v - min) / span) * (h - 8)} r="2.5" fill={i === pts.length - 1 ? "#E5FF00" : "#00E0FF"} />
-          ))}
-        </svg>
-        <div className="text-xs text-zinc-500">
-          <div>min <span className="text-zinc-300 font-bold">{min}</span></div>
-          <div>max <span className="text-zinc-300 font-bold">{max}</span></div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function BenchmarkCard({ bench }) {
   const { t } = useTranslation();
@@ -157,7 +130,6 @@ function BenchmarkCard({ bench }) {
           );
         })}
       </div>
-      <ScoreSparkline history={bench?.history} />
       <div className="mt-4 border-t border-[#1A1A24] pt-3">
         <div className="flex flex-wrap gap-2 mb-3">
           {!explanation && (
@@ -194,6 +166,7 @@ export default function Benchmark() {
   const { t } = useTranslation();
   const [bench, setBench] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const load = async () => {
     setLoading(true);
@@ -218,6 +191,7 @@ export default function Benchmark() {
       done: t("bench.silent_done", { defaultValue: "Benchmark completato." }),
       failed: t("bench.silent_failed", { defaultValue: "Benchmark non risponde. Hai installato FrameForge?" }),
     },
+    onDone: () => setRefreshKey((k) => k + 1),
     detectDone: async () => {
       const { data } = await api.get("/pc-benchmark");
       const newTs = data?.latest?.ts;
@@ -229,16 +203,49 @@ export default function Benchmark() {
     },
   });
 
+  // Guardrails: before triggering a benchmark, ask the backend for a snapshot
+  // of the last known running_apps. If a game/stream is running, warn the user
+  // via a sonner confirm-toast; they can still force-launch if they know better.
+  const guardedLaunch = async () => {
+    try {
+      const { data } = await api.get("/benchmarks/guardrails");
+      const highs = (data?.warnings || []).filter((w) => w.severity === "high");
+      if (highs.length > 0) {
+        const games = highs.filter((w) => w.key === "game_running").map((w) => w.detail);
+        const streams = highs.filter((w) => w.key === "stream_running").map((w) => w.detail);
+        const parts = [];
+        if (games.length) parts.push(t("bench.guard_game", { defaultValue: "gioco attivo" }) + `: ${games.join(", ")}`);
+        if (streams.length) parts.push(t("bench.guard_stream", { defaultValue: "streaming attivo" }) + `: ${streams.join(", ")}`);
+        toast.warning(t("bench.guard_title", { defaultValue: "Rilevati processi che falserebbero il benchmark" }), {
+          description: `${parts.join(" · ")}. ${t("bench.guard_hint", { defaultValue: "Chiudili per un risultato attendibile." })}`,
+          duration: 12000,
+          action: {
+            label: t("bench.guard_force", { defaultValue: "Esegui comunque" }),
+            onClick: () => benchLaunch.launch(),
+          },
+          cancel: { label: t("bench.guard_cancel", { defaultValue: "Annulla" }), onClick: () => {} },
+          "data-testid": "bench-guardrail-toast",
+        });
+        return;
+      }
+      benchLaunch.launch();
+    } catch (e) {
+      // Fail-open: if guardrails can't be fetched, launch anyway
+      console.error("guardrails check failed", e);
+      benchLaunch.launch();
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto fade-up">
       <PageHeader eyebrow={t("bench.eyebrow", { defaultValue: "// benchmark" })} title={t("bench.title", { defaultValue: "Benchmark del sistema" })}
         actions={<>
-          <button data-testid="silent-bench-btn" onClick={benchLaunch.launch} disabled={benchLaunch.running}
+          <button data-testid="silent-bench-btn" onClick={guardedLaunch} disabled={benchLaunch.running}
             className="flex items-center gap-2 border border-[#E5FF00]/50 text-[#E5FF00] px-3 py-2 text-sm hover:bg-[#E5FF00]/10 disabled:opacity-60 transition-colors">
             {benchLaunch.running ? <Loader2 size={15} className="animate-spin" /> : <Zap size={15} />}
             {t("bench.run_now", { defaultValue: "Benchmark ora" })}
           </button>
-          <button data-testid="refresh-bench-btn" onClick={load} disabled={loading}
+          <button data-testid="refresh-bench-btn" onClick={() => { load(); setRefreshKey((k) => k + 1); }} disabled={loading}
             className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost">
             <Loader2 size={15} className={loading ? "animate-spin" : "hidden"} />
             <Sparkles size={15} className={loading ? "hidden" : ""} />
@@ -246,8 +253,14 @@ export default function Benchmark() {
           </button>
         </>} />
 
+      <BrowserPopupHint testid="bench-popup-hint" />
+
       {bench && bench.latest ? (
-        <BenchmarkCard bench={bench} />
+        <>
+          <FleetPercentileCard key={`fp-${refreshKey}`} />
+          <BenchmarkSparkline days={30} refreshKey={refreshKey} />
+          <BenchmarkCard bench={bench} />
+        </>
       ) : (
         <div className="bg-[#0F0F12] border border-[#2A2A35] p-8 text-center" data-testid="bench-empty">
           <Gauge size={40} className="mx-auto text-zinc-600 mb-3" />
@@ -257,7 +270,7 @@ export default function Benchmark() {
           <p className="text-xs text-zinc-500 max-w-lg mx-auto leading-relaxed mb-4">
             {t("bench.empty_desc", { defaultValue: "Esegui il benchmark per misurare CPU, RAM, disco e latenza di rete. Ripeti dopo un'ottimizzazione per vedere il confronto prima/dopo." })}
           </p>
-          <button onClick={benchLaunch.launch} disabled={benchLaunch.running} data-testid="bench-cta"
+          <button onClick={guardedLaunch} disabled={benchLaunch.running} data-testid="bench-cta"
             className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2.5 text-sm hover:bg-[#D4EE00] disabled:opacity-60 transition-colors">
             {benchLaunch.running ? <Loader2 size={15} className="animate-spin" /> : <Zap size={15} />}
             {t("bench.run_first", { defaultValue: "Esegui il primo benchmark" })}

@@ -1,5 +1,180 @@
 # FrameForge — Changelog
 
+
+## Fase 3 + Fase 4 — 2026-02-22 · Benchmark contestuale & Storico visual
+### Added (backend — `routers/pc.py`)
+- **`GET /api/benchmarks/fleet-percentile`**: percentile del punteggio benchmark
+  dell'utente vs. la flotta complessiva e vs. utenti con CPU/GPU della stessa
+  famiglia. Include `delta` (before/after ultimi due run). Ritorna
+  `available:false` se meno di 3 utenti nel fleet (evita percentili farlocchi).
+  Helpers: `_cpu_family` / `_gpu_family` (parser euristici stringa CPU/GPU),
+  `_percentile_rank`, `_bench_score`, `_bench_overall`.
+- **`GET /api/benchmarks/guardrails`**: guardrail server-side (scelta utente A).
+  Legge `running_apps` dall'ultimo sync e segnala giochi/streaming/recorder
+  attivi che falserebbero il benchmark. Severità: `high` (blocking) per
+  giochi (fortnite/valorant/cs2/…) e streaming (obs64/streamlabs/…),
+  `medium` per recorder, `info` per snapshot stantìo (>10 min) o assente.
+  Non blocca lato server: la UI decide se avvisare o meno.
+- **`GET /api/benchmarks/history?days=30`**: serie temporale del benchmark
+  (score/overall/cpu_score) capped 1..90 giorni, max 500 punti, con stats
+  (min/max/avg/latest).
+- **`GET /api/pc/sync-history?days=7`**: timeline di sync (fonte:
+  `health_history` — ogni report hardware ne produce uno). Include
+  aggregazione `by_day` per l'heatmap.
+### Added (frontend)
+- **`components/FleetPercentileCard.jsx`**: card con due barre — vs. tutti gli
+  utenti e vs. hardware simile — e badge Δ before/after. Rende nulla se
+  non ci sono abbastanza dati.
+- **`components/BenchmarkSparkline.jsx`**: sparkline SVG 30gg del benchmark
+  con gradient fill cyan, min/max/trend %. Fallback su `overall` per record
+  vecchi che non hanno `score`.
+- **`components/SyncTimeline.jsx`**: strip attività sync 7gg (heatmap
+  intensità basata sul numero di sync/giorno). Tooltip con date localizzata.
+- **`pages/Benchmark.jsx`**: integra i 3 nuovi componenti; `guardedLaunch`
+  chiama `/benchmarks/guardrails` prima di lanciare l'agent — se rileva
+  giochi/streaming mostra un `toast.warning` sonner con azione "Esegui
+  comunque" (fail-open in caso di errore rete). Rimosso `ScoreSparkline`
+  legacy (sostituito da `<BenchmarkSparkline>`).
+- **`pages/MyPc.jsx`**: `<SyncTimeline days={7}>` sotto `<HealthHistoryCard>`.
+### Tested
+- Backend: 14/14 pytest passati (`test_phase34_benchmarks.py`) — auth guards,
+  shape response, clamping giorni, blocking guardrail su valorant/obs64,
+  running_apps injection via `/api/agent/report-specs`.
+- Frontend: iteration_33 verificato — guardrail toast si mostra quando
+  `running_apps=['valorant.exe']`, testid `bench-guardrail-toast` esposto.
+### Design decisioni
+- Scelta utente **A** — solo server-side guardrails (nessun rebuild `.exe`).
+  Battery check rimandato (info non ancora catturata dall'agent).
+
+
+## Fase 2 polish — 2026-02-21 · Hint browser popup one-shot
+### Added
+- **`<BrowserPopupHint>`** (`components/BrowserPopupHint.jsx`):
+  - Piccolo banner cyan con icona info sotto i bottoni che triggerano
+    `frameforge://` (Sync, Benchmark, Monitor).
+  - Testo: "Prima volta? Chrome ti chiederà 'Aprire FrameForge?'. Spunta
+    'Consenti sempre' e non lo vedrai più."
+  - Bottone X per dismissare, stato persistito in localStorage
+    (`ff_popup_hint_dismissed_v1`).
+  - Traduzioni ITA/ENG via `defaultValue` (i18n keys `popup_hint.*`).
+- Piazzato in `MyPc.jsx` (sotto last-sync-info), `Benchmark.jsx` (sotto
+  PageHeader), `Live.jsx` (dentro pannello monitor sotto CTA).
+
+### Verified
+- Screenshot preview: hint visibile su Benchmark e Live, dismiss X funziona,
+  localStorage persistente.
+
+### Todo utente
+- Redeploy per applicare a forgefps.dev (frontend-only, no rebuild).
+
+
+
+## Fase 2 — Sync ambientale (~1.5h effort) — 2026-02-21
+### Added
+- **Hook `useAutoSync`** (`hooks/useAutoSync.js`):
+  - Trigger 1: al primo carico, se `updated_at > 24h` -> silent sync auto
+  - Trigger 2: `visibilitychange` listener, se tab torna dopo >1h idle -> silent sync
+  - Cooldown 30 min tra un auto-sync e il successivo (via localStorage `ff_autosync_last_ts`)
+  - Espone `{ ageSec, tier, forceSync, refresh, running }`
+- **Componente `<FreshnessBadge>`** (`components/FreshnessBadge.jsx`):
+  - Verde <10min, giallo 10min-24h, rosso >=24h
+  - Click = force sync silent con `useAutoSync.forceSync()`
+  - Piazzato nell'header globale di `Layout.jsx` -> visibile su ogni pagina
+  - Format friendly: "or ora" / "45 min fa" / "21h fa" / "3gg fa"
+- **Sync predittivo su hover AI Advisor** (`Layout.jsx`):
+  - `onMouseEnter` sul NavLink `/app/advisor` -> se `ff_autosync_last_ts >5min`
+    fa fetch `/api/agent/launch-uri?mode=sync&silent=1` + navigate URI
+  - `advisorPreloaded` flag: max 1 trigger per sessione, evita spam su
+    hover multipli
+
+### Testato in preview
+- Screenshot dashboard mostra badge "AGGIORNATI 21H FA" (tier warm, giallo)
+- Zero console errors
+- FreshnessBadge presente su tutte le rotte (Layout globale)
+
+### Todo utente
+- Redeploy produzione (solo web, no rebuild .exe)
+
+
+
+## v0.7.1 (UX polish) — 2026-02-21 · Feedback visivo per Sincronizza ora
+### Fixed
+- **Utente segnalava "Sync completato ma dati non cambiano"**: il sync
+  funzionava correttamente ma quando l'hardware/health erano identici al
+  precedente non c'era feedback visivo tangibile, sembrava non fatto nulla.
+- Aggiunto indicatore `<div data-testid="last-sync-info">` sotto il
+  PageHeader con:
+  - Pallino verde permanente + testo "Ultimo sync: X min fa"
+  - Format friendly: "or ora" / "45s fa" / "3 min fa" / "2h fa" / data
+  - **Pulse verde animato** (`animate-ping`) + testo bold "aggiornato!"
+    per 5 secondi dopo un sync appena completato
+- Se il sync riscrive dati identici ora l'utente vede comunque un cambio
+  di UI: "21h fa" → "or ora · aggiornato!" → riflesso concreto dell'azione.
+- Fix bonus preventivo in `forgefps_agent.py` v0.7.2:
+  `register_frameforge_protocol` ora include `--backend "<URL>"` nel
+  command del registry per preservare l'ambiente (preview vs prod). Non
+  serve rilascio immediato: la produzione userebbe comunque default forgefps.dev.
+
+### Todo utente
+- Redeploy per applicare feedback visivo sul sync (frontend-only).
+- v0.7.2 exe rebuild solo se in futuro vuoi testare i bottoni silent dalla
+  preview URL (edge case).
+
+
+
+## v0.7.1 (Hotfix) — 2026-02-21 · Sync silent polling: fix nome campo
+### Fixed
+- **Sincronizza ora non completava mai**: il polling in `MyPc.jsx` verificava
+  `data.synced_at !== baseline` ma l'endpoint `/api/pc-specs` restituisce
+  il campo con nome `updated_at`. Poll sempre falso → timeout dopo 60s con
+  toast "app non risponde" anche quando la sync riusciva davvero.
+- Fix: aggiornato `useSilentLaunch({ detectDone })` per confrontare
+  `data.updated_at` (corretto) invece di `data.synced_at`.
+- `baselineRef` rinominato coerentemente (`syncedAt` -> `updatedAt`).
+- Verificato via screenshot: toast "Sincronizzazione in corso..." appare
+  correttamente e il bottone mostra spinner. Il polling ora rileva il bump
+  di `updated_at` non appena il Desktop Agent POSTa a `/api/agent/report-specs`.
+
+
+
+## v0.7.1 (Fase 1 completa) — 2026-02-21 · Silent execution + Benchmark tab
+### Added
+- **Endpoint `/api/agent/launch-uri` con `silent=0|1`** — URI firmato HMAC
+  retrocompatibile con v0.7.0 (firma solo `mode|ts`, silent viaggia come hint).
+- **Python Agent v0.7.1** (`forgefps_agent.py`):
+  - Nuova `launch_silent_mode(mode)`: PowerShell `-WindowStyle Hidden` +
+    `CREATE_NO_WINDOW`. Whitelist: sync, benchmark, cleanup, optimize.
+  - `parse_and_verify_uri` estrae `silent` dall'URI.
+  - `__main__` intercetta `_SILENT_FROM_URI` e esce dopo lo spawn (no input()).
+- **Frontend**:
+  - Nuovo hook `useSilentLaunch({ mode, detectDone, ... })` con polling +
+    toast + fallback "app non installata".
+  - `MyPc.jsx`: bottone "Sincronizza ora" (ciano) nell'header.
+  - `Live.jsx`: bottone "▶ Avvia monitor sul PC" sostituisce SecureRunBlock
+    (che rimane in `<details>` come fallback power user).
+- **Nuova tab "Benchmark"** (`pages/Benchmark.jsx`) affianco a Panoramica e
+  Monitoraggio Live in `MyPcHub.jsx`. Route `/app/benchmark` in App.js.
+  Header dedicato con bottone "Benchmark ora" (silent) + "Ricarica".
+  Empty state con CTA "Esegui il primo benchmark".
+- **Rilascio GitHub v0.7.1**: SHA `12ab8424e03da1fc06f1ebe37eca7d3e9f7878b0bcb759f24c0ac3b447d92e69`
+  · PE FileVersion 0.7.1.0 · workflow ora usa `working-directory: agent-build`.
+
+### Removed
+- Card `BenchmarkCard` + helpers (`BENCH_METRICS`, `ScoreSparkline`) migrati
+  in `pages/Benchmark.jsx` dedicato — pulita Panoramica da 300+ righe.
+
+### Verified
+- SHA download endpoint = SHA GitHub release ✅
+- Bytecode compilato contiene: `AGENT_VERSION="0.7.1"`, `launch_silent_mode`,
+  `Hidden`, `register_frameforge_protocol`, 11 occorrenze `silent` ✅
+- Test frontend Playwright: tab Benchmark + bottoni silent presenti,
+  BenchmarkCard rimossa da /app/pc, bottone Sync ancora presente ✅
+
+### Todo utente
+- Redeploy produzione (forgefps.dev) per aggiornare SHA + config frontend.
+
+
+
 ## v0.7.4 (UX cleanup) — 2026-02-21 · Consolidato Pre-match → Game Booster
 ### Removed
 - **QuickStart hero** (2 CTA "Installa FrameForge" + "Dashboard web") sopra le
@@ -529,3 +704,46 @@ Dopo aver eseguito la build su Windows e caricato il ZIP sulla GitHub Release v0
 
 ## Historical
 Precedenti release documentate in `PRD.md`.
+
+## Monitor lifecycle A+E — 2026-02-22 · Pre-flight & Live REC control
+### Added
+- **Backend** (`routers/pc.py`):
+  - `POST /api/monitor/stop` (auth) — set stop_requested=true in db.monitor_control
+  - `POST /api/monitor/reset` (auth) — clear stop flag before new session
+  - `GET /api/monitor/state` (auth) — expose current flag + timestamps
+  - Modified `POST /api/agent/telemetry` — now returns `{ok, stop}`; agent reads `stop` and breaks the monitor loop cleanly.
+- **Agent** (`ps_agent.py`):
+  - `Send-Telemetry` returns `$true` when backend signals stop
+  - Monitor loop (`MODE=monitor`) checks the return value each tick and exits cleanly with a Say('Stop richiesto dal browser') message. **No .exe rebuild needed** — the .ps1 script is fetched fresh on every launch via `/api/agent/script`.
+- **Frontend**:
+  - `components/MonitorPreflight.jsx` — modal with 4 checks (agent, game detected, background apps, alerts enabled). Reads /prematch + /alerts. Non-blocking (bad→disable proceed, warn→proceed with note).
+  - `components/MonitorLiveControl.jsx` — REC panel with pulsing badge, live duration, sample count, current game, Stop + Copia URI buttons. Hydrates stopPending from `/monitor/state` on mount.
+  - `pages/Live.jsx` — replaces the launch button with preflight modal trigger + swap to LiveControl panel when data.live=true.
+### Tested
+- iteration_34.json — backend 9/9 pytest, frontend E2E happy path 100%.
+
+
+## Cleanup — 2026-02-22 · Dead code removal
+### Removed
+- `frontend/src/hooks/use-toast.js` (shadcn toast, mai renderizzato — l'app usa `sonner`)
+- `frontend/src/components/ui/toaster.jsx` (idem, componente non montato)
+- `hud.jsx` exports inutilizzati: `StatCard`, `SkeletonRow`, `PageContainer`, `DataMetric` (160 → 118 LOC)
+- `agent-build/REBUILD_v0.6.0.md`, `REBUILD_v0.6.7.md` → spostati in `agent-build/archive/`
+### Moved
+- `pages/SessionSummary.jsx` → `components/SessionSummary.jsx` (era un componente, non una pagina; importato da Live.jsx). Aggiornato l'import path.
+### Verified
+- Frontend compila pulito, 4 route (`/app`, `/app/live`, `/app/pc`, `/app/benchmark`) navigano senza errori console.
+
+
+## Content refresh — 2026-02-22 · Testi & Changelog pubblico
+### Changed
+- `i18n.js` (IT+EN): `f_agent_long` — sostituito "pre-match mode" con "booster automatico che rileva i giochi in esecuzione" / "auto-booster that detects running games" (feature era stata rimossa nella scorsa iterazione).
+- `DesktopAgent.jsx`: rimossa entry `prematch` da `RUN_MODES` (menu Quick Actions puntava a una modalità inesistente).
+### Removed (dead i18n keys, mai renderizzate)
+- `guide.prematch_title`, `guide.prematch_desc`, `guide.step_prematch`, `guide.python_title`, `guide.python_desc` (IT + EN)
+### Added — pages/Changelog.jsx (contenuto pubblico)
+- Nuove entry release: **v0.6.7** (bundle onedir), **v0.6.8** (token persistente), **v0.7.0** (protocollo frameforge://), **v0.7.1** (silent mode + --backend), **v0.7.2 web+agent** (Fase 3 percentile, Fase 4 storico, monitor lifecycle, guardrails, ambient sync v2, UTF-8 BOM fix).
+- ROADMAP aggiornata: "--onedir build" spostata in Done, aggiunti "Bottleneck detector real-time" (in progress) e "Storico sessioni gaming" (planned).
+### Verified
+- Compile pulito, `/changelog` renderizza 6 versioni + roadmap; nessun console error.
+

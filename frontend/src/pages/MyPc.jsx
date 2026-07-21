@@ -7,8 +7,10 @@ import i18n from "@/i18n";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import SpecsForm from "@/components/SpecsForm";
 import HealthHistoryCard from "@/components/HealthHistoryCard";
+import SyncTimeline from "@/components/SyncTimeline";
 import { PageHeader } from "@/components/hud";
 import { useSilentLaunch } from "@/hooks/useSilentLaunch";
+import BrowserPopupHint from "@/components/BrowserPopupHint";
 
 const SPEC_KEYS = ["os", "cpu", "gpu", "ram", "disk", "motherboard", "resolution"];
 const specLabel = (t, k) => ({ os: t("mypcpage.sl_os"), cpu: "CPU", gpu: "GPU", ram: "RAM", disk: t("mypcpage.sl_disk"), motherboard: t("mypcpage.sl_mb"), resolution: t("mypcpage.sl_res") }[k]);
@@ -94,9 +96,9 @@ export default function MyPc() {
   useEffect(() => { load(); }, []);
 
   // Silent launch: sync ambientale (nessuna finestra visibile).
-  // Il polling detecta l'aggiornamento comparando 'synced_at' prima e dopo.
-  const baselineRef = useRef({ syncedAt: null });
-  useEffect(() => { baselineRef.current = { syncedAt: specs?.synced_at || null }; }, [specs?.synced_at]);
+  // Il polling detecta l'aggiornamento comparando 'updated_at' prima e dopo.
+  const baselineRef = useRef({ updatedAt: null });
+  useEffect(() => { baselineRef.current = { updatedAt: specs?.updated_at || null }; }, [specs?.updated_at]);
 
   const syncLaunch = useSilentLaunch({
     mode: "sync",
@@ -110,7 +112,7 @@ export default function MyPc() {
     },
     detectDone: async () => {
       const { data } = await api.get("/pc-specs");
-      if (data.synced_at && data.synced_at !== baselineRef.current.syncedAt) {
+      if (data.updated_at && data.updated_at !== baselineRef.current.updatedAt) {
         setSpecs(data);
         try { const { data: h } = await api.get("/pc-health"); setHealth(h.available ? h : null); } catch (e) { console.error("post-sync health reload", e); }
         return true;
@@ -167,6 +169,37 @@ export default function MyPc() {
           <button data-testid="refresh-pc-btn" onClick={load} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><RefreshCw size={15} /> {t("mypcpage.refresh")}</button>
         </>} />
 
+      {specs?.updated_at && (() => {
+        let diffSec = 0;
+        try { diffSec = Math.floor((Date.now() - new Date(specs.updated_at).getTime()) / 1000); } catch { diffSec = 999999; }
+        const justNow = diffSec >= 0 && diffSec < 5;
+        return (
+          <div className={`mb-4 flex items-center gap-2 text-xs transition-colors ${justNow ? "text-[#00FF66]" : "text-zinc-500"}`} data-testid="last-sync-info">
+            <span className={`w-1.5 h-1.5 rounded-full bg-[#00FF66] ${justNow ? "animate-ping" : ""}`} />
+            <span>{t("mypcpage.last_sync", { defaultValue: "Ultimo sync:" })}</span>
+            <span className={`font-mono ${justNow ? "text-[#00FF66] font-bold" : "text-zinc-300"}`} data-testid="last-sync-timestamp">
+              {(() => {
+                try {
+                  const d = new Date(specs.updated_at);
+                  const diffMs = Date.now() - d.getTime();
+                  const s = Math.floor(diffMs / 1000);
+                  if (s < 10) return t("mypcpage.just_now", { defaultValue: "or ora" });
+                  if (s < 60) return t("mypcpage.sec_ago", { count: s, defaultValue: `${s}s fa` });
+                  const m = Math.floor(s / 60);
+                  if (m < 60) return t("mypcpage.min_ago", { count: m, defaultValue: `${m} min fa` });
+                  const h = Math.floor(m / 60);
+                  if (h < 24) return t("mypcpage.hour_ago", { count: h, defaultValue: `${h}h fa` });
+                  return d.toLocaleString((i18n.resolvedLanguage || i18n.language || "en").slice(0, 2), { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+                } catch { return specs.updated_at; }
+              })()}
+            </span>
+            {justNow && <span className="text-[#00FF66] font-bold">· {t("mypcpage.sync_ok", { defaultValue: "aggiornato!" })}</span>}
+          </div>
+        );
+      })()}
+
+      <BrowserPopupHint testid="mypc-popup-hint" />
+
       {health && (
         <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick p-6 mb-4">
           <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4 flex items-center gap-2"><Activity size={14} className="text-[#E5FF00]" /> Health Score</div>
@@ -211,6 +244,8 @@ export default function MyPc() {
       )}
 
       <HealthHistoryCard />
+
+      <SyncTimeline days={7} />
 
       <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick mb-4">
         <div className="p-5 border-b border-[#2A2A35] text-xs uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2"><Cpu size={14} className="text-[#E5FF00]" /> {t("mypcpage.hardware")}</div>

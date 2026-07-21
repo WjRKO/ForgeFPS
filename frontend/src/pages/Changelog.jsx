@@ -13,27 +13,116 @@ const ROADMAP = {
   progress: {
     icon: Loader2, color: "#E5FF00", it: "In corso", en: "In progress",
     items: {
-      it: ["Firma digitale dell'agent (SignPath) — elimina l'avviso antivirus", "Build \u00ab--onedir\u00bb per ridurre i falsi positivi \u201cdropper\u201d"],
-      en: ["Agent code signing (SignPath) — removes the antivirus warning", "\u00ab--onedir\u00bb build to reduce \u201cdropper\u201d false positives"],
+      it: ["Firma digitale dell'agent (SignPath) — elimina l'avviso antivirus", "Bottleneck detector real-time nella pagina Live"],
+      en: ["Agent code signing (SignPath) — removes the antivirus warning", "Real-time bottleneck detector on the Live page"],
     },
   },
   planned: {
     icon: CircleDot, color: "#00E0FF", it: "Pianificato", en: "Planned",
     items: {
-      it: ["Alert salute PC: avviso quando il punteggio scende sotto soglia", "Report PDF completo con grafico storico e checklist", "Abbonamenti Free / Pro / Creator con checkout"],
-      en: ["PC health alerts: notify when the score drops below a threshold", "Full PDF report with historical chart and checklist", "Free / Pro / Creator plans with checkout"],
+      it: ["Alert salute PC: avviso quando il punteggio scende sotto la media 30 giorni", "Storico sessioni gaming con analisi post-match", "Abbonamenti Free / Pro / Creator con checkout"],
+      en: ["PC health alerts: notify when the score drops below the 30-day average", "Gaming session history with post-match analysis", "Free / Pro / Creator plans with checkout"],
     },
   },
   exploring: {
     icon: Lightbulb, color: "#B388FF", it: "In valutazione", en: "Exploring",
     items: {
-      it: ["Testimonianze utenti e contatore stelle GitHub", "Conversioni avanzate per una misurazione pi\u00f9 precisa"],
-      en: ["User testimonials and live GitHub stars counter", "Enhanced conversions for more accurate measurement"],
+      it: ["Testimonianze utenti e contatore stelle GitHub", "Overlay in-game con FPS/temperature/latenza"],
+      en: ["User testimonials and live GitHub stars counter", "In-game overlay with FPS/temperature/latency"],
     },
   },
 };
 
 const RELEASES = [
+  {
+    version: "0.7.2 (web + agent)", date: "2026-02-22",
+    added: {
+      it: [
+        "**Monitor lifecycle**: pannello REC live con durata, sample count e gioco rilevato. Il bottone \u00abFerma\u00bb chiude il monitor sul PC in 1-2 secondi senza dover toccare la finestra locale.",
+        "**Pre-flight checklist**: prima di avviare il monitor, una modal verifica agent, gioco in esecuzione, app in background e alert push. Zero sorprese durante il match.",
+        "**Fase 3 \u2014 Benchmark contestuale**: card \u00abClassifica FrameForge\u00bb con percentile del tuo punteggio vs. la flotta e vs. utenti con CPU/GPU simile al tuo. Badge \u0394 before/after tweak.",
+        "**Fase 4 \u2014 Storico visual**: sparkline 30 giorni del benchmark direttamente nell'header della pagina Benchmark; heatmap 7 giorni delle sync in \u00abIl mio PC\u00bb per gamification.",
+        "**Guardrails benchmark**: se un gioco, OBS o un recorder sono attivi, il benchmark avvisa prima del lancio (evita run inquinati).",
+        "**Sync Ambient v2**: auto-sync alla apertura della tab dopo pi\u00f9 di 24h e al ritorno di focus dopo 4h di idle. La dashboard \u00e8 sempre fresca senza cliccare nulla.",
+        "**Fix caratteri glitchati nella GUI locale** (UTF-8 BOM aggiunto al payload PowerShell)."
+      ],
+      en: [
+        "**Monitor lifecycle**: live REC panel with duration, sample count, and detected game. The \u00abStop\u00bb button closes the monitor on your PC within 1-2 seconds \u2014 no need to touch the local window.",
+        "**Pre-flight checklist**: before launching the monitor, a modal checks agent, running game, background apps and push alerts. Zero surprises during the match.",
+        "**Phase 3 \u2014 Contextual benchmark**: \u00abFrameForge leaderboard\u00bb card with your score percentile vs. the fleet and vs. users with similar CPU/GPU. \u0394 badge before/after tweak.",
+        "**Phase 4 \u2014 Visual history**: 30-day benchmark sparkline right in the Benchmark page header; 7-day sync heatmap in \u00abMy PC\u00bb for gamification.",
+        "**Benchmark guardrails**: if a game, OBS or a recorder is running, the benchmark warns you before launch (prevents polluted runs).",
+        "**Ambient sync v2**: auto-sync when reopening the tab after 24h+ and on focus return after 4h idle. The dashboard is always fresh with zero clicks.",
+        "**Fix garbled characters in the local GUI** (UTF-8 BOM added to the PowerShell payload)."
+      ],
+    },
+    fixed: { it: [], en: [] },
+    changed: { it: [], en: [] },
+  },
+  {
+    version: "0.7.1 (agent)", date: "2026-02-19",
+    added: {
+      it: [
+        "**Modalit\u00e0 silent**: le azioni Sync e Benchmark girano in background senza aprire la GUI Edge (bandiera `silent=1` nel URI firmato).",
+        "**Auto-registrazione con `--backend`** nel comando di lancio: il protocollo `frameforge://` funziona anche se hai cambiato l'URL del backend (multi-ambiente).",
+        "Hint informativo sotto ai bottoni: spiega perch\u00e9 il browser mostra il popup \u00abApri con FrameForge?\u00bb la prima volta (con dismiss persistente)."
+      ],
+      en: [
+        "**Silent mode**: Sync and Benchmark run in the background without opening the Edge GUI (`silent=1` flag in the signed URI).",
+        "**Auto-registration with `--backend`** in the launch command: the `frameforge://` protocol works even if you changed the backend URL (multi-environment).",
+        "Informational hint under the buttons: explains why the browser shows the \u00abOpen with FrameForge?\u00bb popup on first use (dismissible)."
+      ],
+    },
+    fixed: { it: [], en: [] },
+    changed: { it: [], en: [] },
+  },
+  {
+    version: "0.7.0 (agent)", date: "2026-02-15",
+    added: {
+      it: [
+        "**Protocollo `frameforge://`**: al primo avvio dell'.exe viene registrato in HKCU. Da l\u00ec in poi i bottoni della dashboard (\u00abOttimizza\u00bb, \u00abBenchmark\u00bb, \u00abMonitor\u00bb) aprono la GUI locale direttamente sull'azione senza scaricare nulla.",
+        "**Zero-download UX**: dopo l'installazione una tantum non serve pi\u00f9 copiare comandi PowerShell o token \u2014 tutto \u00e8 pilotato dal browser tramite URI firmato HMAC (scade in 60 secondi).",
+        "Rimossa la modalit\u00e0 \u00abPrematch\u00bb e il menu interattivo CLI: la lista app viene ora gestita direttamente dal Booster."
+      ],
+      en: [
+        "**`frameforge://` custom protocol**: registered in HKCU on first .exe launch. From then on the dashboard buttons (\u00abOptimize\u00bb, \u00abBenchmark\u00bb, \u00abMonitor\u00bb) open the local GUI straight to the action \u2014 no download needed.",
+        "**Zero-download UX**: after a one-off install you no longer copy PowerShell commands or tokens \u2014 everything is driven from the browser via HMAC-signed URI (60s TTL).",
+        "Removed the \u00abPrematch\u00bb mode and interactive CLI menu: the app list is now handled directly by the Booster."
+      ],
+    },
+    fixed: { it: [], en: [] },
+    changed: { it: [], en: [] },
+  },
+  {
+    version: "0.6.8 (agent)", date: "2026-01-28",
+    added: {
+      it: [
+        "**Token persistente** in `%APPDATA%\\FrameForge\\token.dat`: il primo lancio chiede il token una sola volta, poi la GUI parte istantanea senza prompt su ogni riavvio.",
+        "Sync automatica di hardware e running_apps ad ogni apertura dell'agent (non solo su richiesta)."
+      ],
+      en: [
+        "**Persistent token** in `%APPDATA%\\FrameForge\\token.dat`: the first launch asks for the token once, then the GUI starts instantly without prompts on every reboot.",
+        "Automatic hardware + running_apps sync on every agent launch (not only on demand)."
+      ],
+    },
+    fixed: { it: [], en: [] },
+    changed: { it: [], en: [] },
+  },
+  {
+    version: "0.6.7 (agent)", date: "2026-01-20",
+    added: { it: [], en: [] },
+    fixed: {
+      it: [
+        "**Falsi positivi Windows Defender eliminati**: passaggio dal pacchetto `--onefile` a `--onedir` (cartella + DLL). Bootloader PyInstaller non pi\u00f9 flaggato euristicamente.",
+        "Download ora \u00e8 uno ZIP contenente `forgefps-agent.exe` + DLL + `Avvia-FrameForge.bat` per il primo lancio."
+      ],
+      en: [
+        "**Windows Defender false positives gone**: switched from `--onefile` to `--onedir` bundle (folder + DLLs). PyInstaller bootloader is no longer heuristically flagged.",
+        "Download is now a ZIP containing `forgefps-agent.exe` + DLLs + `Avvia-FrameForge.bat` for first launch."
+      ],
+    },
+    changed: { it: [], en: [] },
+  },
   {
     version: "0.6.5", date: "2026-07-19",
     added: {

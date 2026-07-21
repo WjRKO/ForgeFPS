@@ -32,7 +32,7 @@ _args, _ = _parser.parse_known_args()
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.7.1"
+AGENT_VERSION = "0.7.2"
 BACKUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "boostpc_backup.json")
 
 # Persistent token storage in %APPDATA%\FrameForge\token.dat (v0.6.8+).
@@ -97,7 +97,13 @@ def _agent_exe_path() -> str:
 
 def register_frameforge_protocol(silent: bool = True) -> bool:
     """Registra frameforge:// come URL Protocol per l'utente corrente (HKCU).
-    Idempotente: se gia' registrato con lo stesso path non fa nulla. Ritorna True se ok."""
+    Idempotente: se gia' registrato con lo stesso path non fa nulla. Ritorna True se ok.
+
+    v0.7.1+: include --backend nel command cosi' la registrazione preserva
+    l'ambiente da cui l'utente ha scaricato lo ZIP (preview vs produzione).
+    Senza questo, i bottoni silent lanciati dalla web preview userebbero
+    BACKEND_URL=default (forgefps.dev), disallineando il flusso di sync.
+    """
     if not sys.platform.startswith("win"):
         return False
     try:
@@ -107,8 +113,9 @@ def register_frameforge_protocol(silent: bool = True) -> bool:
             print("[FrameForge] winreg non disponibile su questa piattaforma.")
         return False
     exe = _agent_exe_path()
-    # "%1" contiene l'URI completo passato dal browser
-    command = f'"{exe}" --uri "%1"'
+    # "%1" contiene l'URI completo passato dal browser. Includiamo anche
+    # --backend per preservare l'ambiente attivo (preview / produzione).
+    command = f'"{exe}" --backend "{BACKEND_URL}" --uri "%1"'
     root = winreg.HKEY_CURRENT_USER
     base = r"Software\Classes\%s" % _PROTOCOL
     try:
@@ -130,7 +137,7 @@ def register_frameforge_protocol(silent: bool = True) -> bool:
         with winreg.CreateKey(root, base + r"\shell\open\command") as k:
             winreg.SetValueEx(k, None, 0, winreg.REG_SZ, command)
         if not silent:
-            print(f"[FrameForge] Protocollo {_PROTOCOL}:// registrato -> {exe}")
+            print(f"[FrameForge] Protocollo {_PROTOCOL}:// registrato -> {exe} (backend={BACKEND_URL})")
         return True
     except Exception as e:
         if not silent:
