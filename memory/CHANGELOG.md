@@ -1,5 +1,20 @@
 # FrameForge — Changelog
 
+## v0.7.1 (Hotfix) — 2026-02-21 · Sync silent polling: fix nome campo
+### Fixed
+- **Sincronizza ora non completava mai**: il polling in `MyPc.jsx` verificava
+  `data.synced_at !== baseline` ma l'endpoint `/api/pc-specs` restituisce
+  il campo con nome `updated_at`. Poll sempre falso → timeout dopo 60s con
+  toast "app non risponde" anche quando la sync riusciva davvero.
+- Fix: aggiornato `useSilentLaunch({ detectDone })` per confrontare
+  `data.updated_at` (corretto) invece di `data.synced_at`.
+- `baselineRef` rinominato coerentemente (`syncedAt` -> `updatedAt`).
+- Verificato via screenshot: toast "Sincronizzazione in corso..." appare
+  correttamente e il bottone mostra spinner. Il polling ora rileva il bump
+  di `updated_at` non appena il Desktop Agent POSTa a `/api/agent/report-specs`.
+
+
+
 ## v0.7.1 (Fase 1 completa) — 2026-02-21 · Silent execution + Benchmark tab
 ### Added
 - **Endpoint `/api/agent/launch-uri` con `silent=0|1`** — URI firmato HMAC

@@ -94,9 +94,9 @@ export default function MyPc() {
   useEffect(() => { load(); }, []);
 
   // Silent launch: sync ambientale (nessuna finestra visibile).
-  // Il polling detecta l'aggiornamento comparando 'synced_at' prima e dopo.
-  const baselineRef = useRef({ syncedAt: null });
-  useEffect(() => { baselineRef.current = { syncedAt: specs?.synced_at || null }; }, [specs?.synced_at]);
+  // Il polling detecta l'aggiornamento comparando 'updated_at' prima e dopo.
+  const baselineRef = useRef({ updatedAt: null });
+  useEffect(() => { baselineRef.current = { updatedAt: specs?.updated_at || null }; }, [specs?.updated_at]);
 
   const syncLaunch = useSilentLaunch({
     mode: "sync",
@@ -110,7 +110,7 @@ export default function MyPc() {
     },
     detectDone: async () => {
       const { data } = await api.get("/pc-specs");
-      if (data.synced_at && data.synced_at !== baselineRef.current.syncedAt) {
+      if (data.updated_at && data.updated_at !== baselineRef.current.updatedAt) {
         setSpecs(data);
         try { const { data: h } = await api.get("/pc-health"); setHealth(h.available ? h : null); } catch (e) { console.error("post-sync health reload", e); }
         return true;
