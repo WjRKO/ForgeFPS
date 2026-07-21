@@ -722,3 +722,15 @@ Precedenti release documentate in `PRD.md`.
 ### Tested
 - iteration_34.json — backend 9/9 pytest, frontend E2E happy path 100%.
 
+
+## Cleanup — 2026-02-22 · Dead code removal
+### Removed
+- `frontend/src/hooks/use-toast.js` (shadcn toast, mai renderizzato — l'app usa `sonner`)
+- `frontend/src/components/ui/toaster.jsx` (idem, componente non montato)
+- `hud.jsx` exports inutilizzati: `StatCard`, `SkeletonRow`, `PageContainer`, `DataMetric` (160 → 118 LOC)
+- `agent-build/REBUILD_v0.6.0.md`, `REBUILD_v0.6.7.md` → spostati in `agent-build/archive/`
+### Moved
+- `pages/SessionSummary.jsx` → `components/SessionSummary.jsx` (era un componente, non una pagina; importato da Live.jsx). Aggiornato l'import path.
+### Verified
+- Frontend compila pulito, 4 route (`/app`, `/app/live`, `/app/pc`, `/app/benchmark`) navigano senza errori console.
+

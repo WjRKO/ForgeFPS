@@ -41,19 +41,6 @@ export function Badge({ tone = "neutral", icon: Icon, children, testid }) {
   );
 }
 
-export function StatCard({ icon: Icon, label, value, accent = "text-[#E5FF00]", testid }) {
-  return (
-    <motion.div variants={item} data-testid={testid}
-      className="group bg-[#0F0F12] border border-[#1A1A24] hover:border-[#2A2A35] hud-tick p-5 transition-colors">
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">{label}</span>
-        {Icon && <Icon size={16} className={`${accent} icon-pop`} />}
-      </div>
-      <div className="font-display font-black text-3xl tracking-tighter group-hover:text-glow-volt transition-all">{value}</div>
-    </motion.div>
-  );
-}
-
 export function EmptyState({ icon: Icon, title, description, action }) {
   return (
     <div className="flex flex-col items-center justify-center text-center py-16 px-6 border border-dashed border-[#2A2A35] bg-[#0F0F12]/40 gap-3">
@@ -67,18 +54,6 @@ export function EmptyState({ icon: Icon, title, description, action }) {
 
 export function SkeletonCard({ className = "h-28" }) {
   return <div className={`skeleton ${className}`} />;
-}
-export function SkeletonRow() {
-  return (
-    <div className="flex items-center gap-4 p-4 border-b border-[#1A1A24]">
-      <div className="skeleton w-12 h-12 shrink-0" />
-      <div className="flex-1 space-y-2">
-        <div className="skeleton h-3 w-2/3" />
-        <div className="skeleton h-2.5 w-1/3" />
-      </div>
-      <div className="skeleton h-5 w-16" />
-    </div>
-  );
 }
 
 export function Sparkline({ data, color = "#00FF66", height = 36, width = 96 }) {
@@ -115,10 +90,6 @@ export function HealthRing({ score = 0, size = 128, label }) {
 }
 
 
-export function PageContainer({ children, className = "" }) {
-  return <div className={`max-w-7xl mx-auto w-full space-y-8 ${className}`}>{children}</div>;
-}
-
 export function Section({ title, hint, actions, children, className = "" }) {
   return (
     <section className={`space-y-4 ${className}`}>
@@ -142,18 +113,6 @@ export function HUDCard({ children, className = "", featured = false, testid }) 
       className={`relative overflow-hidden bg-[#0F0F12] border border-[#2A2A35] p-5 flex flex-col ${className}`}>
       {featured && <span className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-[#E5FF00]/60 to-transparent" />}
       {children}
-    </div>
-  );
-}
-
-export function DataMetric({ label, value, unit, accent = "text-zinc-100", testid }) {
-  return (
-    <div data-testid={testid} className="flex flex-col gap-1 p-4 bg-[#0A0A0C] border border-[#2A2A35]">
-      <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-[0.2em]">{label}</span>
-      <div className="flex items-baseline gap-1.5">
-        <span className={`text-2xl font-display font-black tabular-nums ${accent}`}>{value ?? "--"}</span>
-        {unit && value != null && <span className="text-xs text-zinc-500 font-mono">{unit}</span>}
-      </div>
     </div>
   );
 }

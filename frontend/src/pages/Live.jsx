@@ -4,7 +4,7 @@ import { Cpu, Gauge, Thermometer, MemoryStick, Zap, Radio, Gamepad2, Bell, Timer
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import api from "@/lib/api";
-import { SessionSummary } from "./SessionSummary";
+import { SessionSummary } from "@/components/SessionSummary";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
 import MonitorPreflight from "@/components/MonitorPreflight";
