@@ -1,5 +1,34 @@
 # FrameForge — Changelog
 
+## v0.7.0 — 2026-02-XX · Custom URL protocol `frameforge://` (Step 1)
+### Added
+- **Endpoint `GET /api/agent/launch-uri?mode=<mode>`** in `backend/routers/pc.py`:
+  ritorna un URI firmato HMAC-SHA256 tipo `frameforge://launch?mode=optimize&ts=<epoch>&sig=<hex>`.
+  Chiave HMAC = `agent_token` dell'utente (offline-verifiable dal client).
+  Modes ammesse: optimize, sync, benchmark, monitor, prematch, booster, restore, gui.
+  ts scade in 60s (anti-replay). Auth required (JWT cookie).
+- **Registrazione protocollo Windows** in `agent-build/forgefps_agent.py` (bump v0.7.0):
+  - `register_frameforge_protocol()` scrive in `HKCU\Software\Classes\frameforge`
+    (no admin) e mappa a `"exe" --uri "%1"`. Idempotente.
+  - Chiamata silenziosa best-effort ad ogni avvio; flag `--register-protocol`
+    per repair manuale.
+  - `parse_and_verify_uri()` valida HMAC + freshness locale col token in
+    `%APPDATA%\FrameForge\token.dat`. Rifiuta URI di altri utenti (bad sig),
+    URI vecchi (> 60s) e URI manomessi.
+  - Nuovo flag `--uri "frameforge://..."`: quando il browser invoca il
+    protocollo l'exe estrae la mode e apre direttamente la GUI sicura.
+- **Test regressione**: `backend/tests/test_agent_launch_uri.py` (14 casi:
+  auth, tutte le mode, mode invalida, verifica firma, rifiuto chiave sbagliata,
+  freshness ts). Tutti PASSED.
+
+### Notes
+- Step 1 (backend + Python launcher) completo. Step 2 (frontend cleanup: nuovi
+  bottoni Quick Actions + detection app installata + accordion Metodo Sicuro
+  collassato) rimane da implementare dopo il rebuild dell'exe e la release GitHub.
+- Version_info.txt bumpato a 0.7.0.0 per metadata dell'exe.
+
+
+
 ## v0.6.18 — 2026-02-XX · Quick Start hero su pagina Collega PC
 ### Added
 - **Hero band con due CTA prominenti** in cima a `/app/desktop`
