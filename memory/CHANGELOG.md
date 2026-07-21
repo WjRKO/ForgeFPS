@@ -1,5 +1,29 @@
 # FrameForge — Changelog
 
+## v0.6.16 — 2026-07-20 · Endpoint admin skip-annuncio release
+### Added
+- **`POST /api/admin/releases/mark-announced`** (auth admin): accetta
+  `{"versions": ["x.y.z", ...]}` e inserisce le entries in `db.announced_releases`
+  con `source: "admin_skip"` senza chiamare Discord. Idempotente: entries gia'
+  presenti finiscono in `already_announced`. Uso: dopo aggiunta massiva di release
+  al manifest, marchi le vecchie come "gia' annunciate" per evitare 6 embed in fila
+  sul canale changelog al primo redeploy.
+- Validazione: body vuoto o `versions` non-list ritorna 400. Entries non-string
+  vengono ignorate (isinstance check).
+
+### Verified
+- iteration_32.json: 8/8 acceptance criteria PASS. Auth (401/403), idempotenza,
+  validation, DB side-effect (source=admin_skip), integration con
+  `announce_new_releases()` monkeypatched (dopo mark di 5 versioni, posta solo
+  la 6a rimasta).
+- Minor issue fixato post-test: isinstance(v, str) invece di str(v).strip() per
+  evitare coercion di None/numeri a stringhe.
+
+### Files touched
+- `backend/routers/admin.py` (+ nuovo endpoint)
+
+---
+
 ## v0.6.15 — 2026-07-20 · Fix Discord #changelog auto-announcer
 ### Fixed
 - **`/app/data/releases.json`**: il manifest si fermava a v0.6.5. Aggiunte le 6 versioni

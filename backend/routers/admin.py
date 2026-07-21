@@ -90,7 +90,9 @@ def build(get_current_user):
         now = datetime.now(timezone.utc).isoformat()
         marked, already = [], []
         for v in versions:
-            v = str(v).strip()
+            if not isinstance(v, str):
+                continue
+            v = v.strip()
             if not v:
                 continue
             existing = await db.announced_releases.find_one({"_id": v})
