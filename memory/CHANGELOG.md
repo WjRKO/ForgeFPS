@@ -1,5 +1,33 @@
 # FrameForge — Changelog
 
+## Fase 2 — Sync ambientale (~1.5h effort) — 2026-02-21
+### Added
+- **Hook `useAutoSync`** (`hooks/useAutoSync.js`):
+  - Trigger 1: al primo carico, se `updated_at > 24h` -> silent sync auto
+  - Trigger 2: `visibilitychange` listener, se tab torna dopo >1h idle -> silent sync
+  - Cooldown 30 min tra un auto-sync e il successivo (via localStorage `ff_autosync_last_ts`)
+  - Espone `{ ageSec, tier, forceSync, refresh, running }`
+- **Componente `<FreshnessBadge>`** (`components/FreshnessBadge.jsx`):
+  - Verde <10min, giallo 10min-24h, rosso >=24h
+  - Click = force sync silent con `useAutoSync.forceSync()`
+  - Piazzato nell'header globale di `Layout.jsx` -> visibile su ogni pagina
+  - Format friendly: "or ora" / "45 min fa" / "21h fa" / "3gg fa"
+- **Sync predittivo su hover AI Advisor** (`Layout.jsx`):
+  - `onMouseEnter` sul NavLink `/app/advisor` -> se `ff_autosync_last_ts >5min`
+    fa fetch `/api/agent/launch-uri?mode=sync&silent=1` + navigate URI
+  - `advisorPreloaded` flag: max 1 trigger per sessione, evita spam su
+    hover multipli
+
+### Testato in preview
+- Screenshot dashboard mostra badge "AGGIORNATI 21H FA" (tier warm, giallo)
+- Zero console errors
+- FreshnessBadge presente su tutte le rotte (Layout globale)
+
+### Todo utente
+- Redeploy produzione (solo web, no rebuild .exe)
+
+
+
 ## v0.7.1 (UX polish) — 2026-02-21 · Feedback visivo per Sincronizza ora
 ### Fixed
 - **Utente segnalava "Sync completato ma dati non cambiano"**: il sync

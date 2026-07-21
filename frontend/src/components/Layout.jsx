@@ -5,6 +5,7 @@ import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import FreshnessBadge from "@/components/FreshnessBadge";
 import OnboardingTour from "@/components/OnboardingTour";
 import api from "@/lib/api";
 import { pushSupported, getPushState, enablePush, disablePush } from "@/lib/push";
@@ -122,6 +123,26 @@ export default function Layout() {
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
+  // Sync predittivo Fase 2: hover sul link Advisor -> se dati stantii >5min,
+  // trigger silent sync in background. AI risponde su dati freschi. Debounced.
+  const [advisorPreloaded, setAdvisorPreloaded] = useState(false);
+  const prefetchAdvisorSync = async () => {
+    if (advisorPreloaded) return;
+    try {
+      const LS_LAST = "ff_autosync_last_ts";
+      const last = parseInt(window.localStorage.getItem(LS_LAST) || "0", 10);
+      const ageMin = last ? (Date.now() - last) / 60000 : 999;
+      if (ageMin < 5) { setAdvisorPreloaded(true); return; }
+      const { data } = await api.get("/agent/launch-uri?mode=sync&silent=1");
+      if (data?.uri) {
+        window.location.href = data.uri;
+        window.localStorage.setItem(LS_LAST, String(Date.now()));
+        console.log("[predictive-sync] Advisor hover: silent sync triggered");
+      }
+      setAdvisorPreloaded(true);
+    } catch (e) { console.error("prefetchAdvisorSync failed", e); }
+  };
+
   const doLogout = async () => { await logout(); navigate("/login"); };
 
   return (
@@ -145,6 +166,7 @@ export default function Layout() {
                 )}
                 {items.map((n) => (
                   <NavLink key={n.to} to={n.to} end={n.end} data-testid={`nav-${n.id}`}
+                    onMouseEnter={n.id === "advisor" ? prefetchAdvisorSync : undefined}
                     className={({ isActive }) =>
                       `flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
                         isActive ? "bg-[#E5FF00] text-black font-bold" : "text-zinc-400 hover:text-white hover:bg-[#141419]"
@@ -179,6 +201,7 @@ export default function Layout() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <FreshnessBadge />
             <LanguageSwitcher />
             <Notifications />
           </div>
