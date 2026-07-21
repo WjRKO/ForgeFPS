@@ -704,3 +704,21 @@ Dopo aver eseguito la build su Windows e caricato il ZIP sulla GitHub Release v0
 
 ## Historical
 Precedenti release documentate in `PRD.md`.
+
+## Monitor lifecycle A+E — 2026-02-22 · Pre-flight & Live REC control
+### Added
+- **Backend** (`routers/pc.py`):
+  - `POST /api/monitor/stop` (auth) — set stop_requested=true in db.monitor_control
+  - `POST /api/monitor/reset` (auth) — clear stop flag before new session
+  - `GET /api/monitor/state` (auth) — expose current flag + timestamps
+  - Modified `POST /api/agent/telemetry` — now returns `{ok, stop}`; agent reads `stop` and breaks the monitor loop cleanly.
+- **Agent** (`ps_agent.py`):
+  - `Send-Telemetry` returns `$true` when backend signals stop
+  - Monitor loop (`MODE=monitor`) checks the return value each tick and exits cleanly with a Say('Stop richiesto dal browser') message. **No .exe rebuild needed** — the .ps1 script is fetched fresh on every launch via `/api/agent/script`.
+- **Frontend**:
+  - `components/MonitorPreflight.jsx` — modal with 4 checks (agent, game detected, background apps, alerts enabled). Reads /prematch + /alerts. Non-blocking (bad→disable proceed, warn→proceed with note).
+  - `components/MonitorLiveControl.jsx` — REC panel with pulsing badge, live duration, sample count, current game, Stop + Copia URI buttons. Hydrates stopPending from `/monitor/state` on mount.
+  - `pages/Live.jsx` — replaces the launch button with preflight modal trigger + swap to LiveControl panel when data.live=true.
+### Tested
+- iteration_34.json — backend 9/9 pytest, frontend E2E happy path 100%.
+

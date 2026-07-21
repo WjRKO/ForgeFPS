@@ -22,6 +22,23 @@ export default function MonitorLiveControl({ startedAt, sampleCount, game }) {
     return () => clearInterval(id);
   }, []);
 
+  // Hydrate the "stop pending" hint if the user reopened the page while a
+  // previous stop request is still fresh (agent hasn't acked yet).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { data } = await api.get("/monitor/state");
+        if (!alive) return;
+        if (data?.stop_requested && data?.requested_at) {
+          const ts = new Date(data.requested_at).getTime();
+          if (Date.now() - ts < 15000) setStopRequestedAt(ts);
+        }
+      } catch {}
+    })();
+    return () => { alive = false; };
+  }, []);
+
   const durationSec = useMemo(() => {
     if (!startedAt) return 0;
     return Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000));
