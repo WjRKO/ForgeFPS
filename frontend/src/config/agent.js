@@ -8,7 +8,7 @@
 //
 // AGGIORNARE dopo ogni release: URL, SHA256, versione, data.
 export const AGENT_EXE_URL = "https://github.com/WjRKO/ForgeFPS/releases/download/v0.7.0/forgefps-agent.zip";
-export const AGENT_EXE_SHA256 = "d1afd88b430427efd09064e570f7c53b196a713b768e046eb4b214f78685d898";
+export const AGENT_EXE_SHA256 = "e5d11e038cecfffa2cd68cf9819614ef2c0dc0cc1baf1c85503f6af50d4e1d93";
 export const AGENT_EXE_VERSION = "v0.7.0";
 export const AGENT_EXE_DATE = "2026-02-21";
 export const AGENT_EXE_FORMAT = "zip"; // "zip" (onedir) | legacy: "exe" (onefile)
