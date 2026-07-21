@@ -1,5 +1,20 @@
 # FrameForge — Changelog
 
+## v0.6.17 — 2026-02-XX · Fix caratteri glitchati nella GUI Desktop
+### Fixed
+- **UTF-8 BOM su `/api/agent/script`**: Windows PowerShell 5.1 (default su Win10/11)
+  legge i file `.ps1` senza BOM usando il codepage ANSI di sistema (Windows-1252),
+  causando mojibake per caratteri UTF-8 come `📚 👤 · …` presenti nella sezione
+  Profili e nei toast Sync Cloud dell'Edge WebView GUI.
+- Fix: prepend `\ufeff` (BOM UTF-8, bytes `EF BB BF`) alla `PlainTextResponse`
+  di `/api/agent/script` + `media_type="text/plain; charset=utf-8"`.
+- `/api/agent/script-info` allineato: SHA256 calcolato sui bytes BOM-inclusi
+  per non rompere l'integrity check lato client.
+- File: `backend/routers/pc.py` (agent_script + agent_script_info).
+- Verificato via curl: risposta ora inizia con `EF BB BF` + 168288 byte di script.
+
+
+
 ## v0.6.16 — 2026-07-20 · Endpoint admin skip-annuncio release
 ### Added
 - **`POST /api/admin/releases/mark-announced`** (auth admin): accetta

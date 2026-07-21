@@ -578,7 +578,9 @@ def build(get_current_user):
                 "Write-Host '[FrameForge] Token non valido. Riapri la pagina Collega il PC.' -ForegroundColor Red",
                 media_type="text/plain")
         script = await _build_agent_script(rec["user_id"], profile)
-        return PlainTextResponse(script, media_type="text/plain",
+        # Prepend UTF-8 BOM: Windows PowerShell 5.1 legge i .ps1 senza BOM in ANSI (Windows-1252),
+        # causando caratteri glitchati per emoji/UTF-8 (es. · … 📚 👤). Il BOM forza UTF-8.
+        return PlainTextResponse("\ufeff" + script, media_type="text/plain; charset=utf-8",
                                  headers={"Content-Disposition": "attachment; filename=forgefps.ps1"})
 
     @r.get("/agent/script-info")
@@ -586,7 +588,8 @@ def build(get_current_user):
         rec = await db.agent_tokens.find_one({"token": t})
         user_id = rec["user_id"] if rec else str(user["_id"])
         script = await _build_agent_script(user_id, profile)
-        data = script.encode("utf-8")
+        # Include UTF-8 BOM per allinearsi al byte stream servito da /agent/script
+        data = ("\ufeff" + script).encode("utf-8")
         return {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data), "filename": "forgefps.ps1"}
 
     return r
