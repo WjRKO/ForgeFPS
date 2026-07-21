@@ -1,7 +1,9 @@
 name: build
+
 on:
   push:
-    tags: ['v*']
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -20,24 +22,29 @@ jobs:
       - run: python -m pip install --upgrade pip pyinstaller
 
       - name: Build onedir
+        working-directory: agent-build
         run: pyinstaller --onedir --name forgefps-agent --console --noupx --clean --version-file version_info.txt forgefps_agent.py
 
       - name: Zip folder
         shell: pwsh
+        working-directory: agent-build
         run: Compress-Archive -Path 'dist/forgefps-agent' -DestinationPath 'dist/forgefps-agent.zip' -Force
 
       - id: hash
         shell: pwsh
+        working-directory: agent-build
         run: |
           $h = (Get-FileHash dist/forgefps-agent.zip -Algorithm SHA256).Hash.ToLower()
-          echo "SHA256=$h" >> $env:GITHUB_STEP_SUMMARY
+          echo "SHA256 = $h"
+          echo "## forgefps-agent.zip" >> $env:GITHUB_STEP_SUMMARY
+          echo "**SHA256:** ``$h``" >> $env:GITHUB_STEP_SUMMARY
           echo "SHA256=$h" >> $env:GITHUB_OUTPUT
 
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/forgefps-agent.zip
+          files: agent-build/dist/forgefps-agent.zip
           generate_release_notes: true
           body: |
             **SHA256 (ZIP):** `${{ steps.hash.outputs.SHA256 }}`
 
-            v0.6.7 — Build --onedir (folder + DLLs). Uso: estrai il ZIP e lancia forgefps-agent.exe --token IL_TUO_TOKEN
+            Build --onedir da `agent-build/`. Uso: unzip → apri `forgefps-agent/` → doppio click `Avvia-FrameForge.bat`.
