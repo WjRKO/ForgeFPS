@@ -598,21 +598,27 @@ def build(get_current_user):
     _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "monitor", "prematch", "booster", "restore", "gui"}
 
     @r.get("/agent/launch-uri")
-    async def agent_launch_uri(mode: str = "optimize", user: dict = Depends(get_current_user)):
+    async def agent_launch_uri(mode: str = "optimize", silent: int = 0, user: dict = Depends(get_current_user)):
         """Genera un URI custom-protocol firmato con HMAC del token dell'utente.
         Il Desktop Agent (v0.7.0+) registra il protocollo 'frameforge://' su Windows;
         quando l'utente clicca un bottone nella dashboard il browser passa questo URI
         all'exe locale, che verifica la firma con il proprio token e apre la GUI.
+
+        silent=1 (richiede agent v0.7.1+): l'agent esegue PowerShell -WindowStyle
+        Hidden senza aprire la GUI. Utile per sync/benchmark 'ambientali'
+        triggerati dal web. Il param 'silent' NON e' incluso nell'HMAC per
+        retrocompat con v0.7.0 (che verifica 'mode|ts'). Manipolare silent puo'
+        solo cambiare UX (GUI vs hidden), non e' un vettore di sicurezza.
         """
         if mode not in _ALLOWED_URI_MODES:
             raise HTTPException(status_code=400, detail=f"mode non valido. Ammessi: {sorted(_ALLOWED_URI_MODES)}")
+        silent_flag = 1 if silent else 0
         token = await get_or_create_agent_token(str(user["_id"]))
         ts = int(time.time())
-        # HMAC su "mode|ts" con il token come chiave. Il client (agent) ha lo stesso token
-        # salvato in %APPDATA%\FrameForge\token.dat e puo' verificare offline.
+        # HMAC su "mode|ts" (retrocompat v0.7.0). silent viaggia solo come hint.
         msg = f"{mode}|{ts}".encode("utf-8")
         sig = hmac.new(token.encode("utf-8"), msg, hashlib.sha256).hexdigest()
-        uri = f"frameforge://launch?mode={mode}&ts={ts}&sig={sig}"
-        return {"uri": uri, "mode": mode, "ts": ts, "expires_in": 60}
+        uri = f"frameforge://launch?mode={mode}&silent={silent_flag}&ts={ts}&sig={sig}"
+        return {"uri": uri, "mode": mode, "silent": bool(silent_flag), "ts": ts, "expires_in": 60}
 
     return r

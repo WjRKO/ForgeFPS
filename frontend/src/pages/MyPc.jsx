@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket, Pencil, Gauge, TrendingUp, TrendingDown, Minus, Share2 } from "lucide-react";
+import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket, Pencil, Gauge, TrendingUp, TrendingDown, Minus, Share2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
@@ -8,6 +8,7 @@ import api, { formatApiErrorDetail } from "@/lib/api";
 import SpecsForm from "@/components/SpecsForm";
 import HealthHistoryCard from "@/components/HealthHistoryCard";
 import { PageHeader } from "@/components/hud";
+import { useSilentLaunch } from "@/hooks/useSilentLaunch";
 
 const SPEC_KEYS = ["os", "cpu", "gpu", "ram", "disk", "motherboard", "resolution"];
 const specLabel = (t, k) => ({ os: t("mypcpage.sl_os"), cpu: "CPU", gpu: "GPU", ram: "RAM", disk: t("mypcpage.sl_disk"), motherboard: t("mypcpage.sl_mb"), resolution: t("mypcpage.sl_res") }[k]);
@@ -277,6 +278,58 @@ export default function MyPc() {
   };
   useEffect(() => { load(); }, []);
 
+  // Silent launch: sync e benchmark ambientali (nessuna finestra visibile).
+  // Il polling detecta l'aggiornamento comparando 'synced_at' / bench.ts prima e dopo.
+  const baselineRef = useRef({ syncedAt: null, benchTs: null });
+  useEffect(() => {
+    baselineRef.current = {
+      syncedAt: specs?.synced_at || null,
+      benchTs: bench?.latest?.ts || null,
+    };
+  }, [specs?.synced_at, bench?.latest?.ts]);
+
+  const syncLaunch = useSilentLaunch({
+    mode: "sync",
+    timeoutMs: 60000,
+    labels: {
+      starting: t("mypcpage.silent_sync_start", { defaultValue: "Sincronizzazione in avvio..." }),
+      running: t("mypcpage.silent_sync_running", { defaultValue: "Sincronizzazione hardware in corso..." }),
+      done: t("mypcpage.silent_sync_done", { defaultValue: "Sync completato. Dati aggiornati." }),
+      failed: t("mypcpage.silent_sync_failed", { defaultValue: "L'app non risponde. Hai installato FrameForge?" }),
+      notInstalled: t("mypcpage.silent_not_installed", { defaultValue: "Non hai ancora installato FrameForge? Vai su 'Collega il PC'." }),
+    },
+    detectDone: async () => {
+      const { data } = await api.get("/pc-specs");
+      if (data.synced_at && data.synced_at !== baselineRef.current.syncedAt) {
+        setSpecs(data);
+        // Ricarico anche health/bench in cascata
+        try { const { data: h } = await api.get("/pc-health"); setHealth(h.available ? h : null); } catch (e) { console.error("post-sync health reload", e); }
+        return true;
+      }
+      return false;
+    },
+  });
+
+  const benchLaunch = useSilentLaunch({
+    mode: "benchmark",
+    timeoutMs: 180000, // 3 min
+    labels: {
+      starting: t("mypcpage.silent_bench_start", { defaultValue: "Benchmark in avvio..." }),
+      running: t("mypcpage.silent_bench_running", { defaultValue: "Benchmark in corso (~1-2 min)..." }),
+      done: t("mypcpage.silent_bench_done", { defaultValue: "Benchmark completato." }),
+      failed: t("mypcpage.silent_bench_failed", { defaultValue: "Benchmark non risponde. Hai installato FrameForge?" }),
+    },
+    detectDone: async () => {
+      const { data } = await api.get("/pc-benchmark");
+      const newTs = data?.latest?.ts;
+      if (newTs && newTs !== baselineRef.current.benchTs) {
+        setBench(data);
+        return true;
+      }
+      return false;
+    },
+  });
+
   const analyzeStartup = async () => {
     setAnalyzing(true); setErr("");
     try { const { data } = await api.post("/startup/analyze"); setStartup(data); }
@@ -315,6 +368,16 @@ export default function MyPc() {
     <div className="max-w-6xl mx-auto fade-up">
       <PageHeader eyebrow={t("mypcpage.eyebrow")} title={t("mypcpage.title")}
         actions={<>
+          <button data-testid="silent-sync-btn" onClick={syncLaunch.launch} disabled={syncLaunch.running}
+            className="flex items-center gap-2 border border-[#00E0FF]/50 text-[#00E0FF] px-3 py-2 text-sm hover:bg-[#00E0FF]/10 disabled:opacity-60 transition-colors">
+            {syncLaunch.running ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+            {t("mypcpage.silent_sync_btn", { defaultValue: "Sincronizza ora" })}
+          </button>
+          <button data-testid="silent-bench-btn" onClick={benchLaunch.launch} disabled={benchLaunch.running}
+            className="flex items-center gap-2 border border-[#E5FF00]/50 text-[#E5FF00] px-3 py-2 text-sm hover:bg-[#E5FF00]/10 disabled:opacity-60 transition-colors">
+            {benchLaunch.running ? <Loader2 size={15} className="animate-spin" /> : <Zap size={15} />}
+            {t("mypcpage.silent_bench_btn", { defaultValue: "Benchmark ora" })}
+          </button>
           <button data-testid="edit-specs-btn" onClick={() => setEditing(true)} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><Pencil size={15} /> {t("mypcpage.edit")}</button>
           <Link to="/app/upgrade" data-testid="to-upgrade-btn" className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><Rocket size={15} /> {t("mypcpage.upgrade")}</Link>
           <button data-testid="refresh-pc-btn" onClick={load} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><RefreshCw size={15} /> {t("mypcpage.refresh")}</button>

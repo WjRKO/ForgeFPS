@@ -32,7 +32,7 @@ _args, _ = _parser.parse_known_args()
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.7.0"
+AGENT_VERSION = "0.7.1"
 BACKUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "boostpc_backup.json")
 
 # Persistent token storage in %APPDATA%\FrameForge\token.dat (v0.6.8+).
@@ -139,17 +139,23 @@ def register_frameforge_protocol(silent: bool = True) -> bool:
 
 
 def parse_and_verify_uri(uri: str, agent_token: str):
-    """Parsa un URI 'frameforge://launch?mode=...&ts=...&sig=...' e verifica la firma
-    HMAC-SHA256 usando agent_token come chiave. Ritorna dict con 'mode' oppure None."""
+    """Parsa un URI 'frameforge://launch?mode=...&silent=...&ts=...&sig=...' e
+    verifica la firma HMAC-SHA256 usando agent_token come chiave. Ritorna dict
+    con 'mode' e 'silent' oppure None.
+
+    Note su retrocompat: la firma copre solo 'mode|ts' (per compat con v0.7.0).
+    Il flag 'silent' viaggia come hint UX ma non e' autenticato. Manomettere
+    silent puo' solo cambiare UX (GUI vs headless), non e' security-critical.
+    """
     if not uri or not uri.lower().startswith(f"{_PROTOCOL}://"):
         return None
     try:
         p = urllib.parse.urlparse(uri)
-        # Su Windows il browser puo' passare l'URI con eventuale slash finale: normalizziamo
         qs = urllib.parse.parse_qs(p.query or "")
         mode = (qs.get("mode") or [""])[0]
         ts_str = (qs.get("ts") or [""])[0]
         sig = (qs.get("sig") or [""])[0]
+        silent = (qs.get("silent") or ["0"])[0] in ("1", "true", "yes")
         if not mode or not ts_str or not sig:
             return None
         ts = int(ts_str)
@@ -166,7 +172,7 @@ def parse_and_verify_uri(uri: str, agent_token: str):
         if not hmac.compare_digest(expected, sig):
             print("[FrameForge] Firma URI non valida. Ignoro (possibile URI di un altro account).")
             return None
-        return {"mode": mode, "ts": ts}
+        return {"mode": mode, "ts": ts, "silent": silent}
     except Exception as e:
         print(f"[FrameForge] Errore parsing URI: {e}")
         return None
@@ -220,12 +226,15 @@ elif AGENT_TOKEN and not AGENT_TOKEN.startswith("__"):
 
 # Se l'utente ha lanciato con --uri "frameforge://...", verifica la firma e
 # imposta la mode: la GUI si aprira' direttamente sull'azione richiesta.
+# v0.7.1+: se silent=1 -> lancia PowerShell hidden senza aprire la GUI.
+_SILENT_FROM_URI = False
 if _args.uri:
     payload = parse_and_verify_uri(_args.uri, AGENT_TOKEN)
     if payload:
         _args.mode = payload["mode"]
+        _SILENT_FROM_URI = bool(payload.get("silent"))
         # Se la mode e' 'gui' o 'optimize' apriamo direttamente la finestra sicura
-        if _args.mode in ("gui", "optimize"):
+        if _args.mode in ("gui", "optimize") and not _SILENT_FROM_URI:
             _args.mode = "securegui"
     else:
         # URI non valido -> apri la GUI normale in modalita' securegui
@@ -891,6 +900,61 @@ def launch_secure_gui():
         print("    Errore nell'avvio della GUI sicura: %s" % e)
 
 
+def launch_silent_mode(mode: str) -> bool:
+    """v0.7.1+: esegue la mode PowerShell in background senza aprire finestre.
+    Usato dai bottoni 'silent' della web dashboard (sync/benchmark ambientali).
+    Ritorna True se il processo e' stato lanciato con successo, False altrimenti.
+
+    Nota: il PowerShell script standalone sync/benchmark termina da solo (unlike
+    'monitor' che e' un loop infinito). Se qualcuno passasse mode='monitor' in
+    silent avremmo un processo orfano - il backend impedisce comunque questa
+    combinazione a livello di API (silent + monitor = rifiutato).
+    """
+    if mode not in ("sync", "benchmark", "cleanup", "optimize"):
+        # Whitelist di mode adatte al lancio silent (non-interattive, terminano).
+        print(f"[FrameForge] Mode '{mode}' non supporta il lancio silent. Uso GUI.")
+        return False
+    url = "%s/api/agent/script?t=%s" % (BACKEND_URL, AGENT_TOKEN)
+    dest = os.path.join(tempfile.gettempdir(), "forgefps.ps1")
+    print(f"[*] Silent {mode}: scarico script...")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "FrameForge-Agent-Silent"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = r.read()
+        with open(dest, "wb") as f:
+            f.write(data)
+    except Exception as e:
+        print(f"[FrameForge] Impossibile scaricare lo script: {e}")
+        return False
+
+    # PowerShell hidden: -WindowStyle Hidden nasconde la finestra, subprocess con
+    # CREATE_NO_WINDOW (0x08000000) impedisce anche il flash della console.
+    args = [
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-WindowStyle", "Hidden",
+        "-File", dest,
+        "-Token", AGENT_TOKEN,
+        "-Mode", mode,
+    ]
+    try:
+        creationflags = 0x08000000  # CREATE_NO_WINDOW
+        subprocess.Popen(
+            args,
+            creationflags=creationflags,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            close_fds=True,
+        )
+        print(f"[FrameForge] Silent {mode} avviato in background (PID via Task Manager).")
+        return True
+    except Exception as e:
+        print(f"[FrameForge] Errore nel lancio silent: {e}")
+        return False
+
+
 def restore_tweaks():
     print("\n[8] Ripristino impostazioni dal backup...")
     if not os.path.exists(BACKUP_FILE):
@@ -989,6 +1053,13 @@ if __name__ == "__main__":
         register_frameforge_protocol(silent=True)
     except Exception:
         pass
+    # v0.7.1+: se URI includeva silent=1 -> esegui in background e esci subito.
+    # Nessuna finestra visibile all'utente. Per sync/benchmark ambientali dal web.
+    if _SILENT_FROM_URI:
+        ok = launch_silent_mode(_args.mode if _args.mode not in ("securegui", "gui") else "sync")
+        # Nessun input('Premi INVIO'): l'utente non sta guardando la console.
+        sys.exit(0 if ok else 1)
+
     # Modalita' non interattive dirette (es. --mode securegui / optimize / sync)
     if _args.mode in ("securegui", "gui"):
         launch_secure_gui()

@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.7.1",
+    "date": "2026-02-21",
+    "title": "Sync e benchmark ambientali (senza finestre)",
+    "notes_md": "- **Sincronizza ora** e **Benchmark ora**: due nuovi bottoni nella pagina 'Il mio PC'. Clic -> l'agent esegue in background senza aprire finestre. Nessuna interruzione\n- Toast in-browser mostra il progresso: 'Sync in corso...' -> 'Sync completato. Dati aggiornati.'\n- **Avvia monitor sul PC**: un bottone giallo grande nella pagina Live sostituisce il comando PowerShell copia-incolla (che rimane come fallback per power user)\n- Sotto il cofano: il protocollo `frameforge://` supporta ora `silent=1` -> PowerShell `-WindowStyle Hidden`\n- Retrocompatibile: chi ha ancora la v0.7.0 vede la GUI aprirsi come prima (nessun crash)\n",
+    "url": "https://forgefps.dev/changelog"
+  },
+  {
     "version": "0.7.0",
     "date": "2026-02-21",
     "title": "Un click e l'app parte: zero download",

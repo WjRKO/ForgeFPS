@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Cpu, Gauge, Thermometer, MemoryStick, Zap, Radio, Gamepad2, Bell, Timer, Sparkles } from "lucide-react";
+import { Cpu, Gauge, Thermometer, MemoryStick, Zap, Radio, Gamepad2, Bell, Timer, Sparkles, PlayCircle } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -117,7 +117,31 @@ export default function Live() {
         <div className="bg-[#0F0F12] border border-[#E5FF00]/40 p-5 mb-6">
           <p className="text-sm text-zinc-300 mb-1 font-semibold">{t("live.start_title")}</p>
           <p className="text-xs text-zinc-500 mb-3">{t("live.start_desc")}</p>
-          <SecureRunBlock token={token} mode="monitor" testid="monitor-run-cmd" />
+          <button
+            type="button"
+            data-testid="monitor-launch-btn"
+            onClick={async () => {
+              try {
+                const { data } = await api.get("/agent/launch-uri?mode=monitor");
+                if (!data?.uri) throw new Error("no uri");
+                window.location.href = data.uri;
+                toast(t("live.launching", { defaultValue: "Apertura del monitor sul PC..." }));
+              } catch (e) {
+                console.error("monitor launch failed", e);
+                toast.error(t("live.launch_failed", { defaultValue: "Impossibile aprire. Hai installato FrameForge?" }));
+              }
+            }}
+            className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2.5 text-sm hover:bg-[#D4EE00] transition-colors mb-3">
+            <PlayCircle size={16} /> {t("live.launch_btn", { defaultValue: "Avvia monitor sul PC" })}
+          </button>
+          <details className="text-xs text-zinc-500">
+            <summary className="cursor-pointer hover:text-zinc-300 transition-colors">
+              {t("live.manual_cmd", { defaultValue: "Preferisci copiare il comando manualmente?" })}
+            </summary>
+            <div className="mt-3">
+              <SecureRunBlock token={token} mode="monitor" testid="monitor-run-cmd" />
+            </div>
+          </details>
         </div>
       )}
 
