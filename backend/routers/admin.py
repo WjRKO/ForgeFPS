@@ -107,4 +107,44 @@ def build(get_current_user):
                 marked.append(v)
         return {"marked_as_announced": marked, "already_announced": already}
 
+    @r.get("/password-resets")
+    async def list_password_resets(admin: dict = Depends(require_admin), limit: int = 20):
+        """Elenco ultimi N token di reset password generati.
+        Utile finche' l'invio email vero (Resend/SendGrid) non e' integrato: l'admin
+        vede il link e lo consegna manualmente all'utente. Solo admin.
+
+        Response: lista ordinata per created_at desc, ognuno con:
+        - email (denormalizzata)
+        - link (path completo /reset-password?token=xxx da concatenare al dominio)
+        - created_at, expires_at, used, used_at, ip
+        - status: "active" | "used" | "expired"
+        """
+        from datetime import datetime, timezone
+        limit = max(1, min(limit, 100))
+        cursor = db.password_reset_tokens.find({}, {"_id": 0}).sort("created_at", -1).limit(limit)
+        rows = await cursor.to_list(limit)
+        now = datetime.now(timezone.utc)
+        out = []
+        for r_ in rows:
+            exp = r_.get("expires_at")
+            if isinstance(exp, str):
+                try: exp = datetime.fromisoformat(exp)
+                except Exception: exp = None
+            if exp and exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if r_.get("used"): status = "used"
+            elif exp and exp < now: status = "expired"
+            else: status = "active"
+            out.append({
+                "email": r_.get("email") or "(unknown — legacy record)",
+                "link": f"/reset-password?token={r_.get('token', '')}",
+                "created_at": r_.get("created_at"),
+                "expires_at": r_.get("expires_at"),
+                "used": bool(r_.get("used")),
+                "used_at": r_.get("used_at"),
+                "ip": r_.get("ip"),
+                "status": status,
+            })
+        return {"items": out, "count": len(out)}
+
     return r
