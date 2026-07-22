@@ -1,6 +1,31 @@
 # FrameForge — Changelog
 
 
+## v0.7.4d (Web + Agent) — 2026-02-22 · Diagnostica temperatura CPU
+
+### Fixed — CPU temp non rilevata su Ryzen
+- **`backend/ps_agent.py`** — `Get-LhmTemps` migliorato:
+  - Regex case-insensitive per matchare i nomi sensore Ryzen Zen4+
+    (Tctl / Tdie / Package / CPU) oltre ai nomi Intel classici
+  - Ritorna `_lhm_state`: `no_lhm` (driver non caricato) | `no_cpu_sensors`
+    (LHM ok ma zero sensori Cpu) | `cpu_sensors_out_of_range` | `lhm_exception` | `ok`
+- **`backend/ps_agent.py::Get-Health`** — quando `cpu_temp` e' assente, emette
+  `cpu_temp_reason` con uno di: `not_admin` | `vbs_on` | `blocklist_on` |
+  `no_lhm` | `no_sensors` | `unknown`.
+- **`backend/helpers.py::compute_health`** — se il check `cpu_temp` risulta
+  "unknown" e il payload contiene `cpu_temp_reason`, propaga il campo `reason`
+  nel check per l'UI.
+- **`frontend/src/pages/MyPc.jsx`** — nuovo componente `CpuTempReasonHint`
+  con banner actionable sotto il grid checks. 6 varianti UI (una per reason):
+  - `not_admin` → istruzioni riapertura con UAC
+  - `vbs_on` → guida disattivazione Integrità della memoria
+  - `blocklist_on` → spiegazione + workaround HWiNFO
+  - `no_lhm` → fix Ryzen-friendly: LibreHardwareMonitor standalone come Admin
+    (firma il driver WinRing0 e sblocca la lettura per FrameForge)
+  - `no_sensors` → aggiornamento BIOS + verifica LHM standalone
+  - `unknown` → debug generico
+
+
 ## v0.7.4c (Web) — 2026-02-22 · Pannello Admin ricco
 
 ### Added — Admin dashboard rewritten

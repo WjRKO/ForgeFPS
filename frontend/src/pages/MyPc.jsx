@@ -88,12 +88,24 @@ const CPU_TEMP_REASONS = {
     ],
   },
   no_sensors: {
-    title: "Temperatura CPU non trovata — nessun sensore compatibile",
-    body: "LibreHardwareMonitor ha risposto ma non ha trovato un sensore CPU utilizzabile. Hardware datato o BIOS non espone i sensori termici.",
-    fix_label: "Verifica",
+    title: "Sensori CPU non riconosciuti — probabile Ryzen Zen4 o BIOS datato",
+    body: "LibreHardwareMonitor gira correttamente ma non ha trovato un sensore CPU tra i nomi standard (Tctl, Tdie, CPU Package). Su Ryzen 7000+ i sensori possono avere nomi non standard, oppure il BIOS non li espone.",
+    fix_label: "Come sistemare",
     steps: [
-      "Aggiorna il BIOS all'ultima versione dal sito del produttore della motherboard",
-      "Prova ad avviare HWiNFO come Admin per confermare quali sensori sono disponibili",
+      "Aggiorna il BIOS all'ultima versione stabile dal sito della tua motherboard",
+      "In alternativa scarica LibreHardwareMonitor standalone (github.com/LibreHardwareMonitor) e verifica quali sensori CPU vede: se ne trova, mandami uno screenshot dei nomi e li aggiungo alla whitelist",
+      "Riavvia FrameForge Agent dopo l'update BIOS",
+    ],
+  },
+  no_lhm: {
+    title: "Driver sensori CPU non caricato — WinRing0 bloccato",
+    body: "LibreHardwareMonitor non è riuscito a caricare il driver WinRing0 che serve per leggere i sensori CPU. Anche senza VBS/Blocklist attive, Windows può bloccare driver non firmati al primo avvio.",
+    fix_label: "Fix in 60 secondi (funziona su Ryzen)",
+    steps: [
+      "Scarica LibreHardwareMonitor standalone da github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases",
+      "Estrai lo ZIP e apri LibreHardwareMonitor.exe come Amministratore (tasto destro → Esegui come Amministratore)",
+      "Se vede la temperatura CPU, chiudilo — il driver WinRing0 è ora firmato per il tuo PC",
+      "Riapri FrameForge Agent: la temp CPU verrà rilevata automaticamente",
     ],
   },
   unknown: {
