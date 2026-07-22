@@ -253,6 +253,20 @@ def build(get_current_user):
         return _Resp(content=buf.getvalue(), media_type="image/svg+xml",
                      headers={"Cache-Control": "no-store"})
 
+    @r.get("/pc-specs-agent")
+    async def get_specs_agent(x_agent_token: str = Header(default="")):
+        """Ritorna pc-specs autenticato via X-Agent-Token (lato PowerShell/exe locale).
+        Serve al ps_agent.py optimize block per capire se un primo scan e' necessario:
+        se updated_at e' recente (< 15 min) la GUI salta il primo scan.
+        """
+        rec = await db.agent_tokens.find_one({"token": x_agent_token})
+        if not rec:
+            raise HTTPException(status_code=401, detail="Token agent non valido")
+        doc = await db.pc_specs.find_one({"user_id": rec["user_id"]}, {"_id": 0})
+        if not doc:
+            raise HTTPException(status_code=404, detail="No specs yet")
+        return doc
+
     @r.post("/agent/report-specs")
     async def report_specs(data: SpecsInput, x_agent_token: str = Header(default="")):
         rec = await db.agent_tokens.find_one({"token": x_agent_token})

@@ -905,13 +905,21 @@ def optimize_with_benchmark():
     send_benchmark({"before": before, "after": after, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")})
 
 
-def launch_secure_gui():
-    """Scarica e avvia la GUI sicura FrameForge: per ogni tweak mostra Problema, Motivo,
-    Modifica proposta e Impatto stimato, con pulsante Applica per singolo tweak.
-    Backup automatico + Ripristina sempre disponibili. Non tocca MAI Windows Defender / Firewall."""
+def launch_secure_gui(mode: str = "optimize"):
+    """Scarica ed esegue lo script FrameForge PowerShell nella mode specificata.
+
+    v0.7.4+: prende un parametro `mode` (default: 'optimize' per la GUI).
+    Prima era hardcodato a 'optimize', quindi URI come mode=monitor/fullbench/
+    booster/prematch/bufferbloat venivano SILENZIOSAMENTE convertiti in optimize
+    (l'utente cliccava 'Avvia monitor' e vedeva partire il primo scan della GUI).
+
+    Modes UI-visibili (con finestra PowerShell): optimize (GUI sicura),
+    monitor (loop di telemetria), fullbench (~3min), prematch, booster.
+    Modes 'silent' via URL vanno passate a launch_silent_mode() invece.
+    """
     url = "%s/api/agent/script?t=%s" % (BACKEND_URL, AGENT_TOKEN)
     dest = os.path.join(tempfile.gettempdir(), "forgefps.ps1")
-    print("\n[STEP] Scarico la GUI sicura FrameForge...")
+    print("\n[STEP] Scarico lo script FrameForge (mode=%s)..." % mode)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "FrameForge-Agent"})
         with urllib.request.urlopen(req, timeout=30) as r:
@@ -921,16 +929,18 @@ def launch_secure_gui():
     except Exception as e:
         print("[ERR ] Impossibile scaricare lo script: %s" % e)
         return
-    args = '-NoProfile -ExecutionPolicy Bypass -File "%s" -Token %s -Mode optimize' % (dest, AGENT_TOKEN)
+    # Solo la mode 'optimize' beneficia dell'elevazione UAC (per applicare tweak).
+    # Le altre mode (monitor, benchmark ecc.) girano in user-space senza UAC.
+    args = '-NoProfile -ExecutionPolicy Bypass -File "%s" -Token %s -Mode %s' % (dest, AGENT_TOKEN, mode)
     try:
-        if not is_admin():
+        if mode == "optimize" and not is_admin():
             # rilancia PowerShell elevato: la finestra sicura chiedera' conferma UAC
             ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell.exe", args, None, 1)
         else:
             subprocess.Popen("powershell.exe %s" % args, shell=True)
-        print("[ OK ] GUI sicura avviata: segui le istruzioni nella finestra (Problema/Motivo/Impatto per ogni tweak).")
+        print("[ OK ] Script avviato in mode=%s." % mode)
     except Exception as e:
-        print("[ERR ] Errore nell'avvio della GUI sicura: %s" % e)
+        print("[ERR ] Errore nell'avvio: %s" % e)
 
 
 def launch_silent_mode(mode: str) -> bool:
@@ -1095,8 +1105,17 @@ if __name__ == "__main__":
         except Exception: pass
         sys.exit(0)
 
+    # v0.7.4+: modes che passano allo script PowerShell in finestra visibile
+    # (senza UAC per quelle che non modificano il sistema). Prima venivano
+    # tutte silenziosamente convertite in 'optimize' -> l'utente cliccava
+    # 'Avvia monitor' e vedeva partire il primo scan della GUI.
+    _PS_UI_MODES = ("monitor", "fullbench", "prematch", "booster", "bufferbloat")
+    if _args.mode in _PS_UI_MODES:
+        launch_secure_gui(mode=_args.mode)
+        sys.exit(0)
+
     # Default = securegui/optimize/gui = apre la GUI sicura
-    launch_secure_gui()
+    launch_secure_gui(mode="optimize")
     try:
         input("\nPremi INVIO per chiudere...")
     except Exception:

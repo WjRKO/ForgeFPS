@@ -1,6 +1,36 @@
 # FrameForge — Changelog
 
 
+## v0.7.4b (Agent + Web) — 2026-02-22 · Monitor bug, primo scan condizionale, no-auto-sync
+
+### Fixed — "Avvia monitor sul PC" apriva il primo scan invece del monitor
+- **Root cause**: `forgefps_agent.py::launch_secure_gui()` hardcodava `-Mode optimize`.
+  URI con `mode=monitor`, `fullbench`, `booster`, `prematch`, `bufferbloat`
+  cadevano tutti nel fallback default e venivano SILENZIOSAMENTE convertiti in
+  optimize (l'utente cliccava 'Avvia monitor' e vedeva partire il primo scan).
+- **`agent-build/forgefps_agent.py`** — `launch_secure_gui(mode="optimize")` ora
+  prende un parametro. Il main dispatcher route esplicitamente le mode UI-visibili
+  al PowerShell script con il mode corretto. Solo `optimize` chiede UAC.
+- **Bump AGENT_VERSION** → v0.7.4 (richiede rebuild via GitHub Actions).
+
+### Fixed — Primo scan ad ogni apertura della GUI
+- **`backend/ps_agent.py`** (optimize block) — primo scan ora CONDIZIONALE.
+  Chiama `GET /api/pc-specs-agent` all'inizio; se `updated_at < 15 min` salta
+  il primo scan e va diretto alla GUI. Prima runnava sempre, mostrando 3-5s di
+  console-log "Primo scan hardware..." su ogni apertura della finestra.
+- **`backend/routers/pc.py`** — Nuovo endpoint `GET /api/pc-specs-agent`
+  autenticato via `X-Agent-Token` (401 se token invalido, 404 se no specs).
+
+### Fixed — Sync automatico ad ogni login / hover
+- **`frontend/src/hooks/useAutoSync.js`** — Rimossi entrambi i trigger
+  automatici (stale > 24h + focus dopo 1h idle). Facevano navigation a
+  `frameforge://` che (a) apriva il popup "Aprire FrameForge?" nel browser
+  e (b) con exe non allineato avviava una GUI visibile. Ora il badge
+  `FreshnessBadge` e' solo indicatore visivo + click manuale.
+- **`frontend/src/components/Layout.jsx`** — Rimosso `prefetchAdvisorSync`
+  (era on-hover del navlink Advisor con threshold 5min, troppo aggressivo).
+
+
 ## v0.7.4 (Agent + Web) — 2026-02-22 · Token mismatch UX + GPU ref sposta
 
 ### Fixed — "Sincronizza ora" apriva la GUI "primo scan" invece che sync silent

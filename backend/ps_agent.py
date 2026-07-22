@@ -3692,6 +3692,27 @@ if ($MODE -eq 'fullbench') {
 }
 
 if ($MODE -eq 'optimize') {
+  # v0.7.4c: first-scan CONDIZIONALE. Il primo scan e' utile SOLO se i dati cloud
+  # sono stantii o assenti (utente nuovo, o non ha aperto la GUI da giorni).
+  # Se pc-specs.updated_at e' recente (< 15 min) saltiamo: risparmiamo 3-5s
+  # di attesa ad ogni apertura e togliamo l'effetto "primo scan a ogni apertura".
+  $__skipFirstScan = $false
+  try {
+    $__specsResp = Invoke-RestMethod -Uri "$BACKEND/api/pc-specs-agent" -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 6 -ErrorAction Stop
+    if ($__specsResp -and $__specsResp.updated_at) {
+      $__lastSync = [DateTime]::Parse($__specsResp.updated_at)
+      $__ageMin = ((Get-Date).ToUniversalTime() - $__lastSync.ToUniversalTime()).TotalMinutes
+      if ($__ageMin -lt 15) {
+        $__skipFirstScan = $true
+        Say ("`n[SKIP] Ultima sync cloud: {0:F1} min fa (< 15 min). Salto il primo scan e vado alla GUI." -f $__ageMin) 'DarkGray'
+      }
+    }
+  } catch {
+    # 404 = utente senza dati (mai sincronizzato) -> primo scan e' giustificato.
+    # Qualsiasi altro errore -> facciamo il primo scan per sicurezza.
+  }
+
+  if (-not $__skipFirstScan) {
   # v0.7.4: first-scan al primo avvio della GUI (mode=optimize di default al doppio-click).
   # Prima venivano inviati solo dopo apply/benchmark, quindi un utente nuovo che apre
   # e chiude la GUI senza applicare nulla lasciava il dashboard cloud completamente vuoto.
@@ -3752,6 +3773,7 @@ if ($MODE -eq 'optimize') {
   } else {
     Say "[ERR ] Impossibile raccogliere le specs, invio saltato. Riprova come Amministratore." 'Red'
   }
+  }  # end if -not $__skipFirstScan
 
   Say "`n[STEP] Apro il pannello ottimizzazioni..." 'Cyan'
   $ok = $false
