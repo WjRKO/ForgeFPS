@@ -3052,7 +3052,7 @@ function Show-WebGui {
           $ids = @($body.ids)
           $bench = [bool]$body.benchmark
           $before = $null; $after = $null
-          if ($bench) { WebLog 'Benchmark PRIMA in corso...'; $before = Run-Benchmark; WebLog ("  Punteggio PRIMA: {0}" -f $before.overall) }
+          if ($bench) { WebLog 'Benchmark PRIMA in corso...'; $before = Run-Benchmark; WebLog ("  Performance Score PRIMA: {0}" -f $before.overall) }
           foreach ($id in $ids) {
             $t = $script:TWMAP[$id]; if (-not $t) { continue }
             WebLog ("-> {0}" -f $t.name); & $t.apply
@@ -3061,11 +3061,11 @@ function Show-WebGui {
           if ($bench) {
             WebLog 'Benchmark DOPO in corso...'; $after = Run-Benchmark
             $pct = 0; if ($before.overall) { $pct = [math]::Round(($after.overall - $before.overall) / $before.overall * 100) }
-            WebLog ("  Punteggio DOPO: {0}  (variazione {1}%)" -f $after.overall, $pct)
+            WebLog ("  Performance Score DOPO: {0}  (variazione {1}%)" -f $after.overall, $pct)
             Send-Benchmark @{ before = $before; after = $after; ts = (Get-Date).ToString('o') }
           }
           Send-Data (Get-Specs) (Get-Health) (Get-StartupList)
-          WebLog 'FATTO. Dati inviati a FrameForge. Riavvio consigliato.'
+          WebLog '[ OK ] Ottimizzazioni applicate. Dati inviati a FrameForge. Riavvio consigliato.'
           $script:APPLYING = $false
           Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = @($script:BK.Keys); before = $before; after = $after }
         }
@@ -3198,7 +3198,7 @@ function Show-Gui {
   $script:STATUS = @{}
 
   $form = New-Object System.Windows.Forms.Form
-  $form.Text = 'FrameForge - Ottimizzazioni sicure'
+  $form.Text = 'FrameForge Agent - Ottimizzazioni'
   $form.Size = New-Object System.Drawing.Size(800, 962)
   $form.StartPosition = 'CenterScreen'
   $form.BackColor = $bg; $form.ForeColor = $white
@@ -3210,18 +3210,18 @@ function Show-Gui {
   $form.Controls.Add($head)
 
   $bolt = New-Object System.Windows.Forms.Label
-  $bolt.Text = 'FRAMEFORGE'; $bolt.ForeColor = $acc
+  $bolt.Text = 'FRAMEFORGE AGENT'; $bolt.ForeColor = $acc
   $bolt.Font = New-Object System.Drawing.Font('Segoe UI', 16, [System.Drawing.FontStyle]::Bold)
   $bolt.Location = New-Object System.Drawing.Point(18, 12); $bolt.AutoSize = $true
   $head.Controls.Add($bolt)
 
   $sub = New-Object System.Windows.Forms.Label
-  $sub.Text = 'Ottimizzazioni trasparenti per streamer & gamer'; $sub.ForeColor = $gray
+  $sub.Text = 'Trova i colli di bottiglia. Ottimizza in sicurezza.'; $sub.ForeColor = $gray
   $sub.Location = New-Object System.Drawing.Point(20, 46); $sub.AutoSize = $true
   $head.Controls.Add($sub)
 
   $sec = New-Object System.Windows.Forms.Label
-  $sec.Text = "SICUREZZA GARANTITA  -  Non tocchiamo MAI Windows Defender, Firewall o servizi di sicurezza. Ogni modifica ha un backup automatico ed e reversibile."
+  $sec.Text = "SICUREZZA  -  Non tocchiamo mai Windows Defender, Firewall o servizi di sicurezza. Ogni modifica ha un backup automatico ed e reversibile."
   $sec.ForeColor = $green; $sec.Location = New-Object System.Drawing.Point(20, 70)
   $sec.MaximumSize = New-Object System.Drawing.Size(760, 0); $sec.AutoSize = $true
   $head.Controls.Add($sec)
@@ -3407,13 +3407,13 @@ function Show-Gui {
   $applyBtn.Add_Click({
     $script:APPLYBTN.Enabled = $false
     $before = $null
-    if ($script:BENCHCB.Checked) { GuiLog 'Benchmark PRIMA in corso...'; $before = Run-Benchmark; GuiLog ("  Punteggio PRIMA: {0}" -f $before.overall) }
+    if ($script:BENCHCB.Checked) { GuiLog 'Benchmark PRIMA in corso...'; $before = Run-Benchmark; GuiLog ("  Performance Score PRIMA: {0}" -f $before.overall) }
     foreach ($t in $script:TWEAKS) { if ($script:CHECKS[$t.id].Checked) { GuiLog ("-> {0}" -f $t.name); & $t.apply } }
     Save-Backup
     if ($script:BENCHCB.Checked) {
       GuiLog 'Benchmark DOPO in corso...'; $after = Run-Benchmark
       $pct = $(if ($before.overall) { [math]::Round(($after.overall - $before.overall) / $before.overall * 100) } else { 0 })
-      GuiLog ("  Punteggio DOPO: {0}  (variazione {1}%)" -f $after.overall, $pct)
+      GuiLog ("  Performance Score DOPO: {0}  (variazione {1}%)" -f $after.overall, $pct)
       Send-Benchmark @{ before = $before; after = $after; ts = (Get-Date).ToString('o') }
     }
     Refresh-Status
