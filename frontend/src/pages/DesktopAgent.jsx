@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import api, { API } from "@/lib/api";
 import { trackConversion } from "@/lib/gtag";
 import AgentPreview from "@/components/AgentPreview";
+import FirstScanBanner from "@/components/FirstScanBanner";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const isEn = () => i18n.language?.startsWith("en");
@@ -253,6 +254,9 @@ export default function DesktopAgent() {
         <p className="text-zinc-500 text-sm mt-2 max-w-2xl">{s.exe_desc}</p>
       </div>
 
+      {/* First-scan banner: mostrato solo se l'utente non ha ancora fatto il primo sync */}
+      <FirstScanBanner />
+
       {/* Quick Actions: bottoni che aprono la GUI locale via frameforge:// (v0.7.0+) */}
       <div className="mb-6" data-testid="quick-actions">
         <div className="flex items-baseline justify-between mb-3">
@@ -409,7 +413,7 @@ export default function DesktopAgent() {
 
         {/* RIGHT: sticky action panel */}
         <aside className="lg:sticky lg:top-6 lg:self-start" data-testid="exe-teaser">
-          <div className="bg-gradient-to-br from-[#00E0FF]/15 to-[#0F0F12] border border-[#00E0FF]/40 p-5">
+          <div className="bg-gradient-to-br from-[#00E0FF]/15 to-[#0F0F12] border border-[#00E0FF]/40 p-5" data-testid="exe-download-block">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-10 h-10 border border-[#00E0FF]/40 flex items-center justify-center shrink-0"><MonitorDown size={20} className="text-[#00E0FF]" /></div>
               <div className="flex-1 min-w-0">

@@ -3462,6 +3462,26 @@ if ($MODE -eq 'benchmark') {
 }
 
 if ($MODE -eq 'optimize') {
+  # v0.7.4: first-scan al primo avvio della GUI (mode=optimize di default al doppio-click).
+  # Prima venivano inviati solo dopo apply/benchmark, quindi un utente nuovo che apre
+  # e chiude la GUI senza applicare nulla lasciava il dashboard cloud completamente vuoto.
+  # Ora invece:
+  #  - specs / health / startup / running / games sincronizzati SEMPRE all'apertura
+  #  - la Dashboard "Il mio PC" si popola in 3-8 secondi dal primo doppio-click sull'.exe
+  #  - se qualcosa fallisce (permessi, LHM), continuiamo comunque con la GUI (best-effort)
+  Say "`n[STEP] Primo scan hardware in corso (rilevo CPU, GPU, RAM, salute, avvio)..." 'Cyan'
+  try {
+    $__scanSpecs   = Get-Specs
+    $__scanHealth  = Get-Health
+    $__scanStartup = Get-StartupList
+    Send-Data $__scanSpecs $__scanHealth $__scanStartup
+    try { $__scanRun = Get-RunningApps; if ($__scanRun.Count -gt 0) { Send-Running $__scanRun } } catch {}
+    try { $__scanGames = Get-Games; if ($__scanGames.Count -gt 0) { Send-Games $__scanGames } } catch {}
+    Say ("[ OK ] Primo scan completato: {0} | GPU {1} | RAM {2}. Dati inviati al cloud." -f $__scanSpecs.cpu, $__scanSpecs.gpu, $__scanSpecs.ram) 'Green'
+  } catch {
+    Say ("[WARN] Sync iniziale non riuscito (continuo con la GUI): {0}" -f $_) 'Yellow'
+  }
+
   Say "`n[STEP] Apro il pannello ottimizzazioni..." 'Cyan'
   $ok = $false
   try { $ok = Show-WebGui } catch { $ok = $false }
