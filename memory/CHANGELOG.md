@@ -791,3 +791,19 @@ Precedenti release documentate in `PRD.md`.
 - Compile pulito, menu renders correttamente, modal handoff si apre al click, terminologia unificata.
 - OnboardingTour + FreshnessBadge già presenti nel Layout, non toccati.
 
+
+## UX P1 batch — 2026-02-22 · Killer features + tooltip + banner contestuali
+### Added
+- **`components/BottleneckDetector.jsx`**: real-time bottleneck classifier che poll `/api/pc-telemetry` ogni 4s. Classifica: CPU-BOUND / GPU-BOUND / RAM SATURATED / BALANCED / IDLE / MIXED. Copy contestuale per ogni caso ("Chiudi Chrome/Discord per liberare thread"). **Chiude il gap della hero landing "trova i colli di bottiglia"**. Integrato in `Live.jsx` quando data.live=true.
+- **`components/NextActionBanner.jsx`**: banner contestuale dopo azioni chiave. Presets: `no-hw` (no PC connesso → installa Agent), `post-sync` (sync OK → chiedi Advisor), `post-apply` (tweak applicati → fai benchmark), `post-benchmark` (bench OK → vedi confronto). Dismiss persistente 24h in localStorage. Integrato in Dashboard.jsx (no-hw / post-sync) e Benchmark.jsx (post-benchmark).
+- **`components/TechTerm.jsx`**: tooltip glossario per termini tecnici. Dizionario IT+EN con 12 entry (bufferbloat, MPO, HAGS, MSI mode, MMCSS, ULPS, hiberfil, DPI, DWM, ping, jitter, frametime). Icona `HelpCircle` cyan + underline dashed. Usa shadcn Tooltip. Applicato a Network.jsx (bufferbloat + jitter).
+- **i18n.js**: nuovi namespace `bottleneck.*` (14 chiavi) e `nba.*` (10 chiavi) in IT + EN, per evitare mixed-language UX.
+### Fixed
+- BottleneckDetector: rinominati testid dei chip interni da `bottleneck-{kind}` a `bottleneck-chip-{kind}` per eliminare collisione con il container (segnalato da testing agent iteration_35).
+### Tested
+- iteration_35: 80% pass, tutte le feature core verificate. Bottleneck detector switch CPU-BOUND ↔ GPU-BOUND in real-time confermato. Menu ristrutturato in IT verificato. Mobile handoff modal si apre. `nba-post-benchmark` renders correttamente sopra FleetPercentileCard.
+### Deferred
+- Migrazione bulk dei bottoni esistenti a `<PrimaryButton>/<SecondaryButton>/<GhostButton>` — troppo pervasiva (20+ pagine), farla iterativamente su nuovo lavoro.
+- Fix i18n language init (bug pre-esistente: `localStorage.i18nextLng=it` non applicato al primo render).
+- Route `/app/pc/live` → `/app/live` (già è `/app/live`, testing doc era outdated).
+

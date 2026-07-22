@@ -102,11 +102,11 @@ export default function BottleneckDetector({ compact = false }) {
           <div className="font-display font-black text-xl leading-tight" style={{ color: p.color }}>{c.title}</div>
           <p className="text-sm text-zinc-400 mt-1 leading-relaxed">{c.hint}</p>
           <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-mono text-zinc-500">
-            <span data-testid="bottleneck-cpu">CPU <span className="text-zinc-200">{cpu.toFixed(0)}%</span></span>
+            <span data-testid="bottleneck-chip-cpu">CPU <span className="text-zinc-200">{cpu.toFixed(0)}%</span></span>
             <span className="text-zinc-700">·</span>
-            <span data-testid="bottleneck-gpu">GPU <span className="text-zinc-200">{gpu.toFixed(0)}%</span></span>
+            <span data-testid="bottleneck-chip-gpu">GPU <span className="text-zinc-200">{gpu.toFixed(0)}%</span></span>
             <span className="text-zinc-700">·</span>
-            <span data-testid="bottleneck-ram">RAM <span className="text-zinc-200">{ram.toFixed(0)}%</span></span>
+            <span data-testid="bottleneck-chip-ram">RAM <span className="text-zinc-200">{ram.toFixed(0)}%</span></span>
             {s.cpu_temp != null && <><span className="text-zinc-700">·</span><span>CPU°C <span className="text-zinc-200">{s.cpu_temp}</span></span></>}
             {s.gpu_temp != null && <><span className="text-zinc-700">·</span><span>GPU°C <span className="text-zinc-200">{s.gpu_temp}</span></span></>}
           </div>
