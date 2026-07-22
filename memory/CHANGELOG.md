@@ -1,6 +1,52 @@
 # FrameForge — Changelog
 
 
+## v0.7.3 (Agent) — 2026-02-22 · Menu CLI rimosso, GUI-first
+### Changed
+- **`agent-build/forgefps_agent.py`** — al doppio-click sull'`.exe` senza `--mode`,
+  l'agent apre **direttamente la GUI sicura** (equivalente a `--mode optimize`).
+  Menu CLI a tastiera completamente rimosso: la GUI copriva già il 100% delle
+  azioni (benchmark toggle, ripristina bottone, cleanup incluso in bulk apply,
+  sync silent al boot).
+- **Backward-compat CLI preservata** per protocol handler e power user:
+  `--mode sync | benchmark | restore | logout | securegui | optimize | gui`.
+  `--mode logout` è la modalità power-user per rimuovere il token da riga di
+  comando (equivalente al bottone "Cambia account" nella GUI).
+- **Rimosse funzioni duplicate**: `menu()`, `top_processes()`,
+  `high_performance_power()` (~30 righe). Erano tutte accessibili solo dal
+  menu CLI e duplicavano logica già presente in `apply_all_tweaks()` (che
+  chiama `_cleanup` + power plan setup) e nella GUI.
+- **Bump `AGENT_VERSION`** → `"0.7.3"`.
+
+### Added — GUI locale "Cambia account"
+- **`backend/ps_agent.py`** GUI HTML embedded:
+  - Nuovo bottone **"👤 Cambia account"** nell'header (tra "Continua sul Telefono"
+    e la Sync Cloud toggle). Stile: bordo grigio dim, hover rosso danger.
+    Testid: `logout-btn`.
+  - Nuovo endpoint locale `POST /api/logout` (PowerShell HTTP listener):
+    cancella `%APPDATA%\FrameForge\token.dat` e chiude Edge/WebView2 con
+    graceful shutdown (500ms delay). Ritorna `{ok: bool, removed: bool}`.
+  - JS handler: click → `confirm()` di conferma → `api("/api/logout", POST)` →
+    toast "✓ Token rimosso · chiusura in corso..." → `window.close()` dopo 900ms.
+- CSS: nuova classe `.logout-btn` (font mono, uppercase, letter-spacing coerente
+  col resto dell'header).
+
+### Verified
+- **Syntax check**: `forgefps_agent.py` + `ps_agent.py` parsano OK
+- **LOC**: `forgefps_agent.py` da 1107 → 1081 righe (−2.3%, ma coerenza logica +100%)
+- **Endpoint smoke test**: `/api/agent/script` con token valido admin — 9 nuove
+  occorrenze `logout-btn`/`/api/logout`/`Cambia account`, 0 residui legacy
+  (menu, top_processes, high_performance_power definiti solo nel `.py` client,
+  non servono nel PowerShell)
+
+### Todo utente
+- **Rebuild `.exe` v0.7.3** su GitHub Release (obbligatorio per applicare menu removal + version bump). Il fallback `_LEGACY_BACKUP_FILE` garantisce zero perdita
+  di backup per gli utenti in upgrade da v0.7.2.
+- **Redeploy web** — la nuova GUI con "Cambia account" è servita on-the-fly dal
+  backend (`/api/agent/script`) quindi live subito dopo redeploy, anche per gli
+  utenti che non aggiornano l'`.exe`.
+
+
 ## Agent UX audit P0+P1 — 2026-02-22 · Terminologia unificata & prefissi console
 ### Audit report
 - `/app/memory/AGENT_UX_AUDIT.md` — 17 fix opportunities identificate su `ps_agent.py` (3.766 righe) + `forgefps_agent.py` (1.084 righe).

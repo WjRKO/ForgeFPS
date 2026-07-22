@@ -32,7 +32,7 @@ _args, _ = _parser.parse_known_args()
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.7.2"
+AGENT_VERSION = "0.7.3"
 # v0.7.3+: rinominato da boostpc_backup.json → forgefps_backup.json.
 # Fallback lettura del vecchio nome per una release per non perdere il backup
 # degli utenti che aggiornano dalla v0.7.2 o precedenti.
@@ -1013,60 +1013,12 @@ def restore_tweaks():
     print("[ OK ] Impostazioni ripristinate ai valori precedenti.")
 
 
-def high_performance_power():
-    print("\n[STEP] Piano energetico ad alte prestazioni...")
-    bk = _load_backup()
-    cur = ps("(powercfg /getactivescheme)")
-    m = re.search(r"([0-9a-fA-F-]{36})", cur or "")
-    if m and "power_plan" not in bk:
-        bk["power_plan"] = m.group(1)
-        _save_backup(bk)
-    run("powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c")
-    print("[ OK ] Attivato 'High Performance' (backup salvato).")
-
-
-def top_processes():
-    print("\n[STEP] Processi che consumano piu' RAM:")
-    print(ps("Get-Process | Sort-Object WS -Descending | Select-Object -First 8 "
-             "Name,@{N='RAM_MB';E={[math]::round($_.WS/1MB,1)}} | Format-Table -AutoSize | Out-String") or "       n/d")
-
-
 def _menu_logout():
+    """Rimuove il token dal PC. Esposto anche come pulsante 'Cambia account' nella GUI.
+    Utile via CLI power-user: `forgefps-agent.exe --mode logout`.
+    """
     _forget_saved_token()
     print("\n[ OK ] Token rimosso. Al prossimo avvio verra' richiesto un nuovo token.")
-    print("       Chiudi la finestra e riavvia l'agent con un altro account.")
-
-
-def menu():
-    actions = {
-        "1": ("Apri GUI (Problema · Motivo · Impatto per ogni tweak)", launch_secure_gui),
-        "2": ("Rileva hardware e sincronizza con il cloud", send_all),
-        "3": ("Benchmark rapido (CPU / RAM / disco / rete)", benchmark_only),
-        "4": ("Ripristina (annulla tutti i tweak)", restore_tweaks),
-        "5": ("Cambia account (rimuove il token salvato)", _menu_logout),
-        "A": ("OTTIMIZZA TUTTO CLI + benchmark prima/dopo (avanzato)", optimize_with_benchmark),
-    }
-    print("=" * 54)
-    print("   FrameForge Agent  v%s" % AGENT_VERSION)
-    print("=" * 54)
-    if not is_admin():
-        print("[WARN] Suggerito eseguire come Amministratore.")
-    print("\n   Consigliato")
-    print(f"     1  {actions['1'][0]}")
-    print("\n   Altre azioni")
-    for k in ["2", "3", "4", "5"]:
-        print(f"     {k}  {actions[k][0]}")
-    print("\n   Avanzato")
-    print(f"     A  {actions['A'][0]}")
-    print("\n     Q  Esci")
-    choice = input("\nScegli un'azione: ").strip().upper()
-    if choice == "Q":
-        sys.exit(0)
-    if choice in actions:
-        actions[choice][1]()
-    else:
-        print("[WARN] Scelta non valida.")
-    input("\nPremi INVIO per continuare...")
 
 
 if __name__ == "__main__":
@@ -1090,17 +1042,40 @@ if __name__ == "__main__":
         # Nessun input('Premi INVIO'): l'utente non sta guardando la console.
         sys.exit(0 if ok else 1)
 
-    # Modalita' non interattive dirette (es. --mode securegui / optimize / sync)
-    if _args.mode in ("securegui", "gui"):
-        launch_secure_gui()
-        try:
-            input("\nPremi INVIO per chiudere...")
-        except Exception:
-            pass
+    # v0.7.3+: menu CLI rimosso. Doppio-click sull'.exe = apri direttamente la GUI sicura.
+    # Le vecchie azioni CLI (benchmark, sync, ripristina) sono TUTTE nella GUI:
+    #   - Benchmark PRIMA/DOPO: toggle in fondo alla finestra
+    #   - Ripristina: bottone "Ripristina tutto" nella bottom bar
+    #   - Sync hardware: partita silent al boot dell'agent
+    #   - Cambia account: bottone in header GUI
+    # Backward-compat: --mode benchmark/sync/optimize/restore/logout continuano a funzionare
+    # (usati dal protocol handler frameforge:// e dai power user).
+    if _args.mode == "logout":
+        _menu_logout()
+        try: input("\nPremi INVIO per chiudere...")
+        except Exception: pass
         sys.exit(0)
-    while True:
-        try:
-            subprocess.run(["cmd", "/c", "cls"], check=False)
-        except Exception:
-            pass
-        menu()
+
+    if _args.mode == "sync":
+        send_all()
+        try: input("\nPremi INVIO per chiudere...")
+        except Exception: pass
+        sys.exit(0)
+    if _args.mode == "benchmark":
+        benchmark_only()
+        try: input("\nPremi INVIO per chiudere...")
+        except Exception: pass
+        sys.exit(0)
+    if _args.mode == "restore":
+        restore_tweaks()
+        try: input("\nPremi INVIO per chiudere...")
+        except Exception: pass
+        sys.exit(0)
+
+    # Default = securegui/optimize/gui = apre la GUI sicura
+    launch_secure_gui()
+    try:
+        input("\nPremi INVIO per chiudere...")
+    except Exception:
+        pass
+    sys.exit(0)

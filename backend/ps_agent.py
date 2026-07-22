@@ -1501,6 +1501,16 @@ function Show-WebGui {
   .mobile-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .mobile-btn-icon { font-size: 14px; line-height: 1; }
 
+  .logout-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 10px; border: 1px solid var(--dim); background: transparent;
+    color: var(--muted); font-family: "Consolas", monospace;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .logout-btn:hover { border-color: var(--danger); color: var(--danger); }
+  .logout-btn-icon { font-size: 13px; line-height: 1; }
+
   .mh-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.82);
     z-index: 200; display: flex; align-items: center; justify-content: center;
@@ -2081,6 +2091,10 @@ function Show-WebGui {
         <button type="button" class="mobile-btn" id="mobileHandoffBtn" data-testid="mobile-handoff-btn" title="Apri la Dashboard sul telefono senza login">
           <span class="mobile-btn-icon" aria-hidden="true">&#9990;</span>
           <span>Continua sul Telefono</span>
+        </button>
+        <button type="button" class="logout-btn" id="logoutBtn" data-testid="logout-btn" title="Rimuove il token salvato: al prossimo avvio l'agent chiedera' un nuovo token">
+          <span class="logout-btn-icon" aria-hidden="true">&#128100;</span>
+          <span>Cambia account</span>
         </button>
         <label class="live-sync-toggle" data-testid="live-sync-label" title="Invia CPU/GPU/RAM/temp in tempo reale al Command Center cloud">
           <input type="checkbox" id="liveSyncToggle" data-testid="live-sync-toggle" />
@@ -2750,6 +2764,21 @@ function Show-WebGui {
     renderCards();
   };
 
+  // Cambia account: cancella token.dat + chiude GUI
+  const _logoutBtn = document.getElementById("logoutBtn");
+  if (_logoutBtn) _logoutBtn.onclick = async () => {
+    if (!confirm("Rimuovere il token FrameForge da questo PC?\n\nAl prossimo avvio dell'agent verra' richiesto un nuovo token.\nUsalo se stai passando a un altro account.")) return;
+    _logoutBtn.disabled = true;
+    try {
+      const r = await api("/api/logout", { method: "POST", headers:{"X-FF-Token":TOKEN} });
+      toast(r && r.removed ? "\u2713 Token rimosso · chiusura in corso..." : "Chiusura in corso...", "ok");
+      setTimeout(() => { try { window.close(); } catch(_){} }, 900);
+    } catch (e) {
+      _logoutBtn.disabled = false;
+      toast("Errore: " + (e && e.message || e), "err");
+    }
+  };
+
   // H. Filter chips
   document.querySelectorAll("#filterChips .chip").forEach(chip => {
     chip.onclick = () => {
@@ -3113,6 +3142,20 @@ function Show-WebGui {
         }
         elseif ($path -eq '/api/close') {
           Send-Json $ctx @{ ok = $true }
+          try { if ($realEdge -and -not $realEdge.HasExited) { $realEdge.CloseMainWindow() | Out-Null } } catch {}
+          break
+        }
+        elseif ($path -eq '/api/logout' -and $method -eq 'POST') {
+          # Rimuove il token persistente (%APPDATA%\FrameForge\token.dat) e chiude la GUI.
+          # Al prossimo doppio-click sull'.exe verra' richiesto un nuovo token.
+          $removed = $false
+          try {
+            $tokFile = Join-Path $env:APPDATA 'FrameForge\token.dat'
+            if (Test-Path $tokFile) { Remove-Item $tokFile -Force -ErrorAction SilentlyContinue; $removed = $true }
+          } catch {}
+          WebLog ('Token rimosso dal PC. Al prossimo avvio l''agent chiedera'' un nuovo token.')
+          Send-Json $ctx @{ ok = $true; removed = $removed }
+          Start-Sleep -Milliseconds 500
           try { if ($realEdge -and -not $realEdge.HasExited) { $realEdge.CloseMainWindow() | Out-Null } } catch {}
           break
         }
