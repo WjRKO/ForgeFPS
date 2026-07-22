@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
-import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu, Activity, Copy, Check, Gamepad2, Sparkles, ChevronDown, FileCheck2, Lock, History, AlertTriangle, ExternalLink, Zap, PlayCircle, Target, RotateCcw, LineChart } from "lucide-react";
+import { MonitorDown, Download, Terminal, ShieldCheck, HardDrive, Wind, Gauge, Cpu, Activity, Copy, Check, Gamepad2, Sparkles, ChevronDown, FileCheck2, Lock, History, AlertTriangle, ExternalLink, Target } from "lucide-react";
 import { AGENT_EXE_URL, AGENT_EXE_SHA256, AGENT_EXE_VERSION, AGENT_EXE_DATE, AGENT_RELEASES_URL, AGENT_DEFAULT_BACKEND } from "@/config/agent";
 import { toast } from "sonner";
 import api, { API } from "@/lib/api";
@@ -207,36 +207,6 @@ export default function DesktopAgent() {
   };
 
   // v0.7.0+: chiama /api/agent/launch-uri per un URI firmato HMAC e apre la
-  // GUI locale via protocollo custom `frameforge://`. Se l'utente non ha
-  // l'app installata, il browser mostra "no app to open" o rimane in silenzio:
-  // dopo 1.5s mostriamo un toast che invita a scaricare lo ZIP la prima volta.
-  const [launching, setLaunching] = useState("");
-  const handleLaunch = async (mode) => {
-    if (launching) return;
-    setLaunching(mode);
-    try {
-      const { data } = await api.get(`/agent/launch-uri?mode=${encodeURIComponent(mode)}`);
-      if (!data?.uri) throw new Error("no uri");
-      // Naviga verso l'URI custom: Windows apre l'exe se registrato.
-      window.location.href = data.uri;
-      // Timer di grazia: se dopo 2s la pagina e' ancora visibile
-      // (tab non ha perso focus), probabilmente l'app non e' installata.
-      const startVis = document.visibilityState;
-      setTimeout(() => {
-        if (document.visibilityState === startVis && startVis === "visible") {
-          toast(en
-            ? "Not installed yet? Download FrameForge below (one-time)."
-            : "Non hai ancora l'app? Scarica FrameForge qui sotto (una sola volta).");
-        }
-      }, 2000);
-    } catch (e) {
-      toast.error(en ? "Could not generate launch URI." : "Impossibile generare l'URI di avvio.");
-    } finally {
-      // Riabilita dopo 1s per evitare doppi click accidentali
-      setTimeout(() => setLaunching(""), 1000);
-    }
-  };
-
   const tk = token || "IL_TUO_TOKEN";
   const isProd = (BACKEND || "").includes("forgefps.dev");
   const exeCmd = isProd
@@ -256,56 +226,6 @@ export default function DesktopAgent() {
 
       {/* First-scan banner: mostrato solo se l'utente non ha ancora fatto il primo sync */}
       <FirstScanBanner />
-
-      {/* Quick Actions: bottoni che aprono la GUI locale via frameforge:// (v0.7.0+) */}
-      <div className="mb-6" data-testid="quick-actions">
-        <div className="flex items-baseline justify-between mb-3">
-          <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-1">// {en ? "one click actions" : "azioni un click"}</div>
-            <h2 className="font-display font-bold text-lg">{en ? "Launch the app instantly" : "Avvia l'app all'istante"}</h2>
-          </div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 hidden sm:block">
-            frameforge://
-          </div>
-        </div>
-        <p className="text-xs text-zinc-500 leading-relaxed mb-3 max-w-3xl">
-          {en
-            ? "Click any button below to open the local GUI on the exact action. Requires FrameForge v0.7.0+ installed once. If it doesn't open, download the ZIP above."
-            : "Clicca un bottone per aprire la GUI locale direttamente sull'azione. Richiede FrameForge v0.7.0+ installato una volta. Se non si apre, scarica lo ZIP qui sopra."}
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {[
-            { mode: "optimize",  icon: Zap,        label_it: "Ottimizza",         label_en: "Optimize",           color: "#E5FF00" },
-            { mode: "monitor",   icon: LineChart,  label_it: "Monitor live",      label_en: "Live monitor",       color: "#00E0FF" },
-            { mode: "benchmark", icon: Gauge,      label_it: "Benchmark",         label_en: "Benchmark",          color: "#00FF66" },
-            { mode: "booster",   icon: PlayCircle, label_it: "Game Booster",      label_en: "Game Booster",       color: "#FFAA00" },
-            { mode: "restore",   icon: RotateCcw,  label_it: "Ripristina",        label_en: "Restore",            color: "#FF3860" },
-          ].map(({ mode, icon: Icon, label_it, label_en, color }) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => handleLaunch(mode)}
-              disabled={launching === mode}
-              data-testid={`quick-action-${mode}`}
-              className="group flex items-center gap-3 bg-[#0F0F12] border border-[#2A2A35] hover:border-white/40 px-4 py-3 text-left transition-all disabled:opacity-60"
-              style={{ borderColor: launching === mode ? color : undefined }}
-            >
-              <div className="w-9 h-9 border flex items-center justify-center shrink-0 transition-colors"
-                   style={{ borderColor: `${color}66`, backgroundColor: `${color}0F` }}>
-                <Icon size={16} style={{ color }} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold text-sm text-zinc-200 truncate">
-                  {en ? label_en : label_it}
-                </div>
-                <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">
-                  {launching === mode ? (en ? "opening..." : "apertura...") : `-Mode ${mode}`}
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
 
       <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start">
         {/* LEFT: content (scrolls) */}
