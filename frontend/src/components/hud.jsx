@@ -41,6 +41,40 @@ export function Badge({ tone = "neutral", icon: Icon, children, testid }) {
   );
 }
 
+// ===== 3 canonical button variants (uniformity across app) =====
+// PrimaryButton: solid accent (yellow #E5FF00), MAX 1 per page — the "hero" CTA
+// SecondaryButton: outline grey border, for standard actions
+// GhostButton: text-only, for tertiary/danger-adjacent actions
+export function PrimaryButton({ icon: Icon, children, testid, className = "", ...rest }) {
+  return (
+    <button data-testid={testid}
+      className={`inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2.5 text-sm hover:bg-[#D4EE00] disabled:opacity-60 disabled:cursor-not-allowed transition-colors ${className}`} {...rest}>
+      {Icon && <Icon size={15} />} {children}
+    </button>
+  );
+}
+export function SecondaryButton({ icon: Icon, children, testid, className = "", ...rest }) {
+  return (
+    <button data-testid={testid}
+      className={`inline-flex items-center gap-2 border border-[#2A2A35] text-zinc-300 px-3 py-2 text-sm hover:border-[#E5FF00] hover:text-[#E5FF00] disabled:opacity-60 disabled:cursor-not-allowed transition-colors ${className}`} {...rest}>
+      {Icon && <Icon size={15} />} {children}
+    </button>
+  );
+}
+export function GhostButton({ icon: Icon, children, testid, tone = "muted", className = "", ...rest }) {
+  const tones = {
+    muted: "text-zinc-400 hover:text-zinc-100",
+    accent: "text-[#E5FF00] hover:text-[#F5FF66]",
+    danger: "text-[#FF3B30] hover:text-[#FF5B50]",
+  };
+  return (
+    <button data-testid={testid}
+      className={`inline-flex items-center gap-2 px-2 py-1.5 text-sm transition-colors ${tones[tone] || tones.muted} ${className}`} {...rest}>
+      {Icon && <Icon size={15} />} {children}
+    </button>
+  );
+}
+
 export function EmptyState({ icon: Icon, title, description, action }) {
   return (
     <div className="flex flex-col items-center justify-center text-center py-16 px-6 border border-dashed border-[#2A2A35] bg-[#0F0F12]/40 gap-3">

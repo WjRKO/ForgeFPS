@@ -766,3 +766,28 @@ Precedenti release documentate in `PRD.md`.
 ### Testato
 - Smoke test HTML statico con dati mock in Playwright: tutti i data-testid resi, zero errori JS, preset preview funzionante.
 
+
+## UX consistency P0+P1 — 2026-02-22 · Menu ristrutturato + terminologia
+### Changed
+- **Menu sidebar ristrutturato** (`components/Layout.jsx`):
+  - PRIMARY (5 voci): Dashboard · Il mio PC · AI Advisor · Gaming · Prezzi & Tracker
+  - Sezione **SHOPPING**: Consiglia Build · Upgrade & FPS
+  - Sezione **STRUMENTI** (nuova): FrameForge Agent · Report PDF · Comandi · Rete · BIOS
+  - Admin resta separato
+- **Terminologia unificata** (`i18n.js`, IT+EN):
+  - "Desktop Agent" → **"FrameForge Agent"** (32 occorrenze bulk replace)
+  - "Collega il PC" (menu) → "FrameForge Agent"
+  - "Prezzi" → "Prezzi & Tracker"
+  - "Report Prima/Dopo" → "Report PDF"
+  - "Rete & Bufferbloat" → "Rete"
+  - "BIOS & Ripristino" → "BIOS"
+  - "Comandi Utili" → "Comandi"
+- **Landing**: `f_agent_t` "Desktop Agent" → "FrameForge Agent" (IT+EN)
+### Added
+- **3 bottoni canonici** in `components/hud.jsx`: `<PrimaryButton>`, `<SecondaryButton>`, `<GhostButton>` (per uniformare CTA in tutte le pagine)
+- **Sezione "Strumenti"** in i18n con label `section.tools: Strumenti / Tools`
+- **Bottone Mobile Handoff** persistente nell'header (`Layout.jsx`): icona telefono + label "Telefono" (nascosta su mobile). Al click apre il modal QR handoff su qualsiasi pagina, non solo Dashboard.
+### Verified
+- Compile pulito, menu renders correttamente, modal handoff si apre al click, terminologia unificata.
+- OnboardingTour + FreshnessBadge già presenti nel Layout, non toccati.
+

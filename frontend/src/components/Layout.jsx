@@ -7,29 +7,29 @@ import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import FreshnessBadge from "@/components/FreshnessBadge";
 import OnboardingTour from "@/components/OnboardingTour";
+import MobileHandoffModal from "@/components/MobileHandoffModal";
+import { Smartphone } from "lucide-react";
 import api from "@/lib/api";
 import { pushSupported, getPushState, enablePush, disablePush } from "@/lib/push";
 
 const NAV_GROUPS = [
   { section: null, items: [
     { to: "/app", label: "nav.dashboard", icon: LayoutDashboard, end: true, id: "dashboard" },
-  ]},
-  { section: "section.optimize", items: [
     { to: "/app/pc", label: "nav.pc", icon: Activity, id: "pc" },
     { to: "/app/advisor", label: "nav.advisor", icon: MessageSquareCode, id: "advisor" },
-    { to: "/app/commands", label: "nav.commands", icon: TerminalSquare, id: "commands" },
-    { to: "/app/network", label: "nav.network", icon: Gauge, id: "network" },
-    { to: "/app/bios", label: "nav.bios", icon: SlidersHorizontal, id: "bios" },
-    { to: "/app/report", label: "nav.report", icon: FileBarChart, id: "report" },
-    { to: "/app/desktop", label: "nav.desktop", icon: MonitorDown, id: "desktop" },
-  ]},
-  { section: null, items: [
     { to: "/app/gaming", label: "nav.gaming", icon: Gamepad2, id: "gaming" },
+    { to: "/app/tracker", label: "nav.tracker", icon: LineChart, id: "tracker" },
   ]},
   { section: "section.buy", items: [
     { to: "/app/builds", label: "nav.builds", icon: Cpu, id: "builds" },
     { to: "/app/upgrade", label: "nav.upgrade", icon: Rocket, id: "upgrade" },
-    { to: "/app/tracker", label: "nav.tracker", icon: LineChart, id: "tracker" },
+  ]},
+  { section: "section.tools", items: [
+    { to: "/app/desktop", label: "nav.desktop", icon: MonitorDown, id: "desktop" },
+    { to: "/app/report", label: "nav.report", icon: FileBarChart, id: "report" },
+    { to: "/app/commands", label: "nav.commands", icon: TerminalSquare, id: "commands" },
+    { to: "/app/network", label: "nav.network", icon: Gauge, id: "network" },
+    { to: "/app/bios", label: "nav.bios", icon: SlidersHorizontal, id: "bios" },
   ]},
   { section: null, items: [
     { to: "/app/admin", label: "nav.admin", icon: Shield, id: "admin", adminOnly: true },
@@ -120,6 +120,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [handoffOpen, setHandoffOpen] = useState(false);
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
@@ -202,6 +203,15 @@ export default function Layout() {
           </div>
           <div className="flex items-center gap-4">
             <FreshnessBadge />
+            <button
+              type="button"
+              onClick={() => setHandoffOpen(true)}
+              className="hidden sm:inline-flex items-center gap-1.5 border border-[#2A2A35] text-zinc-400 hover:text-[#E5FF00] hover:border-[#E5FF00] px-2.5 py-1.5 text-xs transition-colors"
+              title={t("mobile.handoff_title", { defaultValue: "Continua sul telefono" })}
+              data-testid="mobile-handoff-header-btn">
+              <Smartphone size={14} />
+              <span className="hidden lg:inline">{t("mobile.handoff_short", { defaultValue: "Telefono" })}</span>
+            </button>
             <LanguageSwitcher />
             <Notifications />
           </div>
@@ -213,6 +223,7 @@ export default function Layout() {
         </main>
       </div>
       <OnboardingTour />
+      <MobileHandoffModal open={handoffOpen} onClose={() => setHandoffOpen(false)} />
     </div>
   );
 }

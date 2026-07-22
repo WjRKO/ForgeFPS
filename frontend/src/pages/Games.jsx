@@ -180,7 +180,7 @@ export default function Games() {
 
               {runningApps.length === 0 ? (
                 <div className="bg-black/30 border border-[#2A2A35] px-3 py-4 text-xs text-zinc-500 text-center leading-relaxed" data-testid="booster-no-running">
-                  {t("games.booster_no_running") || "Nessuna app in background rilevata. Avvia il Desktop Agent con Ottimizza o Sync per aggiornare la lista."}
+                  {t("games.booster_no_running") || "Nessuna app in background rilevata. Avvia il FrameForge Agent con Ottimizza o Sync per aggiornare la lista."}
                 </div>
               ) : (
                 <>
