@@ -414,7 +414,23 @@ function Get-Health {
   return $h
 }
 
-function Get-StartupList { return @(Get-CimInstance Win32_StartupCommand | Select-Object -ExpandProperty Name | Select-Object -First 40) }
+function Get-StartupList {
+  # v0.7.4: emetti list[dict] invece di list[str] per allineare al modello backend.
+  # ArrayList (invece di @()) sopravvive al quirk di PS5 con ConvertTo-Json su
+  # array a 1 elemento (che verrebbe unwrap-ato a oggetto).
+  $al = New-Object System.Collections.ArrayList
+  try {
+    Get-CimInstance Win32_StartupCommand -ErrorAction Stop | Select-Object -First 40 | ForEach-Object {
+      [void]$al.Add(@{
+        name     = "$($_.Name)"
+        command  = "$($_.Command)"
+        user     = "$($_.User)"
+        location = "$($_.Location)"
+      })
+    }
+  } catch {}
+  return ,$al
+}
 
 # ---------------- Benchmark ----------------
 function Run-Benchmark {

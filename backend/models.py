@@ -48,7 +48,9 @@ class PushSubInput(BaseModel):
 class SpecsInput(BaseModel):
     data: Optional[dict[str, Any]] = None
     health: Optional[dict[str, Any]] = None
-    startup: Optional[list[dict[str, Any]]] = None
+    # Accetta sia list[str] (client legacy come .exe v0.7.x) sia list[dict] (client
+    # ricchi). Normalizzato server-side in _normalize_startup prima di scrivere.
+    startup: Optional[list[Any]] = None
     benchmark: Optional[dict[str, Any]] = None
     games: Optional[list[str]] = None
     running_apps: Optional[list[str]] = None

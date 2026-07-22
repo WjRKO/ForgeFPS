@@ -269,7 +269,17 @@ def build(get_current_user):
                 "cpu_temp": _h.get("cpu_temp"), "gpu_temp": _h.get("gpu_temp"),
                 "created_at": now_iso()})
         if data.startup is not None:
-            fields["startup"] = data.startup
+            # v0.7.4: agenti PowerShell legacy inviavano list[str] (nomi startup),
+            # nuovi client possono inviare list[dict] con name/command/user/location.
+            # Normalizza tutto a list[dict] con almeno {name} per compatibilita' DB.
+            _norm = []
+            for item in (data.startup or []):
+                if isinstance(item, str):
+                    _norm.append({"name": item})
+                elif isinstance(item, dict):
+                    _norm.append(item)
+                # else: skip elementi malformati (nessun errore, invio non blocca)
+            fields["startup"] = _norm
         if data.games is not None:
             fields["games"] = data.games
         if data.running_apps is not None:
