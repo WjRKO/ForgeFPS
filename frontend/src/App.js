@@ -9,6 +9,8 @@ import { ConsentBanner } from "@/components/ConsentBanner";
 const Layout = lazy(() => import("@/components/Layout"));
 const Landing = lazy(() => import("@/pages/Landing"));
 const Auth = lazy(() => import("@/pages/Auth"));
+const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const Security = lazy(() => import("@/pages/Security"));
 const PrivacyTelemetry = lazy(() => import("@/pages/PrivacyTelemetry"));
 const Changelog = lazy(() => import("@/pages/Changelog"));
@@ -82,6 +84,8 @@ function App() {
               <Route path="/demo" element={<DemoApp />} />
               <Route path="/login" element={<Guest><Auth mode="login" /></Guest>} />
               <Route path="/register" element={<Guest><Auth mode="register" /></Guest>} />
+              <Route path="/forgot-password" element={<Guest><ForgotPassword /></Guest>} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/app" element={<Protected><Layout /></Protected>}>
                 <Route index element={<Dashboard />} />
                 <Route path="advisor" element={<Advisor />} />

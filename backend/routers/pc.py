@@ -15,6 +15,7 @@ from database import db, now_iso
 from helpers import specs_to_text, compute_health, get_or_create_agent_token, grade_bufferbloat
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
+from services.gpu_catalog_service import find_gpu_reference, compute_health_vs_reference
 from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput
 from routers.profiles import resolve_tweak_ids, TWEAK_CATALOG, TEMPLATES
 from routers.advisor import _check_ai_rate_limit
@@ -40,7 +41,7 @@ def _iso_age(ts):
 # GitHub Release del ZIP generico dell'agent. Aggiornare a ogni bump di versione.
 AGENT_ZIP_UPSTREAM = os.environ.get(
     "AGENT_ZIP_UPSTREAM",
-    "https://github.com/WjRKO/ForgeFPS/releases/download/v0.7.1/forgefps-agent.zip",
+    "https://github.com/WjRKO/ForgeFPS/releases/download/v0.7.3/forgefps-agent.zip",
 )
 _AGENT_ZIP_CACHE_PATH = f"/tmp/forgefps-agent-cache-{hashlib.sha256(AGENT_ZIP_UPSTREAM.encode()).hexdigest()[:10]}.zip"
 
@@ -252,6 +253,20 @@ def build(get_current_user):
         return _Resp(content=buf.getvalue(), media_type="image/svg+xml",
                      headers={"Cache-Control": "no-store"})
 
+    @r.get("/pc-specs-agent")
+    async def get_specs_agent(x_agent_token: str = Header(default="")):
+        """Ritorna pc-specs autenticato via X-Agent-Token (lato PowerShell/exe locale).
+        Serve al ps_agent.py optimize block per capire se un primo scan e' necessario:
+        se updated_at e' recente (< 15 min) la GUI salta il primo scan.
+        """
+        rec = await db.agent_tokens.find_one({"token": x_agent_token})
+        if not rec:
+            raise HTTPException(status_code=401, detail="Token agent non valido")
+        doc = await db.pc_specs.find_one({"user_id": rec["user_id"]}, {"_id": 0})
+        if not doc:
+            raise HTTPException(status_code=404, detail="No specs yet")
+        return doc
+
     @r.post("/agent/report-specs")
     async def report_specs(data: SpecsInput, x_agent_token: str = Header(default="")):
         rec = await db.agent_tokens.find_one({"token": x_agent_token})
@@ -269,7 +284,17 @@ def build(get_current_user):
                 "cpu_temp": _h.get("cpu_temp"), "gpu_temp": _h.get("gpu_temp"),
                 "created_at": now_iso()})
         if data.startup is not None:
-            fields["startup"] = data.startup
+            # v0.7.4: agenti PowerShell legacy inviavano list[str] (nomi startup),
+            # nuovi client possono inviare list[dict] con name/command/user/location.
+            # Normalizza tutto a list[dict] con almeno {name} per compatibilita' DB.
+            _norm = []
+            for item in (data.startup or []):
+                if isinstance(item, str):
+                    _norm.append({"name": item})
+                elif isinstance(item, dict):
+                    _norm.append(item)
+                # else: skip elementi malformati (nessun errore, invio non blocca)
+            fields["startup"] = _norm
         if data.games is not None:
             fields["games"] = data.games
         if data.running_apps is not None:
@@ -309,6 +334,39 @@ def build(get_current_user):
         doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "benchmark": 1})
         history = await db.benchmarks.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(10)
         return {"latest": (doc or {}).get("benchmark"), "history": history}
+
+    @r.get("/gpu-reference")
+    async def gpu_reference(user: dict = Depends(get_current_user)):
+        """Lookup GPU dell'utente nel catalogo reference + health check contro il suo
+        ultimo benchmark. Ritorna None se la GPU non e' nel catalogo (~50 modelli oggi)
+        o se non c'e' ancora un benchmark salvato.
+
+        Response:
+          {
+            "gpu_string": "NVIDIA GeForce RTX 4070 SUPER",
+            "reference": { gpu_model, vendor, g3d, timespy, vram_gb, tdp_w, class },
+            "health": { status, expected_perf, expected_perf_min/max, delta, ... },
+            "measured_perf": 71  # dall'ultimo benchmark
+          }
+        """
+        uid = str(user["_id"])
+        doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "data": 1, "benchmark": 1})
+        if not doc:
+            return {"reference": None, "reason": "no_specs"}
+        gpu_str = (doc.get("data") or {}).get("gpu") or ""
+        reference = find_gpu_reference(gpu_str)
+        if not reference:
+            return {"gpu_string": gpu_str, "reference": None, "reason": "not_in_catalog"}
+        # Measured perf: prende il quick-bench overall/score piu' recente.
+        bench = doc.get("benchmark") or {}
+        measured = _bench_overall(bench) or _bench_score(bench) or 0
+        health = compute_health_vs_reference(reference, measured) if measured else None
+        return {
+            "gpu_string": gpu_str,
+            "reference": reference,
+            "health": health,
+            "measured_perf": measured,
+        }
 
     def _bench_score(bench: dict) -> int | None:
         if not bench:
@@ -879,7 +937,7 @@ def build(get_current_user):
         return {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data), "filename": "forgefps.ps1"}
 
     # Modalita' accettate dal FrameForge Agent quando aperto via protocollo frameforge://
-    _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "monitor", "prematch", "booster", "restore", "gui"}
+    _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "fullbench", "monitor", "prematch", "booster", "restore", "gui"}
 
     @r.get("/agent/launch-uri")
     async def agent_launch_uri(mode: str = "optimize", silent: int = 0, user: dict = Depends(get_current_user)):

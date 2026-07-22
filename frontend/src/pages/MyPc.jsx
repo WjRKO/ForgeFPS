@@ -107,7 +107,7 @@ export default function MyPc() {
       starting: t("mypcpage.silent_sync_start", { defaultValue: "Sincronizzazione in avvio..." }),
       running: t("mypcpage.silent_sync_running", { defaultValue: "Sincronizzazione hardware in corso..." }),
       done: t("mypcpage.silent_sync_done", { defaultValue: "Sync completato. Dati aggiornati." }),
-      failed: t("mypcpage.silent_sync_failed", { defaultValue: "L'app non risponde. Hai installato FrameForge?" }),
+      failed: t("mypcpage.silent_sync_failed", { defaultValue: "Sync non completato. Se hai gia' usato FrameForge con un altro account, il token locale e' disallineato: vai su 'FrameForge Agent' → 'L'agent potrebbe essere collegato ad un altro account' e scarica il launcher .bat." }),
       notInstalled: t("mypcpage.silent_not_installed", { defaultValue: "Non hai ancora installato FrameForge? Vai su 'FrameForge Agent'." }),
     },
     detectDone: async () => {

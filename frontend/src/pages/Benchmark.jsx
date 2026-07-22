@@ -10,6 +10,7 @@ import BrowserPopupHint from "@/components/BrowserPopupHint";
 import FleetPercentileCard from "@/components/FleetPercentileCard";
 import BenchmarkSparkline from "@/components/BenchmarkSparkline";
 import NextActionBanner from "@/components/NextActionBanner";
+import GpuReferenceCard from "@/components/GpuReferenceCard";
 
 const BENCH_METRICS = [
   { key: "score", lk: "m_score", unit: "/100", higherBetter: true },
@@ -255,6 +256,10 @@ export default function Benchmark() {
         </>} />
 
       <BrowserPopupHint testid="bench-popup-hint" />
+
+      <div className="mb-4">
+        <GpuReferenceCard />
+      </div>
 
       {bench && bench.latest ? (
         <>

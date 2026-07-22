@@ -90,12 +90,22 @@ export default function Auth({ mode }) {
             </button>
           </form>
 
-          <div className="mt-6 text-sm text-zinc-500 text-center">
-            {isLogin ? (
-              <>{t("auth.no_account")} <Link to="/register" data-testid="go-register" className="text-[#E5FF00] hover:underline">{t("auth.go_register")}</Link></>
-            ) : (
-              <>{t("auth.have_account")} <Link to="/login" data-testid="go-login" className="text-[#E5FF00] hover:underline">{t("auth.go_login")}</Link></>
+          <div className="mt-6 text-sm text-zinc-500 text-center space-y-2">
+            {isLogin && (
+              <div>
+                <Link to="/forgot-password" data-testid="go-forgot-password"
+                  className="text-zinc-400 hover:text-[#E5FF00] hover:underline text-xs">
+                  {t("auth.forgot_password_link", { defaultValue: "Password dimenticata?" })}
+                </Link>
+              </div>
             )}
+            <div>
+              {isLogin ? (
+                <>{t("auth.no_account")} <Link to="/register" data-testid="go-register" className="text-[#E5FF00] hover:underline">{t("auth.go_register")}</Link></>
+              ) : (
+                <>{t("auth.have_account")} <Link to="/login" data-testid="go-login" className="text-[#E5FF00] hover:underline">{t("auth.go_login")}</Link></>
+              )}
+            </div>
           </div>
         </div>
 

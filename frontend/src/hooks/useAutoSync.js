@@ -71,42 +71,38 @@ export function useAutoSync({ enabled = true, onSynced } = {}) {
     sync.launch();
   }, [sync]);
 
-  // Trigger 1: primo carico. Se stale > 24h → auto sync
+  // Trigger 1 (disabilitato v0.7.4): auto-launch al carico pagina.
+  // Prima causava un URI navigation ad ogni login/reload che apriva un popup
+  // "Aprire FrameForge?" nel browser e (con exe non allineato) una finestra
+  // PowerShell visibile. Ora il badge mostra solo lo status; l'utente clicca
+  // manualmente per sincronizzare quando vuole.
   useEffect(() => {
     if (!enabled || triggeredRef.current) return;
     (async () => {
       const u = await refresh();
       if (!u) return;
+      // Solo un log info per debug — nessun sync automatico.
       const age = (Date.now() - new Date(u).getTime()) / (1000 * 60 * 60);
-      if (age >= STALE_HOURS && canAutoSync()) {
-        triggeredRef.current = true;
-        console.log(`[autosync] Stale by ${age.toFixed(1)}h, triggering silent sync`);
-        sync.launch();
+      if (age >= STALE_HOURS) {
+        console.log(`[autosync] Stale by ${age.toFixed(1)}h — user can click the badge to sync.`);
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 
-  // Trigger 2: tab torna in focus dopo idle > 1h → auto sync
+  // Trigger 2 (disabilitato v0.7.4): auto-launch al ritorno di focus dopo idle.
+  // Stessa motivazione del Trigger 1. Manteniamo solo il tracking dell'idle
+  // per potenziali future analytics; nessuna azione automatica.
   useEffect(() => {
     if (!enabled) return;
     const onVis = () => {
       if (document.visibilityState === "hidden") {
         try { window.localStorage.setItem(LS_LAST_HIDDEN, String(Date.now())); } catch (e) { console.error("LS write failed", e); }
-      } else if (document.visibilityState === "visible") {
-        try {
-          const hidden = parseInt(window.localStorage.getItem(LS_LAST_HIDDEN) || "0", 10);
-          const idleH = hidden ? (Date.now() - hidden) / (1000 * 60 * 60) : 0;
-          if (idleH >= IDLE_HOURS && canAutoSync() && !sync.running) {
-            console.log(`[autosync] Focus after ${idleH.toFixed(1)}h idle, triggering silent sync`);
-            sync.launch();
-          }
-        } catch (e) { console.error("focus autosync check failed", e); }
       }
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [enabled, sync]);
+  }, [enabled]);
 
   // Ticker to keep 'now' updated per age display (every 30s)
   useEffect(() => {

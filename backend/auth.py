@@ -271,14 +271,23 @@ def build_auth_router(db):
             raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     @router.post("/forgot-password")
-    async def forgot(data: ForgotInput):
+    async def forgot(data: ForgotInput, request: Request):
         user = await db.users.find_one({"email": data.email.lower()})
         if user:
             token = secrets.token_urlsafe(32)
+            # Salva token con metadati denormalizzati per il pannello admin
+            # (finché non integriamo email vera via Resend: /api/admin/password-resets
+            # permette all'admin di consegnare il link a mano all'utente).
             await db.password_reset_tokens.insert_one({
-                "token": token, "user_id": str(user["_id"]),
+                "token": token,
+                "user_id": str(user["_id"]),
+                "email": data.email.lower(),
+                "created_at": datetime.now(timezone.utc),
                 "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
-                "used": False})
+                "used": False,
+                "used_at": None,
+                "ip": (request.client.host if request.client else None) if request else None,
+            })
             print(f"[PASSWORD RESET] Link: /reset-password?token={token}")
         return {"ok": True, "message": "If the email exists, a reset link was sent."}
 
@@ -296,7 +305,9 @@ def build_auth_router(db):
             raise HTTPException(status_code=400, detail="Token expired")
         await db.users.update_one({"_id": ObjectId(rec["user_id"])},
                                   {"$set": {"password_hash": hash_password(data.password)}})
-        await db.password_reset_tokens.update_one({"token": data.token}, {"$set": {"used": True}})
+        await db.password_reset_tokens.update_one(
+            {"token": data.token},
+            {"$set": {"used": True, "used_at": datetime.now(timezone.utc)}})
         return {"ok": True}
 
     @router.get("/preferences")
