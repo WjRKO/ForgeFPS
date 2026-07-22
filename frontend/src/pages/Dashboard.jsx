@@ -6,17 +6,14 @@ import {
   LineChart, Cpu, MessageSquareCode, PiggyBank, ArrowRight, Zap,
   MonitorDown, Gauge, Gamepad2, Activity, TrendingUp, TrendingDown,
   MessagesSquare, CheckCircle2, Circle, Share2, Bell, Download,
-  Sparkles, ShieldCheck, Wifi, Smartphone,
+  Sparkles, ShieldCheck, Wifi,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import MobileHandoffModal from "@/components/MobileHandoffModal";
 import NextActionBanner from "@/components/NextActionBanner";
-import {
-  PageHeader, EmptyState, HealthRing, Sparkline, HUDCard, Badge, SkeletonCard,
-  stagger, item,
-} from "@/components/hud";
+import { PageHeader, EmptyState, HealthRing, Sparkline, HUDCard, Badge, SkeletonCard,
+  stagger, item, BTN_CLASSES } from "@/components/hud";
 import { AGENT_EXE_URL, AGENT_EXE_VERSION, AGENT_RELEASES_URL } from "@/config/agent";
 import { trackConversion } from "@/lib/gtag";
 
@@ -61,7 +58,7 @@ function PcHeroCard({ specs, health, t, en }) {
             <Link
               to="/app/desktop"
               data-testid="pc-connect-cta"
-              className="mt-3 inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-5 py-2.5 text-xs font-mono uppercase tracking-widest hover:bg-white transition-colors"
+              className={`mt-3 ${BTN_CLASSES.primaryMono}`}
             >
               <MonitorDown size={14} /> {t("dashboard.pc_connect")}
             </Link>
@@ -173,7 +170,7 @@ function BenchmarkCard({ bench, discord, t, onShare }) {
             <Link
               to="/app/desktop"
               data-testid="bench-empty-cta"
-              className="mt-3 inline-flex items-center gap-2 border border-[#E5FF00]/50 text-[#E5FF00] hover:bg-[#E5FF00]/10 px-4 py-2 text-xs font-mono uppercase tracking-widest transition-colors"
+              className={`mt-3 ${BTN_CLASSES.secondaryMono}`}
             >
               {t("dashboard.bench_none_cta")}
             </Link>
@@ -634,7 +631,6 @@ export default function Dashboard() {
   const [bench, setBench] = useState(null);
   const [discord, setDiscord] = useState(null);
   const [notifs, setNotifs] = useState(null);
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     api.get("/stats").then(({ data }) => setStats(data)).catch(() => setStats({}));
@@ -699,18 +695,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <MobileHandoffModal open={mobileOpen} onClose={() => setMobileOpen(false)} />
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <PageHeader eyebrow={t("dashboard.eyebrow")} title={greeting} />
-        <button
-          onClick={() => setMobileOpen(true)}
-          data-testid="continue-on-mobile-btn"
-          className="mt-2 inline-flex items-center gap-2 border border-[#00E0FF]/40 hover:border-[#00E0FF] text-[#00E0FF] hover:bg-[#00E0FF]/10 px-4 py-2 text-xs font-mono uppercase tracking-widest transition-colors"
-          title="Apri la Dashboard sul telefono con un QR code"
-        >
-          <Smartphone size={13} /> {en ? "Continue on mobile" : "Continua sul telefono"}
-        </button>
-      </div>
+      <PageHeader eyebrow={t("dashboard.eyebrow")} title={greeting} />
 
       {isBrandNew && <HeroEmpty t={t} />}
 

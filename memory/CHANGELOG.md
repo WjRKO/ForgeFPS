@@ -807,3 +807,17 @@ Precedenti release documentate in `PRD.md`.
 - Fix i18n language init (bug pre-esistente: `localStorage.i18nextLng=it` non applicato al primo render).
 - Route `/app/pc/live` → `/app/live` (già è `/app/live`, testing doc era outdated).
 
+
+## Button migration P1 — 2026-02-22 · Dashboard + hud SSOT
+### Added (hud.jsx)
+- **`BTN_CLASSES`** exported constants — single source of truth per gli stili bottone:
+  - `primary`, `secondary`, `ghost` (varianti size medium)
+  - `primaryMono`, `secondaryMono`, `ghostMono` (HUD uppercase mono per header/eyebrow)
+- `PrimaryButton`, `SecondaryButton` ora usano `BTN_CLASSES.primary/secondary` internamente (no duplicate strings).
+### Refactored (pages/Dashboard.jsx)
+- CTA "Collega il PC" empty state: da inline className a `BTN_CLASSES.primaryMono`
+- CTA "Bench empty" da inline className a `BTN_CLASSES.secondaryMono`
+- **Rimosso Mobile Handoff duplicato dal body** (era ridondante ora che il bottone è nell'header globale via `Layout.jsx`). Rimossi import `MobileHandoffModal`, `Smartphone`, state `mobileOpen`.
+### Deferred
+- Migrazione bottoni sulle altre pagine (Tracker, Games, Live, Advisor…) - approccio incrementale, page-by-page, per limitare superficie di rischio.
+
