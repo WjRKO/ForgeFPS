@@ -1788,6 +1788,246 @@ function Show-WebGui {
     text-align: center; color: var(--muted); padding: 60px 20px;
     font-size: 14px;
   }
+
+  /* ===== A. Compact/Detailed toggle (per-card + global default) ===== */
+  .density-toggle {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border: 1px solid var(--border);
+    font-family: "Consolas", monospace; font-size: 10px;
+    color: var(--muted); cursor: pointer; user-select: none;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    transition: all 120ms ease;
+  }
+  .density-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .density-toggle.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
+  /* Compact card: hide description block, condensed padding */
+  .card.compact { padding: 10px 14px; }
+  .card.compact .desc-block { display: none; }
+  .card.compact .state { display: none; }
+  .card.compact .actions { margin-top: 8px; padding-left: 28px; }
+  .card.compact .btn-apply-one { padding: 4px 12px; font-size: 10px; }
+  .card.compact .hint { margin-top: 6px; font-size: 10px; }
+  /* Expandable when clicked in compact mode */
+  .card.compact.expanded .desc-block, .card.compact.expanded .state { display: block; }
+  .card .chevron {
+    margin-left: auto; color: var(--dim); font-size: 12px; cursor: pointer;
+    transition: transform 200ms ease, color 120ms ease;
+    padding: 0 4px; user-select: none;
+  }
+  .card.compact .chevron { display: inline-block; }
+  .card:not(.compact) .chevron { display: none; }
+  .card.compact.expanded .chevron { transform: rotate(180deg); color: var(--accent); }
+
+  /* ===== B. Impact meter ===== */
+  .impact-meter {
+    display: inline-flex; align-items: center; gap: 4px;
+    margin-left: auto; font-family: "Consolas", monospace;
+    font-size: 10px; color: var(--dim);
+  }
+  .impact-dot {
+    width: 6px; height: 6px; background: var(--dim); border-radius: 50%;
+    transition: background 200ms ease;
+  }
+  .impact-dot.on-1 { background: #4a5d00; }
+  .impact-dot.on-2 { background: #7BE00B; }
+  .impact-dot.on-3 { background: var(--ok); }
+  .impact-dot.on-4 { background: var(--accent); box-shadow: 0 0 6px rgba(229,255,0,0.5); }
+  .impact-dot.on-5 { background: #FF9500; box-shadow: 0 0 8px rgba(255,149,0,0.6); }
+  .impact-label { margin-left: 4px; color: var(--muted); letter-spacing: 0.4px; }
+
+  /* ===== C. Preset preview strip ===== */
+  .preset-preview {
+    background: rgba(229,255,0,0.06); border-left: 3px solid var(--accent);
+    padding: 8px 16px; font-size: 12px; color: var(--muted);
+    display: none;
+    animation: fadeUp 180ms ease;
+  }
+  .preset-preview.show { display: block; }
+  .preset-preview b { color: var(--accent); font-family: "Consolas", monospace; }
+  .preset-preview .preview-sep { color: var(--dim); margin: 0 8px; }
+
+  /* Highlight for cards previewed by hovered preset */
+  .card.preview-pick { border-color: var(--accent); background: rgba(229,255,0,0.04); }
+  .card.preview-pick::before { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+  /* ===== E. Semaforo unico (bordo card colorato) — refine existing ===== */
+  .card::before { width: 4px; }
+  .card.applied::before {
+    background: var(--ok);
+    box-shadow: 0 0 8px rgba(0,255,102,0.4);
+  }
+  .card.risk-caution::before {
+    background: var(--warn);
+    box-shadow: 0 0 8px rgba(255,170,0,0.4);
+  }
+  .card:not(.applied):not(.risk-caution):not(.skip)::before {
+    background: var(--accent);
+  }
+
+  /* ===== D. Icone al posto delle label (kept as small colored keywords) ===== */
+  .desc-block .row .k {
+    min-width: 22px; text-align: center;
+    font-size: 13px; font-family: "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+    letter-spacing: 0; text-transform: none;
+  }
+
+  /* ===== F. Progress ring in header ===== */
+  .progress-ring-wrap {
+    display: flex; align-items: center; gap: 14px;
+    padding: 8px 14px; border: 1px solid var(--border);
+    background: rgba(0,0,0,0.2);
+  }
+  .progress-ring { position: relative; width: 52px; height: 52px; flex-shrink: 0; }
+  .progress-ring svg { transform: rotate(-90deg); }
+  .progress-ring circle.bg { stroke: var(--border); }
+  .progress-ring circle.fg {
+    stroke: var(--accent); stroke-linecap: round;
+    transition: stroke-dashoffset 600ms cubic-bezier(.22,1,.36,1);
+    filter: drop-shadow(0 0 4px rgba(229,255,0,0.6));
+  }
+  .progress-ring-pct {
+    position: absolute; inset: 0; display: flex;
+    align-items: center; justify-content: center;
+    font-family: "Consolas", monospace; font-size: 12px; font-weight: 800;
+    color: var(--accent);
+  }
+  .progress-ring-info { font-size: 10px; color: var(--muted); line-height: 1.4; }
+  .progress-ring-info b { color: var(--text); font-family: "Consolas", monospace; }
+
+  /* ===== G. Search prominente ===== */
+  .search-hero {
+    flex: 1; max-width: 480px; position: relative; margin-left: 12px;
+  }
+  .search-hero input {
+    width: 100%; background: var(--card); color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 14px 8px 34px; font-size: 13px; font-family: inherit;
+    outline: none; transition: border-color 120ms ease;
+  }
+  .search-hero input:focus { border-color: var(--accent); }
+  .search-hero .search-icon {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    color: var(--muted); font-size: 14px;
+  }
+  .search-hero .search-kbd {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    font-family: "Consolas", monospace; font-size: 9px; color: var(--dim);
+    border: 1px solid var(--border); padding: 2px 6px;
+    letter-spacing: 0.1em;
+  }
+  .search-hero input:focus + .search-icon + .search-kbd,
+  .search-hero:focus-within .search-kbd { display: none; }
+
+  /* ===== H. Filter chips ===== */
+  .filter-chips {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 8px 28px; background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .filter-chips-label {
+    font-family: "Consolas", monospace; font-size: 10px;
+    color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.15em; margin-right: 4px;
+  }
+  .chip {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); padding: 4px 10px; font-size: 11px;
+    font-family: inherit; cursor: pointer;
+    transition: all 120ms ease; letter-spacing: 0.2px;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip.active { background: var(--accent); color: #000; border-color: var(--accent); }
+  .chip .chip-count { opacity: 0.7; margin-left: 4px; font-size: 10px; }
+
+  /* ===== I. Sort dropdown ===== */
+  .sort-select {
+    background: var(--card); color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 4px 10px; font-size: 11px; font-family: inherit;
+    cursor: pointer; margin-left: auto;
+  }
+  .sort-select:hover { border-color: var(--accent); }
+  .sort-select:focus { outline: none; border-color: var(--accent); color: var(--text); }
+
+  /* ===== J. Summary strip (riepilogo pre-apply) ===== */
+  .summary-strip {
+    background: var(--card); border: 1px solid var(--border);
+    padding: 10px 14px; font-size: 11px; color: var(--muted);
+    font-family: "Consolas", monospace; letter-spacing: 0.4px;
+    margin-bottom: 8px; transition: border-color 200ms ease;
+  }
+  .summary-strip.armed { border-color: var(--accent); color: var(--text); }
+  .summary-strip.danger { border-color: var(--warn); }
+  .summary-strip b { color: var(--accent); }
+  .summary-strip .sep { color: var(--dim); margin: 0 8px; }
+
+  /* Bigger Apply button when armed */
+  .btn-primary:disabled { background: var(--card); color: var(--dim); border: 1px solid var(--border); }
+
+  /* Time pill (⏱ 2s or ⏱ + riavvio) */
+  .time-pill {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-family: "Consolas", monospace; font-size: 9px;
+    color: var(--muted); border: 1px solid var(--border);
+    padding: 1px 6px; letter-spacing: 0.4px;
+    margin-left: 6px;
+  }
+  .time-pill.reboot { color: var(--warn); border-color: rgba(255,170,0,0.35); }
+
+  /* ===== K. Big toast (post-apply overlay) ===== */
+  .big-toast {
+    position: fixed; top: 24px; right: 24px;
+    min-width: 320px; max-width: 420px;
+    background: var(--card); border: 1px solid var(--ok);
+    padding: 14px 16px; z-index: 300;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 32px rgba(0,255,102,0.15);
+    opacity: 0; transform: translateX(20px);
+    transition: opacity 260ms ease, transform 260ms ease;
+  }
+  .big-toast.show { opacity: 1; transform: translateX(0); }
+  .big-toast.warn { border-color: var(--warn); box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 32px rgba(255,170,0,0.15); }
+  .big-toast.danger { border-color: var(--danger); box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 32px rgba(255,51,85,0.15); }
+  .big-toast-title {
+    font-size: 13px; font-weight: 800; color: var(--ok);
+    letter-spacing: 0.4px; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .big-toast.warn .big-toast-title { color: var(--warn); }
+  .big-toast.danger .big-toast-title { color: var(--danger); }
+  .big-toast-body {
+    font-size: 12px; color: var(--muted); line-height: 1.5;
+  }
+  .big-toast-actions {
+    margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .big-toast-actions button {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text); font-family: inherit; font-size: 11px;
+    padding: 6px 12px; cursor: pointer; letter-spacing: 0.3px;
+    transition: all 120ms ease;
+  }
+  .big-toast-actions button.primary {
+    background: var(--ok); color: #000; border-color: var(--ok);
+  }
+  .big-toast-actions button:hover { border-color: var(--accent); color: var(--accent); }
+  .big-toast-actions button.primary:hover {
+    filter: brightness(1.1); color: #000; border-color: var(--ok);
+  }
+  .big-toast-close {
+    position: absolute; top: 6px; right: 8px;
+    background: none; border: none; color: var(--muted);
+    font-size: 18px; line-height: 1; cursor: pointer;
+  }
+  .big-toast-close:hover { color: var(--text); }
+
+  /* Applied pulse animation */
+  @keyframes appliedPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(0,255,102,0.6); }
+    70%  { box-shadow: 0 0 0 12px rgba(0,255,102,0); }
+    100% { box-shadow: 0 0 0 0 rgba(0,255,102,0); }
+  }
+  .card.just-applied { animation: appliedPulse 900ms ease-out; }
 </style>
 </head>
 <body>
@@ -1801,11 +2041,30 @@ function Show-WebGui {
       <strong>SICUREZZA GARANTITA</strong> - Non tocchiamo MAI Windows Defender, Firewall o servizi di sicurezza. Ogni modifica ha backup automatico ed e reversibile.
     </div>
     <div class="meta-row">
-      <div>
-        <div class="hw-line" id="hwLine">PC: rilevamento in corso...</div>
-        <div class="admin-line" id="adminLine"></div>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div class="progress-ring-wrap" id="progressRingWrap" data-testid="progress-ring">
+          <div class="progress-ring">
+            <svg width="52" height="52" viewBox="0 0 52 52">
+              <circle class="bg" cx="26" cy="26" r="22" fill="none" stroke-width="4"></circle>
+              <circle class="fg" id="progressRingFg" cx="26" cy="26" r="22" fill="none" stroke-width="4"
+                stroke-dasharray="138.23" stroke-dashoffset="138.23"></circle>
+            </svg>
+            <div class="progress-ring-pct" id="progressRingPct">--%</div>
+          </div>
+          <div class="progress-ring-info" id="progressRingInfo">
+            <b>--/--</b> ottimizzato<br/>
+            <span id="progressRingSub" style="color:var(--dim)">Analisi in corso...</span>
+          </div>
+        </div>
+        <div>
+          <div class="hw-line" id="hwLine">PC: rilevamento in corso...</div>
+          <div class="admin-line" id="adminLine"></div>
+        </div>
       </div>
       <div class="header-actions">
+        <button type="button" class="density-toggle" id="densityToggle" data-testid="density-toggle" title="Alterna layout compatto/dettagliato (D)">
+          <span id="densityLabel">Compatto</span>
+        </button>
         <button type="button" class="mobile-btn" id="mobileHandoffBtn" data-testid="mobile-handoff-btn" title="Apri la Dashboard sul telefono senza login">
           <span class="mobile-btn-icon" aria-hidden="true">&#9990;</span>
           <span>Continua sul Telefono</span>
@@ -1832,26 +2091,50 @@ function Show-WebGui {
     <button class="preset-btn" data-preset="complete" data-testid="preset-complete">Completo</button>
     <button class="preset-btn" data-preset="none" data-testid="preset-none">Nessuno</button>
     <div class="preset-spacer"></div>
-    <input type="text" class="search" id="searchBox" placeholder="Cerca tweak..." data-testid="search-input" />
+    <div class="search-hero">
+      <input type="text" id="searchBox" placeholder="Cerca tweak... prova 'NVIDIA', 'network', 'DPI'" data-testid="search-input" />
+      <span class="search-icon">&#128269;</span>
+      <span class="search-kbd">Ctrl+K</span>
+    </div>
   </div>
 
+  <div class="preset-preview" id="presetPreview" data-testid="preset-preview"></div>
+
   <div class="tabs" id="tabs"></div>
+
+  <div class="filter-chips" id="filterChips" data-testid="filter-chips">
+    <span class="filter-chips-label">Filtri:</span>
+    <button class="chip" data-filter="recommended" data-testid="chip-recommended">&#9733; Consigliati</button>
+    <button class="chip" data-filter="no-reboot" data-testid="chip-no-reboot">&#9889; No riavvio</button>
+    <button class="chip" data-filter="reversible" data-testid="chip-reversible">&#128737; Reversibili</button>
+    <button class="chip" data-filter="caution" data-testid="chip-caution">&#9888; Cautela</button>
+    <button class="chip" data-filter="pending" data-testid="chip-pending">&#9679; Da applicare</button>
+    <select class="sort-select" id="sortSelect" data-testid="sort-select">
+      <option value="impact">Ordina: Impatto</option>
+      <option value="category">Ordina: Categoria</option>
+      <option value="name">Ordina: Nome</option>
+      <option value="pending">Ordina: Da fare per primi</option>
+    </select>
+  </div>
 
   <main id="cards"></main>
 
   <footer>
     <div class="log" id="log"></div>
     <div class="btn-bar">
-      <div class="selection-count" id="selCount">0 tweak selezionati</div>
+      <div class="summary-strip" id="summaryStrip" data-testid="summary-strip">
+        Nessun tweak selezionato · scegli i tweak o clicca un preset
+      </div>
       <label class="bench-toggle">
         <input type="checkbox" id="benchToggle" checked /> Benchmark PRIMA/DOPO
       </label>
-      <button class="btn-primary" id="applyBtn" data-testid="apply-selected-btn">Applica selezionati</button>
+      <button class="btn-primary" id="applyBtn" data-testid="apply-selected-btn" disabled>Applica selezionati</button>
       <button class="btn-danger" id="restoreBtn" data-testid="restore-all-btn">Ripristina tutto</button>
     </div>
   </footer>
 
   <div class="toast" id="toast"></div>
+  <div id="bigToastHost"></div>
 
   <div class="mh-overlay" id="mobileHandoffOverlay" hidden data-testid="mobile-handoff-overlay">
     <div class="mh-modal" role="dialog" aria-modal="true" aria-labelledby="mhTitle" data-testid="mobile-handoff-modal">
@@ -1895,6 +2178,11 @@ function Show-WebGui {
   let searchQ = "";
   let logSince = 0;
   let applying = false;
+  // GUI v2.5 — density mode (A), filters (H), sort (I)
+  let density = (localStorage.getItem("ff_density") || "detailed"); // "compact" | "detailed"
+  let expanded = new Set(); // per-card override in compact mode
+  let activeFilters = new Set();
+  let sortMode = "impact";
 
   function api(path, opts) {
     opts = opts || {};
@@ -1920,6 +2208,177 @@ function Show-WebGui {
     return stateClass(t.state) === "ok";
   }
 
+  // ===== B. Impact meter — parse "+3-8% FPS", "meno stutter" ecc. -> 0..5 stars =====
+  function parseImpact(t) {
+    const s = String(t.impact || "").toLowerCase();
+    // Numeric percentage range or single value
+    const m = s.match(/\+?(\d+)\s*[-–]\s*(\d+)\s*%/) || s.match(/\+?(\d+)\s*%/);
+    if (m) {
+      const hi = parseInt(m[2] || m[1], 10);
+      if (hi >= 20) return 5;
+      if (hi >= 11) return 4;
+      if (hi >= 6)  return 3;
+      if (hi >= 3)  return 2;
+      return 1;
+    }
+    // Qualitative
+    if (/molto\s+meno\s+stutter|enorme|drastic/i.test(s)) return 4;
+    if (/meno\s+stutter|pi[uù]\s+stabil|migliora\s+netta|pi[uù]\s+veloce/i.test(s)) return 3;
+    if (/leggero|marginal|piccolo|minimo/i.test(s)) return 1;
+    if (/latenza|input|frametime|reattiv/i.test(s)) return 2;
+    return 2; // default
+  }
+
+  // Simple time/reboot detection from various text fields
+  function needsReboot(t) {
+    const s = ((t.desc || "") + " " + (t.impact || "") + " " + (t.problem || "") + " " + (t.reason || "")).toLowerCase();
+    return /richiede\s+riavvio|require[s]?\s+reboot|riavvio\s+richiest/i.test(s);
+  }
+
+  // ===== H. Filter matching =====
+  function matchFilters(t) {
+    if (!activeFilters.size) return true;
+    if (activeFilters.has("recommended") && parseImpact(t) < 3) return false;
+    if (activeFilters.has("no-reboot") && needsReboot(t)) return false;
+    if (activeFilters.has("reversible") && t.risk === "caution") return false;
+    if (activeFilters.has("caution") && t.risk !== "caution") return false;
+    if (activeFilters.has("pending") && (isApplied(t) || t.fit.skip)) return false;
+    return true;
+  }
+
+  // ===== I. Sort =====
+  function sortItems(items) {
+    const arr = items.slice();
+    if (sortMode === "impact") {
+      arr.sort((a, b) => parseImpact(b) - parseImpact(a));
+    } else if (sortMode === "name") {
+      arr.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    } else if (sortMode === "pending") {
+      arr.sort((a, b) => {
+        const pa = isApplied(a) ? 1 : 0, pb = isApplied(b) ? 1 : 0;
+        if (pa !== pb) return pa - pb;
+        return parseImpact(b) - parseImpact(a);
+      });
+    }
+    return arr;
+  }
+
+  // ===== C. Preset preview — which tweaks would this preset apply? =====
+  function computePresetPreview(name) {
+    const ids = (state.presets && state.presets[name]) ? new Set(state.presets[name]) : new Set();
+    const picks = state.tweaks.filter(t => ids.has(t.id) && !t.fit.skip && !isApplied(t));
+    const fpsBoost = picks.reduce((sum, t) => {
+      const s = String(t.impact || "");
+      const m = s.match(/\+(\d+)\s*[-–]\s*(\d+)\s*%\s*FPS/i);
+      return sum + (m ? parseInt(m[2], 10) : 0);
+    }, 0);
+    const reboots = picks.filter(needsReboot).length;
+    return { picks, count: picks.length, fpsBoost, reboots, ids };
+  }
+
+  function renderPresetPreview(name) {
+    const el = document.getElementById("presetPreview");
+    if (!name || name === "none") { el.classList.remove("show"); el.innerHTML = ""; return; }
+    const p = computePresetPreview(name);
+    if (!p.count) { el.classList.remove("show"); el.innerHTML = ""; return; }
+    const parts = [`<b>${p.count}</b> tweak da applicare`];
+    if (p.fpsBoost) parts.push(`<b>+${p.fpsBoost}%</b> FPS stimati max`);
+    parts.push(p.reboots ? `<b>${p.reboots}</b> riavvi` : `<b>0</b> riavvi`);
+    el.innerHTML = `Preset <b>${esc(name)}</b>: ` + parts.join(`<span class="preview-sep">·</span>`);
+    el.classList.add("show");
+    // Highlight cards
+    document.querySelectorAll(".card").forEach(c => {
+      const id = c.dataset.id;
+      c.classList.toggle("preview-pick", p.ids.has(id) && !isApplied({ id, state: "", fit: { skip: false } }));
+    });
+  }
+  function clearPresetPreview() {
+    const el = document.getElementById("presetPreview");
+    el.classList.remove("show"); el.innerHTML = "";
+    document.querySelectorAll(".card.preview-pick").forEach(c => c.classList.remove("preview-pick"));
+  }
+
+  // ===== F. Progress ring =====
+  function renderProgressRing() {
+    const items = state.tweaks.filter(t => !t.fit.skip);
+    const done = items.filter(t => isApplied(t)).length;
+    const total = items.length || 1;
+    const pct = Math.round((done / total) * 100);
+    const circumference = 2 * Math.PI * 22; // r=22
+    const offset = circumference * (1 - done / total);
+    const fg = document.getElementById("progressRingFg");
+    if (fg) fg.setAttribute("stroke-dashoffset", offset.toFixed(2));
+    const pctEl = document.getElementById("progressRingPct");
+    if (pctEl) pctEl.textContent = pct + "%";
+    const info = document.getElementById("progressRingInfo");
+    if (info) {
+      const sub = pct >= 80 ? "Configurazione ottimale" : pct >= 50 ? "Buona strada" : "C'è margine di miglioramento";
+      info.innerHTML = `<b>${done}/${total}</b> ottimizzato<br/><span style="color:var(--dim)">${sub}</span>`;
+    }
+  }
+
+  // ===== J. Summary strip =====
+  function updateSummaryStrip() {
+    const strip = document.getElementById("summaryStrip");
+    const btn = document.getElementById("applyBtn");
+    const n = selected.size;
+    if (!n) {
+      strip.className = "summary-strip";
+      strip.textContent = "Nessun tweak selezionato · scegli i tweak o clicca un preset";
+      btn.disabled = true;
+      btn.textContent = "Applica selezionati";
+      return;
+    }
+    const picks = state.tweaks.filter(t => selected.has(t.id));
+    const fpsMax = picks.reduce((sum, t) => {
+      const m = String(t.impact || "").match(/\+(\d+)\s*[-–]\s*(\d+)\s*%\s*FPS/i);
+      return sum + (m ? parseInt(m[2], 10) : 0);
+    }, 0);
+    const reboots = picks.filter(needsReboot).length;
+    const cauts = picks.filter(t => t.risk === "caution").length;
+    const parts = [`<b>${n}</b> selezionati`];
+    if (fpsMax) parts.push(`<b>+${fpsMax}%</b> FPS stimati max`);
+    if (reboots) parts.push(`<b>${reboots}</b> con riavvio`);
+    if (cauts) parts.push(`<b>${cauts}</b> in cautela`);
+    parts.push(`Backup automatico <b>ON</b>`);
+    strip.innerHTML = parts.join(`<span class="sep">·</span>`);
+    strip.className = cauts ? "summary-strip danger" : "summary-strip armed";
+    btn.disabled = false;
+    btn.textContent = `Applica ${n} tweak`;
+  }
+
+  // ===== K. Big toast (post-apply) =====
+  function bigToast({ level, title, body, actions, autoDismiss }) {
+    const host = document.getElementById("bigToastHost");
+    const id = "bt-" + Date.now();
+    const div = document.createElement("div");
+    div.className = "big-toast " + (level || "");
+    div.id = id;
+    div.innerHTML = `
+      <button class="big-toast-close" aria-label="Chiudi">&times;</button>
+      <div class="big-toast-title">${esc(title || "")}</div>
+      <div class="big-toast-body">${body || ""}</div>
+      <div class="big-toast-actions"></div>`;
+    const actsEl = div.querySelector(".big-toast-actions");
+    (actions || []).forEach(a => {
+      const b = document.createElement("button");
+      b.className = a.primary ? "primary" : "";
+      b.textContent = a.label;
+      b.onclick = () => { try { a.onClick && a.onClick(); } finally { dismiss(); } };
+      actsEl.appendChild(b);
+    });
+    if (!actions || !actions.length) actsEl.remove();
+    const dismiss = () => {
+      div.classList.remove("show");
+      setTimeout(() => div.remove(), 300);
+    };
+    div.querySelector(".big-toast-close").onclick = dismiss;
+    host.appendChild(div);
+    requestAnimationFrame(() => div.classList.add("show"));
+    if (autoDismiss !== false) setTimeout(dismiss, autoDismiss || 12000);
+    return { dismiss };
+  }
+
   function renderTabs() {
     const el = document.getElementById("tabs");
     el.innerHTML = CATS.map(c => {
@@ -1943,11 +2402,13 @@ function Show-WebGui {
   function renderCards() {
     const el = document.getElementById("cards");
     if (activeCat === "profiles") { renderProfilesTab(el); return; }
-    const items = state.tweaks.filter(t => t.cat === activeCat).filter(t => {
+    let items = state.tweaks.filter(t => t.cat === activeCat).filter(t => {
       if (!searchQ) return true;
       const q = searchQ.toLowerCase();
       return (t.name + " " + (t.problem||"") + " " + (t.impact||"")).toLowerCase().includes(q);
     });
+    items = items.filter(matchFilters);
+    items = sortItems(items);
     if (!items.length) { el.innerHTML = `<div class="empty">Nessun tweak in questa categoria.</div>`; return; }
     el.innerHTML = items.map(t => {
       const applied = isApplied(t);
@@ -1957,31 +2418,38 @@ function Show-WebGui {
       const appliedCls = applied ? " applied" : "";
       const riskCls = t.risk === "caution" ? " risk-caution" : "";
       const selCls = sel ? " selected" : "";
-      const stCls = stateClass(t.state);
-      const riskPill = t.risk === "caution" ? `<span class="risk-pill">Cautela</span>` : "";
+      const compactCls = density === "compact" ? " compact" : "";
+      const expandedCls = expanded.has(t.id) ? " expanded" : "";
       let hint = "";
       if (t.fit.skip) hint = `<div class="hint skip">Non applicabile: ${esc(t.fit.hint)}</div>`;
       else if (t.fit.warn) hint = `<div class="hint">Attenzione: ${esc(t.fit.hint)}</div>`;
       else if (t.fit.note) hint = `<div class="hint">Nota: ${esc(t.fit.hint)}</div>`;
+      const impactLvl = parseImpact(t);
+      const impactPct = String(t.impact || "").match(/\+(\d+)\s*[-–]\s*(\d+)\s*%/);
+      const impactLabel = impactPct ? `+${impactPct[2]}%` : (impactLvl >= 4 ? "high" : impactLvl >= 3 ? "med" : "low");
+      const meterDots = Array.from({length: 5}, (_, i) => `<span class="impact-dot${i < impactLvl ? ` on-${impactLvl}` : ""}"></span>`).join("");
+      const timePill = needsReboot(t) ? `<span class="time-pill reboot">&#128260; riavvio</span>` : `<span class="time-pill">&#9202; ~2s</span>`;
+      const chevron = density === "compact" ? `<span class="chevron" data-toggle="${t.id}">&#9662;</span>` : "";
       return `
-        <div class="card${skipCls}${riskCls}${selCls}${appliedCls}" data-id="${t.id}" data-testid="card-${t.id}">
+        <div class="card${skipCls}${riskCls}${selCls}${appliedCls}${compactCls}${expandedCls}" data-id="${t.id}" data-testid="card-${t.id}">
           <div class="card-head">
             <input type="checkbox" class="cb" data-id="${t.id}" ${sel?"checked":""} ${t.fit.skip?"disabled":""} data-testid="cb-${t.id}" />
             <div class="name">${esc(t.name)}</div>
-            ${applied ? `<span class="ok-pill" data-testid="applied-${t.id}">GIA ATTIVO</span>` : ""}
-            ${riskPill}
+            <span class="impact-meter" title="Impatto stimato">${meterDots}<span class="impact-label">${esc(impactLabel)}</span></span>
+            ${timePill}
+            ${chevron}
           </div>
-          <div class="state ${stCls}">Stato: ${esc(t.state)}</div>
+          <div class="state ${stateClass(t.state)}">Stato: ${esc(t.state)}</div>
           <div class="desc-block">
-            <div class="row"><div class="k">Problema</div><div class="v">${esc(t.problem)}</div></div>
-            <div class="row"><div class="k motivo">Motivo</div><div class="v">${esc(t.reason)}</div></div>
-            <div class="row"><div class="k mod">Modifica</div><div class="v">${esc(t.desc)}</div></div>
-            <div class="row"><div class="k impatto">Impatto</div><div class="v impatto">${esc(t.impact)}</div></div>
+            <div class="row"><div class="k" title="Problema">&#9888;</div><div class="v">${esc(t.problem)}</div></div>
+            <div class="row"><div class="k motivo" title="Motivo">&#8505;</div><div class="v">${esc(t.reason)}</div></div>
+            <div class="row"><div class="k mod" title="Modifica">&#9881;</div><div class="v">${esc(t.desc)}</div></div>
+            <div class="row"><div class="k impatto" title="Impatto">&#128200;</div><div class="v impatto">${esc(t.impact)}</div></div>
           </div>
           ${hint}
           <div class="actions">
             ${applied
-              ? `<span class="applied-note">Nessuna azione necessaria</span>`
+              ? `<span class="applied-note">&#10003; gia attivo</span>`
               : `<button class="btn-apply-one" data-apply="${t.id}" ${t.fit.skip?"disabled":""} data-testid="apply-one-${t.id}">Applica</button>`}
           </div>
         </div>`;
@@ -1994,10 +2462,19 @@ function Show-WebGui {
       if (card) card.classList.toggle("selected", e.target.checked);
     });
     el.querySelectorAll(".btn-apply-one").forEach(b => b.onclick = () => applyOne(b.dataset.apply));
+    // Chevron expand/collapse in compact mode
+    el.querySelectorAll(".chevron").forEach(ch => ch.onclick = (e) => {
+      e.stopPropagation();
+      const id = ch.dataset.toggle;
+      if (expanded.has(id)) expanded.delete(id); else expanded.add(id);
+      const card = ch.closest(".card");
+      if (card) card.classList.toggle("expanded", expanded.has(id));
+    });
   }
 
   function updateSelCount() {
-    document.getElementById("selCount").innerHTML = `<b>${selected.size}</b> tweak selezionati`;
+    updateSummaryStrip();
+    renderProgressRing();
   }
 
   // -------- Cloud profiles tab --------
@@ -2157,6 +2634,8 @@ function Show-WebGui {
     state.hw = d.hw || {}; state.admin = !!d.admin;
     state.backup = d.backup || 0; state.backup_ids = d.backup_ids || []; state.presets = d.presets || {};
     renderHeader(); renderTabs(); renderCards();
+    renderProgressRing();
+    updateSummaryStrip();
     if (showToast) toast("Aggiornato", "ok");
   }
 
@@ -2164,17 +2643,54 @@ function Show-WebGui {
     if (!selected.size) { toast("Seleziona almeno un tweak"); return; }
     setApplying(true);
     const bench = document.getElementById("benchToggle").checked;
-    const d = await api("/api/apply", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ ids: Array.from(selected), benchmark: bench }) });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; renderHeader(); renderCards(); }
+    const appliedIds = Array.from(selected);
+    const picks = state.tweaks.filter(t => selected.has(t.id));
+    const rebootCount = picks.filter(needsReboot).length;
+    const d = await api("/api/apply", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ ids: appliedIds, benchmark: bench }) });
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; renderHeader(); renderCards(); renderProgressRing(); }
+    selected.clear();
+    updateSummaryStrip();
     setApplying(false);
-    toast("Ottimizzazioni applicate", "ok");
+    // K. Big toast post-apply
+    appliedIds.forEach(id => {
+      const c = document.querySelector(`.card[data-id="${id}"]`);
+      if (c) { c.classList.add("just-applied"); setTimeout(() => c.classList.remove("just-applied"), 1000); }
+    });
+    const level = rebootCount > 0 ? "warn" : null;
+    const parts = [`<b>${appliedIds.length}</b> tweak applicati`];
+    if (rebootCount > 0) parts.push(`<b>${rebootCount}</b> richiede/richiedono riavvio`);
+    bigToast({
+      level,
+      title: rebootCount > 0 ? "\u26a0 Applicati · Riavvio consigliato" : "\u2713 Ottimizzazioni applicate",
+      body: parts.join(" \u00b7 ") + " \u00b7 Backup salvato",
+      actions: rebootCount > 0 ? [
+        { label: "Ricorda dopo", onClick: () => {} },
+        { label: "Riavvia ora", primary: true, onClick: () => api("/api/reboot", { method: "POST", headers:{"X-FF-Token":TOKEN}}) },
+      ] : [{ label: "OK", primary: true, onClick: () => {} }],
+    });
   }
   async function applyOne(id) {
     setApplying(true);
+    const t = state.tweaks.find(x => x.id === id);
     const d = await api("/api/apply-one", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ id }) });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; renderHeader(); renderCards(); }
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; renderHeader(); renderCards(); renderProgressRing(); }
     setApplying(false);
-    toast("Applicato");
+    // Pulse animation on the just-applied card
+    const c = document.querySelector(`.card[data-id="${id}"]`);
+    if (c) { c.classList.add("just-applied"); setTimeout(() => c.classList.remove("just-applied"), 1000); }
+    if (t && needsReboot(t)) {
+      bigToast({
+        level: "warn",
+        title: "\u26a0 Applicato · Riavvio consigliato",
+        body: `<b>${esc(t.name)}</b> richiede un riavvio per essere pienamente attivo.`,
+        actions: [
+          { label: "Pi\u00f9 tardi", onClick: () => {} },
+          { label: "Riavvia ora", primary: true, onClick: () => api("/api/reboot", { method: "POST", headers:{"X-FF-Token":TOKEN}}) },
+        ],
+      });
+    } else {
+      toast("Applicato");
+    }
   }
   async function doRestore() {
     if (!confirm("Ripristinare TUTTE le modifiche dal backup?")) return;
@@ -2186,10 +2702,62 @@ function Show-WebGui {
   }
 
   // events
-  document.querySelectorAll(".preset-btn").forEach(b => b.onclick = () => applyPreset(b.dataset.preset));
+  document.querySelectorAll(".preset-btn").forEach(b => {
+    b.onclick = () => applyPreset(b.dataset.preset);
+    // C. Preset hover preview
+    b.addEventListener("mouseenter", () => renderPresetPreview(b.dataset.preset));
+    b.addEventListener("mouseleave", clearPresetPreview);
+    b.addEventListener("focus", () => renderPresetPreview(b.dataset.preset));
+    b.addEventListener("blur", clearPresetPreview);
+  });
   document.getElementById("applyBtn").onclick = applySelected;
   document.getElementById("restoreBtn").onclick = doRestore;
   document.getElementById("searchBox").oninput = e => { searchQ = e.target.value; renderCards(); };
+
+  // A. Density toggle (Compact/Detailed)
+  const _densityBtn = document.getElementById("densityToggle");
+  const _densityLabel = document.getElementById("densityLabel");
+  function _refreshDensityUI() {
+    if (!_densityBtn) return;
+    _densityBtn.classList.toggle("active", density === "compact");
+    if (_densityLabel) _densityLabel.textContent = density === "compact" ? "Compatto" : "Dettagliato";
+  }
+  _refreshDensityUI();
+  if (_densityBtn) _densityBtn.onclick = () => {
+    density = (density === "compact") ? "detailed" : "compact";
+    localStorage.setItem("ff_density", density);
+    expanded.clear();
+    _refreshDensityUI();
+    renderCards();
+  };
+
+  // H. Filter chips
+  document.querySelectorAll("#filterChips .chip").forEach(chip => {
+    chip.onclick = () => {
+      const k = chip.dataset.filter;
+      if (activeFilters.has(k)) activeFilters.delete(k); else activeFilters.add(k);
+      chip.classList.toggle("active", activeFilters.has(k));
+      renderCards();
+    };
+  });
+
+  // I. Sort
+  const _sortSel = document.getElementById("sortSelect");
+  if (_sortSel) _sortSel.onchange = () => { sortMode = _sortSel.value; renderCards(); };
+
+  // G. Keyboard Ctrl+K -> focus search; D -> toggle density
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      const s = document.getElementById("searchBox");
+      if (s) { s.focus(); s.select(); }
+    } else if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "d" || e.key === "D")) {
+      const tag = (e.target && e.target.tagName || "").toLowerCase();
+      if (tag !== "input" && tag !== "textarea" && tag !== "select") {
+        if (_densityBtn) _densityBtn.click();
+      }
+    }
+  });
 
   // Live Sync toggle: streams telemetry to cloud when ON.
   const _liveToggle = document.getElementById("liveSyncToggle");

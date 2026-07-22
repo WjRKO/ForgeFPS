@@ -747,3 +747,22 @@ Precedenti release documentate in `PRD.md`.
 ### Verified
 - Compile pulito, `/changelog` renderizza 6 versioni + roadmap; nessun console error.
 
+
+## GUI locale v2.5 (P0+P1) — 2026-02-22 · Redesign completo
+### Aggiunti (ps_agent.py, sezione HTML/CSS/JS)
+- **A. Density toggle** Compatto/Dettagliato (persistente in localStorage, shortcut "D")
+- **B. Impact meter** ●●●●● (5 step) parsando `+3-8% FPS`, `meno stutter`, ecc.
+- **C. Preset preview** su hover: mostra "N tweak, +X% FPS, Y riavvii" ed evidenzia le card che verrebbero applicate
+- **D. Icone al posto delle label** Problema/Motivo/Modifica/Impatto (⚠️/ℹ️/⚙️/📈)
+- **E. Semaforo unico** = bordo card colorato (verde=applicato, giallo=consigliato, arancione=caution, grigio=skip)
+- **F. Progress ring** SVG animato nell'header (%, "3/6 ottimizzato · Buona strada")
+- **G. Search hero** larga con icona 🔍 e badge `Ctrl+K` shortcut
+- **H. Filter chips**: Consigliati · No riavvio · Reversibili · Cautela · Da applicare (combinabili)
+- **I. Sort dropdown**: Impatto | Categoria | Nome | Da fare per primi
+- **J. Summary strip** in bottom bar: `5 selezionati · +12% FPS · 2 riavvii · Backup ON` + bottone Apply disabilitato quando 0
+- **K. Big toast post-apply** con azione "Riavvia ora / Più tardi" + pulse verde sulla card applicata
+- Bonus: **time pill** ⏱ ~2s / 🔄 riavvio su ogni card
+- Bonus: keyboard shortcut `D` per toggle density
+### Testato
+- Smoke test HTML statico con dati mock in Playwright: tutti i data-testid resi, zero errori JS, preset preview funzionante.
+
