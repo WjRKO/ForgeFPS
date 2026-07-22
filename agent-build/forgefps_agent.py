@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-FrameForge - Desktop Agent (Windows)
-Companion locale: ottimizzazioni REALI reversibili + benchmark prima/dopo +
+FrameForge Agent (Windows)
+Agent locale: ottimizzazioni REALI reversibili + benchmark prima/dopo +
 rilevamento hardware/salute per consigli AI su misura.
-Uso:  python boostpc_agent.py   (consigliato come Amministratore)
+Uso:  python forgefps_agent.py   (consigliato come Amministratore)
 """
 import os
 import sys
@@ -21,7 +21,7 @@ import argparse
 import urllib.parse
 import urllib.request
 
-_parser = argparse.ArgumentParser(description="FrameForge Desktop Agent")
+_parser = argparse.ArgumentParser(description="FrameForge Agent")
 _parser.add_argument("--token", default=os.environ.get("FORGEFPS_TOKEN", "__AGENT_TOKEN__"))
 _parser.add_argument("--backend", default=os.environ.get("FORGEFPS_BACKEND", "https://forgefps.dev"))
 _parser.add_argument("--mode", default="optimize")
@@ -32,8 +32,13 @@ _args, _ = _parser.parse_known_args()
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.7.2"
-BACKUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "boostpc_backup.json")
+AGENT_VERSION = "0.7.3"
+# v0.7.3+: rinominato da boostpc_backup.json → forgefps_backup.json.
+# Fallback lettura del vecchio nome per una release per non perdere il backup
+# degli utenti che aggiornano dalla v0.7.2 o precedenti.
+_BACKUP_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKUP_FILE = os.path.join(_BACKUP_DIR, "forgefps_backup.json")
+_LEGACY_BACKUP_FILE = os.path.join(_BACKUP_DIR, "boostpc_backup.json")
 
 # Persistent token storage in %APPDATA%\FrameForge\token.dat (v0.6.8+).
 # Se l'utente non passa --token via CLI, provo a leggerlo da disco. Se non c'e',
@@ -110,7 +115,7 @@ def register_frameforge_protocol(silent: bool = True) -> bool:
         import winreg  # type: ignore
     except Exception:
         if not silent:
-            print("[FrameForge] winreg non disponibile su questa piattaforma.")
+            print("[WARN] winreg non disponibile su questa piattaforma.")
         return False
     exe = _agent_exe_path()
     # "%1" contiene l'URI completo passato dal browser. Includiamo anche
@@ -137,11 +142,11 @@ def register_frameforge_protocol(silent: bool = True) -> bool:
         with winreg.CreateKey(root, base + r"\shell\open\command") as k:
             winreg.SetValueEx(k, None, 0, winreg.REG_SZ, command)
         if not silent:
-            print(f"[FrameForge] Protocollo {_PROTOCOL}:// registrato -> {exe} (backend={BACKEND_URL})")
+            print(f"[ OK ] Protocollo {_PROTOCOL}:// registrato -> {exe} (backend={BACKEND_URL})")
         return True
     except Exception as e:
         if not silent:
-            print(f"[FrameForge] Impossibile registrare protocollo: {e}")
+            print(f"[ERR ] Impossibile registrare protocollo: {e}")
         return False
 
 
@@ -169,7 +174,7 @@ def parse_and_verify_uri(uri: str, agent_token: str):
         # Anti-replay: URI valido per 60s (permette anche piccolo clock skew)
         now = int(time.time())
         if abs(now - ts) > _URI_MAX_AGE_SEC:
-            print(f"[FrameForge] URI scaduto (age={now - ts}s). Riprova dal browser.")
+            print(f"[WARN] URI scaduto (age={now - ts}s). Riprova dal browser.")
             return None
         expected = hmac.new(
             agent_token.encode("utf-8"),
@@ -177,11 +182,11 @@ def parse_and_verify_uri(uri: str, agent_token: str):
             hashlib.sha256,
         ).hexdigest()
         if not hmac.compare_digest(expected, sig):
-            print("[FrameForge] Firma URI non valida. Ignoro (possibile URI di un altro account).")
+            print("[WARN] Firma URI non valida. Ignoro (possibile URI di un altro account).")
             return None
         return {"mode": mode, "ts": ts, "silent": silent}
     except Exception as e:
-        print(f"[FrameForge] Errore parsing URI: {e}")
+        print(f"[ERR ] Errore parsing URI: {e}")
         return None
 
 
@@ -189,7 +194,7 @@ if not AGENT_TOKEN or AGENT_TOKEN.startswith("__"):
     saved = _load_saved_token()
     if saved:
         AGENT_TOKEN = saved
-        print("[FrameForge] Token caricato da %APPDATA%\\FrameForge\\token.dat")
+        print("[INFO] Token caricato da %APPDATA%\\FrameForge\\token.dat")
     else:
         # --register-protocol e' un'operazione stand-alone: non serve token per
         # scrivere nel registro utente. Salta il prompt e vai al main.
@@ -198,27 +203,27 @@ if not AGENT_TOKEN or AGENT_TOKEN.startswith("__"):
         # Se stiamo per gestire un URI ma non c'e' un token salvato, non possiamo
         # verificare la firma: guida l'utente al primo setup.
         elif _args.uri:
-            print("[FrameForge] Nessun token salvato: prima apri l'app dalla dashboard")
-            print("             (scarica lo ZIP da 'Collega il PC'), poi il bottone")
-            print("             'Avvia' funzionera' senza download.")
+            print("[WARN] Nessun token salvato: prima apri l'app dalla dashboard")
+            print("       (scarica lo ZIP da 'FrameForge Agent'), poi il bottone")
+            print("       'Avvia' funzionera' senza download.")
             try:
                 input("Premi INVIO per chiudere...")
             except Exception:
                 pass
             sys.exit(1)
         else:
-            print("=" * 50)
-            print("  FrameForge Desktop Agent")
-            print("=" * 50)
-            print("Incolla il tuo token (pagina 'Collega il PC' del tuo account) e premi INVIO.")
-            print("Paste your token (from the 'Connect PC' page) and press ENTER.")
+            print("=" * 54)
+            print("  FrameForge Agent")
+            print("=" * 54)
+            print("Incolla il tuo token (pagina 'FrameForge Agent' del tuo account) e premi INVIO.")
+            print("Paste your token (from the 'FrameForge Agent' page) and press ENTER.")
             print("Il token verra' salvato in %APPDATA%\\FrameForge\\ per i prossimi avvii.")
             try:
                 AGENT_TOKEN = input("Token > ").strip()
             except Exception:
                 AGENT_TOKEN = ""
             if not AGENT_TOKEN:
-                print("Nessun token inserito. / No token provided.")
+                print("[ERR ] Nessun token inserito. / No token provided.")
                 try:
                     input("Premi INVIO per chiudere... / Press ENTER to close...")
                 except Exception:
@@ -310,9 +315,13 @@ def get_nv():
 
 # ---------------- Backup / registry helpers ----------------
 def _load_backup():
-    if os.path.exists(BACKUP_FILE):
+    # v0.7.3+: fallback lettura vecchio nome per un upgrade indolore.
+    path = BACKUP_FILE if os.path.exists(BACKUP_FILE) else (
+        _LEGACY_BACKUP_FILE if os.path.exists(_LEGACY_BACKUP_FILE) else None
+    )
+    if path:
         try:
-            return json.load(open(BACKUP_FILE))
+            return json.load(open(path))
         except Exception:
             return {}
     return {}
@@ -520,7 +529,7 @@ def _ping_ms():
 
 
 def run_benchmark():
-    print("    Benchmark in corso (CPU / RAM / Disco / DPC / Rete)...")
+    print("[STEP] Benchmark in corso (CPU / RAM / Disco / DPC / Rete)...")
     r = {}
     t = time.perf_counter()
     acc = 0.0
@@ -538,7 +547,7 @@ def run_benchmark():
     el = max(time.perf_counter() - t, 0.001)
     r["ram_mbps"] = int(round((5 * size / (1024 * 1024)) / el))
 
-    tmp = os.path.join(tempfile.gettempdir(), "boostpc_bench.bin")
+    tmp = os.path.join(tempfile.gettempdir(), "forgefps_bench.bin")
     chunk = os.urandom(8 * 1024 * 1024)
     t = time.perf_counter()
     with open(tmp, "wb") as f:
@@ -635,17 +644,20 @@ def run_benchmark():
 
 def show_bench(r, title):
     print(f"\n    [{title}]")
-    print(f"    CPU score      : {r['cpu_score']}")
-    print(f"    RAM bandwidth  : {r['ram_mbps']} MB/s")
-    print(f"    Disco scrittura: {r['disk_write_mbps']} MB/s (reale, no cache)")
-    print(f"    Disco lettura  : {r['disk_read_mbps']} MB/s")
-    print(f"    Disco 4K       : {r.get('iops_4k', 0)} IOPS")
-    print(f"    Latenza DPC    : {r.get('dpc_ms', 0)} ms (p95)")
-    print(f"    Ping (1.1.1.1) : {r['ping_ms']} ms (jitter {r.get('jitter_ms', 0)} ms)")
+    print(f"    CPU score        : {r['cpu_score']}")
+    print(f"    RAM bandwidth    : {r['ram_mbps']} MB/s")
+    print(f"    Disco scrittura  : {r['disk_write_mbps']} MB/s (reale, no cache)")
+    print(f"    Disco lettura    : {r['disk_read_mbps']} MB/s")
+    print(f"    Disco 4K         : {r.get('iops_4k', 0)} IOPS")
+    print(f"    Latenza DPC      : {r.get('dpc_ms', 0)} ms (p95)")
+    print(f"    Ping (1.1.1.1)   : {r['ping_ms']} ms (jitter {r.get('jitter_ms', 0)} ms)")
     if r.get("boot_s"):
-        print(f"    Avvio Windows  : {r['boot_s']} s")
-    print(f"    RAM libera     : {r['free_ram_pct']} %")
-    print(f"    SCORE          : {r.get('score', 0)}/100")
+        print(f"    Avvio Windows    : {r['boot_s']} s")
+    print(f"    RAM libera       : {r['free_ram_pct']} %")
+    print(f"    PERFORMANCE SCORE: {r.get('score', 0)}/100")
+    print("    [INFO] Il Performance Score misura la velocita del PC ora.")
+    print("           L'Health Score globale (temp + tweak + freschezza) e su")
+    print("           forgefps.dev -> Il mio PC.")
 
 
 def show_compare(b, a):
@@ -659,18 +671,18 @@ def show_compare(b, a):
             ("Ping ms", b["ping_ms"], a["ping_ms"], False),
             ("Jitter ms", b.get("jitter_ms", 0), a.get("jitter_ms", 0), False),
             ("RAM libera %", b["free_ram_pct"], a["free_ram_pct"], True),
-            ("SCORE /100", b.get("score", 0), a.get("score", 0), True)]
-    print(f"    {'METRICA':<14}{'PRIMA':>10}{'DOPO':>10}{'VAR':>9}")
+            ("PERF SCORE /100", b.get("score", 0), a.get("score", 0), True)]
+    print(f"    {'METRICA':<16}{'PRIMA':>10}{'DOPO':>10}{'VAR':>9}")
     for name, bv, av, hb in rows:
         delta = round((av - bv) / bv * 100) if bv else 0
         sign = "+" if delta >= 0 else ""
-        print(f"    {name:<14}{bv:>10}{av:>10}{sign}{delta:>7}%")
+        print(f"    {name:<16}{bv:>10}{av:>10}{sign}{delta:>7}%")
 
 
 # ---------------- Reporting ----------------
 def _post(payload):
     if "__AGENT" in AGENT_TOKEN or not BACKEND_URL.startswith("http"):
-        print("\n[!] Token non configurato. Riscarica l'agent dal tuo account FrameForge.")
+        print("\n[ERR ] Token non configurato. Riscarica l'agent dal tuo account FrameForge.")
         return False
     req = urllib.request.Request(f"{BACKEND_URL}/api/agent/report-specs",
                                  data=json.dumps(payload).encode("utf-8"),
@@ -680,28 +692,28 @@ def _post(payload):
         with urllib.request.urlopen(req, timeout=20) as r:
             return r.status == 200
     except Exception as e:
-        print(f"\n[!] Invio fallito: {e}")
+        print(f"\n[ERR ] Invio fallito: {e}")
         return False
 
 
 def send_all():
-    print("\n[*] Rilevamento hardware, salute e programmi all'avvio...")
+    print("\n[STEP] Rilevamento hardware, salute e programmi all'avvio...")
     specs = collect_specs()
     health = collect_health()
     startup = collect_startup()
     for k, v in specs.items():
-        print(f"    {k.upper():12}: {v or 'n/d'}")
+        print(f"       {k.upper():12}: {v or 'n/d'}")
     if _post({"data": specs, "health": health, "startup": startup}):
-        print("\n[OK] Dati inviati! Apri FrameForge -> Il mio PC / Upgrade per analisi e consigli.")
+        print("\n[ OK ] Dati inviati! Apri FrameForge -> Il mio PC per analisi e consigli.")
 
 
 def send_benchmark(rec):
     if _post({"benchmark": rec}):
-        print("\n[OK] Benchmark inviato! Vedi il confronto in FrameForge -> Il mio PC.")
+        print("\n[ OK ] Benchmark inviato! Vedi il confronto in FrameForge -> Il mio PC.")
 
 
 def benchmark_only():
-    print("\n[B] Benchmark del sistema...")
+    print("\n[STEP] Benchmark del sistema...")
     bench = run_benchmark()
     show_bench(bench, "BENCHMARK")
     send_benchmark({"after": bench, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")})
@@ -709,7 +721,7 @@ def benchmark_only():
 
 # ---------------- Tweaks (deep, reversible) ----------------
 def _cleanup():
-    print("\n[1] Pulizia file temporanei + cache Windows Update...")
+    print("\n[STEP] Pulizia file temporanei + cache Windows Update...")
     for t in [tempfile.gettempdir(), os.path.expandvars(r"%SystemRoot%\\Temp"),
               os.path.expandvars(r"%LOCALAPPDATA%\\Temp")]:
         if not os.path.isdir(t):
@@ -729,7 +741,7 @@ def _cleanup():
         shutil.rmtree(wu, ignore_errors=True)
     run("net start wuauserv")
     run("ipconfig /flushdns")
-    print("    File temporanei, cache Windows Update e DNS puliti.")
+    print("[ OK ] File temporanei, cache Windows Update e DNS puliti.")
 
 
 def apply_all_tweaks():
@@ -741,9 +753,9 @@ def apply_all_tweaks():
     except Exception:
         ram_gb = 0
     is_ssd = "SSD" in (ps("(Get-Partition -DriveLetter C -ErrorAction SilentlyContinue | Get-Disk | Get-PhysicalDisk).MediaType") or "")
-    print("\n[*] Profilo hardware: %s, RAM %d GB, disco %s -> tweak adattati." %
+    print("\n[STEP] Profilo hardware: %s, RAM %d GB, disco %s -> tweak adattati." %
           ("Laptop" if is_laptop else "Desktop", ram_gb, "SSD" if is_ssd else "HDD"))
-    print("[*] Applico ottimizzazioni profonde (con backup)...")
+    print("[STEP] Applico ottimizzazioni profonde (con backup)...")
     _cleanup()
 
     cur = ps("(powercfg /getactivescheme)")
@@ -862,17 +874,17 @@ def apply_all_tweaks():
     print("    Edge preload/background disattivato.")
 
     _save_backup(bk)
-    print("\n    Ottimizzazioni applicate. Riavvio consigliato. Per annullare: opzione 8 (Ripristina).")
+    print("\n[ OK ] Ottimizzazioni applicate. Riavvio consigliato. Per annullare: opzione 4 (Ripristina).")
 
 
 def optimize_with_benchmark():
     if not is_admin():
-        print("\n[!] Esegui come Amministratore per applicare le ottimizzazioni.")
+        print("\n[WARN] Esegui come Amministratore per applicare le ottimizzazioni.")
         return
     before = run_benchmark()
     show_bench(before, "PRIMA")
     apply_all_tweaks()
-    print("\n[*] Benchmark post-ottimizzazione...")
+    print("\n[STEP] Benchmark post-ottimizzazione...")
     after = run_benchmark()
     show_bench(after, "DOPO")
     show_compare(before, after)
@@ -885,7 +897,7 @@ def launch_secure_gui():
     Backup automatico + Ripristina sempre disponibili. Non tocca MAI Windows Defender / Firewall."""
     url = "%s/api/agent/script?t=%s" % (BACKEND_URL, AGENT_TOKEN)
     dest = os.path.join(tempfile.gettempdir(), "forgefps.ps1")
-    print("\n[*] Scarico la GUI sicura FrameForge...")
+    print("\n[STEP] Scarico la GUI sicura FrameForge...")
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "FrameForge-Agent"})
         with urllib.request.urlopen(req, timeout=30) as r:
@@ -893,7 +905,7 @@ def launch_secure_gui():
         with open(dest, "wb") as f:
             f.write(data)
     except Exception as e:
-        print("    Impossibile scaricare lo script: %s" % e)
+        print("[ERR ] Impossibile scaricare lo script: %s" % e)
         return
     args = '-NoProfile -ExecutionPolicy Bypass -File "%s" -Token %s -Mode optimize' % (dest, AGENT_TOKEN)
     try:
@@ -902,9 +914,9 @@ def launch_secure_gui():
             ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell.exe", args, None, 1)
         else:
             subprocess.Popen("powershell.exe %s" % args, shell=True)
-        print("    GUI sicura avviata: segui le istruzioni nella finestra (Problema/Motivo/Impatto per ogni tweak).")
+        print("[ OK ] GUI sicura avviata: segui le istruzioni nella finestra (Problema/Motivo/Impatto per ogni tweak).")
     except Exception as e:
-        print("    Errore nell'avvio della GUI sicura: %s" % e)
+        print("[ERR ] Errore nell'avvio della GUI sicura: %s" % e)
 
 
 def launch_silent_mode(mode: str) -> bool:
@@ -919,11 +931,11 @@ def launch_silent_mode(mode: str) -> bool:
     """
     if mode not in ("sync", "benchmark", "cleanup", "optimize"):
         # Whitelist di mode adatte al lancio silent (non-interattive, terminano).
-        print(f"[FrameForge] Mode '{mode}' non supporta il lancio silent. Uso GUI.")
+        print(f"[WARN] Mode '{mode}' non supporta il lancio silent. Uso GUI.")
         return False
     url = "%s/api/agent/script?t=%s" % (BACKEND_URL, AGENT_TOKEN)
     dest = os.path.join(tempfile.gettempdir(), "forgefps.ps1")
-    print(f"[*] Silent {mode}: scarico script...")
+    print(f"[STEP] Silent {mode}: scarico script...")
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "FrameForge-Agent-Silent"})
         with urllib.request.urlopen(req, timeout=30) as r:
@@ -931,7 +943,7 @@ def launch_silent_mode(mode: str) -> bool:
         with open(dest, "wb") as f:
             f.write(data)
     except Exception as e:
-        print(f"[FrameForge] Impossibile scaricare lo script: {e}")
+        print(f"[ERR ] Impossibile scaricare lo script: {e}")
         return False
 
     # PowerShell hidden: -WindowStyle Hidden nasconde la finestra, subprocess con
@@ -955,17 +967,17 @@ def launch_silent_mode(mode: str) -> bool:
             stdin=subprocess.DEVNULL,
             close_fds=True,
         )
-        print(f"[FrameForge] Silent {mode} avviato in background (PID via Task Manager).")
+        print(f"[ OK ] Silent {mode} avviato in background (PID via Task Manager).")
         return True
     except Exception as e:
-        print(f"[FrameForge] Errore nel lancio silent: {e}")
+        print(f"[ERR ] Errore nel lancio silent: {e}")
         return False
 
 
 def restore_tweaks():
-    print("\n[8] Ripristino impostazioni dal backup...")
-    if not os.path.exists(BACKUP_FILE):
-        print("    Nessun backup trovato.")
+    print("\n[STEP] Ripristino impostazioni dal backup...")
+    if not (os.path.exists(BACKUP_FILE) or os.path.exists(_LEGACY_BACKUP_FILE)):
+        print("       Nessun backup trovato.")
         return
     bk = _load_backup()
     if bk.get("power_plan"):
@@ -992,58 +1004,21 @@ def restore_tweaks():
             t = "REG_DWORD" if tp == "DWord" else "REG_SZ"
             run('reg add "%s" /v "%s" /t %s /d "%s" /f' % (cli, name, t, vv))
     run("netsh int tcp set global autotuninglevel=normal")
-    try:
-        os.remove(BACKUP_FILE)
-    except Exception:
-        pass
-    print("    Impostazioni ripristinate ai valori precedenti.")
+    for _p in (BACKUP_FILE, _LEGACY_BACKUP_FILE):
+        try:
+            if os.path.exists(_p):
+                os.remove(_p)
+        except Exception:
+            pass
+    print("[ OK ] Impostazioni ripristinate ai valori precedenti.")
 
 
-def high_performance_power():
-    print("\n[3] Piano energetico ad alte prestazioni...")
-    bk = _load_backup()
-    cur = ps("(powercfg /getactivescheme)")
-    m = re.search(r"([0-9a-fA-F-]{36})", cur or "")
-    if m and "power_plan" not in bk:
-        bk["power_plan"] = m.group(1)
-        _save_backup(bk)
-    run("powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c")
-    print("    Attivato 'High Performance' (backup salvato).")
-
-
-def top_processes():
-    print("\n[4] Processi che consumano piu' RAM:")
-    print(ps("Get-Process | Sort-Object WS -Descending | Select-Object -First 8 "
-             "Name,@{N='RAM_MB';E={[math]::round($_.WS/1MB,1)}} | Format-Table -AutoSize | Out-String") or "    n/d")
-
-
-def menu():
-    actions = {
-        "G": ("GUI SICURA - Problema/Motivo/Impatto per ogni tweak (consigliato)", launch_secure_gui),
-        "1": ("Pulizia temp + cache Windows Update", _cleanup),
-        "3": ("Piano energetico alte prestazioni", high_performance_power),
-        "4": ("Mostra processi pesanti", top_processes),
-        "7": ("Rileva hardware/salute e invia al cloud", send_all),
-        "8": ("Ripristina impostazioni (backup)", restore_tweaks),
-        "B": ("Benchmark del sistema", benchmark_only),
-        "A": ("OTTIMIZZA TUTTO + benchmark prima/dopo (avanzato)", optimize_with_benchmark),
-    }
-    print("=" * 54)
-    print("   FrameForge - Desktop Agent  v%s" % AGENT_VERSION)
-    print("=" * 54)
-    if not is_admin():
-        print("[!] Suggerito eseguire come Amministratore.")
-    for k in ["G", "1", "3", "4", "7", "8", "B", "A"]:
-        print(f"  {k}. {actions[k][0]}")
-    print("  Q. Esci")
-    choice = input("\nScegli un'azione: ").strip().upper()
-    if choice == "Q":
-        sys.exit(0)
-    if choice in actions:
-        actions[choice][1]()
-    else:
-        print("Scelta non valida.")
-    input("\nPremi INVIO per continuare...")
+def _menu_logout():
+    """Rimuove il token dal PC. Esposto anche come pulsante 'Cambia account' nella GUI.
+    Utile via CLI power-user: `forgefps-agent.exe --mode logout`.
+    """
+    _forget_saved_token()
+    print("\n[ OK ] Token rimosso. Al prossimo avvio verra' richiesto un nuovo token.")
 
 
 if __name__ == "__main__":
@@ -1067,17 +1042,40 @@ if __name__ == "__main__":
         # Nessun input('Premi INVIO'): l'utente non sta guardando la console.
         sys.exit(0 if ok else 1)
 
-    # Modalita' non interattive dirette (es. --mode securegui / optimize / sync)
-    if _args.mode in ("securegui", "gui"):
-        launch_secure_gui()
-        try:
-            input("\nPremi INVIO per chiudere...")
-        except Exception:
-            pass
+    # v0.7.3+: menu CLI rimosso. Doppio-click sull'.exe = apri direttamente la GUI sicura.
+    # Le vecchie azioni CLI (benchmark, sync, ripristina) sono TUTTE nella GUI:
+    #   - Benchmark PRIMA/DOPO: toggle in fondo alla finestra
+    #   - Ripristina: bottone "Ripristina tutto" nella bottom bar
+    #   - Sync hardware: partita silent al boot dell'agent
+    #   - Cambia account: bottone in header GUI
+    # Backward-compat: --mode benchmark/sync/optimize/restore/logout continuano a funzionare
+    # (usati dal protocol handler frameforge:// e dai power user).
+    if _args.mode == "logout":
+        _menu_logout()
+        try: input("\nPremi INVIO per chiudere...")
+        except Exception: pass
         sys.exit(0)
-    while True:
-        try:
-            subprocess.run(["cmd", "/c", "cls"], check=False)
-        except Exception:
-            pass
-        menu()
+
+    if _args.mode == "sync":
+        send_all()
+        try: input("\nPremi INVIO per chiudere...")
+        except Exception: pass
+        sys.exit(0)
+    if _args.mode == "benchmark":
+        benchmark_only()
+        try: input("\nPremi INVIO per chiudere...")
+        except Exception: pass
+        sys.exit(0)
+    if _args.mode == "restore":
+        restore_tweaks()
+        try: input("\nPremi INVIO per chiudere...")
+        except Exception: pass
+        sys.exit(0)
+
+    # Default = securegui/optimize/gui = apre la GUI sicura
+    launch_secure_gui()
+    try:
+        input("\nPremi INVIO per chiudere...")
+    except Exception:
+        pass
+    sys.exit(0)

@@ -335,9 +335,9 @@ async def cmd_come_iniziare(interaction: discord.Interaction):
         inline=False,
     )
     emb.add_field(
-        name="3\ufe0f\u20e3  Scarica il Desktop Agent",
+        name="3\ufe0f\u20e3  Scarica il FrameForge Agent",
         value=(
-            f"Dalla pagina [Desktop Agent]({FRONTEND_URL}/app/desktop) scarica `.exe` firmato.\n"
+            f"Dalla pagina [FrameForge Agent]({FRONTEND_URL}/app/desktop) scarica `.exe` firmato.\n"
             "L'agent rileva il tuo hardware, calcola il tuo Health Score e ti suggerisce boost personalizzati.\n"
             f"Nel dubbio, apri la [Guida completa]({FRONTEND_URL}/guida)."
         ),

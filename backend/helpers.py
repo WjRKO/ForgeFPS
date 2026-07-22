@@ -107,7 +107,7 @@ def days_since(date_str: str):
 _HEALTH_NUMERIC_CHECKS = [
     ("temp", "File temporanei", 8, "temp_mb", (1500, 5000),
      lambda v: f"{int(v)} MB",
-     "Esegui la pulizia file temporanei (Desktop Agent opz. 1)", "mb", True),
+     "Esegui la pulizia file temporanei (FrameForge Agent -> GUI)", "mb", True),
     ("startup", "Programmi all'avvio", 10, "startup_count", (8, 15),
      lambda v: f"{int(v)} programmi",
      "Disabilita gli avvii non essenziali (pagina 'Il mio PC')", "programs", True),
@@ -116,7 +116,7 @@ _HEALTH_NUMERIC_CHECKS = [
      "Chiudi app in background o aggiungi RAM", "ram_pct", True),
     ("disk", "Spazio disco (C:)", 12, "disk_free_pct", (12, 6),
      lambda v: f"{int(v)}% libero",
-     "Libera spazio: pulizia disco (Desktop Agent opz. 6)", "disk_pct", False),
+     "Libera spazio: pulizia disco (FrameForge Agent -> GUI)", "disk_pct", False),
     ("driver", "Driver GPU", 12,
      lambda h: days_since(h["gpu_driver_date"]) if h.get("gpu_driver_date") else None,
      (180, 365),
@@ -134,8 +134,8 @@ _HEALTH_NUMERIC_CHECKS = [
 
 # Boolean toggle checks: (id, label, health_key, weight, fix)
 _HEALTH_TOGGLE_CHECKS = [
-    ("game_mode", "Game Mode", "game_mode", 8, "Attiva Game Mode (Desktop Agent opz. 5)"),
-    ("hags", "GPU Scheduling (HAGS)", "gpu_scheduling", 6, "Abilita HAGS (Desktop Agent opz. 5)"),
+    ("game_mode", "Game Mode", "game_mode", 8, "Attiva Game Mode (FrameForge Agent -> GUI)"),
+    ("hags", "GPU Scheduling (HAGS)", "gpu_scheduling", 6, "Abilita HAGS (FrameForge Agent -> GUI)"),
 ]
 
 
@@ -189,7 +189,7 @@ def compute_health(health: dict) -> dict:
     checks.append({"id": "power", "label": "Piano energetico",
                    "status": "ok" if hp else "bad",
                    "message": "Alte prestazioni" if hp else "Non ottimale",
-                   "fix": None if hp else "Attiva 'Alte prestazioni' (Desktop Agent opz. 3)",
+                   "fix": None if hp else "Attiva 'Alte prestazioni' (FrameForge Agent -> GUI)",
                    "mkey": "power_hp" if hp else "power_bad", "mval": None})
 
     # Boolean toggle checks via registry

@@ -4,6 +4,7 @@ import { Gauge, Wifi, Activity, ArrowDownToLine, ArrowUpToLine, Waves, AlertTria
 import api from "@/lib/api";
 import { PageHeader, SkeletonCard } from "@/components/hud";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
+import TechTerm from "@/components/TechTerm";
 
 const GRADE_COLOR = {
   "A+": "#00FF66", "A": "#00FF66", "B": "#E5FF00", "C": "#FF9500", "D": "#FF6B00", "F": "#FF3B30",
@@ -67,7 +68,13 @@ export default function Network() {
       ) : !res ? (
         <div className="bg-[#0F0F12] border border-dashed border-[#2A2A35] p-8 text-center text-zinc-500" data-testid="network-empty">
           <Activity size={28} className="mx-auto mb-3 text-zinc-600" />
-          {t("network.empty")}
+          <p className="mb-4">{t("network.empty")}</p>
+          <div className="inline-flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-zinc-400 border-t border-[#1A1A24] pt-4 mt-2">
+            <span className="text-[10px] uppercase tracking-widest text-zinc-600">{t("network.glossary_hint", { defaultValue: "Cosa misureremo" })}:</span>
+            <TechTerm term="bufferbloat">Bufferbloat</TechTerm>
+            <TechTerm term="ping">Ping</TechTerm>
+            <TechTerm term="jitter">Jitter</TechTerm>
+          </div>
         </div>
       ) : (
         <>
@@ -78,7 +85,7 @@ export default function Network() {
               <div className="font-display font-black text-6xl leading-none" style={{ color: gc }} data-testid="network-grade-value">{grade || "?"}</div>
             </div>
             <div className="flex-1 min-w-[200px]">
-              <div className="text-sm text-zinc-300 mb-1">{t("network.bloat_label")}</div>
+              <div className="text-sm text-zinc-300 mb-1"><TechTerm term="bufferbloat">{t("network.bloat_label")}</TechTerm></div>
               <div className="font-display font-black text-3xl mb-2">+{res.bufferbloat_ms ?? "--"}<span className="text-base text-zinc-500 ml-1">ms</span></div>
               <p className="text-xs text-zinc-500">{t("network.bloat_desc")}</p>
             </div>
@@ -89,7 +96,7 @@ export default function Network() {
             <Metric icon={Activity} label={t("network.idle")} value={res.idle_ms} unit="ms" sub={`${t(`network.q_${res.base_quality}`)}${res.idle_min != null ? ` · min ${res.idle_min}ms` : ""}`} accent="text-[#00FF66]" testid="net-idle" />
             <Metric icon={ArrowDownToLine} label={t("network.down_loaded")} value={res.down_ms} unit="ms" sub={`${res.down_grade ? `${t("network.grade")} ${res.down_grade}` : ""}${res.down_p95 != null ? ` · p95 ${res.down_p95}ms` : ""}`} accent="text-[#00E0FF]" testid="net-down" />
             <Metric icon={ArrowUpToLine} label={t("network.up_loaded")} value={res.up_ms} unit="ms" sub={`${res.up_grade ? `${t("network.grade")} ${res.up_grade}` : ""}${res.up_p95 != null ? ` · p95 ${res.up_p95}ms` : ""}`} accent="text-[#E5FF00]" testid="net-up" />
-            <Metric icon={Wifi} label={t("network.jitter")} value={res.jitter_ms} unit="ms" sub={`${t("network.loss")}: ${res.loss_pct ?? 0}%`} accent="text-[#B388FF]" testid="net-jitter" />
+            <Metric icon={Wifi} label={<TechTerm term="jitter">{t("network.jitter")}</TechTerm>} value={res.jitter_ms} unit="ms" sub={`${t("network.loss")}: ${res.loss_pct ?? 0}%`} accent="text-[#B388FF]" testid="net-jitter" />
           </div>
 
           {/* Recommendations */}

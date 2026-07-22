@@ -9,6 +9,7 @@ import { useSilentLaunch } from "@/hooks/useSilentLaunch";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
 import FleetPercentileCard from "@/components/FleetPercentileCard";
 import BenchmarkSparkline from "@/components/BenchmarkSparkline";
+import NextActionBanner from "@/components/NextActionBanner";
 
 const BENCH_METRICS = [
   { key: "score", lk: "m_score", unit: "/100", higherBetter: true },
@@ -257,6 +258,7 @@ export default function Benchmark() {
 
       {bench && bench.latest ? (
         <>
+          <NextActionBanner kind="post-benchmark" dismissKey={`post-bench-${bench.latest.ts || "any"}`} />
           <FleetPercentileCard key={`fp-${refreshKey}`} />
           <BenchmarkSparkline days={30} refreshKey={refreshKey} />
           <BenchmarkCard bench={bench} />

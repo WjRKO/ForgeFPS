@@ -1,6 +1,149 @@
 # FrameForge — Changelog
 
 
+## v0.7.3 (Agent) — 2026-02-22 · Menu CLI rimosso, GUI-first
+### Changed
+- **`agent-build/forgefps_agent.py`** — al doppio-click sull'`.exe` senza `--mode`,
+  l'agent apre **direttamente la GUI sicura** (equivalente a `--mode optimize`).
+  Menu CLI a tastiera completamente rimosso: la GUI copriva già il 100% delle
+  azioni (benchmark toggle, ripristina bottone, cleanup incluso in bulk apply,
+  sync silent al boot).
+- **Backward-compat CLI preservata** per protocol handler e power user:
+  `--mode sync | benchmark | restore | logout | securegui | optimize | gui`.
+  `--mode logout` è la modalità power-user per rimuovere il token da riga di
+  comando (equivalente al bottone "Cambia account" nella GUI).
+- **Rimosse funzioni duplicate**: `menu()`, `top_processes()`,
+  `high_performance_power()` (~30 righe). Erano tutte accessibili solo dal
+  menu CLI e duplicavano logica già presente in `apply_all_tweaks()` (che
+  chiama `_cleanup` + power plan setup) e nella GUI.
+- **Bump `AGENT_VERSION`** → `"0.7.3"`.
+
+### Added — GUI locale "Cambia account"
+- **`backend/ps_agent.py`** GUI HTML embedded:
+  - Nuovo bottone **"👤 Cambia account"** nell'header (tra "Continua sul Telefono"
+    e la Sync Cloud toggle). Stile: bordo grigio dim, hover rosso danger.
+    Testid: `logout-btn`.
+  - Nuovo endpoint locale `POST /api/logout` (PowerShell HTTP listener):
+    cancella `%APPDATA%\FrameForge\token.dat` e chiude Edge/WebView2 con
+    graceful shutdown (500ms delay). Ritorna `{ok: bool, removed: bool}`.
+  - JS handler: click → `confirm()` di conferma → `api("/api/logout", POST)` →
+    toast "✓ Token rimosso · chiusura in corso..." → `window.close()` dopo 900ms.
+- CSS: nuova classe `.logout-btn` (font mono, uppercase, letter-spacing coerente
+  col resto dell'header).
+
+### Verified
+- **Syntax check**: `forgefps_agent.py` + `ps_agent.py` parsano OK
+- **LOC**: `forgefps_agent.py` da 1107 → 1081 righe (−2.3%, ma coerenza logica +100%)
+- **Endpoint smoke test**: `/api/agent/script` con token valido admin — 9 nuove
+  occorrenze `logout-btn`/`/api/logout`/`Cambia account`, 0 residui legacy
+  (menu, top_processes, high_performance_power definiti solo nel `.py` client,
+  non servono nel PowerShell)
+
+### Todo utente
+- **Rebuild `.exe` v0.7.3** su GitHub Release (obbligatorio per applicare menu removal + version bump). Il fallback `_LEGACY_BACKUP_FILE` garantisce zero perdita
+  di backup per gli utenti in upgrade da v0.7.2.
+- **Redeploy web** — la nuova GUI con "Cambia account" è servita on-the-fly dal
+  backend (`/api/agent/script`) quindi live subito dopo redeploy, anche per gli
+  utenti che non aggiornano l'`.exe`.
+
+
+## Agent UX audit P0+P1 — 2026-02-22 · Terminologia unificata & prefissi console
+### Audit report
+- `/app/memory/AGENT_UX_AUDIT.md` — 17 fix opportunities identificate su `ps_agent.py` (3.766 righe) + `forgefps_agent.py` (1.084 righe).
+
+### P0 — Terminologia, naming legacy, Performance Score
+- **"Desktop Agent" → "FrameForge Agent"** (7 occorrenze user-facing):
+  - `agent-build/forgefps_agent.py`: docstring, argparse description, header banner CLI, menu title
+  - `backend/desktop_agent.py`: docstring, header banner, menu title (agent Python legacy servito da `/api/desktop-agent/download`)
+  - `backend/discord_bot.py`: bot embed `3️⃣ Scarica il FrameForge Agent`
+  - `backend/routers/pc.py`: 3 HTTPException detail (`/pc-benchmark`, `/pc-specs`, `/startup/analyze`) + comment `_ALLOWED_URI_MODES`
+  - `backend/routers/advisor.py`: HTTPException detail (nessun hw)
+  - `backend/helpers.py`: 3 fix string in `_HEALTH_NUMERIC_CHECKS` + boolean check
+- **"Companion locale" → "Agent locale"** nel docstring.
+- **"Collega il PC" → "FrameForge Agent"** nei riferimenti (menu web ora si chiama così):
+  - `backend/ps_agent.py`: messaggio token missing bilingue IT/EN
+  - `backend/routers/pc.py`: PowerShell error line servita da `/api/agent/script` senza token valido
+  - `backend/desktop_agent.py`: prompt token missing
+  - `agent-build/forgefps_agent.py`: prompt token missing + fallback URI senza token
+  - `frontend/src/pages/MyPc.jsx`: default fallback string per silent sync
+- **File rename `boostpc_backup.json` → `forgefps_backup.json`** con fallback lettura per upgrade indolore (v0.7.2 → v0.7.3):
+  - `agent-build/forgefps_agent.py`: `BACKUP_FILE` + `_LEGACY_BACKUP_FILE`, aggiornati `_load_backup()` e `restore_tweaks()`
+  - `backend/ps_agent.py` PowerShell: `$BACKUP` + `$BACKUP_LEGACY`, aggiornati `Load-Backup` inline, `Save-Backup` (rimuove legacy dopo primo save), `Invoke-Restore` (rimuove entrambi)
+  - `backend/desktop_agent.py`: stessa migrazione
+- **`boostpc_bench.bin` → `forgefps_bench.bin`** (file temporaneo benchmark)
+- **Prefissi console unificati** (11 varianti → 5): `[OK]`/`[STEP]`/`[INFO]`/`[WARN]`/`[ERR]`. Sostituiti:
+  - `[*]` → `[STEP]` (~10 occ)
+  - `[!]` → `[WARN]` (~5 occ)
+  - `[i]` → `[INFO]` (~6 occ)
+  - `[FrameForge]` → `[ERR]`/`[WARN]`/`[INFO]` in base al contesto (~8 occ tra `forgefps_agent.py` e `desktop_agent.py`)
+  - `[SICUREZZA]` → `[WARN][SEC]` (2 occ in `Set-Reg`/`Disable-ServiceSafe`)
+  - `[HW]` → `[INFO][HW]` (1 occ)
+  - `[diag]` → `[INFO][diag]` (2 occ)
+  - `[BOOST ATTIVO]` / `[FATTO]` / `[STOP]` / `[FINE PARTITA]` → indented cheer-line senza bracket ("Boost attivo! Buona partita!") oppure `[ OK ]`/`[STEP]` (~7 occ)
+  - Menu-numbering Python `[1]`/`[3]`/`[4]`/`[7]`/`[8]`/`[B]` → `[STEP]` (~6 occ)
+- **Sub-tag mantenuti** come contextual (accettabili per audit): `[FPS]`, `[diag FPS]`, `[SEC]`, `[HW]`, `[diag]`.
+- **Performance Score vs Health Score distinction** nel benchmark output:
+  - `backend/ps_agent.py` `Show-Bench`: `SCORE {n}/100` → `PERFORMANCE SCORE {n}/100` + nota "Health Score globale su forgefps.dev → Il mio PC"
+  - `agent-build/forgefps_agent.py` `show_bench`: stessa modifica + `SCORE` label → `Performance` in confronto PRIMA/DOPO
+- **Menu CLI ristrutturato** in `forgefps_agent.py` (8 voci non-contigue `G/1/3/4/7/8/B/A` → 5 voci contigue):
+  - `1` GUI (consigliato)
+  - `2` Rileva hardware e sincronizza
+  - `3` Benchmark rapido
+  - `4` Ripristina
+  - `5` Cambia account (nuovo — richiama `_forget_saved_token()`)
+  - `A` OTTIMIZZA TUTTO CLI (avanzato)
+- **Version pill GUI locale** `GUI v2` → `GUI v2.5` (allineamento con code base v2.5)
+
+### P1 — GUI HTML embedded polish + stateClass fix
+- **`<title>`** `FrameForge - Ottimizzazioni sicure` → `FrameForge Agent — Ottimizzazioni`
+- **Header brand** `FRAMEFORGE` → `FRAMEFORGE AGENT`
+- **Subtitle** `Ottimizzazioni trasparenti per streamer & gamer` → `Trova i colli di bottiglia. Ottimizza in sicurezza.` (allineato con headline landing)
+- **Safety banner** "SICUREZZA GARANTITA - Non tocchiamo MAI..." → "SICUREZZA - Non tocchiamo mai Windows Defender, Firewall o servizi di sicurezza..." (tono meno marketing)
+- **Sort labels** uniformati:
+  - `Impatto` → `Impatto stimato`
+  - `Nome` → `Nome (A-Z)`
+  - `Da fare per primi` → `Da applicare per primi`
+- **Empty state profili** — link `forgefps.dev/app/profiles` (rotta inesistente) → `Crea preset gaming su forgefps.dev → Gaming`
+- **Toast icons**:
+  - `toast("Applicato")` → `toast("✓ Applicato", "ok")`
+  - `toast("Aggiornato", "ok")` → `toast("⟳ Aggiornato", "ok")`
+  - `toast("Ripristino completato", "ok")` → `toast("↩ Ripristinato", "ok")`
+- **Fix bug `stateClass()`**: la regex vecchia matchava `attivo|disabilit|disattivat|gia|prestazioni|nessun` e classificava come "ok" (verde) le label ambigue tipo `Attivo (da disattivare)` che sono in realtà pending. Nuova logica strict:
+  - `(da att|dis|ott)` o `^da (att|dis|ott)` → `todo` (giallo)
+  - `^solo gpu ` → `na` (grigio)
+  - `n/d` → `na`
+  - keyword positivi → `ok` (verde)
+  - fallback → `""` (colore accent default)
+- **Nuove classi CSS**: `.state.todo` (var(--warn) giallo), `.state.na` (var(--muted) grigio)
+
+### Files touched (10)
+- `backend/ps_agent.py` (~35 modifiche puntuali su 3.766 righe)
+- `backend/desktop_agent.py` (2 blocchi header/menu)
+- `backend/routers/pc.py` (5 stringhe error/comment)
+- `backend/routers/advisor.py` (1 stringa error)
+- `backend/discord_bot.py` (bot embed field name+value)
+- `backend/helpers.py` (4 fix string label)
+- `agent-build/forgefps_agent.py` (docstring, argparse, prompt, prefissi console, backup fallback, menu CLI, show_bench)
+- `frontend/src/pages/MyPc.jsx` (defaultValue fallback)
+- `memory/AGENT_UX_AUDIT.md` (audit report)
+- `memory/CHANGELOG.md` (this entry)
+
+### Verified
+- **Syntax check**: 7/7 file Python parsano correttamente (`ast.parse`)
+- **Endpoint smoke test** `/api/agent/script?t=INVALID` → 200, messaggio aggiornato: `[ERR ] Token non valido. Riapri la pagina FrameForge Agent.`
+- **Full agent script generation** con token valido admin: 47 occorrenze dei nuovi termini presenti, 0 residui legacy (`Desktop Agent`, `Collega il PC`, `[FrameForge]`, `SCORE /100`, `GUI v2` senza .5, `Companion locale`, `BOOST ATTIVO`, `[FATTO]`, `[SICUREZZA]`)
+- **Regression pytest** `tests/test_agent_launch_uri.py + test_booster_bench.py`: 7/8 pass — l'unico fail (`test_launch_uri_default_mode` HTTP 401) è **pre-esistente** (verificato via `git stash`), non causato dalle modifiche
+- **Landing screenshot**: renderizza correttamente, no visual regression
+
+### Todo utente
+- Redeploy produzione (`forgefps.dev`) per far vedere agli utenti finali:
+  - Il nuovo messaggio `[ERR ]` sullo script servito da `/api/agent/script`
+  - I nuovi label in Discord bot embed
+  - Le nuove fix suggestions in Health Score
+- **Rebuild `.exe` v0.7.3** solo per gli utenti che aprono il menu CLI dell'agent (raro — la maggior parte usa il protocol handler `frameforge://` che è invariato). Il fallback `_LEGACY_BACKUP_FILE` garantisce upgrade indolore anche senza rebuild immediato.
+- Backup dell'agent PowerShell serviti da backend è **live immediato** dopo redeploy.
+
+
 ## Fase 3 + Fase 4 — 2026-02-22 · Benchmark contestuale & Storico visual
 ### Added (backend — `routers/pc.py`)
 - **`GET /api/benchmarks/fleet-percentile`**: percentile del punteggio benchmark
@@ -746,4 +889,97 @@ Precedenti release documentate in `PRD.md`.
 - ROADMAP aggiornata: "--onedir build" spostata in Done, aggiunti "Bottleneck detector real-time" (in progress) e "Storico sessioni gaming" (planned).
 ### Verified
 - Compile pulito, `/changelog` renderizza 6 versioni + roadmap; nessun console error.
+
+
+## GUI locale v2.5 (P0+P1) — 2026-02-22 · Redesign completo
+### Aggiunti (ps_agent.py, sezione HTML/CSS/JS)
+- **A. Density toggle** Compatto/Dettagliato (persistente in localStorage, shortcut "D")
+- **B. Impact meter** ●●●●● (5 step) parsando `+3-8% FPS`, `meno stutter`, ecc.
+- **C. Preset preview** su hover: mostra "N tweak, +X% FPS, Y riavvii" ed evidenzia le card che verrebbero applicate
+- **D. Icone al posto delle label** Problema/Motivo/Modifica/Impatto (⚠️/ℹ️/⚙️/📈)
+- **E. Semaforo unico** = bordo card colorato (verde=applicato, giallo=consigliato, arancione=caution, grigio=skip)
+- **F. Progress ring** SVG animato nell'header (%, "3/6 ottimizzato · Buona strada")
+- **G. Search hero** larga con icona 🔍 e badge `Ctrl+K` shortcut
+- **H. Filter chips**: Consigliati · No riavvio · Reversibili · Cautela · Da applicare (combinabili)
+- **I. Sort dropdown**: Impatto | Categoria | Nome | Da fare per primi
+- **J. Summary strip** in bottom bar: `5 selezionati · +12% FPS · 2 riavvii · Backup ON` + bottone Apply disabilitato quando 0
+- **K. Big toast post-apply** con azione "Riavvia ora / Più tardi" + pulse verde sulla card applicata
+- Bonus: **time pill** ⏱ ~2s / 🔄 riavvio su ogni card
+- Bonus: keyboard shortcut `D` per toggle density
+### Testato
+- Smoke test HTML statico con dati mock in Playwright: tutti i data-testid resi, zero errori JS, preset preview funzionante.
+
+
+## UX consistency P0+P1 — 2026-02-22 · Menu ristrutturato + terminologia
+### Changed
+- **Menu sidebar ristrutturato** (`components/Layout.jsx`):
+  - PRIMARY (5 voci): Dashboard · Il mio PC · AI Advisor · Gaming · Prezzi & Tracker
+  - Sezione **SHOPPING**: Consiglia Build · Upgrade & FPS
+  - Sezione **STRUMENTI** (nuova): FrameForge Agent · Report PDF · Comandi · Rete · BIOS
+  - Admin resta separato
+- **Terminologia unificata** (`i18n.js`, IT+EN):
+  - "Desktop Agent" → **"FrameForge Agent"** (32 occorrenze bulk replace)
+  - "Collega il PC" (menu) → "FrameForge Agent"
+  - "Prezzi" → "Prezzi & Tracker"
+  - "Report Prima/Dopo" → "Report PDF"
+  - "Rete & Bufferbloat" → "Rete"
+  - "BIOS & Ripristino" → "BIOS"
+  - "Comandi Utili" → "Comandi"
+- **Landing**: `f_agent_t` "Desktop Agent" → "FrameForge Agent" (IT+EN)
+### Added
+- **3 bottoni canonici** in `components/hud.jsx`: `<PrimaryButton>`, `<SecondaryButton>`, `<GhostButton>` (per uniformare CTA in tutte le pagine)
+- **Sezione "Strumenti"** in i18n con label `section.tools: Strumenti / Tools`
+- **Bottone Mobile Handoff** persistente nell'header (`Layout.jsx`): icona telefono + label "Telefono" (nascosta su mobile). Al click apre il modal QR handoff su qualsiasi pagina, non solo Dashboard.
+### Verified
+- Compile pulito, menu renders correttamente, modal handoff si apre al click, terminologia unificata.
+- OnboardingTour + FreshnessBadge già presenti nel Layout, non toccati.
+
+
+## UX P1 batch — 2026-02-22 · Killer features + tooltip + banner contestuali
+### Added
+- **`components/BottleneckDetector.jsx`**: real-time bottleneck classifier che poll `/api/pc-telemetry` ogni 4s. Classifica: CPU-BOUND / GPU-BOUND / RAM SATURATED / BALANCED / IDLE / MIXED. Copy contestuale per ogni caso ("Chiudi Chrome/Discord per liberare thread"). **Chiude il gap della hero landing "trova i colli di bottiglia"**. Integrato in `Live.jsx` quando data.live=true.
+- **`components/NextActionBanner.jsx`**: banner contestuale dopo azioni chiave. Presets: `no-hw` (no PC connesso → installa Agent), `post-sync` (sync OK → chiedi Advisor), `post-apply` (tweak applicati → fai benchmark), `post-benchmark` (bench OK → vedi confronto). Dismiss persistente 24h in localStorage. Integrato in Dashboard.jsx (no-hw / post-sync) e Benchmark.jsx (post-benchmark).
+- **`components/TechTerm.jsx`**: tooltip glossario per termini tecnici. Dizionario IT+EN con 12 entry (bufferbloat, MPO, HAGS, MSI mode, MMCSS, ULPS, hiberfil, DPI, DWM, ping, jitter, frametime). Icona `HelpCircle` cyan + underline dashed. Usa shadcn Tooltip. Applicato a Network.jsx (bufferbloat + jitter).
+- **i18n.js**: nuovi namespace `bottleneck.*` (14 chiavi) e `nba.*` (10 chiavi) in IT + EN, per evitare mixed-language UX.
+### Fixed
+- BottleneckDetector: rinominati testid dei chip interni da `bottleneck-{kind}` a `bottleneck-chip-{kind}` per eliminare collisione con il container (segnalato da testing agent iteration_35).
+### Tested
+- iteration_35: 80% pass, tutte le feature core verificate. Bottleneck detector switch CPU-BOUND ↔ GPU-BOUND in real-time confermato. Menu ristrutturato in IT verificato. Mobile handoff modal si apre. `nba-post-benchmark` renders correttamente sopra FleetPercentileCard.
+### Deferred
+- Migrazione bulk dei bottoni esistenti a `<PrimaryButton>/<SecondaryButton>/<GhostButton>` — troppo pervasiva (20+ pagine), farla iterativamente su nuovo lavoro.
+- Fix i18n language init (bug pre-esistente: `localStorage.i18nextLng=it` non applicato al primo render).
+- Route `/app/pc/live` → `/app/live` (già è `/app/live`, testing doc era outdated).
+
+
+## Button migration P1 — 2026-02-22 · Dashboard + hud SSOT
+### Added (hud.jsx)
+- **`BTN_CLASSES`** exported constants — single source of truth per gli stili bottone:
+  - `primary`, `secondary`, `ghost` (varianti size medium)
+  - `primaryMono`, `secondaryMono`, `ghostMono` (HUD uppercase mono per header/eyebrow)
+- `PrimaryButton`, `SecondaryButton` ora usano `BTN_CLASSES.primary/secondary` internamente (no duplicate strings).
+### Refactored (pages/Dashboard.jsx)
+- CTA "Collega il PC" empty state: da inline className a `BTN_CLASSES.primaryMono`
+- CTA "Bench empty" da inline className a `BTN_CLASSES.secondaryMono`
+- **Rimosso Mobile Handoff duplicato dal body** (era ridondante ora che il bottone è nell'header globale via `Layout.jsx`). Rimossi import `MobileHandoffModal`, `Smartphone`, state `mobileOpen`.
+### Deferred
+- Migrazione bottoni sulle altre pagine (Tracker, Games, Live, Advisor…) - approccio incrementale, page-by-page, per limitare superficie di rischio.
+
+
+## UX polish batch — 2026-02-22 · i18n + Network glossary
+### Fixed
+- **i18n language detection**: precedentemente `localStorage.i18nextLng=it` non veniva onorato al primo login perché il detector cerca la chiave custom `boostpc_lang`. Aggiunto backfill al boot (`i18n.js`): se `i18nextLng` esiste e `boostpc_lang` no, lo copia. Aggiunto anche listener `languageChanged` che sincronizza `i18nextLng` all'evento switch — così tool esterni (testing agent, script) leggono sempre il valore corretto.
+### Added
+- **Network empty state**: nuova sezione "Cosa misureremo" con `<TechTerm>` tooltip per Bufferbloat, Ping, Jitter — il glossario è ora discoverable anche prima del primo test (feedback da iteration_35).
+### Deferred (button migration)
+- Migrazione bulk dei bottoni sulle pagine Tracker/Games/Live/Advisor/BIOS ecc.: sospesa dopo analisi. Le pagine usano ~5+ varianti di stile bottone (`btn-volt`, `bg-[#E5FF00] font-bold` con padding vario, `border-[#E5FF00]/50`, `text-[#5865F2]` per Discord, ecc.). Un bulk regex-replace sarebbe rischioso.
+- **`BTN_CLASSES` è già la SSOT** in `hud.jsx`. Migrazione va fatta opportunisticamente su ogni nuova pagina/PR o quando si tocca il markup per altre ragioni.
+### Verified
+- Screenshot: menu completamente in italiano al primo login con `i18nextLng=it`, Network empty state mostra i 3 glossary tooltip.
+
+
+## Bottleneck badge Dashboard header — 2026-02-22
+### Added
+- `<BottleneckDetector compact />` come `actions` di `<PageHeader>` in `Dashboard.jsx`. Al render della Dashboard il badge appare in alto a destra se c'è una telemetria fresh (<60s). Auto-hide se assente/stale.
+### Verified
+- Screenshot: badge "🔴 CPU-BOUND" visibile accanto al titolo dopo injection sample cpu_util=95, gpu_util=40. Text=CPU-BOUND, palette rossa come nel banner completo. Zero errori JS.
 
