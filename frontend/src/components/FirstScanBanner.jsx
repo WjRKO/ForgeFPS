@@ -43,11 +43,17 @@ export default function FirstScanBanner() {
   const checkOnce = async (isFirstCall = false) => {
     try {
       const { data } = await api.get("/pc-specs");
-      // Consideriamo "dato presente" se c'e' hardware base O benchmark O una lista giochi/app.
-      // Il vecchio check controllava solo data.data che escludeva utenti con solo benchmark.
+      // Consideriamo "dato presente" se il documento esiste con QUALSIASI campo
+      // significativo. Il vecchio check richiedeva data.data non vuoto O benchmark
+      // O apps: escludeva erroneamente utenti che hanno solo running_apps, o games,
+      // o startup, o solo un updated_at (dati parziali). Ora se il doc esiste con
+      // updated_at, l'utente NON e' un first-scan.
       const hasData = !!(data && (
+        data.updated_at ||
         (data.data && Object.keys(data.data).length > 0) ||
         data.benchmark ||
+        data.health ||
+        (Array.isArray(data.startup) && data.startup.length > 0) ||
         (Array.isArray(data.games) && data.games.length > 0) ||
         (Array.isArray(data.running_apps) && data.running_apps.length > 0)
       ));

@@ -1,6 +1,40 @@
 # FrameForge — Changelog
 
 
+## v0.7.4 (Agent + Web) — 2026-02-22 · Token mismatch UX + GPU ref sposta
+
+### Fixed — "Sincronizza ora" apriva la GUI "primo scan" invece che sync silent
+- **Root cause**: quando `%APPDATA%\FrameForge\token.dat` contiene il token di un
+  account DIVERSO da quello loggato sul web (multi-account su stessa macchina),
+  la firma HMAC dell'URI `frameforge://` fallisce sull'exe. Il fallback v0.7.3
+  apriva `launch_secure_gui()` con `-Mode optimize` → primo scan visibile.
+- **`agent-build/forgefps_agent.py`** — `parse_and_verify_uri` ora ritorna
+  `{invalid_reason, silent_hint}` invece di `None` quando la firma fallisce.
+  Il main gestisce il nuovo caso `_INVALID_URI_SILENT_HINT`: se il chiamante
+  voleva `silent=1` ma la firma è ko, l'exe esce con codice 2 SENZA aprire
+  finestre visibili (evita l'effetto "primo scan a sorpresa").
+- **Bump `AGENT_VERSION`** → `"0.7.4"`.
+
+### Added — TokenMismatchHint sulla pagina FrameForge Agent
+- **`frontend/src/components/TokenMismatchHint.jsx`** — nuovo accordion arancione
+  sotto `FirstScanBanner` che spiega il problema del token vecchio in `%APPDATA%`
+  e offre un bottone "Scarica launcher .bat" (usa `/api/agent/launcher-bat`
+  esistente). Il .bat sovrascrive il token in un doppio click.
+- **`frontend/src/pages/DesktopAgent.jsx`** — import + placement del nuovo hint.
+
+### Changed
+- **`frontend/src/components/FirstScanBanner.jsx`** — check `hasData` più
+  tollerante: ora considera "utente veterano" anche chi ha solo `updated_at`,
+  `health`, o `startup` popolato (prima escludeva erroneamente vari edge-case).
+- **`frontend/src/pages/MyPc.jsx`** — rimosso `<GpuReferenceCard />` (spostato)
+  e migliorato il toast di errore del sync silent che ora indirizza esplicitamente
+  alla sezione "L'agent potrebbe essere collegato ad un altro account".
+- **`frontend/src/pages/Benchmark.jsx`** — aggiunta `<GpuReferenceCard />` in
+  cima alla pagina (era in `MyPc`, contesto sbagliato). Ora la classe GPU
+  e il PassMark reference sono accanto ai risultati del benchmark.
+
+
+
 ## v0.7.3 (Agent) — 2026-02-22 · Menu CLI rimosso, GUI-first
 ### Changed
 - **`agent-build/forgefps_agent.py`** — al doppio-click sull'`.exe` senza `--mode`,

@@ -32,7 +32,7 @@ _args, _ = _parser.parse_known_args()
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.7.3"
+AGENT_VERSION = "0.7.4"
 # v0.7.3+: rinominato da boostpc_backup.json → forgefps_backup.json.
 # Fallback lettura del vecchio nome per una release per non perdere il backup
 # degli utenti che aggiornano dalla v0.7.2 o precedenti.
@@ -175,15 +175,19 @@ def parse_and_verify_uri(uri: str, agent_token: str):
         now = int(time.time())
         if abs(now - ts) > _URI_MAX_AGE_SEC:
             print(f"[WARN] URI scaduto (age={now - ts}s). Riprova dal browser.")
-            return None
+            # v0.7.4+: ritorna info sul silent hint anche in errore, cosi'
+            # il chiamante puo' decidere se aprire una GUI (bad UX per silent).
+            return {"invalid_reason": "expired", "silent_hint": silent}
         expected = hmac.new(
             agent_token.encode("utf-8"),
             f"{mode}|{ts}".encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
         if not hmac.compare_digest(expected, sig):
-            print("[WARN] Firma URI non valida. Ignoro (possibile URI di un altro account).")
-            return None
+            print("[WARN] Firma URI non valida. Token locale potrebbe essere di un altro account.")
+            print("       Fix: apri la GUI locale -> 'Cambia account' e reincolla il token dell'account attuale,")
+            print("       oppure lancia 'Avvia-FrameForge.bat' dal ZIP scaricato dall'account attuale.")
+            return {"invalid_reason": "sig_mismatch", "silent_hint": silent}
         return {"mode": mode, "ts": ts, "silent": silent}
     except Exception as e:
         print(f"[ERR ] Errore parsing URI: {e}")
@@ -239,17 +243,27 @@ elif AGENT_TOKEN and not AGENT_TOKEN.startswith("__"):
 # Se l'utente ha lanciato con --uri "frameforge://...", verifica la firma e
 # imposta la mode: la GUI si aprira' direttamente sull'azione richiesta.
 # v0.7.1+: se silent=1 -> lancia PowerShell hidden senza aprire la GUI.
+# v0.7.4+: se firma fallita ma silent=1 era richiesto, NON aprire una GUI
+#          visibile (bad UX: l'utente pensa di aver premuto un bottone silent
+#          e vede spuntare una finestra). Esci silenziosamente con codice 2.
 _SILENT_FROM_URI = False
+_INVALID_URI_SILENT_HINT = False
 if _args.uri:
     payload = parse_and_verify_uri(_args.uri, AGENT_TOKEN)
-    if payload:
+    if payload and not payload.get("invalid_reason"):
         _args.mode = payload["mode"]
         _SILENT_FROM_URI = bool(payload.get("silent"))
         # Se la mode e' 'gui' o 'optimize' apriamo direttamente la finestra sicura
         if _args.mode in ("gui", "optimize") and not _SILENT_FROM_URI:
             _args.mode = "securegui"
+    elif payload and payload.get("invalid_reason") and payload.get("silent_hint"):
+        # Firma invalida MA il chiamante voleva silent -> exit silenzioso
+        # (nessuna GUI visibile). Il web dashboard mostrera' il toast di errore
+        # dopo il timeout e guidera' l'utente al riallineamento del token.
+        _INVALID_URI_SILENT_HINT = True
+        _args.mode = "silent_signature_error"
     else:
-        # URI non valido -> apri la GUI normale in modalita' securegui
+        # URI non valido e senza hint silent -> apri la GUI normale in modalita' securegui
         _args.mode = "securegui"
 
 
@@ -1041,6 +1055,15 @@ if __name__ == "__main__":
         ok = launch_silent_mode(_args.mode if _args.mode not in ("securegui", "gui") else "sync")
         # Nessun input('Premi INVIO'): l'utente non sta guardando la console.
         sys.exit(0 if ok else 1)
+
+    # v0.7.4+: firma URI invalida ma il chiamante voleva silent -> exit silenzioso.
+    # Non apriamo alcuna GUI perche' l'utente ha premuto un bottone 'silent' e non
+    # si aspetta una finestra. Il browser mostrera' il toast di errore dopo timeout.
+    if _INVALID_URI_SILENT_HINT:
+        print("[INFO] Uscita silenziosa: token locale disallineato con l'account che ha generato l'URI.")
+        print("       Riallinea aprendo l'exe direttamente e usando 'Cambia account', oppure lancia")
+        print("       'Avvia-FrameForge.bat' scaricato dall'account corretto.")
+        sys.exit(2)
 
     # v0.7.3+: menu CLI rimosso. Doppio-click sull'.exe = apri direttamente la GUI sicura.
     # Le vecchie azioni CLI (benchmark, sync, ripristina) sono TUTTE nella GUI:

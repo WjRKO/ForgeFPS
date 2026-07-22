@@ -9,6 +9,7 @@ import api, { API } from "@/lib/api";
 import { trackConversion } from "@/lib/gtag";
 import AgentPreview from "@/components/AgentPreview";
 import FirstScanBanner from "@/components/FirstScanBanner";
+import TokenMismatchHint from "@/components/TokenMismatchHint";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const isEn = () => i18n.language?.startsWith("en");
@@ -226,6 +227,9 @@ export default function DesktopAgent() {
 
       {/* First-scan banner: mostrato solo se l'utente non ha ancora fatto il primo sync */}
       <FirstScanBanner />
+
+      {/* Hint token disallineato: aiuto per gli utenti che hanno gia' installato l'exe con un altro account */}
+      <TokenMismatchHint />
 
       <div className="grid lg:grid-cols-[1fr_360px] gap-6 items-start">
         {/* LEFT: content (scrolls) */}
