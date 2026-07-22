@@ -68,7 +68,13 @@ export default function Network() {
       ) : !res ? (
         <div className="bg-[#0F0F12] border border-dashed border-[#2A2A35] p-8 text-center text-zinc-500" data-testid="network-empty">
           <Activity size={28} className="mx-auto mb-3 text-zinc-600" />
-          {t("network.empty")}
+          <p className="mb-4">{t("network.empty")}</p>
+          <div className="inline-flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-zinc-400 border-t border-[#1A1A24] pt-4 mt-2">
+            <span className="text-[10px] uppercase tracking-widest text-zinc-600">{t("network.glossary_hint", { defaultValue: "Cosa misureremo" })}:</span>
+            <TechTerm term="bufferbloat">Bufferbloat</TechTerm>
+            <TechTerm term="ping">Ping</TechTerm>
+            <TechTerm term="jitter">Jitter</TechTerm>
+          </div>
         </div>
       ) : (
         <>

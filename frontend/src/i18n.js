@@ -1163,6 +1163,21 @@ const resources = {
 const _navLang = (typeof navigator !== "undefined" && (navigator.language || navigator.userLanguage) || "").toLowerCase();
 const _smartFallback = _navLang.startsWith("it") ? "it" : "en";
 
+// Backfill compatibility: some external tools (testing agent, migrations)
+// write the language to the *standard* i18next key `i18nextLng` — mirror it
+// into our custom `boostpc_lang` before init so the detector picks it up on
+// the very first render (no manual reload required).
+if (typeof window !== "undefined") {
+  try {
+    const std = window.localStorage.getItem("i18nextLng");
+    const ours = window.localStorage.getItem("boostpc_lang");
+    if (std && !ours) {
+      const lang = String(std).toLowerCase().slice(0, 2);
+      if (lang === "it" || lang === "en") window.localStorage.setItem("boostpc_lang", lang);
+    }
+  } catch {}
+}
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
@@ -1179,6 +1194,14 @@ i18n
     interpolation: { escapeValue: false },
     react: { useSuspense: false },
   });
+
+// Keep both storage keys in sync so external tools reading the standard
+// key stay accurate whenever the user switches language in-app.
+if (typeof window !== "undefined") {
+  i18n.on("languageChanged", (lng) => {
+    try { window.localStorage.setItem("i18nextLng", String(lng || "").slice(0, 2)); } catch {}
+  });
+}
 
 // Keep <html lang="…"> in sync (SEO + a11y) whenever the user switches.
 if (typeof document !== "undefined") {

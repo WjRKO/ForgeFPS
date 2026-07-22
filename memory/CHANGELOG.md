@@ -821,3 +821,15 @@ Precedenti release documentate in `PRD.md`.
 ### Deferred
 - Migrazione bottoni sulle altre pagine (Tracker, Games, Live, Advisor…) - approccio incrementale, page-by-page, per limitare superficie di rischio.
 
+
+## UX polish batch — 2026-02-22 · i18n + Network glossary
+### Fixed
+- **i18n language detection**: precedentemente `localStorage.i18nextLng=it` non veniva onorato al primo login perché il detector cerca la chiave custom `boostpc_lang`. Aggiunto backfill al boot (`i18n.js`): se `i18nextLng` esiste e `boostpc_lang` no, lo copia. Aggiunto anche listener `languageChanged` che sincronizza `i18nextLng` all'evento switch — così tool esterni (testing agent, script) leggono sempre il valore corretto.
+### Added
+- **Network empty state**: nuova sezione "Cosa misureremo" con `<TechTerm>` tooltip per Bufferbloat, Ping, Jitter — il glossario è ora discoverable anche prima del primo test (feedback da iteration_35).
+### Deferred (button migration)
+- Migrazione bulk dei bottoni sulle pagine Tracker/Games/Live/Advisor/BIOS ecc.: sospesa dopo analisi. Le pagine usano ~5+ varianti di stile bottone (`btn-volt`, `bg-[#E5FF00] font-bold` con padding vario, `border-[#E5FF00]/50`, `text-[#5865F2]` per Discord, ecc.). Un bulk regex-replace sarebbe rischioso.
+- **`BTN_CLASSES` è già la SSOT** in `hud.jsx`. Migrazione va fatta opportunisticamente su ogni nuova pagina/PR o quando si tocca il markup per altre ragioni.
+### Verified
+- Screenshot: menu completamente in italiano al primo login con `i18nextLng=it`, Network empty state mostra i 3 glossary tooltip.
+
