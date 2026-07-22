@@ -3465,21 +3465,62 @@ if ($MODE -eq 'optimize') {
   # v0.7.4: first-scan al primo avvio della GUI (mode=optimize di default al doppio-click).
   # Prima venivano inviati solo dopo apply/benchmark, quindi un utente nuovo che apre
   # e chiude la GUI senza applicare nulla lasciava il dashboard cloud completamente vuoto.
-  # Ora invece:
-  #  - specs / health / startup / running / games sincronizzati SEMPRE all'apertura
-  #  - la Dashboard "Il mio PC" si popola in 3-8 secondi dal primo doppio-click sull'.exe
-  #  - se qualcosa fallisce (permessi, LHM), continuiamo comunque con la GUI (best-effort)
+  # Ora invece: specs / health / startup / running / games sincronizzati SEMPRE all'apertura.
+  #
+  # v0.7.4b: POST verbosi con status code visibile — le helper Send-Data/Send-Running/
+  # Send-Games erano wrapped in try/catch silente, quindi un 401 (token invalido) o 500
+  # (backend crash) mostrava lo stesso "[OK] Primo scan completato" ma il DB restava vuoto.
+  # Ora ogni POST logga byte inviati + HTTP status + eventuale errore.
   Say "`n[STEP] Primo scan hardware in corso (rilevo CPU, GPU, RAM, salute, avvio)..." 'Cyan'
-  try {
-    $__scanSpecs   = Get-Specs
-    $__scanHealth  = Get-Health
-    $__scanStartup = Get-StartupList
-    Send-Data $__scanSpecs $__scanHealth $__scanStartup
-    try { $__scanRun = Get-RunningApps; if ($__scanRun.Count -gt 0) { Send-Running $__scanRun } } catch {}
-    try { $__scanGames = Get-Games; if ($__scanGames.Count -gt 0) { Send-Games $__scanGames } } catch {}
-    Say ("[ OK ] Primo scan completato: {0} | GPU {1} | RAM {2}. Dati inviati al cloud." -f $__scanSpecs.cpu, $__scanSpecs.gpu, $__scanSpecs.ram) 'Green'
-  } catch {
-    Say ("[WARN] Sync iniziale non riuscito (continuo con la GUI): {0}" -f $_) 'Yellow'
+
+  function __FsPost($body, $label) {
+    $json = $body | ConvertTo-Json -Depth 8 -Compress
+    try {
+      $resp = Invoke-WebRequest -Uri "$BACKEND/api/agent/report-specs" -Method Post `
+        -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } `
+        -Body $json -UseBasicParsing -TimeoutSec 20
+      Say ("  [OK] {0}: {1} bytes -> HTTP {2}" -f $label, $json.Length, $resp.StatusCode) 'DarkGreen'
+      return $true
+    } catch {
+      $status = 0
+      try { $status = $_.Exception.Response.StatusCode.value__ } catch {}
+      $errMsg = $_.Exception.Message
+      Say ("  [FAIL] {0} -> HTTP {1}: {2}" -f $label, $status, $errMsg) 'Red'
+      if ($status -eq 401) {
+        Say "         Token agent non valido. Riscarica il ZIP personalizzato dalla pagina 'FrameForge Agent'." 'Yellow'
+      } elseif ($status -eq 0) {
+        Say ("         Backend non raggiungibile: {0}. Firewall/proxy? Connessione internet?" -f $BACKEND) 'Yellow'
+      }
+      return $false
+    }
+  }
+
+  $__scanSpecs = $null; $__scanHealth = $null; $__scanStartup = $null
+  try { $__scanSpecs = Get-Specs;         Say ("  specs: CPU={0}, GPU={1}, RAM={2}" -f $__scanSpecs.cpu, $__scanSpecs.gpu, $__scanSpecs.ram) 'DarkGray' } catch { Say ("  Get-Specs FAIL: {0}" -f $_.Exception.Message) 'Red' }
+  try { $__scanHealth = Get-Health;       Say ("  health: {0} chiavi" -f $__scanHealth.Count) 'DarkGray' } catch { Say ("  Get-Health FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
+  try { $__scanStartup = Get-StartupList; Say ("  startup: {0} app all'avvio" -f $__scanStartup.Count) 'DarkGray' } catch { Say ("  Get-StartupList FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
+
+  if ($__scanSpecs) {
+    $__body = @{}
+    if ($__scanSpecs)   { $__body.data    = $__scanSpecs }
+    if ($__scanHealth)  { $__body.health  = $__scanHealth }
+    if ($__scanStartup) { $__body.startup = $__scanStartup }
+    $__ok = __FsPost $__body 'specs+health+startup'
+    if ($__ok) {
+      Say ("[ OK ] Primo scan completato: {0} | GPU {1} | RAM {2}. Dati inviati al cloud." -f $__scanSpecs.cpu, $__scanSpecs.gpu, $__scanSpecs.ram) 'Green'
+    } else {
+      Say "[ERR ] Primo scan: dati NON inviati. La GUI continua ma la dashboard restera' vuota finche' non risolvi l'errore sopra." 'Red'
+    }
+    try {
+      $__scanRun = Get-RunningApps
+      if ($__scanRun.Count -gt 0) { __FsPost @{ running_apps = $__scanRun } ("running_apps ({0})" -f $__scanRun.Count) | Out-Null }
+    } catch { Say ("  Get-RunningApps FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
+    try {
+      $__scanGames = Get-Games
+      if ($__scanGames.Count -gt 0) { __FsPost @{ games = $__scanGames } ("games ({0})" -f $__scanGames.Count) | Out-Null }
+    } catch { Say ("  Get-Games FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
+  } else {
+    Say "[ERR ] Impossibile raccogliere le specs, invio saltato. Riprova come Amministratore." 'Red'
   }
 
   Say "`n[STEP] Apro il pannello ottimizzazioni..." 'Cyan'
