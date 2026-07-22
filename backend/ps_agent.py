@@ -16,14 +16,15 @@ $ErrorActionPreference = 'SilentlyContinue'
 $BACKEND = '__BACKEND_URL__'
 $TOKEN   = $Token
 $MODE    = $Mode
-$BACKUP  = Join-Path $env:TEMP 'boostpc_backup.json'
+$BACKUP  = Join-Path $env:TEMP 'forgefps_backup.json'
+$BACKUP_LEGACY = Join-Path $env:TEMP 'boostpc_backup.json'  # v0.7.3+: fallback lettura vecchio nome
 $script:PROFILE = @(__PROFILE_IDS__)
 
 if ([string]::IsNullOrWhiteSpace($TOKEN)) {
   Write-Host ''
-  Write-Host '[FrameForge] Token mancante / Missing token.' -ForegroundColor Red
+  Write-Host '[ERR ] Token mancante / Missing token.' -ForegroundColor Red
   Write-Host 'Esegui / Run:  powershell -ExecutionPolicy Bypass -File .\forgefps.ps1 -Token IL_TUO_TOKEN -Mode optimize' -ForegroundColor Yellow
-  Write-Host 'Il token si trova nella pagina "Collega il PC" del tuo account. / Find the token on the Connect PC page.' -ForegroundColor Yellow
+  Write-Host 'Il token si trova nella pagina "FrameForge Agent" del tuo account. / Find the token on the FrameForge Agent page.' -ForegroundColor Yellow
   return
 }
 
@@ -31,7 +32,7 @@ function Say($m, $c='Gray') { Write-Host $m -ForegroundColor $c }
 function ConvertTo-HashtableSafe { $h=@{}; foreach($p in $input.PSObject.Properties){ $h[$p.Name]=$p.Value }; return $h }
 
 Say '======================================' 'Yellow'
-Say '   FrameForge - Agent PowerShell' 'Yellow'
+Say '   FrameForge Agent  (PowerShell)' 'Yellow'
 Say '======================================' 'Yellow'
 
 function Test-Admin {
@@ -40,7 +41,9 @@ function Test-Admin {
 
 # ---------------- Backup helpers ----------------
 $script:BK = @{}
-if (Test-Path $BACKUP) { try { $script:BK = Get-Content $BACKUP -Raw | ConvertFrom-Json | ConvertTo-HashtableSafe } catch { $script:BK = @{} } }
+# v0.7.3+: fallback lettura vecchio nome per upgrade indolore
+$__bkFile = if (Test-Path $BACKUP) { $BACKUP } elseif (Test-Path $BACKUP_LEGACY) { $BACKUP_LEGACY } else { '' }
+if ($__bkFile) { try { $script:BK = Get-Content $__bkFile -Raw | ConvertFrom-Json | ConvertTo-HashtableSafe } catch { $script:BK = @{} } }
 
 function Backup-Reg($path, $name, $type) {
   $key = "$path::$name"
@@ -62,13 +65,13 @@ function Test-ForbiddenReg($path) {
 function Test-ForbiddenSvc($name) { return ($script:FORBIDDEN_SVC -contains $name) }
 
 function Set-Reg($path, $name, $type, $value) {
-  if (Test-ForbiddenReg $path) { Write-Host "[SICUREZZA] Modifica bloccata (area protetta): $path" -ForegroundColor Yellow; return }
+  if (Test-ForbiddenReg $path) { Write-Host "[WARN][SEC] Modifica bloccata (area protetta): $path" -ForegroundColor Yellow; return }
   Backup-Reg $path $name $type
   if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
   New-ItemProperty -Path $path -Name $name -PropertyType $type -Value $value -Force | Out-Null
 }
 function Disable-ServiceSafe($name) {
-  if (Test-ForbiddenSvc $name) { Write-Host "[SICUREZZA] Servizio protetto, non modificato: $name" -ForegroundColor Yellow; return $false }
+  if (Test-ForbiddenSvc $name) { Write-Host "[WARN][SEC] Servizio protetto, non modificato: $name" -ForegroundColor Yellow; return $false }
   $svc = Get-Service $name -ErrorAction SilentlyContinue
   if ($svc -and $svc.Status -eq 'Running' -and -not $script:BK.ContainsKey("svc::$name")) {
     $script:BK["svc::$name"] = "$($svc.StartType)"
@@ -77,7 +80,11 @@ function Disable-ServiceSafe($name) {
   }
   return $true
 }
-function Save-Backup { $script:BK | ConvertTo-Json -Depth 6 | Set-Content $BACKUP }
+function Save-Backup {
+  $script:BK | ConvertTo-Json -Depth 6 | Set-Content $BACKUP
+  # v0.7.3+: se esiste ancora il legacy, rimuovilo (dopo il primo save su nuovo path)
+  if (Test-Path $BACKUP_LEGACY) { Remove-Item $BACKUP_LEGACY -ErrorAction SilentlyContinue }
+}
 
 function Get-RegVal($path, $name) { return (Get-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue).$name }
 function Get-GpuPnp { $g = Get-CimInstance Win32_VideoController | Where-Object { $_.PNPDeviceID -like 'PCI*' } | Select-Object -First 1; return $g.PNPDeviceID }
@@ -489,7 +496,8 @@ function Run-Benchmark {
 function Show-Bench($r, $title) {
   Say "`n   [$title]" 'Cyan'
   Say ("   CPU {0} | RAM {1} MB/s | Disco W/R {2}/{3} MB/s | 4K {4} IOPS" -f $r.cpu_score, $r.ram_mbps, $r.disk_write_mbps, $r.disk_read_mbps, $r.iops_4k) 'Yellow'
-  Say ("   DPC {0} ms | Ping {1} ms (jitter {2} ms){3} | SCORE {4}/100" -f $r.dpc_ms, $r.ping_ms, $r.jitter_ms, $(if($r.ContainsKey('boot_s')){" | Avvio $($r.boot_s)s"}else{''}), $r.score) 'Yellow'
+  Say ("   DPC {0} ms | Ping {1} ms (jitter {2} ms){3} | PERFORMANCE SCORE {4}/100" -f $r.dpc_ms, $r.ping_ms, $r.jitter_ms, $(if($r.ContainsKey('boot_s')){" | Avvio $($r.boot_s)s"}else{''}), $r.score) 'Yellow'
+  Say '   [INFO] Il Performance Score misura la velocita del PC ora. Health Score globale su forgefps.dev -> Il mio PC.' 'DarkGray'
 }
 
 # ---------------- Reporting ----------------
@@ -1202,8 +1210,10 @@ $script:PRESETS = @{
 
 # ---------------- Restore ----------------
 function Invoke-Restore {
-  if (-not (Test-Path $BACKUP)) { return 'Nessun backup trovato.' }
-  $b = Get-Content $BACKUP -Raw | ConvertFrom-Json | ConvertTo-HashtableSafe
+  # v0.7.3+: legge anche dal file legacy se il nuovo non esiste
+  $__rf = if (Test-Path $BACKUP) { $BACKUP } elseif (Test-Path $BACKUP_LEGACY) { $BACKUP_LEGACY } else { '' }
+  if (-not $__rf) { return 'Nessun backup trovato.' }
+  $b = Get-Content $__rf -Raw | ConvertFrom-Json | ConvertTo-HashtableSafe
   if ($b.ContainsKey('power_plan') -and $b['power_plan']) { powercfg -setactive $b['power_plan'] 2>$null }
   if ($b.ContainsKey('hib')) { powercfg -h on 2>$null }
   foreach ($k in $b.Keys) {
@@ -1230,6 +1240,7 @@ function Invoke-Restore {
   }
   netsh int tcp set global autotuninglevel=normal 2>$null | Out-Null
   Remove-Item $BACKUP -ErrorAction SilentlyContinue
+  Remove-Item $BACKUP_LEGACY -ErrorAction SilentlyContinue
   $script:BK = @{}
   return 'Impostazioni ripristinate ai valori precedenti.'
 }
@@ -1347,7 +1358,7 @@ function Show-WebGui {
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>FrameForge - Ottimizzazioni sicure</title>
+<title>FrameForge Agent — Ottimizzazioni</title>
 <style>
   :root {
     --bg: #0a0a0f;
@@ -1702,6 +1713,8 @@ function Show-WebGui {
     color: var(--accent); font-family: "Consolas", monospace;
   }
   .state.ok { color: var(--ok); }
+  .state.todo { color: var(--warn); }
+  .state.na { color: var(--muted); }
   .desc-block {
     margin-top: 12px; padding-left: 28px;
     font-size: 12px; line-height: 1.65;
@@ -2033,12 +2046,12 @@ function Show-WebGui {
 <body>
   <header>
     <div class="brand-row">
-      <div class="brand">FRAMEFORGE</div>
-      <div class="brand-sub">Ottimizzazioni trasparenti per streamer &amp; gamer</div>
-      <div class="ver-pill">GUI v2</div>
+      <div class="brand">FRAMEFORGE AGENT</div>
+      <div class="brand-sub">Trova i colli di bottiglia. Ottimizza in sicurezza.</div>
+      <div class="ver-pill">GUI v2.5</div>
     </div>
     <div class="safety">
-      <strong>SICUREZZA GARANTITA</strong> - Non tocchiamo MAI Windows Defender, Firewall o servizi di sicurezza. Ogni modifica ha backup automatico ed e reversibile.
+      <strong>SICUREZZA</strong> - Non tocchiamo mai Windows Defender, Firewall o servizi di sicurezza. Ogni modifica ha backup automatico ed e reversibile.
     </div>
     <div class="meta-row">
       <div style="display:flex;align-items:center;gap:14px;">
@@ -2110,11 +2123,11 @@ function Show-WebGui {
     <button class="chip" data-filter="caution" data-testid="chip-caution">&#9888; Cautela</button>
     <button class="chip" data-filter="pending" data-testid="chip-pending">&#9679; Da applicare</button>
     <select class="sort-select" id="sortSelect" data-testid="sort-select">
-      <option value="impact">Ordina: Impatto</option>
-      <option value="category">Ordina: Categoria</option>
-      <option value="name">Ordina: Nome</option>
-      <option value="pending">Ordina: Da fare per primi</option>
-    </select>
+        <option value="impact">Ordina: Impatto stimato</option>
+        <option value="category">Ordina: Categoria</option>
+        <option value="name">Ordina: Nome (A-Z)</option>
+        <option value="pending">Ordina: Da applicare per primi</option>
+      </select>
   </div>
 
   <main id="cards"></main>
@@ -2199,8 +2212,14 @@ function Show-WebGui {
     return String(s || "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
   }
   function stateClass(s) {
-    const x = String(s || "");
-    if (/attivo|disabilit|disattivat|gia|prestazioni|nessun/i.test(x)) return "ok";
+    const x = String(s || "").toLowerCase();
+    if (!x || x === "n/d") return "na";
+    // "(da attivare|disattivare|disabilitare|ottimizzare)" o "da attivare" ecc. -> azione richiesta
+    if (/\(da (att|dis|ott)/i.test(x) || /^da (att|dis|ott)/i.test(x)) return "todo";
+    // Solo GPU X (skip perche' altro vendor) -> non applicabile
+    if (/^solo gpu /i.test(x)) return "na";
+    // Stati positivi noti
+    if (/attivo|attiva|disabilit|disattivat|gia |prestazioni|nessun|applicabile|libera ora|trim attivo/i.test(x)) return "ok";
     return "";
   }
   function isApplied(t) {
@@ -2515,7 +2534,7 @@ function Show-WebGui {
       html += `<div class="profile-section-title" data-testid="section-my-profiles">// I MIEI PROFILI</div>`;
       html += p.profiles.map(pr => cardHtml(pr, { template: false })).join("");
     } else {
-      html += `<div class="profile-section-title">// I MIEI PROFILI</div><div class="empty" style="grid-column: 1 / -1;">Nessun profilo personale ancora. Creane uno su forgefps.dev/app/profiles.</div>`;
+      html += `<div class="profile-section-title">// I MIEI PROFILI</div><div class="empty" style="grid-column: 1 / -1;">Nessun profilo personale ancora. Crea preset gaming su forgefps.dev &rarr; Gaming.</div>`;
     }
     if ((p.templates || []).length) {
       html += `<div class="profile-section-title" data-testid="section-templates">// TEMPLATE COMMUNITY</div>`;
@@ -2636,7 +2655,7 @@ function Show-WebGui {
     renderHeader(); renderTabs(); renderCards();
     renderProgressRing();
     updateSummaryStrip();
-    if (showToast) toast("Aggiornato", "ok");
+    if (showToast) toast("\u21bb Aggiornato", "ok");
   }
 
   async function applySelected() {
@@ -2689,7 +2708,7 @@ function Show-WebGui {
         ],
       });
     } else {
-      toast("Applicato");
+      toast("\u2713 Applicato", "ok");
     }
   }
   async function doRestore() {
@@ -2698,7 +2717,7 @@ function Show-WebGui {
     const d = await api("/api/restore", { method: "POST", headers:{"X-FF-Token":TOKEN} });
     if (d.tweaks) { state.tweaks = d.tweaks; state.backup = 0; state.backup_ids = []; renderHeader(); renderCards(); }
     setApplying(false);
-    toast("Ripristino completato", "ok");
+    toast("\u21a9 Ripristinato", "ok");
   }
 
   // events
@@ -2914,8 +2933,8 @@ function Show-WebGui {
   $profileDir = Join-Path $tmpDir 'edge-profile'
 
   $localUrl = "http://127.0.0.1:$port/?tk=$sessionToken"
-  Say "[*] GUI locale su $localUrl" 'Cyan'
-  Say "    (se la finestra non si apre, incolla l'URL sopra in un browser)" 'DarkGray'
+  Say "[STEP] GUI locale su $localUrl" 'Cyan'
+  Say "       (se la finestra non si apre, incolla l'URL sopra in un browser)" 'DarkGray'
 
   # Lancia Edge in modalita app (chromeless)
   $edgeArgs = @(
@@ -3389,28 +3408,28 @@ function Show-Gui {
 }
 
 # ---------------- Main ----------------
-if ($MODE -eq 'restore') { Say "`n[*] Ripristino dal backup..." 'Cyan'; Say ('   ' + (Invoke-Restore)) 'Green'; return }
+if ($MODE -eq 'restore') { Say "`n[STEP] Ripristino dal backup..." 'Cyan'; Say ('   ' + (Invoke-Restore)) 'Green'; return }
 
 if ($MODE -eq 'benchmark') {
-  Say "`n[*] Benchmark (CPU / RAM / Disco / Rete)..." 'Cyan'
+  Say "`n[STEP] Benchmark (CPU / RAM / Disco / Rete)..." 'Cyan'
   $bench = Run-Benchmark; Show-Bench $bench 'BENCHMARK'
   Send-Benchmark @{ after = $bench; ts = (Get-Date).ToString('o') }
-  Say "`n[OK] Benchmark inviato! Vedi il confronto in FrameForge -> Il mio PC." 'Green'
+  Say "`n[ OK ] Benchmark inviato! Vedi il confronto in FrameForge -> Il mio PC." 'Green'
   return
 }
 
 if ($MODE -eq 'optimize') {
-  Say "`n[*] Apro il pannello ottimizzazioni..." 'Cyan'
+  Say "`n[STEP] Apro il pannello ottimizzazioni..." 'Cyan'
   $ok = $false
   try { $ok = Show-WebGui } catch { $ok = $false }
   if (-not $ok) {
-    Say '[!] Interfaccia web non disponibile, uso la GUI classica...' 'Yellow'
+    Say '[WARN] Interfaccia web non disponibile, uso la GUI classica...' 'Yellow'
     $ok = Show-Gui
   }
   if (-not $ok) {
-    Say '[!] Interfaccia grafica non disponibile. Applico i preset Completo...' 'Yellow'
+    Say '[WARN] Interfaccia grafica non disponibile. Applico i preset Completo...' 'Yellow'
     $before = Run-Benchmark; Show-Bench $before 'PRIMA'
-    Say ("[HW] {0} | GPU {1} | RAM {2} GB | {3} -> tweak adattati" -f $(if($script:HW.laptop){'Laptop'}else{'Desktop'}), $script:HW.gpu, $script:HW.ram, $(if($script:HW.ssd){'SSD'}else{'HDD'})) 'Cyan'
+    Say ("[INFO][HW] {0} | GPU {1} | RAM {2} GB | {3} -> tweak adattati" -f $(if($script:HW.laptop){'Laptop'}else{'Desktop'}), $script:HW.gpu, $script:HW.ram, $(if($script:HW.ssd){'SSD'}else{'HDD'})) 'Cyan'
     foreach ($t in $script:TWEAKS) {
       $f = 'ok'; if ($t.fit) { $f = & $t.fit }
       if ($t.id -eq 'search_index' -or $f -like 'skip:*' -or $f -like 'warn:*') { Say ("   -- saltato (adattivo): {0}" -f $t.name) 'DarkGray'; continue }
@@ -3537,11 +3556,11 @@ function Run-Bufferbloat {
     samples   = ($idle.rtts.Count + $down.rtts.Count)
   }
   Send-NetResult $res
-  Say "`n[OK] Test rete completato. Apri FrameForge -> Rete per il voto (A-F) e i consigli." 'Green'
+  Say "`n[ OK ] Test rete completato. Apri FrameForge -> Rete per il voto (A-F) e i consigli." 'Green'
 }
 
 if ($MODE -eq 'bufferbloat') {
-  Say "`n== FrameForge - Test rete / Bufferbloat ==" 'Cyan'
+  Say "`n== FrameForge Agent - Test rete / Bufferbloat ==" 'Cyan'
   Say '   Non usare internet durante il test (~15s). Misuro latenza a riposo e sotto carico.' 'DarkGray'
   Run-Bufferbloat
   return
@@ -3549,7 +3568,7 @@ if ($MODE -eq 'bufferbloat') {
 
 
 if ($MODE -eq 'monitor') {
-  Say "`n[*] Monitoraggio live avviato. Lascia aperta questa finestra. Premi Ctrl+C per fermare (o Stop dal browser)." 'Cyan'
+  Say "`n[STEP] Monitoraggio live avviato. Lascia aperta questa finestra. Premi Ctrl+C per fermare (o Stop dal browser)." 'Cyan'
   Say '   Apri FrameForge -> Live per i grafici in tempo reale.' 'DarkGray'
   Start-Fps
   $noFpsCount = 0
@@ -3566,7 +3585,7 @@ if ($MODE -eq 'monitor') {
       $fp = if ($s.ContainsKey('fps')) { (" | {0} FPS ({1}){2}" -f $s.fps, $s.game, $lt) } else { '' }
       Say ("   CPU {0}% {1} | RAM {2}% | {3}{4}" -f $s.cpu_util, $ct, $s.ram_used_pct, $g, $fp)
       if ($stopFromWeb) {
-        Say "`n[i] Stop richiesto dal browser. Chiudo il monitor..." 'Yellow'
+        Say "`n[INFO] Stop richiesto dal browser. Chiudo il monitor..." 'Yellow'
         break
       }
       Start-Sleep -Milliseconds 1000
@@ -3576,7 +3595,7 @@ if ($MODE -eq 'monitor') {
 }
 
 if ($MODE -eq 'prematch') {
-  Say "`n== FrameForge - Modalita Prima del match ==" 'Cyan'
+  Say "`n== FrameForge Agent - Modalita Prima del match ==" 'Cyan'
   $setPower = __PREMATCH_POWER__
   $prevPlan = ''
   if ($setPower) {
@@ -3584,9 +3603,9 @@ if ($MODE -eq 'prematch') {
     $prevPlan = ([regex]::Match($out, '([0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})')).Value
     if ($prevPlan) { Say ("   Piano energetico attuale salvato: {0}" -f $prevPlan) 'DarkGray' }
     powercfg /setactive scheme_min 2>$null
-    Say "   [OK] Piano Prestazioni elevate attivato." 'Green'
+    Say "   [ OK ] Piano Prestazioni elevate attivato." 'Green'
   } else {
-    Say "   [i] Piano energetico lasciato invariato (da impostazioni)." 'DarkGray'
+    Say "   [INFO] Piano energetico lasciato invariato (da impostazioni)." 'DarkGray'
   }
   $apps = @(__PREMATCH_APPS__)
   $closed = 0
@@ -3594,19 +3613,19 @@ if ($MODE -eq 'prematch') {
     $p = Get-Process -Name $a -ErrorAction SilentlyContinue
     if ($p) { Stop-Process -InputObject $p -Force -ErrorAction SilentlyContinue; $closed++ }
   }
-  Say ("   [OK] App in background chiuse: {0} (su {1} selezionate)" -f $closed, $apps.Count) 'Green'
-  Say "`n[BOOST ATTIVO] Avvia pure il tuo gioco. Buon match!" 'Yellow'
+  Say ("   [ OK ] App in background chiuse: {0} (su {1} selezionate)" -f $closed, $apps.Count) 'Green'
+  Say "`n   Boost attivo. Avvia pure il tuo gioco. Buon match!" 'Yellow'
   Read-Host "`nPremi INVIO quando hai finito di giocare per ripristinare tutto"
   if ($setPower) {
-    if ($prevPlan) { powercfg /setactive $prevPlan 2>$null; Say "   [OK] Piano energetico originale ripristinato." 'Green' }
-    else { powercfg /setactive scheme_balanced 2>$null; Say "   [OK] Piano energetico bilanciato ripristinato." 'Green' }
+    if ($prevPlan) { powercfg /setactive $prevPlan 2>$null; Say "   [ OK ] Piano energetico originale ripristinato." 'Green' }
+    else { powercfg /setactive scheme_balanced 2>$null; Say "   [ OK ] Piano energetico bilanciato ripristinato." 'Green' }
   }
-  Say "`n[FATTO] Le app chiuse puoi riaprirle normalmente. A presto!" 'Cyan'
+  Say "`n[ OK ] Le app chiuse puoi riaprirle normalmente. A presto!" 'Cyan'
   return
 }
 
 if ($MODE -eq 'booster') {
-  Say "`n== FrameForge - GAME BOOSTER ==" 'Cyan'
+  Say "`n== FrameForge Agent - GAME BOOSTER ==" 'Cyan'
   Say '   Sorveglio i giochi in avvio: quando ne rilevo uno ti propongo il boost con 5 secondi per annullare.' 'Gray'
   Say '   NIENTE parte in automatico al 100%: hai sempre la scelta. A fine partita ripristino tutto. Ctrl+C per uscire.' 'Gray'
   try { Add-Type -AssemblyName System.Windows.Forms } catch {}
@@ -3615,7 +3634,7 @@ if ($MODE -eq 'booster') {
   $doPurge = __BOOSTER_PURGE__
   $apps = @(__BOOSTER_APPS__)
   Say ("   Azioni configurate (FrameForge -> Games): priorita={0} energia={1} purgeRAM={2} appDaChiudere={3}" -f $doPriority, $doPower, $doPurge, $apps.Count) 'DarkGray'
-  if (-not (Test-Admin)) { Say '   [i] Senza Amministratore rilevo il gioco dalla finestra a schermo intero (niente conteggio FPS).' 'DarkYellow' }
+  if (-not (Test-Admin)) { Say '   [INFO] Senza Amministratore rilevo il gioco dalla finestra a schermo intero (niente conteggio FPS).' 'DarkYellow' }
   if (-not ('FFWin' -as [type])) {
     Add-Type -TypeDefinition @"
 using System;
@@ -3684,34 +3703,34 @@ public static class FFWin {
           $acts = New-Object System.Collections.Generic.List[string]
           if ($doPriority) {
             if (-not $gpid) { $pp = Get-Process -Name ($curName -replace '\.exe$', '') -ErrorAction SilentlyContinue | Select-Object -First 1; if ($pp) { $gpid = $pp.Id } }
-            if ($gpid) { try { (Get-Process -Id $gpid).PriorityClass = 'High'; $acts.Add('priorita_high'); Say '   [OK] Priorita CPU del gioco: HIGH.' 'Green' } catch {} }
+            if ($gpid) { try { (Get-Process -Id $gpid).PriorityClass = 'High'; $acts.Add('priorita_high'); Say '   [ OK ] Priorita CPU del gioco: HIGH.' 'Green' } catch {} }
           }
           if ($doPower) {
             $out = powercfg /getactivescheme
             $prevPlan = ([regex]::Match($out, '([0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})')).Value
             powercfg /setactive scheme_min 2>$null
-            $acts.Add('piano_energetico'); Say '   [OK] Piano Prestazioni elevate attivo (solo durante il gioco).' 'Green'
+            $acts.Add('piano_energetico'); Say '   [ OK ] Piano Prestazioni elevate attivo (solo durante il gioco).' 'Green'
           }
           if ($apps.Count -gt 0) {
             $closed = 0
             foreach ($a in $apps) { $pr = Get-Process -Name $a -ErrorAction SilentlyContinue; if ($pr) { Stop-Process -InputObject $pr -Force -ErrorAction SilentlyContinue; $closed++ } }
-            if ($closed -gt 0) { $acts.Add("app_chiuse_$closed"); Say ("   [OK] App in background chiuse: {0}." -f $closed) 'Green' }
+            if ($closed -gt 0) { $acts.Add("app_chiuse_$closed"); Say ("   [ OK ] App in background chiuse: {0}." -f $closed) 'Green' }
           }
-          if ($doPurge) { Clear-StandbyList; $acts.Add('purge_ram'); Say '   [OK] RAM standby svuotata.' 'Green' }
+          if ($doPurge) { Clear-StandbyList; $acts.Add('purge_ram'); Say '   [ OK ] RAM standby svuotata.' 'Green' }
           $boosted = $true; $bGame = $curName; $bStart = Get-Date; $script:BACTS = @($acts)
-          Say ("`n[BOOST ATTIVO] Buona partita! Ripristino tutto quando esci da {0}." -f ($curName -replace '\.exe$', '')) 'Yellow'
+          Say ("`n   Boost attivo! Buona partita! Ripristino tutto quando esci da {0}." -f ($curName -replace '\.exe$', '')) 'Yellow'
         }
       }
       if (($boosted -or $skipUntilExit) -and $lostCount -ge 8) {
         if ($boosted) {
-          Say ("`n[FINE PARTITA] {0}: ripristino..." -f ($bGame -replace '\.exe$', '')) 'Cyan'
-          if ($doPower) { if ($prevPlan) { powercfg /setactive $prevPlan 2>$null } else { powercfg /setactive scheme_balanced 2>$null }; Say '   [OK] Piano energetico ripristinato.' 'Green' }
+          Say ("`n[STEP] Fine partita {0}: ripristino..." -f ($bGame -replace '\.exe$', '')) 'Cyan'
+          if ($doPower) { if ($prevPlan) { powercfg /setactive $prevPlan 2>$null } else { powercfg /setactive scheme_balanced 2>$null }; Say '   [ OK ] Piano energetico ripristinato.' 'Green' }
           $dur = [int]((Get-Date) - $bStart).TotalSeconds
           $body = @{ boost_session = @{ game = ($bGame -replace '\.exe$', ''); duration_s = $dur; actions = @($script:BACTS); ended_at = (Get-Date).ToString('o') } } | ConvertTo-Json -Depth 4 -Compress
           try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
           Say ("   Sessione registrata ({0} min). Torno in sorveglianza." -f [math]::Round($dur / 60, 1)) 'DarkGray'
         } else {
-          Say "`n[i] Partita finita (boost annullato). Torno in sorveglianza." 'DarkGray'
+          Say "`n[INFO] Partita finita (boost annullato). Torno in sorveglianza." 'DarkGray'
         }
         $boosted = $false; $skipUntilExit = $false; $bGame = ''; $prevPlan = ''; $curName = ''; $detCount = 0
       }
@@ -3720,28 +3739,28 @@ public static class FFWin {
   } finally {
     Stop-Fps
     if ($boosted -and $doPower) { if ($prevPlan) { powercfg /setactive $prevPlan 2>$null } else { powercfg /setactive scheme_balanced 2>$null } }
-    Say "`n[STOP] Game Booster fermato. Tutto ripristinato." 'Cyan'
+    Say "`n[ OK ] Game Booster fermato. Tutto ripristinato." 'Cyan'
   }
   return
 }
 
 # default: sync (safe)
-Say "`n[*] Rilevamento hardware, salute e avvio..." 'Cyan'
-if (-not (Test-Admin)) { Say '   [i] Suggerimento: esegui in PowerShell (Amministratore) per temperature CPU/GPU reali e analisi piu precisa.' 'DarkYellow' }
+Say "`n[STEP] Rilevamento hardware, salute e avvio..." 'Cyan'
+if (-not (Test-Admin)) { Say '   [INFO] Suggerimento: esegui in PowerShell (Amministratore) per temperature CPU/GPU reali e analisi piu precisa.' 'DarkYellow' }
 $specs = Get-Specs
 Say ("   CPU: {0}" -f $specs.cpu); Say ("   GPU: {0}" -f $specs.gpu)
 Say ("   MB : {0}  ({1} {2})" -f $specs.motherboard, $specs.cpu_socket, $specs.chipset)
 $health = Get-Health
 if ($health.ContainsKey('cpu_temp')) { Say ("   Temp CPU: {0}C  |  Temp GPU: {1}C" -f $health.cpu_temp, $(if($health.ContainsKey('gpu_temp')){$health.gpu_temp}else{'n/d'})) 'DarkGray' }
 elseif (Test-Admin) {
-  Say '   [diag] Temp CPU non leggibile. Sensori temperatura rilevati:' 'DarkYellow'
+  Say '   [INFO][diag] Temp CPU non leggibile. Sensori temperatura rilevati:' 'DarkYellow'
   if ($script:LHM_LAST) { Say ("         " + $script:LHM_LAST) 'DarkGray' }
   else { Say '         (nessuno)' 'DarkGray' }
   $mi = Test-MemoryIntegrity
   $bl = Test-VulnerableDriverBlocklist
-  Say ("   [diag] Integrita memoria: {0}  |  Blocklist driver vulnerabili: {1}" -f $(if($mi){'ATTIVA'}else{'disattivata'}), $(if($bl){'ATTIVA'}else{'disattivata'})) 'DarkGray'
+  Say ("   [INFO][diag] Integrita memoria: {0}  |  Blocklist driver vulnerabili: {1}" -f $(if($mi){'ATTIVA'}else{'disattivata'}), $(if($bl){'ATTIVA'}else{'disattivata'})) 'DarkGray'
   if ($mi -or $bl) {
-    Say '   [!] CAUSA: Windows sta bloccando il driver dei sensori CPU (protezione di sicurezza).' 'Yellow'
+    Say '   [WARN] CAUSA: Windows sta bloccando il driver dei sensori CPU (protezione di sicurezza).' 'Yellow'
     Say '       La temperatura CPU sulle AMD Ryzen richiede questo driver di basso livello.' 'Gray'
     if ($mi) {
       Say '       -> Disattiva "Integrita della memoria": Impostazioni > Privacy e sicurezza >' 'Gray'
@@ -3753,7 +3772,7 @@ elseif (Test-Admin) {
     }
     Say '       (La temperatura GPU funziona gia e non richiede alcuna modifica.)' 'DarkGray'
   } else {
-    Say '   [i] Il driver sensori CPU non ha risposto (possibile blocco antivirus). La temp GPU funziona comunque.' 'DarkGray'
+    Say '   [INFO] Il driver sensori CPU non ha risposto (possibile blocco antivirus). La temp GPU funziona comunque.' 'DarkGray'
   }
 }
 Send-Data $specs $health (Get-StartupList)
@@ -3762,5 +3781,5 @@ if ($games.Count -gt 0) { Send-Games $games; Say ("   Giochi rilevati: {0}" -f $
 $running = Get-RunningApps
 Send-Running $running
 Say ("   App in background attive: {0}" -f $running.Count) 'DarkGray'
-Say "`n[OK] Dati inviati! Apri FrameForge -> Il mio PC per analisi e consigli." 'Green'
+Say "`n[ OK ] Dati inviati! Apri FrameForge -> Il mio PC per analisi e consigli." 'Green'
 '''

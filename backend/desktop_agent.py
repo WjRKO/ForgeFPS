@@ -1,9 +1,9 @@
 AGENT_SCRIPT = r'''#!/usr/bin/env python3
 """
-FrameForge - Desktop Agent (Windows)
-Companion locale: ottimizzazioni REALI reversibili + benchmark prima/dopo +
+FrameForge Agent (Windows)
+Agent locale: ottimizzazioni REALI reversibili + benchmark prima/dopo +
 rilevamento hardware/salute per consigli AI su misura.
-Uso:  python boostpc_agent.py   (consigliato come Amministratore)
+Uso:  python forgefps_agent.py   (consigliato come Amministratore)
 """
 import os
 import sys
@@ -19,7 +19,7 @@ import re
 import argparse
 import urllib.request
 
-_parser = argparse.ArgumentParser(description="FrameForge Desktop Agent")
+_parser = argparse.ArgumentParser(description="FrameForge Agent")
 _parser.add_argument("--token", default=os.environ.get("FORGEFPS_TOKEN", "__AGENT_TOKEN__"))
 _parser.add_argument("--backend", default=os.environ.get("FORGEFPS_BACKEND", "__BACKEND_URL__"))
 _parser.add_argument("--mode", default="optimize")
@@ -28,14 +28,15 @@ _args, _ = _parser.parse_known_args()
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
 AGENT_VERSION = "0.5.0"
-BACKUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "boostpc_backup.json")
+BACKUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "forgefps_backup.json")
+_LEGACY_BACKUP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "boostpc_backup.json")
 
 if not AGENT_TOKEN or AGENT_TOKEN.startswith("__"):
-    print("=" * 50)
-    print("  FrameForge Desktop Agent")
-    print("=" * 50)
-    print("Incolla il tuo token (pagina 'Collega il PC' del tuo account) e premi INVIO.")
-    print("Paste your token (from the 'Connect PC' page) and press ENTER.")
+    print("=" * 54)
+    print("  FrameForge Agent")
+    print("=" * 54)
+    print("Incolla il tuo token (pagina 'FrameForge Agent' del tuo account) e premi INVIO.")
+    print("Paste your token (from the 'FrameForge Agent' page) and press ENTER.")
     try:
         AGENT_TOKEN = input("Token > ").strip()
     except Exception:
@@ -671,10 +672,10 @@ def menu():
         "A": ("OTTIMIZZA TUTTO + benchmark prima/dopo (avanzato)", optimize_with_benchmark),
     }
     print("=" * 54)
-    print("   FrameForge - Desktop Agent  v%s" % AGENT_VERSION)
+    print("   FrameForge Agent  v%s" % AGENT_VERSION)
     print("=" * 54)
     if not is_admin():
-        print("[!] Suggerito eseguire come Amministratore.")
+        print("[WARN] Suggerito eseguire come Amministratore.")
     for k in ["G", "1", "3", "4", "7", "8", "B", "A"]:
         print(f"  {k}. {actions[k][0]}")
     print("  Q. Esci")

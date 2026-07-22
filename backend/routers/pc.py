@@ -766,7 +766,7 @@ def build(get_current_user):
         doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "benchmark": 1, "data": 1})
         bench = (doc or {}).get("benchmark")
         if not bench:
-            raise HTTPException(status_code=404, detail="Nessun benchmark disponibile. Esegui prima un benchmark dal Desktop Agent.")
+            raise HTTPException(status_code=404, detail="Nessun benchmark disponibile. Esegui prima un benchmark dal FrameForge Agent.")
         lang = (payload.lang or "it")[:2]
         bench_ts = bench.get("ts") or bench.get("created_at") or ""
         cached = await db.benchmark_explanations.find_one(
@@ -816,7 +816,7 @@ def build(get_current_user):
         specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
         if not specs or not specs.get("data"):
             raise HTTPException(status_code=400,
-                                detail="Nessun hardware rilevato. Usa il Desktop Agent (opzione 7) per inviare le specifiche.")
+                                detail="Nessun hardware rilevato. Usa il FrameForge Agent per inviare le specifiche.")
         try:
             return await ai_engine.generate_upgrade(specs_to_text(specs), data.budget, data.goal)
         except Exception as e:
@@ -839,7 +839,7 @@ def build(get_current_user):
         doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
         startup = (doc or {}).get("startup") or []
         if not startup:
-            raise HTTPException(status_code=400, detail="Nessun dato di avvio. Usa il Desktop Agent (opzione 7).")
+            raise HTTPException(status_code=400, detail="Nessun dato di avvio. Usa il FrameForge Agent.")
         try:
             return await ai_engine.analyze_startup(startup)
         except Exception as e:
@@ -861,7 +861,7 @@ def build(get_current_user):
         rec = await db.agent_tokens.find_one({"token": t})
         if not rec:
             return PlainTextResponse(
-                "Write-Host '[FrameForge] Token non valido. Riapri la pagina Collega il PC.' -ForegroundColor Red",
+                "Write-Host '[ERR ] Token non valido. Riapri la pagina FrameForge Agent.' -ForegroundColor Red",
                 media_type="text/plain")
         script = await _build_agent_script(rec["user_id"], profile)
         # Prepend UTF-8 BOM: Windows PowerShell 5.1 legge i .ps1 senza BOM in ANSI (Windows-1252),
@@ -878,13 +878,13 @@ def build(get_current_user):
         data = ("\ufeff" + script).encode("utf-8")
         return {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data), "filename": "forgefps.ps1"}
 
-    # Modalita' accettate dal Desktop Agent quando aperto via protocollo frameforge://
+    # Modalita' accettate dal FrameForge Agent quando aperto via protocollo frameforge://
     _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "monitor", "prematch", "booster", "restore", "gui"}
 
     @r.get("/agent/launch-uri")
     async def agent_launch_uri(mode: str = "optimize", silent: int = 0, user: dict = Depends(get_current_user)):
         """Genera un URI custom-protocol firmato con HMAC del token dell'utente.
-        Il Desktop Agent (v0.7.0+) registra il protocollo 'frameforge://' su Windows;
+        Il FrameForge Agent (v0.7.0+) registra il protocollo 'frameforge://' su Windows;
         quando l'utente clicca un bottone nella dashboard il browser passa questo URI
         all'exe locale, che verifica la firma con il proprio token e apre la GUI.
 

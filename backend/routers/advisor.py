@@ -304,7 +304,7 @@ def build(get_current_user):
         if not specs or not (specs.get("data") or {}).get("cpu"):
             raise HTTPException(
                 status_code=400,
-                detail="Nessuna configurazione hardware rilevata. Esegui prima l'agent dalla pagina Desktop Agent.",
+                detail="Nessuna configurazione hardware rilevata. Esegui prima l'agent dalla pagina FrameForge Agent.",
             )
         specs = await _enrich_specs_for_ai(uid, specs)
         specs_text = pc_context_text(specs)

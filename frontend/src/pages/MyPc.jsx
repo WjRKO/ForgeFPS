@@ -108,7 +108,7 @@ export default function MyPc() {
       running: t("mypcpage.silent_sync_running", { defaultValue: "Sincronizzazione hardware in corso..." }),
       done: t("mypcpage.silent_sync_done", { defaultValue: "Sync completato. Dati aggiornati." }),
       failed: t("mypcpage.silent_sync_failed", { defaultValue: "L'app non risponde. Hai installato FrameForge?" }),
-      notInstalled: t("mypcpage.silent_not_installed", { defaultValue: "Non hai ancora installato FrameForge? Vai su 'Collega il PC'." }),
+      notInstalled: t("mypcpage.silent_not_installed", { defaultValue: "Non hai ancora installato FrameForge? Vai su 'FrameForge Agent'." }),
     },
     detectDone: async () => {
       const { data } = await api.get("/pc-specs");

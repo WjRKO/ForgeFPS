@@ -1,6 +1,103 @@
 # FrameForge — Changelog
 
 
+## Agent UX audit P0+P1 — 2026-02-22 · Terminologia unificata & prefissi console
+### Audit report
+- `/app/memory/AGENT_UX_AUDIT.md` — 17 fix opportunities identificate su `ps_agent.py` (3.766 righe) + `forgefps_agent.py` (1.084 righe).
+
+### P0 — Terminologia, naming legacy, Performance Score
+- **"Desktop Agent" → "FrameForge Agent"** (7 occorrenze user-facing):
+  - `agent-build/forgefps_agent.py`: docstring, argparse description, header banner CLI, menu title
+  - `backend/desktop_agent.py`: docstring, header banner, menu title (agent Python legacy servito da `/api/desktop-agent/download`)
+  - `backend/discord_bot.py`: bot embed `3️⃣ Scarica il FrameForge Agent`
+  - `backend/routers/pc.py`: 3 HTTPException detail (`/pc-benchmark`, `/pc-specs`, `/startup/analyze`) + comment `_ALLOWED_URI_MODES`
+  - `backend/routers/advisor.py`: HTTPException detail (nessun hw)
+  - `backend/helpers.py`: 3 fix string in `_HEALTH_NUMERIC_CHECKS` + boolean check
+- **"Companion locale" → "Agent locale"** nel docstring.
+- **"Collega il PC" → "FrameForge Agent"** nei riferimenti (menu web ora si chiama così):
+  - `backend/ps_agent.py`: messaggio token missing bilingue IT/EN
+  - `backend/routers/pc.py`: PowerShell error line servita da `/api/agent/script` senza token valido
+  - `backend/desktop_agent.py`: prompt token missing
+  - `agent-build/forgefps_agent.py`: prompt token missing + fallback URI senza token
+  - `frontend/src/pages/MyPc.jsx`: default fallback string per silent sync
+- **File rename `boostpc_backup.json` → `forgefps_backup.json`** con fallback lettura per upgrade indolore (v0.7.2 → v0.7.3):
+  - `agent-build/forgefps_agent.py`: `BACKUP_FILE` + `_LEGACY_BACKUP_FILE`, aggiornati `_load_backup()` e `restore_tweaks()`
+  - `backend/ps_agent.py` PowerShell: `$BACKUP` + `$BACKUP_LEGACY`, aggiornati `Load-Backup` inline, `Save-Backup` (rimuove legacy dopo primo save), `Invoke-Restore` (rimuove entrambi)
+  - `backend/desktop_agent.py`: stessa migrazione
+- **`boostpc_bench.bin` → `forgefps_bench.bin`** (file temporaneo benchmark)
+- **Prefissi console unificati** (11 varianti → 5): `[OK]`/`[STEP]`/`[INFO]`/`[WARN]`/`[ERR]`. Sostituiti:
+  - `[*]` → `[STEP]` (~10 occ)
+  - `[!]` → `[WARN]` (~5 occ)
+  - `[i]` → `[INFO]` (~6 occ)
+  - `[FrameForge]` → `[ERR]`/`[WARN]`/`[INFO]` in base al contesto (~8 occ tra `forgefps_agent.py` e `desktop_agent.py`)
+  - `[SICUREZZA]` → `[WARN][SEC]` (2 occ in `Set-Reg`/`Disable-ServiceSafe`)
+  - `[HW]` → `[INFO][HW]` (1 occ)
+  - `[diag]` → `[INFO][diag]` (2 occ)
+  - `[BOOST ATTIVO]` / `[FATTO]` / `[STOP]` / `[FINE PARTITA]` → indented cheer-line senza bracket ("Boost attivo! Buona partita!") oppure `[ OK ]`/`[STEP]` (~7 occ)
+  - Menu-numbering Python `[1]`/`[3]`/`[4]`/`[7]`/`[8]`/`[B]` → `[STEP]` (~6 occ)
+- **Sub-tag mantenuti** come contextual (accettabili per audit): `[FPS]`, `[diag FPS]`, `[SEC]`, `[HW]`, `[diag]`.
+- **Performance Score vs Health Score distinction** nel benchmark output:
+  - `backend/ps_agent.py` `Show-Bench`: `SCORE {n}/100` → `PERFORMANCE SCORE {n}/100` + nota "Health Score globale su forgefps.dev → Il mio PC"
+  - `agent-build/forgefps_agent.py` `show_bench`: stessa modifica + `SCORE` label → `Performance` in confronto PRIMA/DOPO
+- **Menu CLI ristrutturato** in `forgefps_agent.py` (8 voci non-contigue `G/1/3/4/7/8/B/A` → 5 voci contigue):
+  - `1` GUI (consigliato)
+  - `2` Rileva hardware e sincronizza
+  - `3` Benchmark rapido
+  - `4` Ripristina
+  - `5` Cambia account (nuovo — richiama `_forget_saved_token()`)
+  - `A` OTTIMIZZA TUTTO CLI (avanzato)
+- **Version pill GUI locale** `GUI v2` → `GUI v2.5` (allineamento con code base v2.5)
+
+### P1 — GUI HTML embedded polish + stateClass fix
+- **`<title>`** `FrameForge - Ottimizzazioni sicure` → `FrameForge Agent — Ottimizzazioni`
+- **Header brand** `FRAMEFORGE` → `FRAMEFORGE AGENT`
+- **Subtitle** `Ottimizzazioni trasparenti per streamer & gamer` → `Trova i colli di bottiglia. Ottimizza in sicurezza.` (allineato con headline landing)
+- **Safety banner** "SICUREZZA GARANTITA - Non tocchiamo MAI..." → "SICUREZZA - Non tocchiamo mai Windows Defender, Firewall o servizi di sicurezza..." (tono meno marketing)
+- **Sort labels** uniformati:
+  - `Impatto` → `Impatto stimato`
+  - `Nome` → `Nome (A-Z)`
+  - `Da fare per primi` → `Da applicare per primi`
+- **Empty state profili** — link `forgefps.dev/app/profiles` (rotta inesistente) → `Crea preset gaming su forgefps.dev → Gaming`
+- **Toast icons**:
+  - `toast("Applicato")` → `toast("✓ Applicato", "ok")`
+  - `toast("Aggiornato", "ok")` → `toast("⟳ Aggiornato", "ok")`
+  - `toast("Ripristino completato", "ok")` → `toast("↩ Ripristinato", "ok")`
+- **Fix bug `stateClass()`**: la regex vecchia matchava `attivo|disabilit|disattivat|gia|prestazioni|nessun` e classificava come "ok" (verde) le label ambigue tipo `Attivo (da disattivare)` che sono in realtà pending. Nuova logica strict:
+  - `(da att|dis|ott)` o `^da (att|dis|ott)` → `todo` (giallo)
+  - `^solo gpu ` → `na` (grigio)
+  - `n/d` → `na`
+  - keyword positivi → `ok` (verde)
+  - fallback → `""` (colore accent default)
+- **Nuove classi CSS**: `.state.todo` (var(--warn) giallo), `.state.na` (var(--muted) grigio)
+
+### Files touched (10)
+- `backend/ps_agent.py` (~35 modifiche puntuali su 3.766 righe)
+- `backend/desktop_agent.py` (2 blocchi header/menu)
+- `backend/routers/pc.py` (5 stringhe error/comment)
+- `backend/routers/advisor.py` (1 stringa error)
+- `backend/discord_bot.py` (bot embed field name+value)
+- `backend/helpers.py` (4 fix string label)
+- `agent-build/forgefps_agent.py` (docstring, argparse, prompt, prefissi console, backup fallback, menu CLI, show_bench)
+- `frontend/src/pages/MyPc.jsx` (defaultValue fallback)
+- `memory/AGENT_UX_AUDIT.md` (audit report)
+- `memory/CHANGELOG.md` (this entry)
+
+### Verified
+- **Syntax check**: 7/7 file Python parsano correttamente (`ast.parse`)
+- **Endpoint smoke test** `/api/agent/script?t=INVALID` → 200, messaggio aggiornato: `[ERR ] Token non valido. Riapri la pagina FrameForge Agent.`
+- **Full agent script generation** con token valido admin: 47 occorrenze dei nuovi termini presenti, 0 residui legacy (`Desktop Agent`, `Collega il PC`, `[FrameForge]`, `SCORE /100`, `GUI v2` senza .5, `Companion locale`, `BOOST ATTIVO`, `[FATTO]`, `[SICUREZZA]`)
+- **Regression pytest** `tests/test_agent_launch_uri.py + test_booster_bench.py`: 7/8 pass — l'unico fail (`test_launch_uri_default_mode` HTTP 401) è **pre-esistente** (verificato via `git stash`), non causato dalle modifiche
+- **Landing screenshot**: renderizza correttamente, no visual regression
+
+### Todo utente
+- Redeploy produzione (`forgefps.dev`) per far vedere agli utenti finali:
+  - Il nuovo messaggio `[ERR ]` sullo script servito da `/api/agent/script`
+  - I nuovi label in Discord bot embed
+  - Le nuove fix suggestions in Health Score
+- **Rebuild `.exe` v0.7.3** solo per gli utenti che aprono il menu CLI dell'agent (raro — la maggior parte usa il protocol handler `frameforge://` che è invariato). Il fallback `_LEGACY_BACKUP_FILE` garantisce upgrade indolore anche senza rebuild immediato.
+- Backup dell'agent PowerShell serviti da backend è **live immediato** dopo redeploy.
+
+
 ## Fase 3 + Fase 4 — 2026-02-22 · Benchmark contestuale & Storico visual
 ### Added (backend — `routers/pc.py`)
 - **`GET /api/benchmarks/fleet-percentile`**: percentile del punteggio benchmark

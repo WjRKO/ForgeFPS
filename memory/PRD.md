@@ -916,8 +916,16 @@ Scelta utente: toast web + **notifica Windows nativa** nella GUI (BurntToast/tra
 - Scelta utente: A (solo server-side, no rebuild .exe)
 - Testing: iteration_33.json — backend 14/14, frontend 100% (guardrail toast + card verificati)
 
+### 2026-02-22 — Agent UX audit P0+P1 — DONE
+- **Report**: `/app/memory/AGENT_UX_AUDIT.md` (17 fix opportunities su `ps_agent.py` + `forgefps_agent.py`)
+- **P0**: naming legacy rimosso ("Desktop Agent" → "FrameForge Agent" 7 occ, "Companion locale" → "Agent locale", "Collega il PC" → "FrameForge Agent" nei riferimenti dell'agent, `boostpc_backup.json` → `forgefps_backup.json` con fallback), prefissi console unificati (11 → 5: `[OK]`/`[STEP]`/`[INFO]`/`[WARN]`/`[ERR]`), Performance Score distinct da Health Score nel benchmark output, menu CLI ristrutturato da 8→5 voci contigue, GUI version pill bump `v2` → `v2.5`
+- **P1**: GUI HTML polish (title, brand, subtitle allineato con headline landing, safety banner meno marketing), sort labels uniformati, empty state profili con link fixato, toast icons unicode, **fix bug `stateClass()`** che classificava erroneamente `Attivo (da disattivare)` come verde (ora yellow via nuova classe `.state.todo`)
+- **Files touched**: 10 (ps_agent.py, desktop_agent.py, forgefps_agent.py, pc.py, advisor.py, discord_bot.py, helpers.py, MyPc.jsx + doc)
+- **Verified**: 7/7 syntax check, endpoint `/api/agent/script` smoke test OK (47 nuovi termini, 0 residui legacy), 7/8 pytest agent-related pass (fail pre-esistente non correlato)
+- **Todo utente**: redeploy (immediate impact perché lo script PowerShell è servito on-the-fly dal backend); rebuild `.exe` v0.7.3 opzionale per menu CLI (fallback backup file garantisce continuità)
+
 ### Prossimo
-- P1: Lifecycle "Ferma Monitor" (kill signal all'agent per fermare loop infinito)
 - P1: Alert Salute Storica (notifica quando health score < media 30gg)
 - P2: Checklist tweak nel Report PDF
+- P2: Migrazione opportunistica bottoni inline a `BTN_CLASSES` (Tracker, Games, Live, Advisor, Network, BIOS) — approccio incrementale per pagina toccata
 - P3: Stripe billing + Google Ads conv + testimonial GitHub stars
