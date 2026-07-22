@@ -9,6 +9,7 @@ import { SecureRunBlock } from "@/components/SecureRunBlock";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
 import MonitorPreflight from "@/components/MonitorPreflight";
 import MonitorLiveControl from "@/components/MonitorLiveControl";
+import BottleneckDetector from "@/components/BottleneckDetector";
 
 const freshAcc = () => ({ startTs: null, lastTs: null, fps: [], cpuTempMax: 0, gpuTempMax: 0, cpuSum: 0, cpuN: 0, gpuSum: 0, gpuN: 0, latSum: 0, latN: 0, latMax: 0, games: {}, samples: 0 });
 
@@ -117,6 +118,8 @@ export default function Live() {
           <Radio size={14} className={data.live ? "animate-pulse" : ""} /> {data.live ? t("live.live") : t("live.agent_off")}
         </div>
       </div>
+
+      {data.live && <BottleneckDetector />}
 
       {data.live ? (
         <MonitorLiveControl

@@ -1,0 +1,54 @@
+{
+  "summary": "Frontend UX (P1 batch) tested: BottleneckDetector, NextActionBanner, TechTerm tooltips, restructured sidebar menu, MobileHandoffModal. Core features verified working. Two features could not be fully validated with the admin account (onboarded user, no fresh net-result).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "NextActionBanner nba-no-hw / nba-post-sync",
+        "issue": "Cannot be validated with the admin@boostpc.io account because the user is fully onboarded (has PC specs AND a benchmark). To test these presets, need a fresh user OR reset the user's specs/benchmark in DB. Rendering conditions in Dashboard.jsx look correct: `!specs?.data?.cpu` → nba-no-hw; specs but no bench → nba-post-sync.",
+        "affected_selectors": ["nba-no-hw", "nba-no-hw-dismiss", "nba-post-sync"]
+      },
+      {
+        "flow": "TechTerm tooltip on /app/network",
+        "issue": "data-testid=`tech-term-bufferbloat` and `tech-term-jitter` only render when a bufferbloat result exists (network page shows `network-empty` for admin). Element/tooltip logic itself is correct in code (shadcn Tooltip, delayDuration=200). Recommend testing after seeding a net-result document, or make the labels also visible in the empty state.",
+        "affected_selectors": ["tech-term-bufferbloat", "tech-term-jitter"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Language init",
+        "issues": [
+          "Setting localStorage `i18nextLng=it` BEFORE login does NOT apply on first render — the app boots in EN even though the value is present. Setting AFTER login + reload does apply. This is likely because i18next detects language before localStorage is written to (during login) OR the auth flow flushes storage. Reproducible: fresh browser → localStorage set 'it' → login → sidebar renders in English until manual reload.",
+          "Sidebar shows English labels but page-body strings (e.g. 'Benchmark del sistema', 'PROSSIMA MOSSA', 'Vedi confronto') are Italian in the same view, because many i18n keys use Italian `defaultValue` strings that don't have an EN counterpart, so EN falls back to the Italian default. Mixed-language UX. Add proper EN counterparts for `nba.*`, `bottleneck.*`, `bench.*`, etc."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Task doc says route is `/app/pc/live` but the actual React route is `/app/live` (see App.js). Either update docs or add a redirect from /app/pc/live → /app/live so external links keep working.",
+    "Provide test fixtures / dev-only route to reset user specs/benchmark so nba-no-hw and nba-post-sync banners can be tested without new registrations.",
+    "Add English translations for all `nba.*`, `bottleneck.*`, `bench.*` keys (currently only italian defaultValue exists) so EN users don't see mixed-language UI.",
+    "Fix i18n language detection: `i18nextLng=it` in localStorage should be honored on first login without needing a manual reload.",
+    "Consider rendering the `tech-term-bufferbloat`/`tech-term-jitter` labels also in the empty state on /app/network so users learn what these metrics mean before running a test."
+  ],
+  "critical_code_review_comments": [
+    "BottleneckDetector uses two `data-testid` scopes that collide: the outer container has `data-testid=bottleneck-cpu` AND an inner metric chip also has `data-testid=bottleneck-cpu`. Multiple elements sharing the same testid make selectors ambiguous. Rename the inner chips to `bottleneck-chip-cpu` (etc.).",
+    "NextActionBanner dismiss key derives from `dismissKey || kind` — for `post-benchmark` Benchmark.jsx passes `dismissKey={post-bench-${ts}}` which makes the dismissal timestamp-specific (good), but the derived testid stays `nba-post-benchmark` (fine).",
+    "TechTerm only renders on Network page when data exists (`res && ...`). Consider making the tooltip labels part of the empty state too so glossary is always discoverable."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (not tested)", "frontend": "80%" },
+  "test_credentials": "admin@boostpc.io / 4zWK4o_xSw5prU-2b7w9dQ (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Injected /api/agent/telemetry samples (cpu=95/gpu=40 and cpu=30/gpu=95) via X-Agent-Token to exercise BottleneckDetector.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Actual live route is /app/live (not /app/pc/live). Admin user is already fully onboarded, so nba-no-hw and nba-post-sync banners require a fresh user or backend fixture reset. Tech term tooltips gated behind net-result presence. Language switch via localStorage requires a manual reload after login.",
+  "verified_features": {
+    "bottleneck_detector": "CPU-BOUND and GPU-BOUND banners render correctly with Italian titles after telemetry injection. Real-time switching works. `data-testid=bottleneck-{kind}` present.",
+    "sidebar_menu_italian": "5 primary voices (Dashboard, Il mio PC, AI Advisor, Gaming, Prezzi & Tracker) + Acquisti section (Consiglia Build, Upgrade & FPS) + Strumenti section (FrameForge Agent, Report PDF, Comandi, Rete, BIOS) all present with correct Italian labels.",
+    "mobile_handoff_header": "Header button `mobile-handoff-header-btn` visible on desktop viewport; click opens `mobile-handoff-modal` correctly.",
+    "nba_post_benchmark": "Renders above FleetPercentileCard on /app/benchmark with CTA 'Vedi confronto' when a benchmark exists. Verified visually and via selector."
+  }
+}

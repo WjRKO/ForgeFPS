@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import MobileHandoffModal from "@/components/MobileHandoffModal";
+import NextActionBanner from "@/components/NextActionBanner";
 import {
   PageHeader, EmptyState, HealthRing, Sparkline, HUDCard, Badge, SkeletonCard,
   stagger, item,
@@ -712,6 +713,9 @@ export default function Dashboard() {
       </div>
 
       {isBrandNew && <HeroEmpty t={t} />}
+
+      {!isBrandNew && !specs?.data?.cpu && <NextActionBanner kind="no-hw" />}
+      {!isBrandNew && specs?.data?.cpu && !bench?.latest && <NextActionBanner kind="post-sync" />}
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-6 items-start">
         {/* LEFT: main content */}
