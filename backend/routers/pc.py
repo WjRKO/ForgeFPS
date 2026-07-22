@@ -15,6 +15,7 @@ from database import db, now_iso
 from helpers import specs_to_text, compute_health, get_or_create_agent_token, grade_bufferbloat
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
+from services.gpu_catalog_service import find_gpu_reference, compute_health_vs_reference
 from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput
 from routers.profiles import resolve_tweak_ids, TWEAK_CATALOG, TEMPLATES
 from routers.advisor import _check_ai_rate_limit
@@ -319,6 +320,39 @@ def build(get_current_user):
         doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "benchmark": 1})
         history = await db.benchmarks.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(10)
         return {"latest": (doc or {}).get("benchmark"), "history": history}
+
+    @r.get("/gpu-reference")
+    async def gpu_reference(user: dict = Depends(get_current_user)):
+        """Lookup GPU dell'utente nel catalogo reference + health check contro il suo
+        ultimo benchmark. Ritorna None se la GPU non e' nel catalogo (~50 modelli oggi)
+        o se non c'e' ancora un benchmark salvato.
+
+        Response:
+          {
+            "gpu_string": "NVIDIA GeForce RTX 4070 SUPER",
+            "reference": { gpu_model, vendor, g3d, timespy, vram_gb, tdp_w, class },
+            "health": { status, expected_perf, expected_perf_min/max, delta, ... },
+            "measured_perf": 71  # dall'ultimo benchmark
+          }
+        """
+        uid = str(user["_id"])
+        doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "data": 1, "benchmark": 1})
+        if not doc:
+            return {"reference": None, "reason": "no_specs"}
+        gpu_str = (doc.get("data") or {}).get("gpu") or ""
+        reference = find_gpu_reference(gpu_str)
+        if not reference:
+            return {"gpu_string": gpu_str, "reference": None, "reason": "not_in_catalog"}
+        # Measured perf: prende il quick-bench overall/score piu' recente.
+        bench = doc.get("benchmark") or {}
+        measured = _bench_overall(bench) or _bench_score(bench) or 0
+        health = compute_health_vs_reference(reference, measured) if measured else None
+        return {
+            "gpu_string": gpu_str,
+            "reference": reference,
+            "health": health,
+            "measured_perf": measured,
+        }
 
     def _bench_score(bench: dict) -> int | None:
         if not bench:
@@ -889,7 +923,7 @@ def build(get_current_user):
         return {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data), "filename": "forgefps.ps1"}
 
     # Modalita' accettate dal FrameForge Agent quando aperto via protocollo frameforge://
-    _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "monitor", "prematch", "booster", "restore", "gui"}
+    _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "fullbench", "monitor", "prematch", "booster", "restore", "gui"}
 
     @r.get("/agent/launch-uri")
     async def agent_launch_uri(mode: str = "optimize", silent: int = 0, user: dict = Depends(get_current_user)):

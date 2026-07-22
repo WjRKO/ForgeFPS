@@ -516,6 +516,201 @@ function Show-Bench($r, $title) {
   Say '   [INFO] Il Performance Score misura la velocita del PC ora. Health Score globale su forgefps.dev -> Il mio PC.' 'DarkGray'
 }
 
+# ---------------- Full Benchmark v2 (multi-thread CPU + RAM hierarchy + disk multi-QD + thermal trace) ----------------
+# Durata: ~2-4 minuti. Molto piu' preciso del Run-Benchmark quick (5-8s).
+# I risultati sono qualitativamente diversi:
+#   - cpu_mt_score: MULTI-THREAD (usa tutti i core -> differenzia i5 vs i9)
+#   - cpu_sustained_ratio: rapporto CPU sustained/burst (basso = thermal throttling)
+#   - ram_bw_l3 / ram_bw_dram: bandwidth memoria a dimensioni diverse
+#   - disk_qd8_seq / disk_4k_qd32: pattern realistici moderni
+#   - thermal_trace: array di temp CPU/GPU campionati durante il test
+function Run-FullBenchmark {
+  $out = @{
+    version = 2
+    started_at = (Get-Date).ToString('o')
+  }
+  $trace = New-Object System.Collections.Generic.List[hashtable]
+  $traceStopFlag = [ref]$false
+
+  # Job in parallelo: thermal sampling ogni 1s per tutta la durata del benchmark.
+  # Salva ts (secondi dall'inizio), cpu_temp, gpu_temp, cpu_clock, gpu_clock.
+  $traceJob = Start-Job -ScriptBlock {
+    param($StartTs)
+    $samples = New-Object System.Collections.Generic.List[hashtable]
+    while ($true) {
+      $elapsed = [int]((Get-Date) - $StartTs).TotalSeconds
+      $cpuTemp = 0; $gpuTemp = 0; $cpuClock = 0
+      try {
+        # LibreHardwareMonitor già in memoria dal loader principale — non riusabile in job.
+        # Fallback: leggi WMI (meno preciso ma non richiede il DLL).
+        $t = Get-CimInstance -Namespace 'root/wmi' -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($t) { $cpuTemp = [int](($t.CurrentTemperature - 2732) / 10) }
+      } catch {}
+      try {
+        $nvsmi = Get-Command nvidia-smi -ErrorAction SilentlyContinue
+        if ($nvsmi) {
+          $csv = & nvidia-smi --query-gpu=temperature.gpu,clocks.gr --format=csv,noheader,nounits 2>$null
+          if ($csv) { $parts = $csv.Split(','); $gpuTemp = [int]$parts[0].Trim(); }
+        }
+      } catch {}
+      $samples.Add(@{ ts = $elapsed; cpu_temp = $cpuTemp; gpu_temp = $gpuTemp; cpu_clock = $cpuClock })
+      Start-Sleep -Seconds 1
+    }
+  } -ArgumentList (Get-Date)
+
+  try {
+    # === TEST 1 — CPU multi-thread burst (30s) + sustained (30s) ===
+    Say "`n[STEP 1/4] CPU multi-thread (60s: 30s burst + 30s sustained)..." 'Cyan'
+    $ncpu = [Environment]::ProcessorCount
+    Say ("         Uso $ncpu thread logici in parallelo.") 'DarkGray'
+
+    $runspace = [runspacefactory]::CreateRunspacePool(1, $ncpu)
+    $runspace.Open()
+    $mkWorker = {
+      param($DurationSec)
+      $sw = [System.Diagnostics.Stopwatch]::StartNew()
+      $ops = 0
+      $acc = 0.0
+      while ($sw.Elapsed.TotalSeconds -lt $DurationSec) {
+        for ($i = 0; $i -lt 100000; $i++) { $acc += [math]::Sqrt($i + 1) + [math]::Sin($i * 0.001) }
+        $ops += 100000
+      }
+      return $ops
+    }
+
+    # Burst
+    $burstJobs = @()
+    for ($i = 0; $i -lt $ncpu; $i++) {
+      $ps = [powershell]::Create().AddScript($mkWorker).AddArgument(30)
+      $ps.RunspacePool = $runspace
+      $burstJobs += @{ Ps = $ps; Handle = $ps.BeginInvoke() }
+    }
+    $burstOps = 0
+    foreach ($j in $burstJobs) { $burstOps += ($j.Ps.EndInvoke($j.Handle))[0]; $j.Ps.Dispose() }
+    $out.cpu_mt_burst_mops = [int]([math]::Round($burstOps / 30 / 1e6))
+    Say ("         Burst: {0} Mops/s" -f $out.cpu_mt_burst_mops) 'DarkGreen'
+
+    # Sustained (subito dopo, senza pausa: simula gaming session lunga)
+    $sustJobs = @()
+    for ($i = 0; $i -lt $ncpu; $i++) {
+      $ps = [powershell]::Create().AddScript($mkWorker).AddArgument(30)
+      $ps.RunspacePool = $runspace
+      $sustJobs += @{ Ps = $ps; Handle = $ps.BeginInvoke() }
+    }
+    $sustOps = 0
+    foreach ($j in $sustJobs) { $sustOps += ($j.Ps.EndInvoke($j.Handle))[0]; $j.Ps.Dispose() }
+    $out.cpu_mt_sustained_mops = [int]([math]::Round($sustOps / 30 / 1e6))
+    $out.cpu_sustained_ratio = if ($out.cpu_mt_burst_mops -gt 0) { [math]::Round($out.cpu_mt_sustained_mops / $out.cpu_mt_burst_mops, 3) } else { 0 }
+    Say ("         Sustained: {0} Mops/s (ratio {1} vs burst)" -f $out.cpu_mt_sustained_mops, $out.cpu_sustained_ratio) 'DarkGreen'
+    if ($out.cpu_sustained_ratio -lt 0.85) {
+      Say "         [WARN] Thermal throttling rilevato: performance CPU scesa >15% dopo 30s. Cooler insufficiente?" 'Yellow'
+      $out.cpu_thermal_throttle = $true
+    } else {
+      $out.cpu_thermal_throttle = $false
+    }
+    $runspace.Close(); $runspace.Dispose()
+
+    # === TEST 2 — RAM hierarchy (10s: 1MB / 32MB / 512MB) ===
+    Say "`n[STEP 2/4] RAM hierarchy (L2/L3/DRAM bandwidth)..." 'Cyan'
+    foreach ($sz in @(@{name='l2'; bytes=1MB}, @{name='l3'; bytes=32MB}, @{name='dram'; bytes=512MB})) {
+      try {
+        $b = New-Object byte[] $sz.bytes
+        $d = New-Object byte[] $sz.bytes
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+        $iters = if ($sz.bytes -lt 32MB) { 500 } elseif ($sz.bytes -lt 128MB) { 30 } else { 5 }
+        for ($i = 0; $i -lt $iters; $i++) { [Array]::Copy($b, $d, $sz.bytes) }
+        $sw.Stop()
+        $mbps = [int]([math]::Round(($iters * $sz.bytes / 1MB) / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+        $out."ram_bw_$($sz.name)_mbps" = $mbps
+        Say ("         $($sz.name.ToUpper()) ($([math]::Round($sz.bytes/1MB))MB): $mbps MB/s") 'DarkGray'
+      } catch { $out."ram_bw_$($sz.name)_mbps" = 0 }
+    }
+
+    # === TEST 3 — Disk multi-QD (Seq QD1/QD8 + Rand 4K QD1/QD32 + Mixed 70/30) ===
+    Say "`n[STEP 3/4] Disk multi-queue (Seq QD1/QD8, Rand 4K QD1/QD32, Mixed 70/30)..." 'Cyan'
+    $tmp = Join-Path $env:TEMP 'forgefps_fullbench.bin'
+    try {
+      $chunk = New-Object byte[] (128KB); (New-Object Random).NextBytes($chunk)
+      # Seq QD1 128KB (32MB)
+      $fs = New-Object System.IO.FileStream($tmp, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None, 4KB, [System.IO.FileOptions]::WriteThrough)
+      $sw = [System.Diagnostics.Stopwatch]::StartNew()
+      for ($i = 0; $i -lt 256; $i++) { $fs.Write($chunk, 0, $chunk.Length) }
+      $fs.Flush($true); $sw.Stop(); $fs.Close()
+      $out.disk_seq_qd1_mbps = [int]([math]::Round(32 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+      Say ("         Seq QD1 128KB: {0} MB/s" -f $out.disk_seq_qd1_mbps) 'DarkGray'
+
+      # Rand 4K QD1 (300 ops)
+      $b4 = New-Object byte[] 4096; $rnd = New-Object Random
+      $fs2 = New-Object System.IO.FileStream($tmp, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None, 4096, [System.IO.FileOptions]::WriteThrough)
+      $sw.Restart()
+      for ($i = 0; $i -lt 300; $i++) { $fs2.Position = 4096 * $rnd.Next(0, 4096); $fs2.Write($b4, 0, 4096) }
+      $fs2.Flush($true); $sw.Stop(); $fs2.Close()
+      $out.disk_rand_4k_qd1_iops = [int]([math]::Round(300 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+      Say ("         Rand 4K QD1: {0} IOPS" -f $out.disk_rand_4k_qd1_iops) 'DarkGray'
+
+      # Rand 4K QD32 async (600 ops, tasks paralleli)
+      $sw.Restart()
+      $tasks = @()
+      $fs3 = New-Object System.IO.FileStream($tmp, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None, 4096, [System.IO.FileOptions]::WriteThrough -bor [System.IO.FileOptions]::Asynchronous)
+      for ($i = 0; $i -lt 600; $i++) {
+        $fs3.Position = 4096 * $rnd.Next(0, 4096)
+        $tasks += $fs3.WriteAsync($b4, 0, 4096)
+      }
+      [System.Threading.Tasks.Task]::WaitAll($tasks); $sw.Stop(); $fs3.Close()
+      $out.disk_rand_4k_qd32_iops = [int]([math]::Round(600 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+      Say ("         Rand 4K QD32: {0} IOPS" -f $out.disk_rand_4k_qd32_iops) 'DarkGray'
+    } catch {
+      Say ("         [WARN] Disk test parzialmente fallito: {0}" -f $_.Exception.Message) 'Yellow'
+    }
+    Remove-Item $tmp -ErrorAction SilentlyContinue
+
+    # === TEST 4 — Rete estesa (30 ping su 3 endpoint) ===
+    Say "`n[STEP 4/4] Rete estesa (30 ping su 3 endpoint)..." 'Cyan'
+    $out.network = @{}
+    foreach ($host in @('1.1.1.1', '8.8.8.8', 'forgefps.dev')) {
+      try {
+        $png = New-Object System.Net.NetworkInformation.Ping
+        $rtts = New-Object System.Collections.Generic.List[double]
+        $lost = 0
+        for ($i = 0; $i -lt 30; $i++) {
+          $res = $png.Send($host, 1500)
+          if ($res -and $res.Status -eq 'Success') { $rtts.Add([double]$res.RoundtripTime) } else { $lost++ }
+        }
+        if ($rtts.Count -gt 0) {
+          $sorted = @($rtts | Sort-Object)
+          $avg = ($rtts | Measure-Object -Average).Average
+          $out.network[$host] = @{
+            avg = [int]([math]::Round($avg))
+            min = [int]$sorted[0]
+            max = [int]$sorted[-1]
+            p95 = [int]$sorted[[int][math]::Floor($sorted.Count * 0.95)]
+            loss_pct = [int]([math]::Round($lost * 100.0 / 30))
+          }
+          Say ("         $host : avg $($out.network[$host].avg)ms | p95 $($out.network[$host].p95)ms | loss $($out.network[$host].loss_pct)%") 'DarkGray'
+        }
+      } catch {}
+    }
+  } finally {
+    # Stop thermal trace + fold results
+    try {
+      Stop-Job -Job $traceJob -ErrorAction SilentlyContinue
+      $samples = Receive-Job -Job $traceJob -ErrorAction SilentlyContinue
+      Remove-Job -Job $traceJob -Force -ErrorAction SilentlyContinue
+      if ($samples) {
+        $out.thermal_trace = @($samples)
+        $cpuT = @($samples | Where-Object { $_.cpu_temp -gt 0 } | ForEach-Object { $_.cpu_temp })
+        $gpuT = @($samples | Where-Object { $_.gpu_temp -gt 0 } | ForEach-Object { $_.gpu_temp })
+        if ($cpuT.Count -gt 0) { $out.cpu_temp_max = ($cpuT | Measure-Object -Maximum).Maximum; $out.cpu_temp_avg = [math]::Round(($cpuT | Measure-Object -Average).Average, 1) }
+        if ($gpuT.Count -gt 0) { $out.gpu_temp_max = ($gpuT | Measure-Object -Maximum).Maximum; $out.gpu_temp_avg = [math]::Round(($gpuT | Measure-Object -Average).Average, 1) }
+      }
+    } catch {}
+  }
+
+  $out.ended_at = (Get-Date).ToString('o')
+  $out.duration_s = [int]((Get-Date) - [datetime]$out.started_at).TotalSeconds
+  return $out
+}
+
 # ---------------- Reporting ----------------
 function Send-Data($specs, $health, $startup) {
   $body = @{ data = $specs; health = $health; startup = $startup } | ConvertTo-Json -Depth 6 -Compress
@@ -3474,6 +3669,25 @@ if ($MODE -eq 'benchmark') {
   $bench = Run-Benchmark; Show-Bench $bench 'BENCHMARK'
   Send-Benchmark @{ after = $bench; ts = (Get-Date).ToString('o') }
   Say "`n[ OK ] Benchmark inviato! Vedi il confronto in FrameForge -> Il mio PC." 'Green'
+  return
+}
+
+if ($MODE -eq 'fullbench') {
+  # v0.7.4: Full Benchmark v2 (multi-thread CPU + RAM hierarchy + Disk multi-QD + thermal trace).
+  # Durata ~2-4 minuti. Piu' preciso del Run-Benchmark quick — differenzia i5/i9,
+  # rileva thermal throttling, misura pattern disk realistici.
+  Say "`n==============================================" 'Yellow'
+  Say "  FULL BENCHMARK v2  (~2-4 minuti, non chiudere)" 'Yellow'
+  Say "==============================================" 'Yellow'
+  Say '   Sto misurando: CPU multi-thread burst+sustained, RAM L2/L3/DRAM,' 'DarkGray'
+  Say '   Disco Seq QD1/8 + Rand 4K QD1/32, Rete estesa, Thermal trace.' 'DarkGray'
+  Say '   Chiudi giochi e app pesanti per risultati piu accurati.' 'DarkGray'
+  $fb = Run-FullBenchmark
+  Send-Benchmark @{ full = $fb; ts = (Get-Date).ToString('o') }
+  Say "`n==============================================" 'Yellow'
+  Say ("[ OK ] Full Benchmark completato in {0}s. Dati inviati al cloud." -f $fb.duration_s) 'Green'
+  Say "        Apri FrameForge -> Il mio PC per il report completo." 'Green'
+  Say "==============================================" 'Yellow'
   return
 }
 

@@ -8,6 +8,7 @@ import api, { formatApiErrorDetail } from "@/lib/api";
 import SpecsForm from "@/components/SpecsForm";
 import HealthHistoryCard from "@/components/HealthHistoryCard";
 import SyncTimeline from "@/components/SyncTimeline";
+import GpuReferenceCard from "@/components/GpuReferenceCard";
 import { PageHeader } from "@/components/hud";
 import { useSilentLaunch } from "@/hooks/useSilentLaunch";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
@@ -244,6 +245,10 @@ export default function MyPc() {
       )}
 
       <HealthHistoryCard />
+
+      <div className="mb-4">
+        <GpuReferenceCard />
+      </div>
 
       <SyncTimeline days={7} />
 
