@@ -30,17 +30,38 @@ const POLL_SLOW_INTERVAL_MS = 10_000;
 export default function FirstScanBanner() {
   const { t, i18n } = useTranslation();
   const en = (i18n.language || "").startsWith("en");
-  const [status, setStatus] = useState("checking"); // checking | pending | done | error
+  const [status, setStatus] = useState("checking"); // checking | pending | done | done-fresh | idle
   const [specs, setSpecs] = useState(null);
   const pollRef = useRef(null);
   const startedAtRef = useRef(0);
+  // Traccia se all'apertura del componente esisteva gia' un doc pc_specs.
+  // In quel caso e' un utente veterano — NON mostrare il banner "primo scan"
+  // (ne pending, ne done): sarebbe misleading dire "Il tuo primo scan e' arrivato"
+  // quando i dati sono li da giorni/settimane.
+  const preExistedRef = useRef(false);
 
-  const checkOnce = async () => {
+  const checkOnce = async (isFirstCall = false) => {
     try {
       const { data } = await api.get("/pc-specs");
-      if (data && data.data && Object.keys(data.data).length > 0) {
-        setSpecs(data.data);
-        setStatus("done");
+      // Consideriamo "dato presente" se c'e' hardware base O benchmark O una lista giochi/app.
+      // Il vecchio check controllava solo data.data che escludeva utenti con solo benchmark.
+      const hasData = !!(data && (
+        (data.data && Object.keys(data.data).length > 0) ||
+        data.benchmark ||
+        (Array.isArray(data.games) && data.games.length > 0) ||
+        (Array.isArray(data.running_apps) && data.running_apps.length > 0)
+      ));
+      if (hasData) {
+        if (isFirstCall) {
+          // I dati esistevano PRIMA che aprissimo la pagina -> utente veterano,
+          // nascondi silenziosamente tutto (banner "idle").
+          preExistedRef.current = true;
+          setStatus("idle");
+        } else {
+          // I dati sono arrivati DOPO l'apertura (polling): scan appena completato.
+          setSpecs(data.data || {});
+          setStatus("done-fresh");
+        }
         return true;
       }
       return false;
@@ -55,14 +76,14 @@ export default function FirstScanBanner() {
     startedAtRef.current = Date.now();
 
     (async () => {
-      const found = await checkOnce();
+      const found = await checkOnce(true);
       if (stopped) return;
       if (!found) {
         setStatus("pending");
         // Polling loop
         const tick = async () => {
           if (stopped) return;
-          const found2 = await checkOnce();
+          const found2 = await checkOnce(false);
           if (stopped || found2) return;
           const elapsed = Date.now() - startedAtRef.current;
           const nextMs = elapsed > POLL_SLOW_AFTER_MS ? POLL_SLOW_INTERVAL_MS : POLL_INTERVAL_MS;
@@ -78,15 +99,13 @@ export default function FirstScanBanner() {
     };
   }, []);
 
-  // Ancora in caricamento (< 500ms): non mostrare nulla per evitare flash
+  // Loading iniziale (< qualche ms): nascosto per evitare flash.
   if (status === "checking") return null;
-  // Utente ha gia' fatto lo scan tempo fa: nascondi tutto silenziosamente
-  if (status === "done" && !specs) return null;
+  // Utente veterano con dati preesistenti: componente nascosto silenziosamente.
+  if (status === "idle") return null;
 
-  // Success state — mostra brevemente il successo, poi il componente si
-  // nasconde da solo perche' status=done implica specs presenti nel DB e al
-  // prossimo mount la condizione iniziale returna null.
-  if (status === "done") {
+  // Solo dati arrivati DURANTE questa sessione mostrano il banner "done-fresh".
+  if (status === "done-fresh") {
     return (
       <div className="border border-[#00FF66]/40 bg-[#00FF66]/5 p-5 mb-6" data-testid="first-scan-done">
         <div className="flex items-start gap-3">
