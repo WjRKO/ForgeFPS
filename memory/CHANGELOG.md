@@ -1,6 +1,32 @@
 # FrameForge — Changelog
 
 
+## v0.7.4c (Web) — 2026-02-22 · Pannello Admin ricco
+
+### Added — Admin dashboard rewritten
+- **Stat card estese**: 8 metriche invece di 4. Aggiunte:
+  - `signups_last_7d` / `signups_last_24h` (backend `/admin/stats`)
+  - `users_with_agent` (utenti con almeno un doc `pc_specs`)
+  - `users_discord_linked` (colore Discord)
+  - `total_benchmarks` + `total_health_snapshots`
+- **Search live** sulla tabella utenti (email + nome, case-insensitive).
+- **Sort per colonna** con toggle asc/desc (email, ruolo, signup, prodotti, build).
+- **Pagination client-side** (20 utenti/pagina) con footer prev/next.
+- **Riga espandibile per utente** — click su chevron → 3 colonne di dettagli:
+  - Account (signup date, plan, discord, contatori prodotti/build/benchmark/notifiche)
+  - Hardware & agent (CPU/GPU/RAM/OS + ultima sync)
+  - Ultima salute PC (score con colore, grade, timestamp)
+  - Nuovo endpoint `GET /api/admin/users/{user_id}/details`.
+- **Colonne aggiuntive tabella**: Signup (relative time), Agent (con timestamp
+  ultima sync se installato), Discord (badge blu se linkato).
+- **PasswordResetsPanel** ora incluso nella pagina admin (era orfano).
+- **Broadcast modal**: `POST /api/admin/broadcast` con scope
+  `all|admins|boosted|has_agent`. Inserisce un doc `notifications` per ogni
+  destinatario. Utile per annunciare nuove release / manutenzioni.
+- **Timeline endpoint** `GET /api/admin/signups-timeline?days=30` gia' pronto
+  per un futuro chart (non renderizzato in questa iterazione).
+
+
 ## v0.7.4b (Agent + Web) — 2026-02-22 · Monitor bug, primo scan condizionale, no-auto-sync
 
 ### Fixed — "Avvia monitor sul PC" apriva il primo scan invece del monitor
