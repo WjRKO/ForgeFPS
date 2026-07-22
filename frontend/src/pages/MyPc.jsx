@@ -52,6 +52,90 @@ function composeSpec(key, d) {
 const STATUS_ICON = { ok: <CheckCircle2 size={16} className="text-[#00FF66]" />, warn: <AlertTriangle size={16} className="text-[#E5FF00]" />, bad: <XCircle size={16} className="text-[#FF3B30]" />, unknown: <HelpCircle size={16} className="text-zinc-600" /> };
 
 
+// v0.7.4d: guida actionable quando la temp CPU non e' leggibile.
+// Il PowerShell agent invia in health.checks[cpu_temp].reason uno di:
+//   not_admin | vbs_on | blocklist_on | no_sensors | unknown
+// Mostriamo un banner giallo/rosso sotto il grid con istruzioni specifiche.
+const CPU_TEMP_REASONS = {
+  not_admin: {
+    title: "Temperatura CPU non leggibile — l'agent non gira come Amministratore",
+    body: "Il driver dei sensori CPU richiede privilegi elevati (UAC). Riapri FrameForge Agent e conferma il prompt UAC quando appare.",
+    fix_label: "Come risolvere",
+    steps: [
+      "Chiudi la finestra dell'agent",
+      "Doppio click su Avvia-FrameForge.bat (o forgefps-agent.exe)",
+      "Quando appare il prompt UAC di Windows, clicca Sì",
+    ],
+  },
+  vbs_on: {
+    title: "Temperatura CPU bloccata da Windows — Integrità della memoria attiva",
+    body: "Sicurezza di Windows sta bloccando il driver di basso livello che legge la temperatura CPU. È una protezione (VBS). Puoi disattivarla se ti serve la temp.",
+    fix_label: "Come disattivare (opzionale)",
+    steps: [
+      "Impostazioni → Privacy e sicurezza → Sicurezza di Windows",
+      "Sicurezza del dispositivo → Isolamento core → Integrità della memoria → OFF",
+      "Riavvia il PC",
+    ],
+  },
+  blocklist_on: {
+    title: "Temperatura CPU bloccata da Windows — Blocklist driver vulnerabili",
+    body: "Windows 11 blocca WinRing0 (il driver usato per leggere i sensori CPU) tramite la Blocklist. È attiva di default per sicurezza — la temp GPU continua a funzionare comunque.",
+    fix_label: "Alternativa",
+    steps: [
+      "La blocklist protegge da driver malevoli — sconsigliamo di disattivarla",
+      "Come workaround, tieni aperto HWMonitor/HWiNFO in parallelo per vedere la temp CPU",
+      "La GPU (che è quella che conta di più per il gaming) viene rilevata normalmente",
+    ],
+  },
+  no_sensors: {
+    title: "Temperatura CPU non trovata — nessun sensore compatibile",
+    body: "LibreHardwareMonitor ha risposto ma non ha trovato un sensore CPU utilizzabile. Hardware datato o BIOS non espone i sensori termici.",
+    fix_label: "Verifica",
+    steps: [
+      "Aggiorna il BIOS all'ultima versione dal sito del produttore della motherboard",
+      "Prova ad avviare HWiNFO come Admin per confermare quali sensori sono disponibili",
+    ],
+  },
+  unknown: {
+    title: "Temperatura CPU non leggibile",
+    body: "L'agent non è riuscito a determinare il motivo. Se il problema persiste, contatta il supporto con lo screenshot della console dell'agent.",
+    fix_label: "Debug",
+    steps: [
+      "Avvia l'agent come Amministratore",
+      "Controlla la console per messaggi [WARN] o [INFO][diag]",
+    ],
+  },
+};
+
+function CpuTempReasonHint({ checks }) {
+  if (!Array.isArray(checks)) return null;
+  const cpuCheck = checks.find((c) => c.id === "cpu_temp");
+  if (!cpuCheck || cpuCheck.status !== "unknown" || !cpuCheck.reason) return null;
+  const info = CPU_TEMP_REASONS[cpuCheck.reason] || CPU_TEMP_REASONS.unknown;
+  const isSecurity = cpuCheck.reason === "vbs_on" || cpuCheck.reason === "blocklist_on";
+  const color = isSecurity ? "#E5FF00" : "#00E0FF"; // giallo = protezione security, azzurro = altro
+
+  return (
+    <div className="mt-4 border-t border-[#1A1A24] pt-3" data-testid="cpu-temp-reason-hint">
+      <div className="border p-4" style={{ borderColor: `${color}66`, backgroundColor: `${color}0D` }}>
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" style={{ color }} />
+          <div className="min-w-0 flex-1">
+            <div className="text-xs uppercase tracking-widest mb-1 font-mono" style={{ color }}>// {cpuCheck.reason}</div>
+            <div className="text-sm font-semibold text-zinc-100 mb-1" data-testid="cpu-temp-reason-title">{info.title}</div>
+            <p className="text-xs text-zinc-400 leading-relaxed mb-3">{info.body}</p>
+            <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1.5">{info.fix_label}</div>
+            <ol className="text-xs text-zinc-300 space-y-1 list-decimal pl-4">
+              {info.steps.map((s, i) => (<li key={i}>{s}</li>))}
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 
 
 
@@ -218,6 +302,7 @@ export default function MyPc() {
               ))}
             </div>
           </div>
+          <CpuTempReasonHint checks={health.checks} />
           {(health.gpu_temp != null || health.cpu_temp != null) && (
             <div className="mt-4 flex flex-wrap gap-3 border-t border-[#1A1A24] pt-3">
               {health.cpu_temp != null && (

@@ -411,6 +411,23 @@ function Get-Health {
       if ($ct -gt 0) { $h.cpu_temp = $ct }
     }
   }
+  # v0.7.4d: se la temp CPU e' assente, diagnostica il motivo per suggerire un fix
+  # nell'UI web (banner sotto Health Score). Codici: not_admin | vbs_on | blocklist_on |
+  # no_sensors | unknown. Il frontend mostra istruzioni actionable per ognuno.
+  if (-not $h.ContainsKey('cpu_temp') -or $null -eq $h.cpu_temp) {
+    if (-not (Test-Admin)) {
+      $h.cpu_temp_reason = 'not_admin'
+    } elseif (Test-MemoryIntegrity) {
+      $h.cpu_temp_reason = 'vbs_on'
+    } elseif (Test-VulnerableDriverBlocklist) {
+      $h.cpu_temp_reason = 'blocklist_on'
+    } elseif ($script:LHM_LAST) {
+      # LHM ha risposto ma nessun sensore CPU utile (raro, hardware datato)
+      $h.cpu_temp_reason = 'no_sensors'
+    } else {
+      $h.cpu_temp_reason = 'unknown'
+    }
+  }
   return $h
 }
 
