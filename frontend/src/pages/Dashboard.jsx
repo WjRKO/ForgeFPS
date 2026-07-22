@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import NextActionBanner from "@/components/NextActionBanner";
+import BottleneckDetector from "@/components/BottleneckDetector";
 import { PageHeader, EmptyState, HealthRing, Sparkline, HUDCard, Badge, SkeletonCard,
   stagger, item, BTN_CLASSES } from "@/components/hud";
 import { AGENT_EXE_URL, AGENT_EXE_VERSION, AGENT_RELEASES_URL } from "@/config/agent";
@@ -695,7 +696,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <PageHeader eyebrow={t("dashboard.eyebrow")} title={greeting} />
+      <PageHeader eyebrow={t("dashboard.eyebrow")} title={greeting} actions={<BottleneckDetector compact />} />
 
       {isBrandNew && <HeroEmpty t={t} />}
 

@@ -833,3 +833,10 @@ Precedenti release documentate in `PRD.md`.
 ### Verified
 - Screenshot: menu completamente in italiano al primo login con `i18nextLng=it`, Network empty state mostra i 3 glossary tooltip.
 
+
+## Bottleneck badge Dashboard header — 2026-02-22
+### Added
+- `<BottleneckDetector compact />` come `actions` di `<PageHeader>` in `Dashboard.jsx`. Al render della Dashboard il badge appare in alto a destra se c'è una telemetria fresh (<60s). Auto-hide se assente/stale.
+### Verified
+- Screenshot: badge "🔴 CPU-BOUND" visibile accanto al titolo dopo injection sample cpu_util=95, gpu_util=40. Text=CPU-BOUND, palette rossa come nel banner completo. Zero errori JS.
+
