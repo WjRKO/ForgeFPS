@@ -1,6 +1,30 @@
 # FrameForge — Changelog
 
 
+## v0.7.5 (Agent) — 2026-02-22 · UAC-admin manifest per rilevamento sensori
+
+### Changed — build packaging
+- **PyInstaller `--uac-admin`** aggiunto ai 4 script di build:
+  - `agent-build/github-workflow-build-nosign.yml` (GitHub Actions unsigned)
+  - `agent-build/github-workflow-build-sign.yml` (GitHub Actions con SignPath)
+  - `agent-build/build.bat` (Windows locale)
+  - `agent-build/build.ps1` (PowerShell locale)
+- L'exe generato ha ora nel manifest `requestedExecutionLevel level="requireAdministrator"`.
+  Windows mostra UAC ad ogni avvio → PowerShell figlio eredita admin → LHM
+  WinRing0 driver carica → temperatura CPU leggibile via LibreHardwareMonitor.
+- **`agent-build/forgefps_agent.py`** — `AGENT_VERSION = "0.7.5"`.
+- **`agent-build/version_info.txt`** — file/product version `0.7.5.0`.
+
+### Tradeoff
+- **PRO**: Temperatura CPU (e altri sensori low-level) letti in modo affidabile
+  su tutti i PC, senza richiedere flag di compatibilità manuali.
+- **CONTRO**: Anche il sync silent triggerato da web ("Sincronizza ora") ora
+  mostra un breve UAC prompt. L'utente clicca Yes → il resto (`launch_silent_mode`
+  → PowerShell hidden) rimane silenzioso.
+- Il codice legacy `ShellExecuteW("runas")` in `launch_secure_gui` resta come
+  fallback ma con `--uac-admin` diventa dead-code (l'exe e' gia' admin).
+
+
 ## v0.7.4d (Web + Agent) — 2026-02-22 · Diagnostica temperatura CPU
 
 ### Fixed — CPU temp non rilevata su Ryzen
