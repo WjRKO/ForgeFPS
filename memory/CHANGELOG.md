@@ -1,6 +1,81 @@
 # FrameForge — Changelog
 
 
+## v0.7.5 (Agent) — 2026-02-22 · UAC-admin manifest per rilevamento sensori
+
+### Changed — build packaging
+- **PyInstaller `--uac-admin`** aggiunto ai 4 script di build:
+  - `agent-build/github-workflow-build-nosign.yml` (GitHub Actions unsigned)
+  - `agent-build/github-workflow-build-sign.yml` (GitHub Actions con SignPath)
+  - `agent-build/build.bat` (Windows locale)
+  - `agent-build/build.ps1` (PowerShell locale)
+- L'exe generato ha ora nel manifest `requestedExecutionLevel level="requireAdministrator"`.
+  Windows mostra UAC ad ogni avvio → PowerShell figlio eredita admin → LHM
+  WinRing0 driver carica → temperatura CPU leggibile via LibreHardwareMonitor.
+- **`agent-build/forgefps_agent.py`** — `AGENT_VERSION = "0.7.5"`.
+- **`agent-build/version_info.txt`** — file/product version `0.7.5.0`.
+
+### Tradeoff
+- **PRO**: Temperatura CPU (e altri sensori low-level) letti in modo affidabile
+  su tutti i PC, senza richiedere flag di compatibilità manuali.
+- **CONTRO**: Anche il sync silent triggerato da web ("Sincronizza ora") ora
+  mostra un breve UAC prompt. L'utente clicca Yes → il resto (`launch_silent_mode`
+  → PowerShell hidden) rimane silenzioso.
+- Il codice legacy `ShellExecuteW("runas")` in `launch_secure_gui` resta come
+  fallback ma con `--uac-admin` diventa dead-code (l'exe e' gia' admin).
+
+
+## v0.7.4d (Web + Agent) — 2026-02-22 · Diagnostica temperatura CPU
+
+### Fixed — CPU temp non rilevata su Ryzen
+- **`backend/ps_agent.py`** — `Get-LhmTemps` migliorato:
+  - Regex case-insensitive per matchare i nomi sensore Ryzen Zen4+
+    (Tctl / Tdie / Package / CPU) oltre ai nomi Intel classici
+  - Ritorna `_lhm_state`: `no_lhm` (driver non caricato) | `no_cpu_sensors`
+    (LHM ok ma zero sensori Cpu) | `cpu_sensors_out_of_range` | `lhm_exception` | `ok`
+- **`backend/ps_agent.py::Get-Health`** — quando `cpu_temp` e' assente, emette
+  `cpu_temp_reason` con uno di: `not_admin` | `vbs_on` | `blocklist_on` |
+  `no_lhm` | `no_sensors` | `unknown`.
+- **`backend/helpers.py::compute_health`** — se il check `cpu_temp` risulta
+  "unknown" e il payload contiene `cpu_temp_reason`, propaga il campo `reason`
+  nel check per l'UI.
+- **`frontend/src/pages/MyPc.jsx`** — nuovo componente `CpuTempReasonHint`
+  con banner actionable sotto il grid checks. 6 varianti UI (una per reason):
+  - `not_admin` → istruzioni riapertura con UAC
+  - `vbs_on` → guida disattivazione Integrità della memoria
+  - `blocklist_on` → spiegazione + workaround HWiNFO
+  - `no_lhm` → fix Ryzen-friendly: LibreHardwareMonitor standalone come Admin
+    (firma il driver WinRing0 e sblocca la lettura per FrameForge)
+  - `no_sensors` → aggiornamento BIOS + verifica LHM standalone
+  - `unknown` → debug generico
+
+
+## v0.7.4c (Web) — 2026-02-22 · Pannello Admin ricco
+
+### Added — Admin dashboard rewritten
+- **Stat card estese**: 8 metriche invece di 4. Aggiunte:
+  - `signups_last_7d` / `signups_last_24h` (backend `/admin/stats`)
+  - `users_with_agent` (utenti con almeno un doc `pc_specs`)
+  - `users_discord_linked` (colore Discord)
+  - `total_benchmarks` + `total_health_snapshots`
+- **Search live** sulla tabella utenti (email + nome, case-insensitive).
+- **Sort per colonna** con toggle asc/desc (email, ruolo, signup, prodotti, build).
+- **Pagination client-side** (20 utenti/pagina) con footer prev/next.
+- **Riga espandibile per utente** — click su chevron → 3 colonne di dettagli:
+  - Account (signup date, plan, discord, contatori prodotti/build/benchmark/notifiche)
+  - Hardware & agent (CPU/GPU/RAM/OS + ultima sync)
+  - Ultima salute PC (score con colore, grade, timestamp)
+  - Nuovo endpoint `GET /api/admin/users/{user_id}/details`.
+- **Colonne aggiuntive tabella**: Signup (relative time), Agent (con timestamp
+  ultima sync se installato), Discord (badge blu se linkato).
+- **PasswordResetsPanel** ora incluso nella pagina admin (era orfano).
+- **Broadcast modal**: `POST /api/admin/broadcast` con scope
+  `all|admins|boosted|has_agent`. Inserisce un doc `notifications` per ogni
+  destinatario. Utile per annunciare nuove release / manutenzioni.
+- **Timeline endpoint** `GET /api/admin/signups-timeline?days=30` gia' pronto
+  per un futuro chart (non renderizzato in questa iterazione).
+
+
 ## v0.7.4b (Agent + Web) — 2026-02-22 · Monitor bug, primo scan condizionale, no-auto-sync
 
 ### Fixed — "Avvia monitor sul PC" apriva il primo scan invece del monitor

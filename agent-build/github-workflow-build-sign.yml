@@ -40,10 +40,11 @@ jobs:
       - name: Install PyInstaller
         run: python -m pip install --upgrade pip pyinstaller
 
-      - name: Build onedir (metadati + no UPX)
+      - name: Build onedir (metadati + no UPX + UAC admin)
         working-directory: agent-build
         run: >
           pyinstaller --onedir --name forgefps-agent --console --noupx --clean
+          --uac-admin
           --version-file version_info.txt forgefps_agent.py
 
       - name: Upload unsigned .exe artifact for SignPath

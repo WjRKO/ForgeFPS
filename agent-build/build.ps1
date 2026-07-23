@@ -16,8 +16,9 @@ Write-Host "[2/5] Pulisco build precedenti..." -ForegroundColor Cyan
 if (Test-Path build) { Remove-Item build -Recurse -Force }
 if (Test-Path dist)  { Remove-Item dist  -Recurse -Force }
 
-Write-Host "[3/5] Costruisco la cartella dist\forgefps-agent\ (onedir, metadati, no UPX)..." -ForegroundColor Cyan
+Write-Host "[3/5] Costruisco la cartella dist\forgefps-agent\ (onedir, metadati, no UPX, UAC admin)..." -ForegroundColor Cyan
 pyinstaller --onedir --name forgefps-agent --console --noupx --clean `
+  --uac-admin `
   --version-file version_info.txt forgefps_agent.py
 
 Write-Host "[4/5] Comprimo dist\forgefps-agent\ in forgefps-agent.zip..." -ForegroundColor Cyan

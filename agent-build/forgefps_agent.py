@@ -32,7 +32,7 @@ _args, _ = _parser.parse_known_args()
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.7.4"
+AGENT_VERSION = "0.7.5"
 # v0.7.3+: rinominato da boostpc_backup.json → forgefps_backup.json.
 # Fallback lettura del vecchio nome per una release per non perdere il backup
 # degli utenti che aggiornano dalla v0.7.2 o precedenti.

@@ -180,7 +180,7 @@ function Get-LhmTemps {
   # Real CPU/GPU temperatures from hardware sensors (incl. motherboard SuperIO). Requires admin.
   $r = @{}
   $c = Get-LhmComputer
-  if (-not $c) { return $r }
+  if (-not $c) { $r._lhm_state = 'no_lhm'; return $r }
   try {
     $cpuTemps = @{}; $gpuTemps = @{}; $mbTemps = @{}
     $found = New-Object 'System.Collections.Generic.List[string]'
@@ -201,20 +201,36 @@ function Get-LhmTemps {
     }
     $script:LHM_LAST = ($found -join ', ')
     $cpuVal = $null
+    # Prima passata: nomi noti (Intel + Ryzen classic)
     foreach ($k in @('CPU Package', 'Core (Tctl/Tdie)', 'Core (Tctl)', 'Core (Tdie)', 'Core Average', 'Core Max')) {
       if ($cpuTemps.ContainsKey($k)) { $cpuVal = $cpuTemps[$k]; break }
     }
+    # v0.7.4d: Ryzen 7000+ / Zen4 espone nomi diversi (es. "Tctl", "Ccd1 (Tdie)", "Package").
+    # Regex case-insensitive su qualunque sensore Cpu che contenga tctl/tdie/package/cpu.
+    if ($null -eq $cpuVal) {
+      foreach ($k in $cpuTemps.Keys) {
+        if ($k -match '(?i)tctl|tdie|package|^cpu\s') { $cpuVal = $cpuTemps[$k]; break }
+      }
+    }
+    # Ultima chance: massimo tra tutti i sensori Cpu
     if ($null -eq $cpuVal -and $cpuTemps.Count -gt 0) { $cpuVal = ($cpuTemps.Values | Measure-Object -Maximum).Maximum }
     if ($null -eq $cpuVal) {
       # Motherboard SuperIO fallback: a sensor explicitly named like CPU.
-      foreach ($k in $mbTemps.Keys) { if ($k -match 'CPU') { $cpuVal = $mbTemps[$k]; break } }
+      foreach ($k in $mbTemps.Keys) { if ($k -match '(?i)cpu') { $cpuVal = $mbTemps[$k]; break } }
     }
     if ($null -ne $cpuVal -and $cpuVal -gt 0) { $r.cpu_temp = [int][math]::Round($cpuVal) }
     $gpuVal = $null
     foreach ($k in @('GPU Core', 'GPU Hot Spot', 'GPU')) { if ($gpuTemps.ContainsKey($k)) { $gpuVal = $gpuTemps[$k]; break } }
     if ($null -eq $gpuVal -and $gpuTemps.Count -gt 0) { $gpuVal = ($gpuTemps.Values | Measure-Object -Maximum).Maximum }
     if ($null -ne $gpuVal -and $gpuVal -gt 0) { $r.gpu_temp = [int][math]::Round($gpuVal) }
-  } catch {}
+    # Diagnostica: LHM caricato ma nessun sensore CPU trovato
+    if (-not $r.ContainsKey('cpu_temp')) {
+      if ($cpuTemps.Count -eq 0) { $r._lhm_state = 'no_cpu_sensors' }
+      else { $r._lhm_state = 'cpu_sensors_out_of_range' }
+    } else {
+      $r._lhm_state = 'ok'
+    }
+  } catch { $r._lhm_state = 'lhm_exception' }
   return $r
 }
 
@@ -409,6 +425,27 @@ function Get-Health {
     if ($tzt -and $tzt.CurrentTemperature -gt 2732) {
       $ct = [math]::Round(($tzt.CurrentTemperature - 2732)/10)
       if ($ct -gt 0) { $h.cpu_temp = $ct }
+    }
+  }
+  # v0.7.4d: se la temp CPU e' assente, diagnostica il motivo per suggerire un fix
+  # nell'UI web (banner sotto Health Score). Codici: not_admin | vbs_on | blocklist_on |
+  # no_sensors | no_lhm | unknown. Il frontend mostra istruzioni actionable per ognuno.
+  if (-not $h.ContainsKey('cpu_temp') -or $null -eq $h.cpu_temp) {
+    if (-not (Test-Admin)) {
+      $h.cpu_temp_reason = 'not_admin'
+    } elseif (Test-MemoryIntegrity) {
+      $h.cpu_temp_reason = 'vbs_on'
+    } elseif (Test-VulnerableDriverBlocklist) {
+      $h.cpu_temp_reason = 'blocklist_on'
+    } elseif ($lhm._lhm_state -eq 'no_lhm' -or $lhm._lhm_state -eq 'lhm_exception') {
+      # LibreHardwareMonitor non riesce a caricare (driver WinRing0 non firmato sul PC).
+      # Il fix e' aprire LHM standalone come Admin una volta -> firma il driver.
+      $h.cpu_temp_reason = 'no_lhm'
+    } elseif ($lhm._lhm_state -eq 'no_cpu_sensors' -or $lhm._lhm_state -eq 'cpu_sensors_out_of_range') {
+      # LHM caricato ma non trova sensori CPU (Ryzen Zen4+ con nomi diversi, o BIOS non li espone).
+      $h.cpu_temp_reason = 'no_sensors'
+    } else {
+      $h.cpu_temp_reason = 'unknown'
     }
   }
   return $h

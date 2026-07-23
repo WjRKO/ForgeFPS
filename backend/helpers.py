@@ -165,9 +165,15 @@ def compute_health(health: dict) -> dict:
     for cid, label, weight, key, thresholds, fmt, fix, mkey, higher_bad in _HEALTH_NUMERIC_CHECKS:
         value = key(health) if callable(key) else health.get(key)
         if value is None:
+            # v0.7.4d: se e' cpu_temp e c'e' un reason -> propaga per UI actionable
+            _extra = {}
+            if cid == "cpu_temp":
+                _r = health.get("cpu_temp_reason")
+                if _r:
+                    _extra["reason"] = _r
             checks.append({"id": cid, "label": label, "status": "unknown",
                            "message": "Dato non disponibile", "fix": None,
-                           "mkey": "na", "mval": None})
+                           "mkey": "na", "mval": None, **_extra})
             continue
         status = _numeric_status(value, thresholds, higher_bad)
         total_weight += weight
