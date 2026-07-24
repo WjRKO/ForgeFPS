@@ -3,6 +3,7 @@ import {
   Shield, Users, Package, Cpu, Trash2, Loader2, ShieldCheck, ShieldOff,
   Search, ChevronDown, ChevronUp, Send, Sparkles, Activity, MonitorCheck,
   MessageSquare, Gauge, X, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown,
+  Gift,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -42,6 +43,70 @@ function fmtRelative(iso) {
     if (s < 86400 * 7) return `${Math.floor(s / 86400)}g fa`;
     return `${Math.floor(s / (86400 * 30))} mesi fa`;
   } catch { return "—"; }
+}
+
+function GrantPlanModal({ open, onClose, user, onGranted }) {
+  const [plan, setPlan] = useState("pro");
+  const [months, setMonths] = useState(1);
+  const [saving, setSaving] = useState(false);
+  if (!open || !user) return null;
+  const submit = async () => {
+    setSaving(true);
+    try {
+      const { data } = await api.post(`/admin/users/${user.id}/grant-plan`, { plan, months: Number(months) });
+      toast.success(`${user.email} → ${plan.toUpperCase()} per ${months === 0 ? "sempre" : months + " mesi"}`);
+      onGranted?.(data);
+      onClose();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Errore");
+    } finally { setSaving(false); }
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={onClose} data-testid="grant-plan-modal">
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-[#0F0F12] border border-[#E5FF00]/40 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="text-xs uppercase tracking-[0.2em] text-[#E5FF00] mb-1">// grant plan</div>
+            <h3 className="font-display font-black text-xl">Concedi piano paid</h3>
+            <p className="text-xs text-zinc-500 mt-1">A: <span className="font-mono text-zinc-300">{user.email}</span></p>
+          </div>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200"><X size={18} /></button>
+        </div>
+        <div className="space-y-3 mb-5">
+          <div>
+            <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">Piano</label>
+            <select value={plan} onChange={(e) => setPlan(e.target.value)}
+              className="w-full bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none"
+              data-testid="grant-plan-select">
+              <option value="pro">Pro (€7/mese equiv.)</option>
+              <option value="streamer">Streamer (€16/mese equiv.)</option>
+              <option value="starter">Starter (revoca piano)</option>
+            </select>
+          </div>
+          {plan !== "starter" && (
+            <div>
+              <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">Durata (mesi) · 0 = perpetuo</label>
+              <input type="number" min={0} max={120} value={months} onChange={(e) => setMonths(e.target.value)}
+                className="w-full bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none"
+                data-testid="grant-plan-months" />
+              <div className="text-[10px] text-zinc-600 mt-1 font-mono">
+                {Number(months) === 0 ? "Piano perpetuo (senza scadenza)"
+                 : `Scade il ${new Date(Date.now() + Number(months) * 30 * 86400000).toLocaleDateString("it-IT")}`}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} disabled={saving} className="px-4 py-2 border border-[#2A2A35] text-sm hover:border-zinc-500 transition-colors disabled:opacity-50">Annulla</button>
+          <button onClick={submit} disabled={saving} data-testid="grant-plan-submit"
+            className="flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2 text-sm hover:bg-[#D4EE00] transition-colors disabled:opacity-50">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Gift size={14} />}
+            {saving ? "Salvo..." : "Concedi"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function BroadcastModal({ open, onClose }) {
@@ -211,6 +276,7 @@ export default function Admin() {
   const [sortDir, setSortDir] = useState("desc"); // asc | desc
   const [expanded, setExpanded] = useState(null); // user id
   const [broadcastOpen, setBroadcastOpen] = useState(false);
+  const [grantTarget, setGrantTarget] = useState(null); // user object to grant plan to
 
   const load = async () => {
     try { const { data } = await api.get("/admin/stats"); setStats(data); }
@@ -379,6 +445,11 @@ export default function Admin() {
                       <td className="p-4 text-zinc-400">{u.builds}</td>
                       <td className="p-4">
                         <div className="flex items-center justify-end gap-2">
+                          <button data-testid={`grant-plan-${u.id}`} onClick={() => setGrantTarget(u)} disabled={busy[u.id]}
+                            title="Concedi/revoca piano paid manualmente"
+                            className="p-2 border border-[#2A2A35] hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors disabled:opacity-40">
+                            <Gift size={14} />
+                          </button>
                           <button data-testid={`toggle-role-${u.id}`} onClick={() => toggleRole(u)} disabled={busy[u.id] || u.id === user?.id}
                             title={u.role === "admin" ? "Rimuovi admin" : "Promuovi ad admin"}
                             className="p-2 border border-[#2A2A35] hover:border-[#E5FF00] transition-colors disabled:opacity-40">
@@ -423,6 +494,9 @@ export default function Admin() {
 
       {/* Broadcast Modal */}
       <BroadcastModal open={broadcastOpen} onClose={() => setBroadcastOpen(false)} />
+
+      {/* Grant Plan Modal */}
+      <GrantPlanModal open={!!grantTarget} onClose={() => setGrantTarget(null)} user={grantTarget} onGranted={() => load()} />
     </div>
   );
 }
