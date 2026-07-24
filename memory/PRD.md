@@ -948,3 +948,11 @@ Scelta utente: toast web + **notifica Windows nativa** nella GUI (BurntToast/tra
 - P1: Alert Salute Storica (health score < media 30gg)
 - P2: Checklist tweak nel Report PDF, migrazione bottoni a BTN_CLASSES
 - P3: Stripe Live mode, Google Ads conv avanzate, testimonial GitHub stars
+
+
+## 2026-02 (patch) — TrialUpgradeBanner nel ProfileMenu (conversion boost)
+- **Backend** (`subscriptions.py`): nuova `compute_upgrade_suggestion(user, info)` che calcola engagement score (AI messages×2 + health scans + telemetry, ultimi 14gg) e ritorna `tier`, `recommended_cycle` (monthly/yearly), `recommended_lookup`, prezzi, `save_amount`, `reason` personalizzata. Esposto in `GET /api/subscriptions/status` come `suggested_upgrade` (null se paid/starter senza-trial).
+- **Regola**: expired → yearly (commit); trial + score≥15 → yearly; trial + score<15 → monthly.
+- **Frontend** (`components/TrialUpgradeBanner.jsx`): banner nel ProfileMenu sotto l'account card. Countdown + reason + CTA primaria colorata verso Stripe Checkout preselezionato, CTA secondaria per ciclo alternativo. Deep-link diretto a `POST /api/payments/checkout`.
+- **Test**: smoke test e2e (register→login→start-trial→open menu). Banner visibile con "Trial: 14 giorni rimasti", CTA "Passa a Pro · €7/mese", alt "o annuale · €70/anno (risparmi €14)".
+- **Testids**: `trial-upgrade-banner`, `banner-countdown`, `banner-reason`, `banner-cta-primary`, `banner-cta-secondary`.

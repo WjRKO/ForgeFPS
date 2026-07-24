@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import TrialUpgradeBanner from "@/components/TrialUpgradeBanner";
 
 const DISCORD_ICON = ({ size = 16, ...props }) => (
   <svg {...props} width={size} height={size} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
@@ -176,6 +177,9 @@ export default function ProfileMenu() {
             </div>
             <PlanBadge info={info} />
           </div>
+
+          {/* Sezione 1b — banner upgrade dinamico (solo trial/expired) */}
+          <TrialUpgradeBanner info={info} />
 
           {/* Sezione 2 — menu */}
           <div className="p-1.5">

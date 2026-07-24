@@ -17,6 +17,68 @@ from database import db
 from plan_gate import compute_effective_plan, TRIAL_DAYS
 
 
+# --- Upgrade suggestion (engagement-driven) ----------------------------------
+# Prezzi (in EUR, IVA-inclusa) — vedi PRICING_COPY_v2.md
+_PRICE_BOOK = {
+    "pro": {"monthly": 7, "yearly": 70, "save": 14},
+    "streamer": {"monthly": 16, "yearly": 160, "save": 32},
+}
+
+
+async def compute_upgrade_suggestion(user: dict, info: dict):
+    """Suggerisce il miglior piano/ciclo di fatturazione per convertire il trial.
+
+    Regole:
+      - Piani `pro`/`streamer` gia' attivi -> None (nessuna suggestione)
+      - `starter` senza mai aver provato trial -> None (mostrato altrove come banner trial)
+      - `pro_trial`/`streamer_trial` -> engagement score decide monthly vs yearly
+      - `pro_expired`/`streamer_expired` -> yearly (riattivazione = commitment)
+    """
+    eff = info["plan_effective"]
+    if eff in ("pro", "streamer"):
+        return None
+    if eff not in ("pro_trial", "streamer_trial", "pro_expired", "streamer_expired"):
+        return None
+
+    tier = "streamer" if eff.startswith("streamer") else "pro"
+    uid = str(user["_id"])
+    since_iso = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
+
+    # Engagement signals ultimi 14gg
+    ai_count = await db.chat_messages.count_documents({"user_id": uid, "created_at": {"$gte": since_iso}})
+    health_count = await db.health_history.count_documents({"user_id": uid, "timestamp": {"$gte": since_iso}})
+    telem_count = await db.pc_telemetry.count_documents({"user_id": uid})
+
+    score = (ai_count * 2) + health_count + min(telem_count, 20)
+    is_expired = eff.endswith("_expired")
+
+    if is_expired or score >= 15:
+        recommended = "yearly"
+        reason = (
+            "Riattiva risparmiando 2 mesi con l'annuale."
+            if is_expired else
+            "Sei un power user — l'annuale ti fa risparmiare 2 mesi."
+        )
+    else:
+        recommended = "monthly"
+        reason = f"Continua da dove hai lasciato — €{_PRICE_BOOK[tier]['monthly']}/mese, cancelli quando vuoi."
+
+    prices = _PRICE_BOOK[tier]
+    return {
+        "tier": tier,
+        "tier_label": tier.capitalize(),
+        "lookup_monthly": f"{tier}_monthly",
+        "lookup_yearly": f"{tier}_yearly",
+        "recommended_cycle": recommended,
+        "recommended_lookup": f"{tier}_{recommended}",
+        "monthly_price": prices["monthly"],
+        "yearly_price": prices["yearly"],
+        "save_amount": prices["save"],
+        "reason": reason,
+        "engagement_score": score,
+    }
+
+
 class StartTrialInput(BaseModel):
     plan: str  # "pro_trial" | "streamer_trial"
 
@@ -26,8 +88,10 @@ def build(get_current_user):
 
     @r.get("/status")
     async def status(user: dict = Depends(get_current_user)):
-        """Piano corrente + trial info per il frontend (banner, feature-gating UI)."""
-        return compute_effective_plan(user)
+        """Piano corrente + trial info + suggestione upgrade personalizzata."""
+        info = compute_effective_plan(user)
+        suggestion = await compute_upgrade_suggestion(user, info)
+        return {**info, "suggested_upgrade": suggestion}
 
     @r.post("/start-trial")
     async def start_trial(payload: StartTrialInput, user: dict = Depends(get_current_user)):
