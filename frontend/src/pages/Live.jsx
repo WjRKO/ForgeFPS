@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import api from "@/lib/api";
 import { SessionSummary } from "@/components/SessionSummary";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
+import { PrimaryButton } from "@/components/hud";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
 import MonitorPreflight from "@/components/MonitorPreflight";
 import MonitorLiveControl from "@/components/MonitorLiveControl";
@@ -131,13 +132,14 @@ export default function Live() {
         <div className="bg-[#0F0F12] border border-[#E5FF00]/40 p-5 mb-6">
           <p className="text-sm text-zinc-300 mb-1 font-semibold">{t("live.start_title")}</p>
           <p className="text-xs text-zinc-500 mb-3">{t("live.start_desc")}</p>
-          <button
+          <PrimaryButton
+            icon={PlayCircle}
             type="button"
-            data-testid="monitor-launch-btn"
+            testid="monitor-launch-btn"
             onClick={() => setPreflightOpen(true)}
-            className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2.5 text-sm hover:bg-[#D4EE00] transition-colors mb-3">
-            <PlayCircle size={16} /> {t("live.launch_btn", { defaultValue: "Avvia monitor sul PC" })}
-          </button>
+            className="mb-3">
+            {t("live.launch_btn", { defaultValue: "Avvia monitor sul PC" })}
+          </PrimaryButton>
           <BrowserPopupHint testid="live-popup-hint" />
           <details className="text-xs text-zinc-500">
             <summary className="cursor-pointer hover:text-zinc-300 transition-colors">
@@ -221,7 +223,7 @@ export default function Live() {
             <input type="number" data-testid="alert-gpu-max" value={alerts.gpu_max} onChange={(e) => setAlerts({ ...alerts, gpu_max: parseInt(e.target.value) || 0 })}
               className="w-24 bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none" />
           </div>
-          <button data-testid="save-alerts-btn" onClick={saveAlerts} className="bg-[#E5FF00] text-black font-bold px-4 py-2 text-sm hover:bg-[#c9e000] transition-colors">{t("common.save")}</button>
+          <PrimaryButton testid="save-alerts-btn" onClick={saveAlerts}>{t("common.save")}</PrimaryButton>
         </div>
         <p className="text-xs text-zinc-600 mt-3">{t("live.alert_hint")}</p>
       </div>

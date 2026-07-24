@@ -7,6 +7,7 @@ import { Send, Plus, Trash2, Loader2, MessageSquareCode, Terminal, Cpu, Copy, Ch
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import api, { API } from "@/lib/api";
+import { PrimaryButton } from "@/components/hud";
 import { PageHeader } from "@/components/hud";
 import DiagnosePanel from "@/components/DiagnosePanel";
 
@@ -434,10 +435,9 @@ function ChatInput({ input, setInput, imageDataUrl, setImageDataUrl, fileInputRe
         <input data-testid="chat-input" value={input} onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && onSend()} placeholder={placeholder}
           className="flex-1 bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 text-sm transition-colors" />
-        <button data-testid="chat-send-btn" onClick={() => onSend()} disabled={streaming}
-          className="bg-[#E5FF00] text-black px-4 hover:bg-[#D4EC00] transition-colors disabled:opacity-60">
+        <PrimaryButton testid="chat-send-btn" onClick={() => onSend()} disabled={streaming} className="!px-4">
           {streaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-        </button>
+        </PrimaryButton>
       </div>
     </div>
   );

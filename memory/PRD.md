@@ -993,3 +993,27 @@ Scelta utente: toast web + **notifica Windows nativa** nella GUI (BurntToast/tra
 - **Network page** (`pages/Network.jsx`): bottone one-click prominente + il vecchio `SecureRunBlock` PowerShell relegato in `<details>` collapsible come fallback.
 - **Test smoke**: bottone visibile, endpoint launch-uri ritorna URI corretto per mode=bufferbloat, endpoint respinge mode invalidi con 400.
 - **Riutilizzabile**: il componente `OneClickLaunchButton` puo' essere usato ovunque nell'app dove serve un lancio "1 click" verso l'agent (Optimize, Benchmark, Full Benchmark, Monitor, Prematch, Booster, Restore).
+
+
+## 2026-02 — P2 wave: Report PDF tweak log + button migration
+### (a) Checklist tweak nel Report PDF
+- **Frontend** (`pages/Report.jsx`): nuova sezione "Tweak applicati" nel PDF generato via jsPDF.
+- Fetch `GET /api/advisor/applied-tweaks` in parallelo agli altri asset PDF, disegna tabella con:
+  - Header giallo neon "Applied tweaks · N total" con underline
+  - 2 colonne: TWEAK (60%) | APPLIED AT (35%)
+  - Bullet verde ✓ per tweak `active=true`, cerchio grigio ○ per inattivi
+  - Timestamp: `dd/mm/yyyy · hh:mm` (locale)
+  - Empty state: "No tweaks logged in this session."
+- **Copy IT + EN**: aggiunte 5 chiavi `pdf_tweaks_head`, `pdf_tweaks_empty`, `pdf_tweaks_count`, `pdf_col_tweak`, `pdf_col_when`
+- **Test e2e**: PDF scaricato (8.5MB), contiene stringa "Applied tweaks", ispezione visuale conferma layout corretto con 6 tweak seed
+
+### (b) Migrazione bottoni inline → BTN_CLASSES/PrimaryButton
+- **Live.jsx** L138 (monitor-launch-btn) + L224 (save-alerts-btn) → `<PrimaryButton>`
+- **Games.jsx** L272 (game-search-btn) → `<PrimaryButton>` con `!px-4`
+- **Advisor.jsx** L437 (chat-send-btn) → `<PrimaryButton>` con `!px-4`
+- **Skippati** per rispetto regole FRONTEND_RULES.md:
+  - Tracker.jsx: tutti hanno `btn-volt` (CSS custom animation, non migrare)
+  - BiosRestore.jsx: styling troppo custom (size text-[11px], border accent semi-transparent)
+  - Advisor.jsx altre linee: usa `btn-volt` o color CIANO (non accent)
+  - Network.jsx: nessun candidato con match pattern
+- **Verifica**: `yarn build` OK, smoke test playwright su 4 bottoni: tutti visibili post-migrazione
