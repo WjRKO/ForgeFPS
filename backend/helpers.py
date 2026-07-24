@@ -222,16 +222,29 @@ def compute_health(health: dict) -> dict:
 
 
 def grade_bufferbloat(result: dict) -> dict:
-    """Compute bufferbloat grade (A+..F) from idle vs loaded latency (Waveform-style)."""
+    """Compute bufferbloat grades (v2) from idle vs loaded latency.
+
+    Returns 3 sub-grades:
+      - idle_grade:        health della connessione a riposo (base RTT)
+      - loaded_grade:      "bufferbloat vero" (incremento sotto carico) — retro-compat con `grade`
+      - consistency_grade: stabilita' (jitter + loss + tail p99)
+
+    Plus the legacy `grade` field (== loaded_grade) for backward-compat.
+    """
     idle = result.get("idle_ms")
     down = result.get("down_ms")
     up = result.get("up_ms")
+    down_p99 = result.get("down_p99")
+    up_p99 = result.get("up_p99")
+    jitter = result.get("jitter_ms") or 0
+    loss = result.get("loss_pct") or 0
+
+    # --- Loaded (bufferbloat) grade: max incremento sotto carico ---
     incs = [x - idle for x in (down, up) if x is not None and idle is not None]
     inc = max(incs) if incs else None
 
-    def grade_for(v):
-        if v is None:
-            return None
+    def _grade_bloat(v):
+        if v is None: return None
         if v <= 5: return "A+"
         if v <= 30: return "A"
         if v <= 60: return "B"
@@ -239,17 +252,64 @@ def grade_bufferbloat(result: dict) -> dict:
         if v <= 400: return "D"
         return "F"
 
-    bloat_grade = grade_for(inc)
-    down_grade = grade_for(down - idle) if (down is not None and idle is not None) else None
-    up_grade = grade_for(up - idle) if (up is not None and idle is not None) else None
+    loaded_grade = _grade_bloat(inc)
+    down_grade = _grade_bloat(down - idle) if (down is not None and idle is not None) else None
+    up_grade = _grade_bloat(up - idle) if (up is not None and idle is not None) else None
 
-    # Base latency quality (idle RTT to reference host)
+    # --- Idle grade: RTT baseline verso host di riferimento ---
+    def _grade_idle(v):
+        if v is None: return None
+        if v <= 15: return "A+"
+        if v <= 25: return "A"
+        if v <= 45: return "B"
+        if v <= 80: return "C"
+        if v <= 150: return "D"
+        return "F"
+    idle_grade = _grade_idle(idle)
+
+    # --- Consistency grade: score 0-100 poi mapping a lettera ---
+    # Penalty framework: partiamo da 100, sottraiamo per jitter/loss/tail spike.
+    score = 100
+    # Jitter (variabilita' RTT idle)
+    if jitter > 30: score -= 40
+    elif jitter > 15: score -= 25
+    elif jitter > 5: score -= 10
+    # Packet loss (piu' cattivo di qualunque altra cosa nel gaming)
+    if loss > 5: score -= 60
+    elif loss > 2: score -= 35
+    elif loss > 0.5: score -= 15
+    # Tail latency spike sotto carico (p99 - idle)
+    tail_incs = [x - idle for x in (down_p99, up_p99) if x is not None and idle is not None]
+    tail = max(tail_incs) if tail_incs else None
+    if tail is not None:
+        if tail > 400: score -= 30
+        elif tail > 200: score -= 20
+        elif tail > 100: score -= 10
+    score = max(0, min(100, score))
+
+    def _score_to_grade(s):
+        if s >= 95: return "A+"
+        if s >= 85: return "A"
+        if s >= 70: return "B"
+        if s >= 50: return "C"
+        if s >= 30: return "D"
+        return "F"
+    consistency_grade = _score_to_grade(score)
+
+    # Base latency quality (idle RTT) — retro-compat
     base = "great" if (idle is not None and idle <= 20) else "good" if (idle is not None and idle <= 50) else "fair" if (idle is not None and idle <= 100) else "poor"
-    loss = result.get("loss_pct")
+
     return {
         **result,
         "bufferbloat_ms": round(inc) if inc is not None else None,
-        "grade": bloat_grade,
+        # Nuovo modello 3 grade (v2)
+        "idle_grade": idle_grade,
+        "loaded_grade": loaded_grade,
+        "consistency_grade": consistency_grade,
+        "consistency_score": score,
+        "tail_spike_ms": round(tail) if tail is not None else None,
+        # Legacy fields (retro-compat)
+        "grade": loaded_grade,
         "down_grade": down_grade,
         "up_grade": up_grade,
         "base_quality": base,

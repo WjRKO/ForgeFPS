@@ -23,6 +23,30 @@ function Metric({ icon: Icon, label, value, unit, sub, accent, testid }) {
   );
 }
 
+function SubGrade({ label, grade, value, unit, unitPrefix = "", hint, colorFn, testid }) {
+  const c = colorFn(grade);
+  return (
+    <div className="flex items-center gap-3 bg-black/40 border-l-4 border border-[#2A2A35] px-4 py-3 flex-1 min-w-[170px]" style={{ borderLeftColor: c }} data-testid={testid}>
+      <div className="font-display font-black text-4xl leading-none" style={{ color: c }} data-testid={`${testid}-grade`}>{grade || "?"}</div>
+      <div className="min-w-0">
+        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono">{label}</div>
+        <div className="text-sm text-zinc-200 font-semibold" data-testid={`${testid}-value`}>
+          {value != null ? `${unitPrefix}${value}` : "--"}<span className="text-zinc-500 text-xs ml-0.5">{value != null ? unit : ""}</span>
+        </div>
+        {hint && <div className="text-[10px] text-zinc-600 truncate">{hint}</div>}
+      </div>
+    </div>
+  );
+}
+
+function buildLoadedSub(g, p95, p99, t) {
+  const parts = [];
+  if (g) parts.push(`${t("network.grade")} ${g}`);
+  if (p95 != null) parts.push(`p95 ${p95}ms`);
+  if (p99 != null) parts.push(`p99 ${p99}ms`);
+  return parts.join(" · ");
+}
+
 export default function Network() {
   const { t } = useTranslation();
   const [token, setToken] = useState("");
@@ -121,24 +145,54 @@ export default function Network() {
         </div>
       ) : (
         <>
-          {/* Grade */}
-          <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-6 flex items-center gap-6 flex-wrap" data-testid="network-grade">
-            <div className="flex flex-col items-center justify-center w-32 h-32 border-2" style={{ borderColor: gc }}>
-              <div className="text-[10px] uppercase tracking-widest text-zinc-500">{t("network.grade")}</div>
-              <div className="font-display font-black text-6xl leading-none" style={{ color: gc }} data-testid="network-grade-value">{grade || "?"}</div>
-            </div>
-            <div className="flex-1 min-w-[200px]">
-              <div className="text-sm text-zinc-300 mb-1"><TechTerm term="bufferbloat">{t("network.bloat_label")}</TechTerm></div>
-              <div className="font-display font-black text-3xl mb-2">+{res.bufferbloat_ms ?? "--"}<span className="text-base text-zinc-500 ml-1">ms</span></div>
-              <p className="text-xs text-zinc-500">{t("network.bloat_desc")}</p>
+          {/* Grade — 3 sub-grade cards (Idle/Loaded/Consistency) */}
+          <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-6" data-testid="network-grade">
+            <div className="flex flex-wrap items-stretch gap-3">
+              <SubGrade
+                label="Idle"
+                grade={res.idle_grade || grade}
+                value={res.idle_ms}
+                unit="ms"
+                hint="Latenza a riposo"
+                colorFn={gradeColor}
+                testid="subgrade-idle"
+              />
+              <SubGrade
+                label="Loaded"
+                grade={res.loaded_grade || grade}
+                value={res.bufferbloat_ms}
+                unit="ms"
+                unitPrefix="+"
+                hint="Bufferbloat sotto carico"
+                colorFn={gradeColor}
+                testid="subgrade-loaded"
+              />
+              <SubGrade
+                label="Consistency"
+                grade={res.consistency_grade || grade}
+                value={res.consistency_score}
+                unit="/100"
+                hint="Jitter + Loss + tail p99"
+                colorFn={gradeColor}
+                testid="subgrade-consistency"
+              />
+              <div className="flex-1 min-w-[200px] flex flex-col justify-center bg-black/40 border border-[#2A2A35] p-4">
+                <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1"><TechTerm term="bufferbloat">Bufferbloat</TechTerm> {t("network.bloat_label", { defaultValue: "aumento sotto carico" })}</div>
+                <div className="font-display font-black text-2xl">+{res.bufferbloat_ms ?? "--"}<span className="text-sm text-zinc-500 ml-1">ms</span></div>
+                {res.tail_spike_ms != null && (
+                  <div className="text-[11px] text-zinc-500 mt-1" data-testid="tail-spike">
+                    Tail spike (p99): <span className="text-[#FF9500] font-mono">+{res.tail_spike_ms} ms</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Metrics */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
             <Metric icon={Activity} label={t("network.idle")} value={res.idle_ms} unit="ms" sub={`${t(`network.q_${res.base_quality}`)}${res.idle_min != null ? ` · min ${res.idle_min}ms` : ""}`} accent="text-[#00FF66]" testid="net-idle" />
-            <Metric icon={ArrowDownToLine} label={t("network.down_loaded")} value={res.down_ms} unit="ms" sub={`${res.down_grade ? `${t("network.grade")} ${res.down_grade}` : ""}${res.down_p95 != null ? ` · p95 ${res.down_p95}ms` : ""}`} accent="text-[#00E0FF]" testid="net-down" />
-            <Metric icon={ArrowUpToLine} label={t("network.up_loaded")} value={res.up_ms} unit="ms" sub={`${res.up_grade ? `${t("network.grade")} ${res.up_grade}` : ""}${res.up_p95 != null ? ` · p95 ${res.up_p95}ms` : ""}`} accent="text-[#E5FF00]" testid="net-up" />
+            <Metric icon={ArrowDownToLine} label={t("network.down_loaded")} value={res.down_ms} unit="ms" sub={buildLoadedSub(res.down_grade, res.down_p95, res.down_p99, t)} accent="text-[#00E0FF]" testid="net-down" />
+            <Metric icon={ArrowUpToLine} label={t("network.up_loaded")} value={res.up_ms} unit="ms" sub={buildLoadedSub(res.up_grade, res.up_p95, res.up_p99, t)} accent="text-[#E5FF00]" testid="net-up" />
             <Metric icon={Wifi} label={<TechTerm term="jitter">{t("network.jitter")}</TechTerm>} value={res.jitter_ms} unit="ms" sub={`${t("network.loss")}: ${res.loss_pct ?? 0}%`} accent="text-[#B388FF]" testid="net-jitter" />
           </div>
 

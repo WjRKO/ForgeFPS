@@ -1017,3 +1017,28 @@ Scelta utente: toast web + **notifica Windows nativa** nella GUI (BurntToast/tra
   - Advisor.jsx altre linee: usa `btn-volt` o color CIANO (non accent)
   - Network.jsx: nessun candidato con match pattern
 - **Verifica**: `yarn build` OK, smoke test playwright su 4 bottoni: tutti visibili post-migrazione
+
+
+## 2026-02 — Bufferbloat v2: 3 sub-grade + p99 tail latency
+### Backend
+- **`ps_agent.py`** (`Run-Bufferbloat`): calcola anche `down_p99` e `up_p99` via `Percentile $rtts 0.99`, include in `Send-NetResult`
+- **`helpers.py`** (`grade_bufferbloat`): rifattorizzato con 3 sub-grade:
+  - `idle_grade` — RTT baseline (A+ ≤15ms · A ≤25 · B ≤45 · C ≤80 · D ≤150 · F >150)
+  - `loaded_grade` — bufferbloat vero (retro-compat = campo `grade`)
+  - `consistency_grade` — score 0-100 basato su penalty framework:
+    - Jitter: -10 (>5) / -25 (>15) / -40 (>30)
+    - Loss %: -15 (>0.5) / -35 (>2) / -60 (>5)
+    - Tail spike (p99 - idle): -10 (>100) / -20 (>200) / -30 (>400)
+    - Mapping: A+ ≥95 · A ≥85 · B ≥70 · C ≥50 · D ≥30 · F <30
+  - `tail_spike_ms` — max(down_p99, up_p99) - idle_ms (nuovo campo evidenziato)
+  - **Retro-compat**: `grade`, `down_grade`, `up_grade`, `base_quality`, `loss_pct` preservati
+
+### Frontend
+- **`Network.jsx`**: sostituita giant grade card singola con 3 `<SubGrade>` cards affiancate:
+  - Border-left colorato secondo il grade, letter huge, valore + hint testuale
+  - Bufferbloat card laterale con `tail_spike_ms` in arancione
+- Metric cards Download/Upload ora includono `p99` accanto a `p95` (via helper `buildLoadedSub`)
+
+### Test
+- **`tests/test_bufferbloat_grades_v2.py`**: 22/22 passed (idle thresholds, loaded, consistency scoring, p99 passthrough, retro-compat)
+- **Smoke test frontend**: 3 sub-grade + tail-spike + p99 tutti visibili con dati seed
