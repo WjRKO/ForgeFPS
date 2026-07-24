@@ -1,6 +1,36 @@
 # FrameForge — Changelog
 
 
+## v0.7.5b (Web) — 2026-02-22 · /pricing page rewrite + trial funnel
+
+### Added — nuova pagina Pricing
+- **`frontend/src/pages/Pricing.jsx`** — full rewrite (89 → 500+ righe) allineato
+  al copy v2 in `memory/PRICING_COPY_v2.md`:
+  - 3 tier: **Starter** (€0), **Pro** (€7/mese o €5,75/mese annuale), **Streamer** (€16/mese o €13,25/mese annuale)
+  - Toggle mensile ↔ annuale con animazione prezzo (risparmio 17% annuale)
+  - Feature list allineate a quello che l'app FA davvero (rimossi "AI applicato in automatico" e "Build generator AI" che non esistono)
+  - Trial badge "🎁 14 giorni gratis · senza carta" su Pro e Streamer
+  - Badge "Più scelto" con shadow gialla su Pro (anchor psicologico)
+  - Tabella comparativa 17-righe (Feature × 3 tier) — scan-friendly, mobile-scrollable
+  - 4 trust signals (14gg gratis, Stripe, cancel anytime, money-back 30gg)
+  - FAQ accordion 8-domande (disdetta, cambio piano, Amazon fuori Italia, sicurezza agent, IVA, prezzo bloccato ecc.)
+  - Closing CTA per gli indecisi
+  - Fully bilingual IT/EN con separatore decimale localizzato (€5,75 IT vs €5.75 EN)
+
+### Added — trial funnel signup
+- **`frontend/src/pages/Auth.jsx`** — la register page ora legge `?plan=pro_trial|streamer_trial` dalla URL:
+  - Mostra un badge visivo "Stai attivando il trial di Pro/Streamer" tra subtitle e form
+  - Al signup completato salva `ff_pending_plan=<plan>` in localStorage per uso futuro (Stripe checkout)
+- Le CTA "Sblocca Pro" e "Sblocca il livello Creator" della Pricing page ora fanno navigate a `/register?plan=pro_trial` / `?plan=streamer_trial`
+
+### Not yet implemented (blockers per andare live con Stripe)
+- Backend endpoint per attivare trial + set `plan="pro_trial"` con `trial_expires_at` (14gg da signup)
+- Feature gating server-side sui campi Pro/Streamer
+- Stripe checkout webhook + subscription lifecycle
+- Downgrade grazia (dati preservati quando trial scade)
+- Cronjob notifica trial scadenza (7gg / 1gg prima)
+
+
 ## v0.7.5 (Agent) — 2026-02-22 · UAC-admin manifest per rilevamento sensori
 
 ### Changed — build packaging
