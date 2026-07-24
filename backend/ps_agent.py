@@ -1187,62 +1187,6 @@ $script:BLOAT = @('Microsoft.549981C3F5F10','Microsoft.BingNews','Microsoft.Bing
   'king.com.CandyCrushSaga','Microsoft.SkypeApp')
 function Do-Debloat { foreach ($pkg in $script:BLOAT) { $app = Get-AppxPackage -Name $pkg -ErrorAction SilentlyContinue; if ($app) { $app | Remove-AppxPackage -ErrorAction SilentlyContinue } } }
 
-# ---------------- BCD helpers (backup + apply) ----------------
-function Backup-Bcd($key) {
-  # $key esempio: 'disabledynamictick' | 'useplatformclock' | 'tscsyncpolicy'
-  $bkKey = "bcd::$key"
-  if ($script:BK.ContainsKey($bkKey)) { return }
-  $raw = bcdedit /enum '{current}' 2>$null | Out-String
-  # Cerchiamo la riga "<key> ..." case-insensitive
-  $line = ($raw -split "`n") | Where-Object { $_ -match "(?i)^\s*$key\s+" } | Select-Object -First 1
-  if ($line) {
-    $val = ($line -replace "(?i)^\s*$key\s+", '').Trim()
-    $script:BK[$bkKey] = $val
-  } else {
-    $script:BK[$bkKey] = '__ABSENT__'
-  }
-}
-function Do-BcdDynamicTick {
-  Backup-Bcd 'disabledynamictick'
-  Backup-Bcd 'tscsyncpolicy'
-  bcdedit /set disabledynamictick yes 2>$null | Out-Null
-  bcdedit /set tscsyncpolicy Enhanced 2>$null | Out-Null
-}
-function Do-HpetOff {
-  Backup-Bcd 'useplatformclock'
-  bcdedit /deletevalue useplatformclock 2>$null | Out-Null
-}
-# ---------------- Memory Compression ----------------
-function Do-MemComp {
-  # Backup MMAgent state
-  if (-not $script:BK.ContainsKey('mmagent::mc')) {
-    $cur = try { (Get-MMAgent).MemoryCompression } catch { $null }
-    if ($null -ne $cur) { $script:BK['mmagent::mc'] = if ($cur) { 'true' } else { 'false' } }
-  }
-  try { Disable-MMAgent -mc | Out-Null } catch {}
-}
-# ---------------- Auto Maintenance quiet hours ----------------
-function Do-AutoMaintNight {
-  # Sposta la manutenzione automatica alle 03:00 (invece che a orari random durante il giorno)
-  Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance' 'MaintenanceStartTime' 'DWord' 3
-  Set-Reg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance' 'WakeUp' 'DWord' 0
-}
-# ---------------- Focus Assist auto in fullscreen ----------------
-function Do-NotifFullscreen {
-  # Attiva Focus Assist "Alarms only" quando un gioco fullscreen e' rilevato
-  Set-Reg 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\CloudStore\Store\Cache\DefaultAccount\$$windows.data.notifications.quiethourssettings\Current' 'Value' 'DWord' 2 2>$null
-  # Fallback: policy-based via GameBar
-  Set-Reg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings' 'NOC_GLOBAL_SETTING_TOASTS_ENABLED_IN_QUIET_HOURS' 'DWord' 0
-  Set-Reg 'HKCU:\Software\Microsoft\GameBar' 'AutoGameModeEnabled' 'DWord' 1
-}
-# ---------------- Spectre/Meltdown mitigations OFF (extreme) ----------------
-function Do-SpectreOff {
-  # Disabilita le mitigazioni Spectre/Meltdown a livello CPU
-  # ATTENZIONE: usare solo su macchine isolate/dedicate al gaming
-  Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' 'FeatureSettingsOverride' 'DWord' 3
-  Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' 'FeatureSettingsOverrideMask' 'DWord' 3
-}
-
 # ---------------- Tweak catalogue (cat / id / name / desc / state / apply) ----------------
 $script:TWEAKS = @(
   # GAMING & FPS
@@ -1505,56 +1449,11 @@ $script:TWEAKS = @(
      impact='Avvio piu pulito e RAM libera se non usi Edge. Nessun rischio.';
      risk='safe';
      state={ if((Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' 'StartupBoostEnabled') -eq 0){'Disattivato'}else{'Attivo (da disattivare)'} }; apply={ Do-EdgePreload } }
-
-  # NUOVI TWEAK (aggiunti dopo review checklist Standard/Extreme) -----------
-  @{ cat='system'; id='memcomp'; name='Memory Compression OFF (solo 32GB+)';
-     problem='La compressione della memoria consuma CPU per comprimere pagine RAM che, con abbondanza di RAM, non serve comprimere.';
-     reason='Con 32GB+ di RAM la compressione fa piu male che bene: aggiunge lavoro alla CPU senza risparmiare RAM utile.';
-     desc='Esegue Disable-MMAgent -mc (disabilita compressione memoria pagine).';
-     impact='Meno CPU per gestione memoria, meno stutter in scene con caricamento asset (open world). Zero rischi.';
-     risk='safe';
-     fit={ if($script:HW.ram -ge 32){'ok'}else{"skip:Serve almeno 32GB di RAM (rilevati $($script:HW.ram) GB). Con meno la compressione aiuta, non toccare."} };
-     state={ try{ if((Get-MMAgent).MemoryCompression){'Attivo (da disattivare)'}else{'Disattivato'} }catch{'n/d'} }; apply={ Do-MemComp } }
-  @{ cat='system'; id='auto_maint_night'; name='Manutenzione automatica alle 3AM';
-     problem='La manutenzione automatica di Windows si avvia a orari random durante il giorno (spesso durante il gioco).';
-     reason='Spostarla a orario notturno evita rallentamenti improvvisi mentre stai giocando o streammando.';
-     desc='Imposta MaintenanceStartTime=03:00 nel registro pianificatore.';
-     impact='Meno stutter random dovuti a manutenzione, defrag, aggiornamenti in background.';
-     risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance' 'MaintenanceStartTime') -eq 3){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-AutoMaintNight } }
-  @{ cat='gaming'; id='notif_fullscreen'; name='Notifiche OFF durante fullscreen';
-     problem='Le notifiche di Windows possono apparire durante il gioco causando spike di CPU/GPU e distrazione.';
-     reason='Focus Assist "Alarms only" quando un gioco e in fullscreen evita interruzioni e cali di FPS.';
-     desc='Configura Focus Assist per attivarsi automaticamente in fullscreen (Alarms only priority).';
-     impact='Zero pop-up durante il gioco, meno spike causati da toast notifications.';
-     risk='safe';
-     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings' 'NOC_GLOBAL_SETTING_TOASTS_ENABLED_IN_QUIET_HOURS') -eq 0){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-NotifFullscreen } }
-  @{ cat='input'; id='hpet_off'; name='HPET off (solo se stabile)';
-     problem='HPET (High Precision Event Timer) puo introdurre latenza variabile su alcune configurazioni Ryzen/Intel piu recenti.';
-     reason='Disattivare HPET forza Windows a usare TSC piu veloce, ma su alcuni sistemi puo causare instabilita USB/audio.';
-     desc='Esegue bcdedit /deletevalue useplatformclock. RICHIEDE TEST A/B con CapFrameX prima di considerarlo definitivo.';
-     impact='Latenza input piu bassa su hardware compatibile. Se noti glitch audio/USB, ripristina.';
-     risk='caution';
-     state={ $r=(bcdedit /enum '{current}' 2>$null) -join "`n"; if($r -match '(?i)useplatformclock'){'Attivo (HPET forzato)'}else{'HPET off'} }; apply={ Do-HpetOff } }
-  @{ cat='input'; id='bcd_dynamic_tick'; name='BCD dynamic tick + TSC sync (Extreme)';
-     problem='Windows usa il dynamic tick del kernel che aggiunge micro-jitter nel timer scheduler.';
-     reason='disabledynamictick=yes + tscsyncpolicy=Enhanced rendono lo scheduling piu deterministico su hardware moderno.';
-     desc='Esegue bcdedit /set disabledynamictick yes + bcdedit /set tscsyncpolicy Enhanced.';
-     impact='Frametime piu regolare in giochi CPU-bound. Zero benefici in giochi GPU-bound.';
-     risk='caution';
-     state={ $r=(bcdedit /enum '{current}' 2>$null) -join "`n"; if($r -match '(?i)disabledynamictick\s+Yes' -and $r -match '(?i)tscsyncpolicy\s+Enhanced'){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-BcdDynamicTick } }
-  @{ cat='system'; id='spectre_off'; name='[EXTREME] Spectre/Meltdown OFF';
-     problem='Windows applica mitigazioni contro Spectre/Meltdown che riducono le prestazioni CPU del 2-15%.';
-     reason='Su una macchina dedicata e-sport isolata (no home banking/lavoro sensibile), disabilitarle recupera prestazioni CPU pure.';
-     desc='ATTENZIONE: disabilita mitigazioni CPU contro attacchi side-channel. Usa SOLO su PC dedicati al gaming, mai su macchine con dati sensibili. Firma richiesta.';
-     impact='+2-8% CPU intensive (CS2/Valorant/Overwatch); +8-12% su CPU 6th-10th gen Intel. Riduce sicurezza contro exploit browser/network.';
-     risk='caution';
-     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' 'FeatureSettingsOverride') -eq 3){'Attivo (mitigazioni OFF)'}else{'Sicuro (mitigazioni ON)'} }; apply={ Do-SpectreOff } }
 )
 
 $script:PRESETS = @{
-  'competitivo' = @('power','gaming','priority','mpo','gpu_msi','amd_ulps','nvidia_tel','fse','power_throttling','standby_clear','mouse','timer','usb','stickykeys','network','nic_power','qos','visual','bgapps','paging_exec','ntfs','memcomp','notif_fullscreen','auto_maint_night')
-  'streaming'   = @('power','gaming','priority','mpo','gpu_msi','amd_ulps','nvidia_tel','fse','network','dns','nic_power','qos','deliveryopt','obs_priority','telemetry','ads','bgapps','gamebar_rec','edge_preload','paging_exec','auto_maint_night','notif_fullscreen')
+  'competitivo' = @('power','gaming','priority','mpo','gpu_msi','amd_ulps','nvidia_tel','fse','power_throttling','standby_clear','mouse','timer','usb','stickykeys','network','nic_power','qos','visual','bgapps','paging_exec','ntfs')
+  'streaming'   = @('power','gaming','priority','mpo','gpu_msi','amd_ulps','nvidia_tel','fse','network','dns','nic_power','qos','deliveryopt','obs_priority','telemetry','ads','bgapps','gamebar_rec','edge_preload','paging_exec')
 }
 
 # ---------------- Restore ----------------
@@ -1576,17 +1475,6 @@ function Invoke-Restore {
     }
     if ($k -eq 'ntfs::lastaccess') { fsutil behavior set disablelastaccess ([int]$b[$k]) 2>$null | Out-Null; continue }
     if ($k.StartsWith('dns::')) { Set-DnsClientServerAddress -InterfaceAlias $k.Substring(5) -ResetServerAddresses 2>$null; continue }
-    if ($k.StartsWith('bcd::')) {
-      $bcdKey = $k.Substring(5); $bcdVal = $b[$k]
-      if ($bcdVal -eq '__ABSENT__') { bcdedit /deletevalue $bcdKey 2>$null | Out-Null }
-      else { bcdedit /set $bcdKey $bcdVal 2>$null | Out-Null }
-      continue
-    }
-    if ($k -eq 'mmagent::mc') {
-      if ($b[$k] -eq 'true') { try { Enable-MMAgent -mc | Out-Null } catch {} }
-      else { try { Disable-MMAgent -mc | Out-Null } catch {} }
-      continue
-    }
     $parts = $k -split '::', 2
     if ($parts.Count -ne 2) { continue }
     $path = $parts[0]; $name = $parts[1]; $v = $b[$k]
