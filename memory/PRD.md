@@ -971,3 +971,21 @@ Scelta utente: toast web + **notifica Windows nativa** nella GUI (BurntToast/tra
 - **Debug**: `POST /api/admin/test-email` (admin only) — body `{template, to, name}` per triggerare ogni template manualmente
 - **Test e2e**: 5/5 template inviati con successo (email_id ricevuti) a `forgefps.support@gmail.com`
 - **Prossimo step DEPLOY**: verificare dominio `forgefps.dev` su Resend (record DNS TXT+CNAME), poi cambiare `SENDER_EMAIL` in `no-reply@forgefps.dev` per uscire dal test mode
+
+
+## 2026-02 — Extended tweak catalog (Standard + Extreme from client checklist)
+- **ps_agent.py**: aggiunti 6 nuovi tweak + 6 funzioni Do-* + 1 helper Backup-Bcd + estensione Invoke-Restore per bcd:: e mmagent:: keys
+- **Tweak safe** (aggiunti a preset `competitivo` e/o `streaming`):
+  - `memcomp` — Memory Compression OFF (`Disable-MMAgent -mc`), fit-gated a `$script:HW.ram -ge 32`
+  - `auto_maint_night` — Manutenzione automatica alle 3AM (evita rallentamenti diurni durante gaming/streaming)
+  - `notif_fullscreen` — Focus Assist auto in fullscreen (`NOC_GLOBAL_SETTING_TOASTS_ENABLED_IN_QUIET_HOURS=0` + policy)
+- **Tweak caution** (opt-in nel Web GUI, checkbox non spuntata di default):
+  - `hpet_off` — `bcdedit /deletevalue useplatformclock`
+  - `bcd_dynamic_tick` — `disabledynamictick=yes` + `tscsyncpolicy=Enhanced`
+  - `spectre_off` — Spectre/Meltdown mitigations OFF via `FeatureSettingsOverride=3` (name prefissato `[EXTREME]` per identificazione UI)
+- **Restore extended**: nuovi handler in `Invoke-Restore` per bcd:: (usa `bcdedit /set` o `/deletevalue`) e mmagent::mc (Enable/Disable-MMAgent)
+- **Test**: `/app/backend/tests/test_new_tweaks_catalog.py` — 17/17 passed
+- **Roadmap prossima**: 
+  - Introduce risk tier `'extreme'` con UI dedicata (modale consenso legale firmato prima dell'apply per `spectre_off`)
+  - Aggiungere sezione input/audio checklist mancante nel client MD (Xbox Game Bar full, DPC pre-check con LatencyMon suggestion)
+  - `.reg` export snapshot pre-apply per rollback anche fuori dal JSON backup (asset legale)
