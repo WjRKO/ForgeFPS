@@ -137,6 +137,28 @@ def build(get_current_user):
 
         return {"status": "ok"}
 
+    @r.post("/payments/portal")
+    async def create_portal(user: dict = Depends(get_current_user)):
+        """Genera link al Stripe Customer Portal per l'utente corrente.
+        Nel portal l'utente puo': aggiungere/cambiare carta, vedere fatture,
+        cancellare o cambiare piano.
+        """
+        customer_id = user.get("stripe_customer_id")
+        if not customer_id:
+            raise HTTPException(status_code=400, detail={
+                "code": "no_customer",
+                "message": "Nessun metodo di pagamento associato. Sottoscrivi un piano prima.",
+            })
+        origin = "https://forgefps.dev"
+        try:
+            session = stripe.billing_portal.Session.create(
+                customer=customer_id,
+                return_url=f"{origin}/app/billing",
+            )
+            return {"portal_url": session.url}
+        except stripe.error.StripeError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
     return r
 
 

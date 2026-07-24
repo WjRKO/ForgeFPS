@@ -165,16 +165,6 @@ export default function Layout() {
             );
           })}
         </nav>
-        <div className="p-3 border-t border-[#2A2A35]">
-          <NavLink to="/app/account" data-testid="nav-account"
-            className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${isActive ? "bg-[#E5FF00] text-black font-bold" : "text-zinc-400 hover:text-white hover:bg-[#141419]"}`}>
-            <Settings size={17} /> <span className="truncate">{user?.email}</span>
-          </NavLink>
-          <button onClick={doLogout} data-testid="logout-btn"
-            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-zinc-400 hover:text-[#FF3B30] transition-colors">
-            <LogOut size={17} /> {t("common.logout")}
-          </button>
-        </div>
       </aside>
 
       <div className="flex-1 md:ml-60 flex flex-col min-w-0">

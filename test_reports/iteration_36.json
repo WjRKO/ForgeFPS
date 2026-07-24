@@ -1,0 +1,36 @@
+{
+  "summary": "Full end-to-end validation of ProfileMenu (Header top-right dropdown) and new /app/billing page. Backend endpoints for subscription status, discord status, and Stripe portal all behave correctly. Fresh registered user returns 400 code=no_customer on /api/payments/portal (as specified). UI: profile menu opens on avatar click, closes on Escape + outside-click, all 6 menu items render, navigation to Billing works, Billing page correctly shows starter-only UI (no open-portal-btn, 'Nessun metodo di pagamento associato' message, upgrade-cta + see-plans-btn visible). Logout via menu-logout redirects to /login and invalidates the server session (subsequent /me returns 401).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_profile_billing.py",
+    "/app/test_reports/pytest/profile_billing.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ProfileMenu.jsx fetches /subscriptions/status and /discord/status on every dropdown open (useEffect on 'open'). Consider caching or fetch once per session to avoid repeated calls when user opens the menu multiple times.",
+    "Billing.jsx has origin hardcoded as 'https://forgefps.dev' in payments.py return_url (line 152) — this is the production domain and OK for prod, but on preview/staging the Stripe portal would redirect back to prod. Consider using request-origin or env var (e.g. os.environ.get('APP_ORIGIN')).",
+    "Console spam: many 402 errors observed during dashboard load (AI Advisor / Emergent LLM key out of budget as noted in the task). Consider hiding failing widgets or showing a graceful error state instead of firing failing requests on mount.",
+    "payments.py POST /payments/portal catches all stripe.error.StripeError as 500 with raw str(e) — consider mapping known errors (e.g. customer not found in Stripe) to specific codes/messages for UI."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_profile_billing.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 pytest tests passed)",
+    "frontend": "100% (all ProfileMenu + Billing + Logout assertions passed)"
+  },
+  "test_credentials": "admin@boostpc.io / 4zWK4o_xSw5prU-2b7w9dQ (used); fresh test users registered via /api/auth/register with prefix TEST_billing_* and test_uibill_*",
+  "seed_data_creation": "Created a few TEST_billing_* + test_uibill_* users via /api/auth/register to validate starter-with-no-stripe_customer_id flow. Not cleaned up (backend doesn't expose user delete via API).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "ProfileMenu + Billing verified fully working. Admin (admin@boostpc.io) currently has plan_effective='starter' but ALSO has a stripe_customer_id set from prior payment tests — so its portal endpoint returns a URL (200), not 400. For 'no_customer' testing use a freshly registered user. AI Advisor still 402 (out of budget) — expected per main agent note.",
+  "rca of the issue": "N/A — no bugs found. Note: React AuthContext caches user state on mount; navigating from unauthenticated / to /app after API-only login (page.request.post) without a full reload keeps context.user=null and ProtectedRoute redirects. Not a bug — expected React behavior. UI login flow works end-to-end."
+}

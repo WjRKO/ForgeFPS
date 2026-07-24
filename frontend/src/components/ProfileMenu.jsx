@@ -180,9 +180,8 @@ export default function ProfileMenu() {
           {/* Sezione 2 — menu */}
           <div className="p-1.5">
             <MenuItem to="/app/settings" icon={User} label={t("profile.account", { defaultValue: "Profilo & Sicurezza" })} testid="menu-settings" />
-            {isPaid ? (
-              <MenuItem to="/app/billing" icon={CreditCard} label={t("profile.billing", { defaultValue: "Fatturazione" })} testid="menu-billing" />
-            ) : (
+            <MenuItem to="/app/billing" icon={CreditCard} label={t("profile.billing", { defaultValue: "Fatturazione" })} testid="menu-billing" />
+            {!isPaid && (
               <MenuItem to="/pricing" icon={Sparkles} label={t("profile.plans", { defaultValue: "Piani & Trial" })} accent="#E5FF00" testid="menu-plans" />
             )}
             {discord.linked ? (

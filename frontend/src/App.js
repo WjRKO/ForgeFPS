@@ -34,6 +34,7 @@ const Network = lazy(() => import("@/pages/Network"));
 const BiosRestore = lazy(() => import("@/pages/BiosRestore"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const Account = lazy(() => import("@/pages/Account"));
+const Billing = lazy(() => import("@/pages/Billing"));
 const Report = lazy(() => import("@/pages/Report"));
 
 const Fallback = () => (
@@ -107,6 +108,7 @@ function App() {
                 <Route path="commands" element={<Commands />} />
                 <Route path="desktop" element={<DesktopAgent />} />
                 <Route path="account" element={<Account />} />
+                <Route path="billing" element={<Billing />} />
                 <Route path="admin" element={<AdminOnly><Admin /></AdminOnly>} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
