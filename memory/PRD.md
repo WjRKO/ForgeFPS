@@ -929,3 +929,22 @@ Scelta utente: toast web + **notifica Windows nativa** nella GUI (BurntToast/tra
 - P2: Checklist tweak nel Report PDF
 - P2: Migrazione opportunistica bottoni inline a `BTN_CLASSES` (Tracker, Games, Live, Advisor, Network, BIOS) — approccio incrementale per pagina toccata
 - P3: Stripe billing + Google Ads conv + testimonial GitHub stars
+
+
+## 2026-02 — ProfileMenu dropdown + pagina Fatturazione (Stripe Portal)
+- **ProfileMenu.jsx**: dropdown in alto a destra con account card (avatar deterministico da email hash, name/email, badge piano colorato con countdown trial), menu items (Profilo & Sicurezza, Fatturazione, Piani & Trial, Discord connect/linked, Feedback, Logout), click-outside + ESC per chiudere. Discord rimosso dalla sidebar.
+- **Billing.jsx** (`/app/billing`): mostra piano corrente con Icon/color per tier (starter/pro/streamer/trial/expired), payment-method-card con CTA "Gestisci pagamento su Stripe" (solo paid users), upgrade-cta per starter/trial/expired con link a `/pricing`.
+- **Backend**: nuovo `POST /api/payments/portal` in `routers/payments.py` che genera link al Stripe Customer Portal. Ritorna 400 con `code=no_customer` se l'utente non ha `stripe_customer_id`.
+- **Testing**: iteration_36.json — 100% backend (8/8 pytest) + 100% frontend. Test file: `/app/backend/tests/test_profile_billing.py`. Nessun bug.
+
+### Code review notes (non blocking)
+- ProfileMenu fetcha `/subscriptions/status` + `/discord/status` ogni apertura dropdown (potenziale cache/session).
+- `payments.py` line 152: `return_url` hardcoded a `https://forgefps.dev` — su preview redirigge in prod, considera env `APP_ORIGIN`.
+- Dashboard mostra 402 in console per AI Advisor (Emergent LLM Key out of budget) — considera fallback UI graceful.
+
+### Prossimo
+- P1: Integrazione **Resend** (email trial started/ending, welcome, payment success) — in attesa API key utente
+- P1: Discord OAuth Login
+- P1: Alert Salute Storica (health score < media 30gg)
+- P2: Checklist tweak nel Report PDF, migrazione bottoni a BTN_CLASSES
+- P3: Stripe Live mode, Google Ads conv avanzate, testimonial GitHub stars
