@@ -60,7 +60,10 @@ export default function PaymentSuccess() {
           if (!cancelled) setState("failed");
           return;
         }
-      } catch (e) { /* transient network error */ }
+      } catch (e) {
+        // Transient network error durante polling; loggo ma continuo (backoff sotto)
+        console.warn("[payment] status poll failed (transient)", e?.response?.status || e?.message || e);
+      }
       // Retry with backoff (max 15 attempts = 30s)
       setAttempts((a) => a + 1);
     };

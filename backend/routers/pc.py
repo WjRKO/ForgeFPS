@@ -250,7 +250,7 @@ def build(get_current_user):
         frontend = os.environ.get("FRONTEND_URL", "").rstrip("/")
         url = f"{frontend}/auth/mobile?t={token}"
         img = _qr.make(url, image_factory=_qrsvg.SvgPathImage, box_size=8, border=1)
-        buf = __import__("io").BytesIO()
+        buf = io.BytesIO()
         img.save(buf)
         return _Resp(content=buf.getvalue(), media_type="image/svg+xml",
                      headers={"Cache-Control": "no-store"})

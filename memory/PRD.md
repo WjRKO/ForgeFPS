@@ -1042,3 +1042,25 @@ Scelta utente: toast web + **notifica Windows nativa** nella GUI (BurntToast/tra
 ### Test
 - **`tests/test_bufferbloat_grades_v2.py`**: 22/22 passed (idle thresholds, loaded, consistency scoring, p99 passthrough, retro-compat)
 - **Smoke test frontend**: 3 sub-grade + tail-spike + p99 tutti visibili con dati seed
+
+
+## 2026-02 — Code quality review (surgical fixes only)
+Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi. Regressioni: 42/42 test passati + build OK.
+
+### 🟢 Fix applicati
+- **`routers/pc.py` L253**: sostituito `__import__("io").BytesIO()` con `io.BytesIO()` (io e' gia' importato in cima).
+- **`PaymentSuccess.jsx` L63**: silent catch nel polling status ora logga `console.warn` con lo status HTTP per debug production.
+
+### 🟡 Falsi positivi identificati e documentati (NON fixati)
+- `ps_agent.py:2442` "hardcoded secret" → `TOKEN = "__TOKEN__"` e' template placeholder sostituito runtime dal backend
+- `desktop_agent.py:704` `os.system("cls")` → dentro stringa Python del template PS/Batch client, non codice eseguito dal backend
+- `i18n.js:329,934` "hardcoded secret" → `password: "Password"` e' label UI in traduzione, non secret
+- `Auth.jsx:64,69` catch vuoti → wrapper localStorage.setItem/removeItem, pattern legittimo per quota errors
+- `useSilentLaunch.js:37` "10 missing deps" → deps list gia' corretta, linter overly aggressive
+
+### 🔴 Refactor complessita' NON applicati (motivazione: benefit/risk sfavorevole)
+- `auth.py build_auth_router` (194 righe/complessita 38): funziona in produzione, testato
+- `helpers.py grade_bufferbloat` (93 righe): appena riscritta con 22/22 test pass, non ritoccare
+- `helpers.py compute_health` (62 righe): core testato prod
+- 456 ternaries · 39 array-index-keys · 15 localStorage: da fixare opportunisticamente per FRONTEND_RULES
+- DiagnosePanel/FirstScanBanner refactor: rischia regressioni onboarding
