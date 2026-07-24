@@ -9,6 +9,7 @@ import FreshnessBadge from "@/components/FreshnessBadge";
 import OnboardingTour from "@/components/OnboardingTour";
 import MobileHandoffModal from "@/components/MobileHandoffModal";
 import PlanStatusBanner from "@/components/PlanStatusBanner";
+import ProfileMenu from "@/components/ProfileMenu";
 import { Smartphone } from "lucide-react";
 import api from "@/lib/api";
 import { pushSupported, getPushState, enablePush, disablePush } from "@/lib/push";
@@ -199,6 +200,7 @@ export default function Layout() {
             </button>
             <LanguageSwitcher />
             <Notifications />
+            <ProfileMenu />
           </div>
         </header>
         <PlanStatusBanner />
