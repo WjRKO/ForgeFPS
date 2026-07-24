@@ -18,6 +18,7 @@ const Terms = lazy(() => import("@/pages/Terms"));
 const AuthMobile = lazy(() => import("@/pages/AuthMobile"));
 const Guide = lazy(() => import("@/pages/Guide"));
 const Pricing = lazy(() => import("@/pages/Pricing"));
+const PaymentSuccess = lazy(() => import("@/pages/PaymentSuccess"));
 const DemoApp = lazy(() => import("@/pages/DemoApp"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Advisor = lazy(() => import("@/pages/Advisor"));
@@ -81,6 +82,7 @@ function App() {
               <Route path="/guida" element={<Guide />} />
               <Route path="/guide" element={<Navigate to="/guida" replace />} />
               <Route path="/pricing" element={<Pricing />} />
+              <Route path="/payment/success" element={<PaymentSuccess />} />
               <Route path="/demo" element={<DemoApp />} />
               <Route path="/login" element={<Guest><Auth mode="login" /></Guest>} />
               <Route path="/register" element={<Guest><Auth mode="register" /></Guest>} />

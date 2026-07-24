@@ -468,34 +468,52 @@ export default function Pricing() {
   usePageMeta(c.meta_t, c.meta_d);
 
   const handleCta = async (tier) => {
-    // Se free -> signup normale (o dashboard se loggato)
+    // Starter
     if (tier.cta === "start") {
       if (user) { navigate("/app"); return; }
       navigate("/register");
       return;
     }
-    // Trial pro/streamer
+    // Pro/Streamer
     if (tier.cta === "trial" || tier.cta === "trial_streamer") {
       const planHint = tier.cta === "trial" ? "pro_trial" : "streamer_trial";
-      if (user) {
-        // Utente loggato -> POST /subscriptions/start-trial direttamente
-        try {
-          const { data } = await api.post("/subscriptions/start-trial", { plan: planHint });
-          toast.success(data.message || "Trial attivato!");
-          navigate("/app");
-        } catch (e) {
-          const detail = e?.response?.data?.detail;
-          const msg = typeof detail === "string" ? detail : detail?.message || "Impossibile attivare il trial";
-          toast.error(msg);
-          // Se ha gia' un piano attivo o trial usato, portalo comunque alla dashboard
-          if (detail?.code === "already_on_plan" || detail?.code === "trial_already_used") {
-            navigate("/app");
-          }
-        }
+      if (!user) {
+        navigate(`/register?plan=${planHint}`);
         return;
       }
-      // Utente non loggato -> signup con planHint (Auth.jsx auto-attiva trial dopo register)
-      navigate(`/register?plan=${planHint}`);
+      // Utente loggato: prima prova trial. Se gia' usato -> checkout Stripe diretto
+      try {
+        const { data } = await api.post("/subscriptions/start-trial", { plan: planHint });
+        toast.success(data.message || "Trial attivato!");
+        navigate("/app");
+      } catch (e) {
+        const detail = e?.response?.data?.detail;
+        const code = typeof detail === "object" ? detail?.code : null;
+        // Se il trial e' gia' stato usato oppure l'utente e' gia' su piano attivo,
+        // apriamo direttamente il checkout Stripe (mensile di default).
+        if (code === "trial_already_used" || code === "already_on_plan") {
+          const lookup = tier.cta === "trial" ? "pro_monthly" : "streamer_monthly";
+          await startCheckout(lookup);
+          return;
+        }
+        const msg = typeof detail === "string" ? detail : detail?.message || "Impossibile attivare il trial";
+        toast.error(msg);
+      }
+    }
+  };
+
+  const startCheckout = async (lookup_key) => {
+    try {
+      const { data } = await api.post("/payments/checkout", {
+        lookup_key,
+        origin_url: window.location.origin,
+      });
+      if (data?.checkout_url) {
+        window.location.href = data.checkout_url;
+      }
+    } catch (e) {
+      const detail = e?.response?.data?.detail;
+      toast.error(typeof detail === "string" ? detail : detail?.message || "Errore checkout");
     }
   };
 
