@@ -980,3 +980,16 @@ Scelta utente: toast web + **notifica Windows nativa** nella GUI (BurntToast/tra
 - Preset `competitivo` e `streaming` ripristinati alla versione originale.
 - Test file `tests/test_new_tweaks_catalog.py` eliminato.
 
+
+
+## 2026-02 — One-click Bufferbloat launch button (via frameforge:// protocol)
+- **Problema**: la pagina `/app/network` mostrava solo comandi PowerShell copia-incolla per eseguire il test bufferbloat (`SecureRunBlock`), UX macchinosa.
+- **Backend**: aggiunto `"bufferbloat"` a `_ALLOWED_URI_MODES` in `routers/pc.py`. `GET /api/agent/launch-uri?mode=bufferbloat` ora ritorna URI firmato HMAC.
+- **Frontend**: nuovo componente riutilizzabile `components/OneClickLaunchButton.jsx`:
+  - Bottone giallo neon prominente "Avvia test bufferbloat"
+  - `useLocation.href = uri` per triggerare protocollo `frameforge://` → agent locale esegue il test
+  - Polling di `detectDone` ogni 3s (compara `updated_at` con `launchTs` snapshot)
+  - Timeout 90s con fallback UI "hai installato l'agent?" + link diretto a `/app/desktop`
+- **Network page** (`pages/Network.jsx`): bottone one-click prominente + il vecchio `SecureRunBlock` PowerShell relegato in `<details>` collapsible come fallback.
+- **Test smoke**: bottone visibile, endpoint launch-uri ritorna URI corretto per mode=bufferbloat, endpoint respinge mode invalidi con 400.
+- **Riutilizzabile**: il componente `OneClickLaunchButton` puo' essere usato ovunque nell'app dove serve un lancio "1 click" verso l'agent (Optimize, Benchmark, Full Benchmark, Monitor, Prematch, Booster, Restore).

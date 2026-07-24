@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Gauge, Wifi, Activity, ArrowDownToLine, ArrowUpToLine, Waves, AlertTriangle, ShieldCheck } from "lucide-react";
 import api from "@/lib/api";
 import { PageHeader, SkeletonCard } from "@/components/hud";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
+import OneClickLaunchButton from "@/components/OneClickLaunchButton";
 import TechTerm from "@/components/TechTerm";
 
 const GRADE_COLOR = {
@@ -27,11 +29,15 @@ export default function Network() {
   const [res, setRes] = useState(null);
   const [loading, setLoading] = useState(true);
   const timer = useRef(null);
+  const launchTs = useRef(null);
 
   useEffect(() => {
     api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
     const load = async () => {
-      try { const { data } = await api.get("/net-result"); setRes(data.available ? data.result : null); } catch (e) { console.error("load net-result failed", e); }
+      try {
+        const { data } = await api.get("/net-result");
+        setRes(data.available ? data.result : null);
+      } catch (e) { console.error("load net-result failed", e); }
       setLoading(false);
     };
     load();
@@ -59,7 +65,44 @@ export default function Network() {
       <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 mb-6" data-testid="network-run">
         <div className="flex items-center gap-2 text-sm font-bold mb-1"><Waves size={16} className="text-[#00E0FF]" /> {t("network.run_title")}</div>
         <p className="text-xs text-zinc-400 mb-3">{t("network.run_desc")}</p>
-        <SecureRunBlock token={token} mode="bufferbloat" testid="network-run-cmd" />
+
+        {/* Bottone one-click (usa protocollo frameforge:// via agent installato) */}
+        <div className="mb-4">
+          <OneClickLaunchButton
+            mode="bufferbloat"
+            label="Avvia test bufferbloat"
+            timeoutMs={90000}
+            onLaunch={(ts) => { launchTs.current = ts; }}
+            detectDone={async () => {
+              try {
+                const { data } = await api.get("/net-result");
+                if (!data?.available) return false;
+                const newTs = data.updated_at;
+                if (!newTs) return false;
+                if (!launchTs.current) return false;
+                return new Date(newTs).getTime() > launchTs.current;
+              } catch { return false; }
+            }}
+            onDone={() => {
+              // Ricarica il risultato per popolare la UI
+              api.get("/net-result").then(({ data }) => setRes(data.available ? data.result : null)).catch(() => {});
+            }}
+            testid="network-oneclick"
+          />
+          <p className="text-[10px] text-zinc-600 mt-2 font-mono uppercase tracking-widest">
+            richiede FrameForge Agent installato · <Link to="/app/desktop" className="text-[#00E0FF] hover:underline">scaricalo qui</Link>
+          </p>
+        </div>
+
+        {/* Fallback manuale (copy-paste PowerShell) per chi non ha ancora l'agent */}
+        <details className="border-t border-[#2A2A35] pt-3 mt-2">
+          <summary className="text-[11px] text-zinc-500 cursor-pointer hover:text-zinc-300 font-mono uppercase tracking-widest" data-testid="network-manual-toggle">
+            oppure esegui manualmente (senza installare l'agent)
+          </summary>
+          <div className="mt-3">
+            <SecureRunBlock token={token} mode="bufferbloat" testid="network-run-cmd" />
+          </div>
+        </details>
         <p className="text-[11px] text-zinc-500 mt-2">{t("network.run_hint")}</p>
       </div>
 
