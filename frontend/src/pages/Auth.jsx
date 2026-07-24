@@ -1,3 +1,4 @@
+import api from "@/lib/api";
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Zap, Loader2, Check, Gift } from "lucide-react";
@@ -50,11 +51,19 @@ export default function Auth({ mode }) {
       } else {
         await register(name, email, password);
         trackConversion("signup");
-        // v0.7.5: se l'utente e' arrivato da /pricing con planHint, salvo l'intent
-        // in localStorage. La dashboard mostrera' un banner "Il tuo trial e' pronto"
-        // (quando implementiamo Stripe checkout). Per ora solo tracking dell'intent.
+        // v0.7.5: se l'utente e' arrivato da /pricing con planHint, attiviamo
+        // subito il trial via POST /subscriptions/start-trial. Il backend crea
+        // il record con trial_expires_at = now + 14gg. Se il POST fallisce
+        // (es. utente gia' con trial usato) proseguiamo comunque al dashboard.
         if (planHint === "pro_trial" || planHint === "streamer_trial") {
-          try { window.localStorage.setItem("ff_pending_plan", planHint); } catch {}
+          try {
+            await api.post("/subscriptions/start-trial", { plan: planHint });
+            window.localStorage.removeItem("ff_pending_plan");
+          } catch (trialErr) {
+            // Salva l'intent per un retry manuale dal dashboard
+            try { window.localStorage.setItem("ff_pending_plan", planHint); } catch {}
+            console.warn("[trial] auto-start failed", trialErr?.response?.data || trialErr);
+          }
         }
         // Attiva il tour di onboarding solo per i neo-registrati (una tantum)
         try { window.localStorage.setItem("ff_show_tour_pending", "1"); } catch {}

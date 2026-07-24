@@ -19,6 +19,7 @@ from services.gpu_catalog_service import find_gpu_reference, compute_health_vs_r
 from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput
 from routers.profiles import resolve_tweak_ids, TWEAK_CATALOG, TEMPLATES
 from routers.advisor import _check_ai_rate_limit
+from plan_gate import require_pro
 
 # Default background processes closed by "Prima del match" (must stay in sync with frontend groups)
 DEFAULT_PREMATCH_APPS = [
@@ -136,6 +137,7 @@ async def _build_agent_script(user_id: str, profile: str = "") -> str:
 
 def build(get_current_user):
     r = APIRouter(prefix="/api", tags=["pc"])
+    require_pro_dep = require_pro(get_current_user)
 
     @r.get("/agent/token")
     async def agent_token(user: dict = Depends(get_current_user)):
@@ -727,7 +729,7 @@ def build(get_current_user):
                 "reset_at": doc.get("reset_at")}
 
     @r.get("/pc-telemetry")
-    async def pc_telemetry(user: dict = Depends(get_current_user)):
+    async def pc_telemetry(user: dict = Depends(require_pro_dep)):
         doc = await db.pc_telemetry.find_one({"user_id": str(user["_id"])}, {"_id": 0})
         if not doc:
             return {"samples": [], "updated_at": None, "live": False}

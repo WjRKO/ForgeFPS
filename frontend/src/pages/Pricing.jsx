@@ -4,9 +4,11 @@ import {
   Check, X as XIcon, HardDrive, Zap, Video, ArrowRight, Sparkles, Shield,
   RotateCcw, Wallet, ChevronDown, Gift, Undo2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { MarketingNav, MarketingFooter, useLang } from "@/components/MarketingChrome";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { useAuth } from "@/context/AuthContext";
+import api from "@/lib/api";
 
 // -----------------------------------------------------------------------------
 // Content — bilingual IT/EN
@@ -465,22 +467,34 @@ export default function Pricing() {
   const { user } = useAuth();
   usePageMeta(c.meta_t, c.meta_d);
 
-  const handleCta = (tier) => {
+  const handleCta = async (tier) => {
     // Se free -> signup normale (o dashboard se loggato)
     if (tier.cta === "start") {
       if (user) { navigate("/app"); return; }
       navigate("/register");
       return;
     }
-    // Trial pro/streamer -> signup con query hint (backend gestira' il plan al signup)
+    // Trial pro/streamer
     if (tier.cta === "trial" || tier.cta === "trial_streamer") {
       const planHint = tier.cta === "trial" ? "pro_trial" : "streamer_trial";
       if (user) {
-        // Utente gia' loggato: redirect a settings billing (o dashboard con banner)
-        // TODO Stripe integration: qui parte il checkout Stripe con il piano scelto.
-        navigate(`/app?upgrade=${planHint}`);
+        // Utente loggato -> POST /subscriptions/start-trial direttamente
+        try {
+          const { data } = await api.post("/subscriptions/start-trial", { plan: planHint });
+          toast.success(data.message || "Trial attivato!");
+          navigate("/app");
+        } catch (e) {
+          const detail = e?.response?.data?.detail;
+          const msg = typeof detail === "string" ? detail : detail?.message || "Impossibile attivare il trial";
+          toast.error(msg);
+          // Se ha gia' un piano attivo o trial usato, portalo comunque alla dashboard
+          if (detail?.code === "already_on_plan" || detail?.code === "trial_already_used") {
+            navigate("/app");
+          }
+        }
         return;
       }
+      // Utente non loggato -> signup con planHint (Auth.jsx auto-attiva trial dopo register)
       navigate(`/register?plan=${planHint}`);
     }
   };

@@ -8,6 +8,7 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import FreshnessBadge from "@/components/FreshnessBadge";
 import OnboardingTour from "@/components/OnboardingTour";
 import MobileHandoffModal from "@/components/MobileHandoffModal";
+import PlanStatusBanner from "@/components/PlanStatusBanner";
 import { Smartphone } from "lucide-react";
 import api from "@/lib/api";
 import { pushSupported, getPushState, enablePush, disablePush } from "@/lib/push";
@@ -200,6 +201,7 @@ export default function Layout() {
             <Notifications />
           </div>
         </header>
+        <PlanStatusBanner />
         <main className="flex-1 grid-bg overflow-x-hidden">
           <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
             <Outlet />
