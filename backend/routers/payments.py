@@ -134,6 +134,18 @@ def build(get_current_user):
             if cust:
                 await db.users.update_one({"stripe_customer_id": cust},
                     {"$set": {"payment_failed_at": now.isoformat()}})
+                # Fire-and-forget email payment_failed
+                try:
+                    import asyncio as _aio
+                    from email_service import send_payment_failed
+                    user_doc = await db.users.find_one({"stripe_customer_id": cust})
+                    if user_doc:
+                        _aio.create_task(send_payment_failed(
+                            user_doc["email"], user_doc.get("name", ""),
+                            (user_doc.get("plan") or "pro"),
+                        ))
+                except Exception:
+                    pass
 
         return {"status": "ok"}
 
@@ -192,3 +204,15 @@ async def _apply_paid(session_id: str, session_obj):
         "stripe_subscription_id": session_obj.get("subscription"),
         "payment_failed_at": None,
     }})
+    # Fire-and-forget email payment_success
+    try:
+        import asyncio as _aio
+        from email_service import send_payment_success
+        user_doc = await db.users.find_one({"_id": ObjectId(user_id)})
+        if user_doc:
+            _aio.create_task(send_payment_success(
+                user_doc["email"], user_doc.get("name", ""), plan,
+                tx.get("amount", 0), tx.get("currency", "eur"),
+            ))
+    except Exception:
+        pass

@@ -956,3 +956,18 @@ Scelta utente: toast web + **notifica Windows nativa** nella GUI (BurntToast/tra
 - **Frontend** (`components/TrialUpgradeBanner.jsx`): banner nel ProfileMenu sotto l'account card. Countdown + reason + CTA primaria colorata verso Stripe Checkout preselezionato, CTA secondaria per ciclo alternativo. Deep-link diretto a `POST /api/payments/checkout`.
 - **Test**: smoke test e2e (register→login→start-trial→open menu). Banner visibile con "Trial: 14 giorni rimasti", CTA "Passa a Pro · €7/mese", alt "o annuale · €70/anno (risparmi €14)".
 - **Testids**: `trial-upgrade-banner`, `banner-countdown`, `banner-reason`, `banner-cta-primary`, `banner-cta-secondary`.
+
+
+## 2026-02 — Resend email integration (transactional)
+- **Package**: `resend==2.34.0` in requirements.txt
+- **Config .env**: `RESEND_API_KEY`, `SENDER_EMAIL=onboarding@resend.dev` (test mode), `REPLY_TO_EMAIL=support@forgefps.dev`, `APP_ORIGIN=https://forgefps.dev`
+- **email_service.py**: 5 template inline HTML (dark theme, brand giallo #E5FF00, CTA table-based) + `send_email()` wrapper async con `asyncio.to_thread(resend.Emails.send)` — fire-and-forget, mai blocca flusso utente
+- **Trigger auto-inviati**:
+  - `POST /api/auth/register` → welcome
+  - `POST /api/subscriptions/start-trial` → trial_started
+  - Stripe webhook `checkout.session.completed` → payment_success
+  - Stripe webhook `invoice.payment_failed` → payment_failed
+  - Cron daily 09:00 UTC (APScheduler) → trial_ending T-3 e T-1 (idempotent via `trial_reminder_sent.t_N` sul doc user)
+- **Debug**: `POST /api/admin/test-email` (admin only) — body `{template, to, name}` per triggerare ogni template manualmente
+- **Test e2e**: 5/5 template inviati con successo (email_id ricevuti) a `forgefps.support@gmail.com`
+- **Prossimo step DEPLOY**: verificare dominio `forgefps.dev` su Resend (record DNS TXT+CNAME), poi cambiare `SENDER_EMAIL` in `no-reply@forgefps.dev` per uscire dal test mode

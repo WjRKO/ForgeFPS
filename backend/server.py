@@ -68,6 +68,47 @@ async def scheduled_price_check():
             logger.warning(f"Price check failed for {product.get('id')}: {e}")
 
 
+async def scheduled_trial_reminders():
+    """Ogni giorno alle 09:00 UTC: manda email di reminder ai trial in scadenza T-3 e T-1.
+
+    Idempotent via campo `trial_reminder_sent_at` sul doc user.
+    """
+    from datetime import datetime, timezone, timedelta
+    from email_service import send_trial_ending
+    now = datetime.now(timezone.utc)
+    logger.info("Running scheduled trial reminders...")
+
+    cursor = db.users.find({
+        "plan": {"$in": ["pro_trial", "streamer_trial"]},
+        "trial_expires_at": {"$ne": None},
+    })
+    sent = 0
+    async for user in cursor:
+        try:
+            exp_str = user.get("trial_expires_at")
+            if not exp_str:
+                continue
+            exp = datetime.fromisoformat(exp_str.replace("Z", "+00:00")) if isinstance(exp_str, str) else exp_str
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            delta = exp - now
+            days_left = delta.days + (1 if delta.seconds > 0 else 0)
+            if days_left not in (1, 3):
+                continue
+            # Idempotency: non rimandare se gia' inviato per questa soglia
+            already = (user.get("trial_reminder_sent") or {}).get(f"t_{days_left}")
+            if already:
+                continue
+            await send_trial_ending(user["email"], user.get("name", ""), user.get("plan", "pro_trial"), days_left)
+            await db.users.update_one({"_id": user["_id"]}, {"$set": {
+                f"trial_reminder_sent.t_{days_left}": now.isoformat(),
+            }})
+            sent += 1
+        except Exception as e:
+            logger.warning("trial reminder failed for %s: %s", user.get("email"), e)
+    logger.info("Trial reminders sent: %d", sent)
+
+
 async def _ensure_indexes():
     await db.users.create_index("email", unique=True)
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
@@ -96,6 +137,7 @@ async def startup():
     await seed_admin(db)
     _write_test_credentials()
     scheduler.add_job(scheduled_price_check, "interval", minutes=45, id="price_check", replace_existing=True)
+    scheduler.add_job(scheduled_trial_reminders, "cron", hour=9, minute=0, id="trial_reminders", replace_existing=True)
     scheduler.start()
     # Discord: annuncia release nuove (non-blocking se webhook non configurato)
     try:

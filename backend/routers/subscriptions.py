@@ -138,6 +138,13 @@ def build(get_current_user):
 
         # Rileggo per la risposta
         u2 = await db.users.find_one({"_id": user["_id"]}, {"password_hash": 0})
+        # Fire-and-forget email trial_started
+        try:
+            import asyncio as _aio
+            from email_service import send_trial_started
+            _aio.create_task(send_trial_started(user["email"], user.get("name", ""), wanted, TRIAL_DAYS, expires.isoformat()))
+        except Exception:
+            pass
         return {
             "ok": True,
             "message": f"Trial {wanted} attivato! Hai {TRIAL_DAYS} giorni pieni di accesso.",

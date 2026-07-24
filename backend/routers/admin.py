@@ -294,4 +294,33 @@ def build(get_current_user):
             })
         return {"items": out, "count": len(out)}
 
+    @r.post("/test-email")
+    async def test_email(data: dict, admin: dict = Depends(require_admin)):
+        """Invia una email di test (usa i template reali) al destinatario indicato.
+
+        Body: {"template": "welcome|trial_started|trial_ending|payment_success|payment_failed", "to": "email@..."}
+        """
+        from email_service import (
+            send_welcome, send_trial_started, send_trial_ending,
+            send_payment_success, send_payment_failed,
+        )
+        tpl = (data.get("template") or "").strip()
+        to = (data.get("to") or admin["email"]).strip().lower()
+        name = data.get("name") or "Test User"
+        eid = None
+        if tpl == "welcome":
+            eid = await send_welcome(to, name)
+        elif tpl == "trial_started":
+            from datetime import datetime, timezone, timedelta
+            eid = await send_trial_started(to, name, "pro_trial", 14, (datetime.now(timezone.utc) + timedelta(days=14)).isoformat())
+        elif tpl == "trial_ending":
+            eid = await send_trial_ending(to, name, "pro_trial", 3)
+        elif tpl == "payment_success":
+            eid = await send_payment_success(to, name, "pro", 700, "eur")
+        elif tpl == "payment_failed":
+            eid = await send_payment_failed(to, name, "pro")
+        else:
+            raise HTTPException(status_code=400, detail="template non valido (welcome|trial_started|trial_ending|payment_success|payment_failed)")
+        return {"ok": bool(eid), "email_id": eid, "template": tpl, "to": to}
+
     return r
