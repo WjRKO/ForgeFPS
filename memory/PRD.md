@@ -1382,3 +1382,9 @@ Scelte utente: Build a+b, Upgrade d+e+g.
 - Frontend: components/HwInsightsPanel.jsx (severità high/med/low con bordi/badge colorati, titolo+desc+fix localizzati con interpolazione params) renderizzato in MyPc.jsx sotto Health Score. i18n `hwins.*` IT+EN completo. Screenshot ✓ (6 righe).
 - Seed dev admin: specs estese con problemi simulati (XMP off 2133/3600, 60/165Hz, Steam su HDD D:, HVCI on, driver 8 mesi, BIOS 2023).
 - Richiede redeploy per produzione (sia backend che script agent).
+
+### 2026-07-25 (53) — Overlay OBS: layout bar + accent custom + size (a,d,f scelte utente) (FATTO, testato)
+- overlay.py: config estesa con `layout` (card|bar), `size` (small 0.85|medium 1|large 1.35 via CSS zoom), `accent` (#RRGGBB validato regex, ""=reset al tema; glow/border calcolati in rgba). PUT /overlay/config valida i 3 campi; _config_response li espone. Pagina overlay: CSS condizionale per layout bar (ticker orizzontale width max-content, border-top accent, icone/barre nascoste, metriche inline).
+- ObsOverlayPanel.jsx: nuova riga controlli md:grid-cols-3 → Layout (Card/Barra), Dimensione (S/M/L), Colore brand (input color con debounce 400ms + Reset). testids: overlay-layout-*, overlay-size-*, overlay-accent-picker/reset.
+- Test: curl PUT (bar/large/#ff2d95 OK, "rosso" → 400), HTML overlay contiene zoom 1.35 + accent + bar CSS (9 match), screenshot pannello+preview bar rosa ✓.
+- Richiede redeploy; in OBS basta refresh della Browser Source.

@@ -13,6 +13,7 @@ il token stesso agisce da capability. Rotate = invalida il vecchio URL.
 """
 from __future__ import annotations
 import os
+import re
 import secrets
 from datetime import datetime, timezone
 from typing import Optional
@@ -30,11 +31,22 @@ APP_ORIGIN = os.environ.get("APP_ORIGIN", "https://forgefps.dev")
 
 _ALLOWED_POSITIONS = {"top-left", "top-right", "bottom-left", "bottom-right"}
 _ALLOWED_THEMES = {"neon", "minimal", "dark"}
+_ALLOWED_LAYOUTS = {"card", "bar"}
+_ALLOWED_SIZES = {"small", "medium", "large"}
+_HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _hex_rgba(hex_color: str, alpha: float) -> str:
+    h = hex_color.lstrip("#")
+    return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alpha})"
 
 
 class OverlayConfigUpdate(BaseModel):
     position: Optional[str] = Field(default=None)
     theme: Optional[str] = Field(default=None)
+    layout: Optional[str] = Field(default=None)
+    size: Optional[str] = Field(default=None)
+    accent: Optional[str] = Field(default=None)  # "#RRGGBB" oppure "" per reset al tema
     show_fps: Optional[bool] = None
     show_cpu: Optional[bool] = None
     show_gpu: Optional[bool] = None
@@ -77,6 +89,9 @@ def build(get_current_user):
             "url": f"{APP_ORIGIN}/api/overlay/{doc['token']}",
             "position": doc.get("position", "top-right"),
             "theme": doc.get("theme", "neon"),
+            "layout": doc.get("layout", "card"),
+            "size": doc.get("size", "medium"),
+            "accent": doc.get("accent"),
             "show_fps": doc.get("show_fps", True),
             "show_cpu": doc.get("show_cpu", True),
             "show_gpu": doc.get("show_gpu", True),
@@ -122,6 +137,21 @@ def build(get_current_user):
             if body.theme not in _ALLOWED_THEMES:
                 raise HTTPException(status_code=400, detail=f"theme deve essere uno di {sorted(_ALLOWED_THEMES)}")
             update["theme"] = body.theme
+        if body.layout is not None:
+            if body.layout not in _ALLOWED_LAYOUTS:
+                raise HTTPException(status_code=400, detail=f"layout deve essere uno di {sorted(_ALLOWED_LAYOUTS)}")
+            update["layout"] = body.layout
+        if body.size is not None:
+            if body.size not in _ALLOWED_SIZES:
+                raise HTTPException(status_code=400, detail=f"size deve essere uno di {sorted(_ALLOWED_SIZES)}")
+            update["size"] = body.size
+        if body.accent is not None:
+            if body.accent == "":
+                update["accent"] = None
+            elif _HEX_RE.match(body.accent):
+                update["accent"] = body.accent.upper()
+            else:
+                raise HTTPException(status_code=400, detail="accent deve essere un colore hex #RRGGBB")
         for k in ("show_fps", "show_cpu", "show_gpu", "show_ping", "show_health"):
             v = getattr(body, k)
             if v is not None:
@@ -220,6 +250,9 @@ def build(get_current_user):
 
         position = cfg.get("position", "top-right")
         theme = cfg.get("theme", "neon")
+        layout = cfg.get("layout", "card")
+        size = cfg.get("size", "medium")
+        accent_override = cfg.get("accent")
         show_fps = cfg.get("show_fps", True)
         show_cpu = cfg.get("show_cpu", True)
         show_gpu = cfg.get("show_gpu", True)
@@ -266,6 +299,12 @@ def build(get_current_user):
             },
         }
         c = theme_map.get(theme, theme_map["neon"])
+        if accent_override and _HEX_RE.match(accent_override):
+            c = dict(c)
+            c["accent"] = accent_override
+            c["accent_glow"] = _hex_rgba(accent_override, 0.35)
+            c["border"] = _hex_rgba(accent_override, 0.35)
+        zoom = {"small": 0.85, "medium": 1.0, "large": 1.35}.get(size, 1.0)
 
         # Build metric rows dynamically. Each has: key, label, icon SVG path, unit, whether it takes a temp badge.
         ICONS = {
@@ -445,6 +484,22 @@ def build(get_current_user):
 
   /* Theme-specific tweaks */
   {"" if theme != "minimal" else ".card { border-left: none; } .card::before { display: none; }"}
+
+  /* Size (nativo, piu' nitido dello scaling OBS) */
+  .card {{ zoom: {zoom}; }}
+
+  /* Layout "bar": ticker orizzontale compatto */
+  {'''
+  .card { display: flex; align-items: center; gap: 18px; padding: 7px 16px;
+          min-width: 0; width: max-content;
+          border-left: 1px solid ''' + c['border'] + '''; border-top: 3px solid ''' + c['accent'] + '''; }
+  .header { margin: 0; padding: 0; border-bottom: none; gap: 8px; flex-shrink: 0; }
+  .metric { display: flex; grid-template-columns: none; align-items: baseline; gap: 7px; padding: 0; flex-shrink: 0; }
+  .metric .icon { display: none; }
+  .metric .label { font-size: 8px; }
+  .metric .value { justify-content: flex-start; }
+  .bar-track { display: none; }
+  ''' if layout == "bar" else ""}
 </style></head>
 <body>
 <div class="card" id="ovl">
