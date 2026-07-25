@@ -3918,20 +3918,20 @@ function Run-Bufferbloat {
   Start-Sleep -Milliseconds 2500
   $down = Measure-Ping $target 80 40 2000
   $dljobs | Stop-Job -ErrorAction SilentlyContinue; $dljobs | Remove-Job -Force -ErrorAction SilentlyContinue
-  $downP50 = Percentile $down.rtts 0.5; $downP95 = Percentile $down.rtts 0.95
-  Say ("        download p50: {0} ms | p95: {1} ms" -f $downP50, $downP95) 'DarkGray'
+  $downP50 = Percentile $down.rtts 0.5; $downP95 = Percentile $down.rtts 0.95; $downP99 = Percentile $down.rtts 0.99
+  Say ("        download p50: {0} ms | p95: {1} ms | p99: {2} ms" -f $downP50, $downP95, $downP99) 'DarkGray'
   Start-Sleep -Milliseconds 1000
 
   Say '   [3/3] Sotto carico UPLOAD (4 stream, warm-up 2.5s)...' 'DarkGray'
-  $upP50 = $null; $upP95 = $null; $upLost = 0; $upSent = 0
+  $upP50 = $null; $upP95 = $null; $upP99 = $null; $upLost = 0; $upSent = 0
   try {
     $upjobs = @(); for ($i = 0; $i -lt 4; $i++) { $upjobs += Start-Job -ScriptBlock $script:UP_BLOCK -ArgumentList $upUrl }
     Start-Sleep -Milliseconds 2500
     $up = Measure-Ping $target 60 40 2000
     $upjobs | Stop-Job -ErrorAction SilentlyContinue; $upjobs | Remove-Job -Force -ErrorAction SilentlyContinue
-    $upP50 = Percentile $up.rtts 0.5; $upP95 = Percentile $up.rtts 0.95
+    $upP50 = Percentile $up.rtts 0.5; $upP95 = Percentile $up.rtts 0.95; $upP99 = Percentile $up.rtts 0.99
     $upLost = $up.lost; $upSent = $up.sent
-    Say ("        upload p50: {0} ms | p95: {1} ms" -f $upP50, $upP95) 'DarkGray'
+    Say ("        upload p50: {0} ms | p95: {1} ms | p99: {2} ms" -f $upP50, $upP95, $upP99) 'DarkGray'
   } catch {}
 
   $totalSent = $down.sent + $upSent
@@ -3942,8 +3942,10 @@ function Run-Bufferbloat {
     idle_min  = $idleMin
     down_ms   = $downP50
     down_p95  = $downP95
+    down_p99  = $downP99
     up_ms     = $upP50
     up_p95    = $upP95
+    up_p99    = $upP99
     jitter_ms = (Jitter $idle.rtts)
     loss_pct  = $loss
     samples   = ($idle.rtts.Count + $down.rtts.Count)

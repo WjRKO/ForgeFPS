@@ -56,7 +56,11 @@ export default function TechTerm({ term, children, iconOnly = false, testid }) {
             <HelpCircle size={11} className="text-[#00E0FF]/70 hover:text-[#00E0FF] shrink-0 translate-y-[1px]" />
           </span>
         </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-xs bg-[#0F0F12] border-[#00E0FF]/40 text-xs leading-relaxed">
+        <TooltipContent
+          side="top"
+          sideOffset={8}
+          className="max-w-xs bg-[#16161C] border-2 border-[#00E0FF] text-white text-xs leading-relaxed shadow-[0_10px_32px_rgba(0,0,0,0.85)] px-4 py-3 font-normal"
+        >
           {definition}
         </TooltipContent>
       </Tooltip>

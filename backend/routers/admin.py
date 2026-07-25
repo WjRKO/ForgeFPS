@@ -108,6 +108,35 @@ def build(get_current_user):
             await db[coll].delete_many({"user_id": user_id})
         return {"ok": True}
 
+    @r.post("/users/{user_id}/grant-plan")
+    async def grant_plan(user_id: str, data: dict, admin: dict = Depends(require_admin)):
+        """Concede manualmente un piano (Pro/Streamer/Starter) a un utente per N mesi.
+        Utile prima che Stripe sia live: premi, rimborsi, collaboratori, testimonial.
+        Body: {"plan": "pro" | "streamer" | "starter", "months": 12}
+        - months=0 significa perpetuo (no scadenza)
+        - Il piano viene salvato in users.plan direttamente (paid, no *_trial)
+        """
+        plan = (data or {}).get("plan")
+        if plan not in ("pro", "streamer", "starter"):
+            raise HTTPException(status_code=400, detail="Plan non valido (pro | streamer | starter)")
+        months = int((data or {}).get("months") or 1)
+        if months < 0 or months > 120:
+            raise HTTPException(status_code=400, detail="months deve essere 0-120 (0 = perpetuo)")
+
+        oid = _oid(user_id)
+        if not await db.users.find_one({"_id": oid}):
+            raise HTTPException(status_code=404, detail="Utente non trovato")
+
+        now = datetime.now(timezone.utc)
+        update = {"plan": plan, "plan_updated_at": now.isoformat(), "granted_by_admin": admin["email"]}
+        if plan == "starter" or months == 0:
+            update["trial_expires_at"] = None
+        else:
+            update["trial_expires_at"] = (now + timedelta(days=months * 30)).isoformat()
+
+        await db.users.update_one({"_id": oid}, {"$set": update})
+        return {"ok": True, "user_id": user_id, "plan": plan, "months": months, "expires_at": update.get("trial_expires_at")}
+
     @r.get("/stats")
     async def global_stats(admin: dict = Depends(require_admin)):
         now = datetime.now(timezone.utc)
@@ -264,5 +293,34 @@ def build(get_current_user):
                 "status": status,
             })
         return {"items": out, "count": len(out)}
+
+    @r.post("/test-email")
+    async def test_email(data: dict, admin: dict = Depends(require_admin)):
+        """Invia una email di test (usa i template reali) al destinatario indicato.
+
+        Body: {"template": "welcome|trial_started|trial_ending|payment_success|payment_failed", "to": "email@..."}
+        """
+        from email_service import (
+            send_welcome, send_trial_started, send_trial_ending,
+            send_payment_success, send_payment_failed,
+        )
+        tpl = (data.get("template") or "").strip()
+        to = (data.get("to") or admin["email"]).strip().lower()
+        name = data.get("name") or "Test User"
+        eid = None
+        if tpl == "welcome":
+            eid = await send_welcome(to, name)
+        elif tpl == "trial_started":
+            from datetime import datetime, timezone, timedelta
+            eid = await send_trial_started(to, name, "pro_trial", 14, (datetime.now(timezone.utc) + timedelta(days=14)).isoformat())
+        elif tpl == "trial_ending":
+            eid = await send_trial_ending(to, name, "pro_trial", 3)
+        elif tpl == "payment_success":
+            eid = await send_payment_success(to, name, "pro", 700, "eur")
+        elif tpl == "payment_failed":
+            eid = await send_payment_failed(to, name, "pro")
+        else:
+            raise HTTPException(status_code=400, detail="template non valido (welcome|trial_started|trial_ending|payment_success|payment_failed)")
+        return {"ok": bool(eid), "email_id": eid, "template": tpl, "to": to}
 
     return r

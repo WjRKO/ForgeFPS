@@ -1,13 +1,17 @@
 import { NavLink, useNavigate, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal, TerminalSquare, Swords, Gauge, Menu, Settings, FileBarChart } from "lucide-react";
+import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal, TerminalSquare, Swords, Gauge, Menu, Settings, FileBarChart, Sparkles, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import FreshnessBadge from "@/components/FreshnessBadge";
 import OnboardingTour from "@/components/OnboardingTour";
 import MobileHandoffModal from "@/components/MobileHandoffModal";
+import PlanStatusBanner from "@/components/PlanStatusBanner";
+import ProfileMenu from "@/components/ProfileMenu";
+import FeedbackModal from "@/components/FeedbackModal";
+import AgentUpdateBanner from "@/components/AgentUpdateBanner";
 import { Smartphone } from "lucide-react";
 import api from "@/lib/api";
 import { pushSupported, getPushState, enablePush, disablePush } from "@/lib/push";
@@ -33,6 +37,10 @@ const NAV_GROUPS = [
   ]},
   { section: null, items: [
     { to: "/app/admin", label: "nav.admin", icon: Shield, id: "admin", adminOnly: true },
+  ]},
+  { section: "section.community", items: [
+    { to: "/app/changelog", label: "nav.changelog", icon: Sparkles, id: "changelog", badge: "unseen" },
+    { action: "feedback", label: "nav.feedback", icon: MessageSquare, id: "feedback" },
   ]},
 ];
 
@@ -121,8 +129,20 @@ export default function Layout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [handoffOpen, setHandoffOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [changelogUnseen, setChangelogUnseen] = useState(0);
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+
+  useEffect(() => {
+    let stop = false;
+    const load = () => api.get("/changelog/status").then(({ data }) => {
+      if (!stop) setChangelogUnseen(data?.unseen || 0);
+    }).catch(() => {});
+    load();
+    const t = setInterval(load, 60_000);
+    return () => { stop = true; clearInterval(t); };
+  }, [location.pathname]);
 
   // v0.7.4: rimosso `prefetchAdvisorSync` (era hover-triggered con threshold 5min).
   // Faceva partire una silent-sync su ogni hover dell'Advisor navlink -> popup
@@ -150,29 +170,44 @@ export default function Layout() {
                 {group.section && (
                   <div className="px-3 pb-1.5 text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-bold">{t(group.section)}</div>
                 )}
-                {items.map((n) => (
-                  <NavLink key={n.to} to={n.to} end={n.end} data-testid={`nav-${n.id}`}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
-                        isActive ? "bg-[#E5FF00] text-black font-bold" : "text-zinc-400 hover:text-white hover:bg-[#141419]"
-                      }`}>
-                    <n.icon size={17} /> {t(n.label)}
-                  </NavLink>
-                ))}
+                {items.map((n) => {
+                  if (n.action === "feedback") {
+                    return (
+                      <button
+                        key={`action-${n.id}`}
+                        type="button"
+                        onClick={() => setFeedbackOpen(true)}
+                        data-testid={`nav-${n.id}`}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-zinc-400 hover:text-white hover:bg-[#141419] transition-colors"
+                      >
+                        <n.icon size={17} /> {t(n.label)}
+                      </button>
+                    );
+                  }
+                  const badgeCount = n.badge === "unseen" ? changelogUnseen : 0;
+                  return (
+                    <NavLink key={n.to} to={n.to} end={n.end} data-testid={`nav-${n.id}`}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
+                          isActive ? "bg-[#E5FF00] text-black font-bold" : "text-zinc-400 hover:text-white hover:bg-[#141419]"
+                        }`}>
+                      <n.icon size={17} />
+                      <span className="flex-1">{t(n.label)}</span>
+                      {badgeCount > 0 && (
+                        <span
+                          className="min-w-[18px] h-[18px] px-1.5 flex items-center justify-center bg-[#FF3B30] text-white text-[10px] font-bold rounded-full"
+                          data-testid={`nav-${n.id}-badge`}
+                        >
+                          {badgeCount > 9 ? "9+" : badgeCount}
+                        </span>
+                      )}
+                    </NavLink>
+                  );
+                })}
               </div>
             );
           })}
         </nav>
-        <div className="p-3 border-t border-[#2A2A35]">
-          <NavLink to="/app/account" data-testid="nav-account"
-            className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${isActive ? "bg-[#E5FF00] text-black font-bold" : "text-zinc-400 hover:text-white hover:bg-[#141419]"}`}>
-            <Settings size={17} /> <span className="truncate">{user?.email}</span>
-          </NavLink>
-          <button onClick={doLogout} data-testid="logout-btn"
-            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-zinc-400 hover:text-[#FF3B30] transition-colors">
-            <LogOut size={17} /> {t("common.logout")}
-          </button>
-        </div>
       </aside>
 
       <div className="flex-1 md:ml-60 flex flex-col min-w-0">
@@ -198,8 +233,11 @@ export default function Layout() {
             </button>
             <LanguageSwitcher />
             <Notifications />
+            <ProfileMenu />
           </div>
         </header>
+        <AgentUpdateBanner />
+        <PlanStatusBanner />
         <main className="flex-1 grid-bg overflow-x-hidden">
           <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
             <Outlet />
@@ -208,6 +246,7 @@ export default function Layout() {
       </div>
       <OnboardingTour />
       <MobileHandoffModal open={handoffOpen} onClose={() => setHandoffOpen(false)} />
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </div>
   );
 }

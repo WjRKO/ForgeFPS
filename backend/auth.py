@@ -208,6 +208,13 @@ def build_auth_router(db):
         uid = str(res.inserted_id)
         set_auth_cookies(response, create_access_token(uid, email), create_refresh_token(uid))
         doc["_id"] = res.inserted_id
+        # Fire-and-forget welcome email (non blocca la registrazione se Resend fallisce)
+        try:
+            import asyncio as _aio
+            from email_service import send_welcome
+            _aio.create_task(send_welcome(email, data.name or ""))
+        except Exception:
+            pass
         return public_user(doc)
 
     @router.post("/login")

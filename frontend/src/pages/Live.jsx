@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Cpu, Gauge, Thermometer, MemoryStick, Zap, Radio, Gamepad2, Bell, Timer, Sparkles, PlayCircle } from "lucide-react";
+import { Cpu, Gauge, Thermometer, MemoryStick, Zap, Radio, Gamepad2, Bell, Timer, Sparkles, PlayCircle, Activity, BellRing, LineChart as LineChartIcon } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { SessionSummary } from "@/components/SessionSummary";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
+import { PrimaryButton } from "@/components/hud";
+import ObsOverlayPanel from "@/components/ObsOverlayPanel";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
 import MonitorPreflight from "@/components/MonitorPreflight";
 import MonitorLiveControl from "@/components/MonitorLiveControl";
 import BottleneckDetector from "@/components/BottleneckDetector";
+import PlanUpgradeBanner from "@/components/PlanUpgradeBanner";
 
 const freshAcc = () => ({ startTs: null, lastTs: null, fps: [], cpuTempMax: 0, gpuTempMax: 0, cpuSum: 0, cpuN: 0, gpuSum: 0, gpuN: 0, latSum: 0, latN: 0, latMax: 0, games: {}, samples: 0 });
 
@@ -59,6 +62,7 @@ export default function Live() {
   const [summary, setSummary] = useState(null);
   const [preflightOpen, setPreflightOpen] = useState(false);
   const [launching, setLaunching] = useState(false);
+  const [planInfo, setPlanInfo] = useState(null); // null=loading
   const acc = useRef(freshAcc());
   const seenRef = useRef(new Set());
   const timer = useRef(null);
@@ -66,8 +70,10 @@ export default function Live() {
   useEffect(() => {
     api.get("/agent/token").then(({ data }) => setToken(data.token)).catch((e) => console.error("load agent token failed", e));
     api.get("/alerts").then(({ data }) => setAlerts(data)).catch((e) => console.error("load alerts failed", e));
+    api.get("/subscriptions/status").then(({ data }) => setPlanInfo(data)).catch(() => setPlanInfo({ is_pro: false, plan_effective: "starter" }));
   }, []);
   useEffect(() => {
+    if (planInfo && !planInfo.is_pro) return; // skip telemetry poll if gated
     const load = async () => {
       try {
         const { data } = await api.get("/pc-telemetry");
@@ -94,7 +100,7 @@ export default function Live() {
     load();
     timer.current = setInterval(load, 1000);
     return () => clearInterval(timer.current);
-  }, []);
+  }, [planInfo]);
 
   const resetSession = () => { acc.current = freshAcc(); setSummary(null); toast.success(t("live.session_reset_done")); };
 
@@ -119,6 +125,22 @@ export default function Live() {
         </div>
       </div>
 
+      {planInfo && !planInfo.is_pro ? (
+        <PlanUpgradeBanner
+          tier="pro"
+          title={t("plan_banner.live.title")}
+          description={t("plan_banner.live.desc")}
+          features={[
+            { icon: Activity, title: t("plan_banner.live.f1_t"), desc: t("plan_banner.live.f1_d") },
+            { icon: LineChartIcon, title: t("plan_banner.live.f2_t"), desc: t("plan_banner.live.f2_d") },
+            { icon: BellRing, title: t("plan_banner.live.f3_t"), desc: t("plan_banner.live.f3_d") },
+            { icon: Sparkles, title: t("plan_banner.live.f4_t"), desc: t("plan_banner.live.f4_d") },
+          ]}
+          currentPlan={planInfo.plan_effective || "starter"}
+          testid="live-locked"
+        />
+      ) : (
+        <>
       {data.live && <BottleneckDetector />}
 
       {data.live ? (
@@ -131,13 +153,14 @@ export default function Live() {
         <div className="bg-[#0F0F12] border border-[#E5FF00]/40 p-5 mb-6">
           <p className="text-sm text-zinc-300 mb-1 font-semibold">{t("live.start_title")}</p>
           <p className="text-xs text-zinc-500 mb-3">{t("live.start_desc")}</p>
-          <button
+          <PrimaryButton
+            icon={PlayCircle}
             type="button"
-            data-testid="monitor-launch-btn"
+            testid="monitor-launch-btn"
             onClick={() => setPreflightOpen(true)}
-            className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2.5 text-sm hover:bg-[#D4EE00] transition-colors mb-3">
-            <PlayCircle size={16} /> {t("live.launch_btn", { defaultValue: "Avvia monitor sul PC" })}
-          </button>
+            className="mb-3">
+            {t("live.launch_btn", { defaultValue: "Avvia monitor sul PC" })}
+          </PrimaryButton>
           <BrowserPopupHint testid="live-popup-hint" />
           <details className="text-xs text-zinc-500">
             <summary className="cursor-pointer hover:text-zinc-300 transition-colors">
@@ -194,6 +217,11 @@ export default function Live() {
 
       {summary && <SessionSummary summary={summary} onReset={resetSession} />}
 
+      {/* OBS Browser Overlay (Streamer only) */}
+      <div className="mb-6">
+        <ObsOverlayPanel />
+      </div>
+
       <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 mb-6" data-testid="reflex-card">
         <div className="flex items-center gap-2 text-sm font-bold mb-1"><Sparkles size={16} className="text-[#00E0FF]" /> {t("live.reflex_title")}</div>
         <p className="text-xs text-zinc-400 mb-3">{t("live.reflex_desc")}</p>
@@ -221,7 +249,7 @@ export default function Live() {
             <input type="number" data-testid="alert-gpu-max" value={alerts.gpu_max} onChange={(e) => setAlerts({ ...alerts, gpu_max: parseInt(e.target.value) || 0 })}
               className="w-24 bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none" />
           </div>
-          <button data-testid="save-alerts-btn" onClick={saveAlerts} className="bg-[#E5FF00] text-black font-bold px-4 py-2 text-sm hover:bg-[#c9e000] transition-colors">{t("common.save")}</button>
+          <PrimaryButton testid="save-alerts-btn" onClick={saveAlerts}>{t("common.save")}</PrimaryButton>
         </div>
         <p className="text-xs text-zinc-600 mt-3">{t("live.alert_hint")}</p>
       </div>
@@ -246,6 +274,8 @@ export default function Live() {
           </ResponsiveContainer>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

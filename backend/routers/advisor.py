@@ -10,6 +10,7 @@ import ai_engine
 from database import db, now_iso
 from helpers import pc_context_text, compute_health
 from models import ChatMessageInput
+from plan_gate import require_pro
 
 AI_RATE_LIMIT_PER_HOUR = 100
 
@@ -141,6 +142,7 @@ async def _check_ai_rate_limit(uid: str):
 
 def build(get_current_user):
     r = APIRouter(prefix="/api/advisor", tags=["advisor"])
+    require_pro_dep = require_pro(get_current_user)
 
     @r.get("/sessions")
     async def list_sessions(user: dict = Depends(get_current_user)):
@@ -223,7 +225,7 @@ def build(get_current_user):
         return {"ok": True}
 
     @r.post("/chat")
-    async def advisor_chat(data: ChatMessageInputExt, user: dict = Depends(get_current_user)):
+    async def advisor_chat(data: ChatMessageInputExt, user: dict = Depends(require_pro_dep)):
         uid = str(user["_id"])
         await _check_ai_rate_limit(uid)
         image_data_url = (data.image_data_url or "").strip()
@@ -295,7 +297,7 @@ def build(get_current_user):
         lang: str = "it"
 
     @r.post("/diagnose")
-    async def diagnose_pc(data: DiagnoseInput | None = None, user: dict = Depends(get_current_user)):
+    async def diagnose_pc(data: DiagnoseInput | None = None, user: dict = Depends(require_pro_dep)):
         """Genera una diagnosi strutturata: 3-5 azioni prioritizzate per il PC dell'utente.
         Ritorna JSON. Rate limited come chat."""
         uid = str(user["_id"])

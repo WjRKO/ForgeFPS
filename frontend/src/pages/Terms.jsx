@@ -111,8 +111,8 @@ export default function Terms() {
         <div className="text-xs font-mono text-zinc-500 mb-8">{c.updated}</div>
         <p className="text-zinc-300 text-base leading-relaxed mb-10">{c.intro}</p>
         <div className="space-y-8">
-          {c.sections.map((s, i) => (
-            <section key={i} className="border-l-2 border-[#1A1A24] pl-5">
+          {c.sections.map((s) => (
+            <section key={s.h} className="border-l-2 border-[#1A1A24] pl-5">
               <h2 className="font-display font-black tracking-tight text-lg mb-2 text-white">{s.h}</h2>
               <p className="text-zinc-400 text-sm leading-relaxed">{s.p}</p>
             </section>

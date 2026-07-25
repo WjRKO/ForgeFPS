@@ -3,12 +3,15 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { Send, Plus, Trash2, Loader2, MessageSquareCode, Terminal, Cpu, Copy, Check,
-  ThumbsUp, ThumbsDown, RefreshCw, Image as ImageIcon, X as XIcon, Sparkles } from "lucide-react";
+  ThumbsUp, ThumbsDown, RefreshCw, Image as ImageIcon, X as XIcon, Sparkles,
+  Brain, Stethoscope, Camera, Zap } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import api, { API } from "@/lib/api";
+import { PrimaryButton } from "@/components/hud";
 import { PageHeader } from "@/components/hud";
 import DiagnosePanel from "@/components/DiagnosePanel";
+import PlanUpgradeBanner from "@/components/PlanUpgradeBanner";
 
 function CodeBlock({ children }) {
   const [copied, setCopied] = useState(false);
@@ -61,6 +64,7 @@ export default function Advisor() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [specs, setSpecs] = useState(null);
+  const [planInfo, setPlanInfo] = useState(null); // null=loading, {is_pro, plan_effective}
   const [mode, setMode] = useState(() => (typeof localStorage !== "undefined" && localStorage.getItem("advisor_mode")) || "default");
   // Personalized suggestions from backend (hardware-aware) — used only for "default" coach
   const [personalizedDefault, setPersonalizedDefault] = useState(null);
@@ -86,6 +90,7 @@ export default function Advisor() {
   useEffect(() => {
     loadSessions();
     api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {});
+    api.get("/subscriptions/status").then(({ data }) => setPlanInfo(data)).catch(() => setPlanInfo({ is_pro: false, plan_effective: "starter" }));
     const lng = (i18n.resolvedLanguage || "it").slice(0, 2);
     api.get(`/advisor/suggestions?lang=${lng}`).then(({ data }) => { if (data?.suggestions?.length) setPersonalizedDefault(data.suggestions); }).catch(() => {});
   }, []);
@@ -230,6 +235,22 @@ export default function Advisor() {
           </div>
         )} />
 
+      {planInfo && !planInfo.is_pro ? (
+        <PlanUpgradeBanner
+          tier="pro"
+          title={t("plan_banner.advisor.title")}
+          description={t("plan_banner.advisor.desc")}
+          features={[
+            { icon: Brain, title: t("plan_banner.advisor.f1_t"), desc: t("plan_banner.advisor.f1_d") },
+            { icon: Stethoscope, title: t("plan_banner.advisor.f2_t"), desc: t("plan_banner.advisor.f2_d") },
+            { icon: Camera, title: t("plan_banner.advisor.f3_t"), desc: t("plan_banner.advisor.f3_d") },
+            { icon: Zap, title: t("plan_banner.advisor.f4_t"), desc: t("plan_banner.advisor.f4_d") },
+          ]}
+          currentPlan={planInfo.plan_effective || "starter"}
+          testid="advisor-locked"
+        />
+      ) : (
+        <>
       <DiagnosePanel hasSpecs={!!specs?.data?.cpu} />
 
       <div className="grid lg:grid-cols-[240px_1fr] gap-4">
@@ -304,6 +325,8 @@ export default function Advisor() {
           />
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -434,10 +457,9 @@ function ChatInput({ input, setInput, imageDataUrl, setImageDataUrl, fileInputRe
         <input data-testid="chat-input" value={input} onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && onSend()} placeholder={placeholder}
           className="flex-1 bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 text-sm transition-colors" />
-        <button data-testid="chat-send-btn" onClick={() => onSend()} disabled={streaming}
-          className="bg-[#E5FF00] text-black px-4 hover:bg-[#D4EC00] transition-colors disabled:opacity-60">
+        <PrimaryButton testid="chat-send-btn" onClick={() => onSend()} disabled={streaming} className="!px-4">
           {streaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-        </button>
+        </PrimaryButton>
       </div>
     </div>
   );

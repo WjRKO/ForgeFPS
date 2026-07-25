@@ -28,6 +28,11 @@ const DICT = {
     pdf_notes_head: "Note",
     pdf_chart_title: "Health Score — ultimi 90 giorni",
     pdf_chart_empty: "Nessuno storico Health Score disponibile.",
+    pdf_tweaks_head: "Tweak applicati",
+    pdf_tweaks_empty: "Nessun tweak registrato in questa sessione.",
+    pdf_tweaks_count: "totale",
+    pdf_col_tweak: "Ottimizzazione",
+    pdf_col_when: "Applicato il",
     captured: "Snapshot salvato",
     err: "Errore",
     report_title: "Report Ottimizzazione PC",
@@ -70,6 +75,11 @@ const DICT = {
     pdf_notes_head: "Notes",
     pdf_chart_title: "Health Score — last 90 days",
     pdf_chart_empty: "No Health Score history available yet.",
+    pdf_tweaks_head: "Applied tweaks",
+    pdf_tweaks_empty: "No tweaks logged in this session.",
+    pdf_tweaks_count: "total",
+    pdf_col_tweak: "Tweak",
+    pdf_col_when: "Applied at",
     captured: "Snapshot saved",
     err: "Error",
     report_title: "PC Optimization Report",
@@ -269,10 +279,11 @@ export default function Report() {
     if (!cardRef.current) return;
     setBusy("pdf");
     try {
-      const [{ toPng }, { jsPDF }, historyRes] = await Promise.all([
+      const [{ toPng }, { jsPDF }, historyRes, tweaksRes] = await Promise.all([
         import("html-to-image"),
         import("jspdf"),
         api.get("/health-history").catch(() => ({ data: { points: [] } })),
+        api.get("/advisor/applied-tweaks").catch(() => ({ data: [] })),
       ]);
       const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, backgroundColor: "#0A0A0C", cacheBust: true });
       const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
@@ -303,6 +314,63 @@ export default function Report() {
       doc.rect(margin, y, cw, chartH);
       doc.addImage(chartUrl, "PNG", margin, y, cw, chartH);
       y += chartH + 24;
+
+      // ─── Tweak applicati (log con timestamp) ───────────────────────────
+      const tweaks = Array.isArray(tweaksRes.data) ? tweaksRes.data : [];
+      // Header sezione
+      if (y + 40 > footerY) { doc.addPage(); y = 60; }
+      doc.setTextColor(20, 20, 20); doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+      const twHeader = `${c.pdf_tweaks_head}${tweaks.length ? `  ·  ${tweaks.length} ${c.pdf_tweaks_count}` : ""}`;
+      doc.text(twHeader, margin, y); y += 6;
+      // Linea giallo neon sotto l'header
+      doc.setDrawColor(229, 255, 0); doc.setLineWidth(1.2);
+      doc.line(margin, y, margin + 80, y); y += 14;
+      doc.setLineWidth(0.5);
+
+      if (!tweaks.length) {
+        doc.setFont("helvetica", "italic"); doc.setFontSize(10); doc.setTextColor(120, 120, 120);
+        doc.text(c.pdf_tweaks_empty, margin, y); y += 20;
+      } else {
+        // Colonne: title (65%) | timestamp (35%)
+        const colTitleX = margin + 4;
+        const colTimeX = margin + cw * 0.65 + 4;
+        // Column headers
+        doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(120, 120, 120);
+        doc.text(c.pdf_col_tweak.toUpperCase(), colTitleX, y);
+        doc.text(c.pdf_col_when.toUpperCase(), colTimeX, y);
+        y += 4;
+        doc.setDrawColor(220, 220, 220);
+        doc.line(margin, y, margin + cw, y); y += 12;
+        // Rows
+        doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+        for (const tw of tweaks) {
+          if (y + 20 > footerY) { doc.addPage(); y = 60; }
+          const active = tw.active !== false;
+          const bullet = active ? "\u2713" : "\u25CB"; // ✓ if active, ○ if inactive
+          const bulletColor = active ? [0, 200, 80] : [140, 140, 140];
+          doc.setTextColor(...bulletColor); doc.setFont("helvetica", "bold");
+          doc.text(bullet, colTitleX - 12, y);
+          doc.setFont("helvetica", "normal"); doc.setTextColor(40, 40, 40);
+          const title = String(tw.title || tw.slug || "—");
+          const maxW = cw * 0.6;
+          const truncated = doc.splitTextToSize(title, maxW)[0] + (doc.getTextWidth(title) > maxW ? "…" : "");
+          doc.text(truncated, colTitleX, y);
+          // Timestamp
+          doc.setTextColor(120, 120, 120); doc.setFontSize(9);
+          let when = "—";
+          if (tw.applied_at) {
+            try {
+              const d = new Date(tw.applied_at);
+              when = d.toLocaleDateString() + " · " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            } catch { /* keep — */ }
+          }
+          doc.text(when, colTimeX, y);
+          doc.setFontSize(10);
+          y += 16;
+        }
+        y += 6;
+      }
+
       if (notes.trim()) {
         if (y + 60 > footerY) { doc.addPage(); y = 60; }
         doc.setTextColor(20, 20, 20); doc.setFont("helvetica", "bold"); doc.setFontSize(13);

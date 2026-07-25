@@ -19,6 +19,7 @@ from services.gpu_catalog_service import find_gpu_reference, compute_health_vs_r
 from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput
 from routers.profiles import resolve_tweak_ids, TWEAK_CATALOG, TEMPLATES
 from routers.advisor import _check_ai_rate_limit
+from plan_gate import require_pro, require_streamer
 
 # Default background processes closed by "Prima del match" (must stay in sync with frontend groups)
 DEFAULT_PREMATCH_APPS = [
@@ -44,6 +45,18 @@ AGENT_ZIP_UPSTREAM = os.environ.get(
     "https://github.com/WjRKO/ForgeFPS/releases/download/v0.7.5/forgefps-agent.zip",
 )
 _AGENT_ZIP_CACHE_PATH = f"/tmp/forgefps-agent-cache-{hashlib.sha256(AGENT_ZIP_UPSTREAM.encode()).hexdigest()[:10]}.zip"
+
+
+def _extract_latest_version() -> str:
+    """Estrae la versione dall'URL upstream (unico source of truth).
+    Es. '.../releases/download/v0.7.5/...' -> '0.7.5'. Fallback: '0.7.5'.
+    """
+    import re as _re
+    m = _re.search(r"/download/v(\d+\.\d+\.\d+)/", AGENT_ZIP_UPSTREAM)
+    return m.group(1) if m else "0.7.5"
+
+
+LATEST_AGENT_VERSION = _extract_latest_version()
 
 
 def _render_launcher_bat(token: str, backend: str, standalone: bool) -> bytes:
@@ -136,6 +149,8 @@ async def _build_agent_script(user_id: str, profile: str = "") -> str:
 
 def build(get_current_user):
     r = APIRouter(prefix="/api", tags=["pc"])
+    require_pro_dep = require_pro(get_current_user)
+    require_streamer_dep = require_streamer(get_current_user)
 
     @r.get("/agent/token")
     async def agent_token(user: dict = Depends(get_current_user)):
@@ -248,7 +263,7 @@ def build(get_current_user):
         frontend = os.environ.get("FRONTEND_URL", "").rstrip("/")
         url = f"{frontend}/auth/mobile?t={token}"
         img = _qr.make(url, image_factory=_qrsvg.SvgPathImage, box_size=8, border=1)
-        buf = __import__("io").BytesIO()
+        buf = io.BytesIO()
         img.save(buf)
         return _Resp(content=buf.getvalue(), media_type="image/svg+xml",
                      headers={"Cache-Control": "no-store"})
@@ -334,6 +349,28 @@ def build(get_current_user):
         doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "benchmark": 1})
         history = await db.benchmarks.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(10)
         return {"latest": (doc or {}).get("benchmark"), "history": history}
+
+    @r.get("/pc-benchmark/full")
+    async def pc_benchmark_full(user: dict = Depends(require_streamer_dep)):
+        """Ultimo Full Benchmark (~2-4min run) + storico ultimi 5.
+
+        FEATURE-GATED: solo piano Streamer (o streamer_trial attivo).
+
+        Ritorna solo record che contengono il payload `full` (i.e. Full Benchmark,
+        non Quick). Se nessun Full Benchmark e' mai stato eseguito -> latest=None.
+        """
+        uid = str(user["_id"])
+        # Ultimo Full Benchmark (record che ha campo `full`)
+        latest = await db.benchmarks.find_one(
+            {"user_id": uid, "full": {"$exists": True, "$ne": None}},
+            {"_id": 0}, sort=[("created_at", -1)],
+        )
+        # Storico ultimi 5 (per delta e trend)
+        history = await db.benchmarks.find(
+            {"user_id": uid, "full": {"$exists": True, "$ne": None}},
+            {"_id": 0, "user_id": 0},
+        ).sort("created_at", -1).to_list(5)
+        return {"latest": latest, "history": history}
 
     @r.get("/gpu-reference")
     async def gpu_reference(user: dict = Depends(get_current_user)):
@@ -727,7 +764,7 @@ def build(get_current_user):
                 "reset_at": doc.get("reset_at")}
 
     @r.get("/pc-telemetry")
-    async def pc_telemetry(user: dict = Depends(get_current_user)):
+    async def pc_telemetry(user: dict = Depends(require_pro_dep)):
         doc = await db.pc_telemetry.find_one({"user_id": str(user["_id"])}, {"_id": 0})
         if not doc:
             return {"samples": [], "updated_at": None, "live": False}
@@ -915,17 +952,55 @@ def build(get_current_user):
         return PlainTextResponse(script, headers={"Content-Disposition": "attachment; filename=forgefps_agent.py"})
 
     @r.get("/agent/script")
-    async def agent_script(t: str = "", profile: str = ""):
+    async def agent_script(t: str = "", profile: str = "", x_agent_version: str = Header(default="")):
         rec = await db.agent_tokens.find_one({"token": t})
         if not rec:
             return PlainTextResponse(
                 "Write-Host '[ERR ] Token non valido. Riapri la pagina FrameForge Agent.' -ForegroundColor Red",
                 media_type="text/plain")
+        # v0.7.6: registra la versione dell'agent locale se dichiarata (solo v0.7.6+
+        # invia questo header). Se assente -> agent vecchio, resta "unknown" nel
+        # doc utente e il banner di update apparira' finche' non aggiornano.
+        if x_agent_version and len(x_agent_version) <= 20:
+            try:
+                await db.pc_specs.update_one(
+                    {"user_id": rec["user_id"]},
+                    {"$set": {"agent_version": x_agent_version, "agent_version_at": now_iso()}},
+                    upsert=True,
+                )
+            except Exception:
+                pass
         script = await _build_agent_script(rec["user_id"], profile)
         # Prepend UTF-8 BOM: Windows PowerShell 5.1 legge i .ps1 senza BOM in ANSI (Windows-1252),
         # causando caratteri glitchati per emoji/UTF-8 (es. · … 📚 👤). Il BOM forza UTF-8.
         return PlainTextResponse("\ufeff" + script, media_type="text/plain; charset=utf-8",
                                  headers={"Content-Disposition": "attachment; filename=forgefps.ps1"})
+
+    @r.get("/agent/status")
+    async def agent_status(user: dict = Depends(get_current_user)):
+        """Ritorna lo stato dell'agent locale dell'utente: versione installata (se
+        rilevata dall'header X-Agent-Version) vs versione ultima disponibile.
+        Usato dal banner "Aggiorna l'agent" nella dashboard."""
+        latest = LATEST_AGENT_VERSION
+        specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"agent_version": 1, "updated_at": 1})
+        installed = (specs or {}).get("agent_version") or None
+        has_ever_run = bool(specs and specs.get("updated_at"))
+        # Outdated se:
+        #  - l'utente ha usato l'agent almeno una volta (ha pc_specs.updated_at)
+        #  - E non ha mai riportato la versione (agent < 0.7.6) OPPURE riportata < latest
+        def _lt(a: str, b: str) -> bool:
+            try:
+                return tuple(int(x) for x in a.split(".")) < tuple(int(x) for x in b.split("."))
+            except Exception:
+                return False
+        is_outdated = bool(has_ever_run and (not installed or _lt(installed, latest)))
+        return {
+            "installed_version": installed,
+            "latest_version": latest,
+            "is_outdated": is_outdated,
+            "has_ever_run": has_ever_run,
+            "download_url": AGENT_ZIP_UPSTREAM,
+        }
 
     @r.get("/agent/script-info")
     async def agent_script_info(t: str = "", profile: str = "", user: dict = Depends(get_current_user)):
@@ -937,7 +1012,7 @@ def build(get_current_user):
         return {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data), "filename": "forgefps.ps1"}
 
     # Modalita' accettate dal FrameForge Agent quando aperto via protocollo frameforge://
-    _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "fullbench", "monitor", "prematch", "booster", "restore", "gui"}
+    _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "bufferbloat", "fullbench", "monitor", "prematch", "booster", "restore", "gui"}
 
     @r.get("/agent/launch-uri")
     async def agent_launch_uri(mode: str = "optimize", silent: int = 0, user: dict = Depends(get_current_user)):

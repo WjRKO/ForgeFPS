@@ -929,3 +929,331 @@ Scelta utente: toast web + **notifica Windows nativa** nella GUI (BurntToast/tra
 - P2: Checklist tweak nel Report PDF
 - P2: Migrazione opportunistica bottoni inline a `BTN_CLASSES` (Tracker, Games, Live, Advisor, Network, BIOS) — approccio incrementale per pagina toccata
 - P3: Stripe billing + Google Ads conv + testimonial GitHub stars
+
+
+## 2026-02 — ProfileMenu dropdown + pagina Fatturazione (Stripe Portal)
+- **ProfileMenu.jsx**: dropdown in alto a destra con account card (avatar deterministico da email hash, name/email, badge piano colorato con countdown trial), menu items (Profilo & Sicurezza, Fatturazione, Piani & Trial, Discord connect/linked, Feedback, Logout), click-outside + ESC per chiudere. Discord rimosso dalla sidebar.
+- **Billing.jsx** (`/app/billing`): mostra piano corrente con Icon/color per tier (starter/pro/streamer/trial/expired), payment-method-card con CTA "Gestisci pagamento su Stripe" (solo paid users), upgrade-cta per starter/trial/expired con link a `/pricing`.
+- **Backend**: nuovo `POST /api/payments/portal` in `routers/payments.py` che genera link al Stripe Customer Portal. Ritorna 400 con `code=no_customer` se l'utente non ha `stripe_customer_id`.
+- **Testing**: iteration_36.json — 100% backend (8/8 pytest) + 100% frontend. Test file: `/app/backend/tests/test_profile_billing.py`. Nessun bug.
+
+### Code review notes (non blocking)
+- ProfileMenu fetcha `/subscriptions/status` + `/discord/status` ogni apertura dropdown (potenziale cache/session).
+- `payments.py` line 152: `return_url` hardcoded a `https://forgefps.dev` — su preview redirigge in prod, considera env `APP_ORIGIN`.
+- Dashboard mostra 402 in console per AI Advisor (Emergent LLM Key out of budget) — considera fallback UI graceful.
+
+### Prossimo
+- P1: Integrazione **Resend** (email trial started/ending, welcome, payment success) — in attesa API key utente
+- P1: Discord OAuth Login
+- P1: Alert Salute Storica (health score < media 30gg)
+- P2: Checklist tweak nel Report PDF, migrazione bottoni a BTN_CLASSES
+- P3: Stripe Live mode, Google Ads conv avanzate, testimonial GitHub stars
+
+
+## 2026-02 (patch) — TrialUpgradeBanner nel ProfileMenu (conversion boost)
+- **Backend** (`subscriptions.py`): nuova `compute_upgrade_suggestion(user, info)` che calcola engagement score (AI messages×2 + health scans + telemetry, ultimi 14gg) e ritorna `tier`, `recommended_cycle` (monthly/yearly), `recommended_lookup`, prezzi, `save_amount`, `reason` personalizzata. Esposto in `GET /api/subscriptions/status` come `suggested_upgrade` (null se paid/starter senza-trial).
+- **Regola**: expired → yearly (commit); trial + score≥15 → yearly; trial + score<15 → monthly.
+- **Frontend** (`components/TrialUpgradeBanner.jsx`): banner nel ProfileMenu sotto l'account card. Countdown + reason + CTA primaria colorata verso Stripe Checkout preselezionato, CTA secondaria per ciclo alternativo. Deep-link diretto a `POST /api/payments/checkout`.
+- **Test**: smoke test e2e (register→login→start-trial→open menu). Banner visibile con "Trial: 14 giorni rimasti", CTA "Passa a Pro · €7/mese", alt "o annuale · €70/anno (risparmi €14)".
+- **Testids**: `trial-upgrade-banner`, `banner-countdown`, `banner-reason`, `banner-cta-primary`, `banner-cta-secondary`.
+
+
+## 2026-02 — Resend email integration (transactional)
+- **Package**: `resend==2.34.0` in requirements.txt
+- **Config .env**: `RESEND_API_KEY`, `SENDER_EMAIL=onboarding@resend.dev` (test mode), `REPLY_TO_EMAIL=support@forgefps.dev`, `APP_ORIGIN=https://forgefps.dev`
+- **email_service.py**: 5 template inline HTML (dark theme, brand giallo #E5FF00, CTA table-based) + `send_email()` wrapper async con `asyncio.to_thread(resend.Emails.send)` — fire-and-forget, mai blocca flusso utente
+- **Trigger auto-inviati**:
+  - `POST /api/auth/register` → welcome
+  - `POST /api/subscriptions/start-trial` → trial_started
+  - Stripe webhook `checkout.session.completed` → payment_success
+  - Stripe webhook `invoice.payment_failed` → payment_failed
+  - Cron daily 09:00 UTC (APScheduler) → trial_ending T-3 e T-1 (idempotent via `trial_reminder_sent.t_N` sul doc user)
+- **Debug**: `POST /api/admin/test-email` (admin only) — body `{template, to, name}` per triggerare ogni template manualmente
+- **Test e2e**: 5/5 template inviati con successo (email_id ricevuti) a `forgefps.support@gmail.com`
+- **Prossimo step DEPLOY**: verificare dominio `forgefps.dev` su Resend (record DNS TXT+CNAME), poi cambiare `SENDER_EMAIL` in `no-reply@forgefps.dev` per uscire dal test mode
+
+
+## 2026-02 — Extended tweak catalog (Standard + Extreme from client checklist) — REVERTED
+- Cambiamenti proposti e implementati (6 tweak: memcomp, auto_maint_night, notif_fullscreen, hpet_off, bcd_dynamic_tick, spectre_off) sono stati **rimossi su richiesta utente**.
+- File `ps_agent.py` riportato allo stato pre-modifica (4178 righe).
+- `Invoke-Restore` non gestisce piu bcd::/mmagent::mc (rimossi).
+- Preset `competitivo` e `streaming` ripristinati alla versione originale.
+- Test file `tests/test_new_tweaks_catalog.py` eliminato.
+
+
+
+## 2026-02 — One-click Bufferbloat launch button (via frameforge:// protocol)
+- **Problema**: la pagina `/app/network` mostrava solo comandi PowerShell copia-incolla per eseguire il test bufferbloat (`SecureRunBlock`), UX macchinosa.
+- **Backend**: aggiunto `"bufferbloat"` a `_ALLOWED_URI_MODES` in `routers/pc.py`. `GET /api/agent/launch-uri?mode=bufferbloat` ora ritorna URI firmato HMAC.
+- **Frontend**: nuovo componente riutilizzabile `components/OneClickLaunchButton.jsx`:
+  - Bottone giallo neon prominente "Avvia test bufferbloat"
+  - `useLocation.href = uri` per triggerare protocollo `frameforge://` → agent locale esegue il test
+  - Polling di `detectDone` ogni 3s (compara `updated_at` con `launchTs` snapshot)
+  - Timeout 90s con fallback UI "hai installato l'agent?" + link diretto a `/app/desktop`
+- **Network page** (`pages/Network.jsx`): bottone one-click prominente + il vecchio `SecureRunBlock` PowerShell relegato in `<details>` collapsible come fallback.
+- **Test smoke**: bottone visibile, endpoint launch-uri ritorna URI corretto per mode=bufferbloat, endpoint respinge mode invalidi con 400.
+- **Riutilizzabile**: il componente `OneClickLaunchButton` puo' essere usato ovunque nell'app dove serve un lancio "1 click" verso l'agent (Optimize, Benchmark, Full Benchmark, Monitor, Prematch, Booster, Restore).
+
+
+## 2026-02 — P2 wave: Report PDF tweak log + button migration
+### (a) Checklist tweak nel Report PDF
+- **Frontend** (`pages/Report.jsx`): nuova sezione "Tweak applicati" nel PDF generato via jsPDF.
+- Fetch `GET /api/advisor/applied-tweaks` in parallelo agli altri asset PDF, disegna tabella con:
+  - Header giallo neon "Applied tweaks · N total" con underline
+  - 2 colonne: TWEAK (60%) | APPLIED AT (35%)
+  - Bullet verde ✓ per tweak `active=true`, cerchio grigio ○ per inattivi
+  - Timestamp: `dd/mm/yyyy · hh:mm` (locale)
+  - Empty state: "No tweaks logged in this session."
+- **Copy IT + EN**: aggiunte 5 chiavi `pdf_tweaks_head`, `pdf_tweaks_empty`, `pdf_tweaks_count`, `pdf_col_tweak`, `pdf_col_when`
+- **Test e2e**: PDF scaricato (8.5MB), contiene stringa "Applied tweaks", ispezione visuale conferma layout corretto con 6 tweak seed
+
+### (b) Migrazione bottoni inline → BTN_CLASSES/PrimaryButton
+- **Live.jsx** L138 (monitor-launch-btn) + L224 (save-alerts-btn) → `<PrimaryButton>`
+- **Games.jsx** L272 (game-search-btn) → `<PrimaryButton>` con `!px-4`
+- **Advisor.jsx** L437 (chat-send-btn) → `<PrimaryButton>` con `!px-4`
+- **Skippati** per rispetto regole FRONTEND_RULES.md:
+  - Tracker.jsx: tutti hanno `btn-volt` (CSS custom animation, non migrare)
+  - BiosRestore.jsx: styling troppo custom (size text-[11px], border accent semi-transparent)
+  - Advisor.jsx altre linee: usa `btn-volt` o color CIANO (non accent)
+  - Network.jsx: nessun candidato con match pattern
+- **Verifica**: `yarn build` OK, smoke test playwright su 4 bottoni: tutti visibili post-migrazione
+
+
+## 2026-02 — Bufferbloat v2: 3 sub-grade + p99 tail latency
+### Backend
+- **`ps_agent.py`** (`Run-Bufferbloat`): calcola anche `down_p99` e `up_p99` via `Percentile $rtts 0.99`, include in `Send-NetResult`
+- **`helpers.py`** (`grade_bufferbloat`): rifattorizzato con 3 sub-grade:
+  - `idle_grade` — RTT baseline (A+ ≤15ms · A ≤25 · B ≤45 · C ≤80 · D ≤150 · F >150)
+  - `loaded_grade` — bufferbloat vero (retro-compat = campo `grade`)
+  - `consistency_grade` — score 0-100 basato su penalty framework:
+    - Jitter: -10 (>5) / -25 (>15) / -40 (>30)
+    - Loss %: -15 (>0.5) / -35 (>2) / -60 (>5)
+    - Tail spike (p99 - idle): -10 (>100) / -20 (>200) / -30 (>400)
+    - Mapping: A+ ≥95 · A ≥85 · B ≥70 · C ≥50 · D ≥30 · F <30
+  - `tail_spike_ms` — max(down_p99, up_p99) - idle_ms (nuovo campo evidenziato)
+  - **Retro-compat**: `grade`, `down_grade`, `up_grade`, `base_quality`, `loss_pct` preservati
+
+### Frontend
+- **`Network.jsx`**: sostituita giant grade card singola con 3 `<SubGrade>` cards affiancate:
+  - Border-left colorato secondo il grade, letter huge, valore + hint testuale
+  - Bufferbloat card laterale con `tail_spike_ms` in arancione
+- Metric cards Download/Upload ora includono `p99` accanto a `p95` (via helper `buildLoadedSub`)
+
+### Test
+- **`tests/test_bufferbloat_grades_v2.py`**: 22/22 passed (idle thresholds, loaded, consistency scoring, p99 passthrough, retro-compat)
+- **Smoke test frontend**: 3 sub-grade + tail-spike + p99 tutti visibili con dati seed
+
+
+## 2026-02 — Code quality review (surgical fixes only)
+Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi. Regressioni: 42/42 test passati + build OK.
+
+### 🟢 Fix applicati
+- **`routers/pc.py` L253**: sostituito `__import__("io").BytesIO()` con `io.BytesIO()` (io e' gia' importato in cima).
+- **`PaymentSuccess.jsx` L63**: silent catch nel polling status ora logga `console.warn` con lo status HTTP per debug production.
+
+### 🟡 Falsi positivi identificati e documentati (NON fixati)
+- `ps_agent.py:2442` "hardcoded secret" → `TOKEN = "__TOKEN__"` e' template placeholder sostituito runtime dal backend
+- `desktop_agent.py:704` `os.system("cls")` → dentro stringa Python del template PS/Batch client, non codice eseguito dal backend
+- `i18n.js:329,934` "hardcoded secret" → `password: "Password"` e' label UI in traduzione, non secret
+- `Auth.jsx:64,69` catch vuoti → wrapper localStorage.setItem/removeItem, pattern legittimo per quota errors
+- `useSilentLaunch.js:37` "10 missing deps" → deps list gia' corretta, linter overly aggressive
+
+### 🔴 Refactor complessita' NON applicati (motivazione: benefit/risk sfavorevole)
+- `auth.py build_auth_router` (194 righe/complessita 38): funziona in produzione, testato
+- `helpers.py grade_bufferbloat` (93 righe): appena riscritta con 22/22 test pass, non ritoccare
+- `helpers.py compute_health` (62 righe): core testato prod
+- 456 ternaries · 39 array-index-keys · 15 localStorage: da fixare opportunisticamente per FRONTEND_RULES
+- DiagnosePanel/FirstScanBanner refactor: rischia regressioni onboarding
+
+
+## 2026-02 — Full Benchmark Report UI + TechTerm tooltip fix
+### TechTerm tooltip fix (contrasto)
+- **Problema**: tooltip su `?` accanto ai termini tecnici era illeggibile (bg trasparente + testo bianco senza stacco).
+- **Fix** `TechTerm.jsx`: override `TooltipContent` con `bg-[#16161C] border-2 border-[#00E0FF] shadow-[0_10px_32px_rgba(0,0,0,0.85)] px-4 py-3`. Contrasto ora ottimo.
+
+### Full Benchmark Report — nuova UI
+- **Problema identificato**: il Full Benchmark (`mode=fullbench`) veniva eseguito e i dati salvati in `db.benchmarks.full`, ma **nessuna UI li visualizzava**. Il messaggio "Apri FrameForge -> Il mio PC per il report completo" era orfano.
+- **Backend** (`routers/pc.py`): nuovo endpoint `GET /api/pc-benchmark/full` che filtra `db.benchmarks` per record con campo `full` non-null. Ritorna `{latest, history[5]}`.
+- **Frontend** nuovo componente `components/FullBenchmarkReport.jsx`:
+  - Header: durata + timestamp + "Ripeti Full Benchmark" (uses `OneClickLaunchButton` con mode `fullbench`)
+  - Card **CPU**: burst + sustained + ratio + thermal throttle warning banner
+  - Card **RAM hierarchy**: L2/L3/DRAM bandwidth in GB/s
+  - Card **Disk I/O multi-queue**: seq QD1 + rand 4K QD1/QD32 IOPS
+  - Card **Network extended**: 3 host (avg + p95 + min + max + loss)
+  - **Thermal trace chart** (recharts LineChart): CPU/GPU temp nel tempo con avg/max annotations
+  - **History table**: ultimi 5 Full Benchmark per confronto trend
+  - **DeltaBadge**: percentuale variazione vs precedente (verde su miglioramento, arancione su peggioramento)
+  - **Empty state**: CTA "Avvia Full Benchmark" via OneClickLaunchButton
+- **Benchmark.jsx**: aggiunta **tab switcher** "Quick Benchmark" / "Full Benchmark v2" (state `tab` = quick|full).
+- **Test smoke**: verificate tutte le sezioni con dati seed (CPU 842/768 Mops, RAM L2 85.2 GB/s, Disk 2.7GB/s, Net 3 host, Thermal trace + max/avg temp).
+
+
+## 2026-02 — Full Benchmark = feature esclusiva Streamer (upsell driver)
+- **Backend** (`routers/pc.py`): `GET /api/pc-benchmark/full` ora usa `require_streamer` dep. Ritorna 402 con `{code:"plan_required", required:"streamer", current, upgrade_url}` per pro/starter/trial.
+- **Frontend** (`FullBenchmarkReport.jsx`): gestione 402 -> nuovo stato `locked` con banner upsell dedicato:
+  - Badge "FEATURE ESCLUSIVA STREAMER" in ciano
+  - Titolo grande + value prop 2-4 min
+  - 4 mini-card preview delle features (thermal throttling, RAM hierarchy, disk multi-Q, thermal trace)
+  - CTA prominente "Passa a Streamer" -> `/pricing?plan=streamer`
+  - Glow decorativo ciano + viola
+  - Info piano corrente dell'utente
+- **Test**: admin starter -> 402 + banner visibile con href `/pricing?plan=streamer`. Grant temporaneo streamer -> 200 con dati. Ripristinato a starter dopo test.
+
+
+## 2026-02 — OBS Browser Source Overlay (feature esclusiva Streamer)
+### Backend
+- Nuovo router `/app/backend/routers/overlay.py`, montato in `server.py`
+- Endpoint (streamer-only, plan gate):
+  - `GET /api/overlay/config` — auto-inizializza al primo accesso (default: top-right, neon theme, tutte le metric on). Ritorna URL completo + settings.
+  - `POST /api/overlay/token` — rotate cripto-strong token (`secrets.token_urlsafe(24)`). Invalida il vecchio URL.
+  - `PUT /api/overlay/config` — aggiorna position (top-left|top-right|bottom-left|bottom-right), theme (neon|dark|minimal), toggle per singola metric (fps/cpu/gpu/ping/health)
+- Endpoint pubblici (no-auth, token = capability):
+  - `GET /api/overlay/{token}` — HTML page per OBS Browser Source. Transparent bg + auto-poll ogni 1s. Layout responsive per 4 posizioni + 3 temi.
+  - `GET /api/overlay/{token}/data` — JSON con ultimo sample da `pc_telemetry` + health score. `Cache-Control: no-store`.
+- Storage: `db.overlay_tokens` con `{user_id, token, position, theme, show_*, rotated_at, created_at}`. Indicizzato per token unico.
+
+### Frontend
+- Nuovo componente `components/ObsOverlayPanel.jsx`:
+  - Input readonly con URL + bottoni **Copia URL** (con feedback `Copiato ✓`), **Apri** (target blank), **Rigenera** (arancione, con confirm)
+  - Griglia 4 posizioni + 3 temi con visual selected state
+  - Toggle a pill per ogni metric (FPS / CPU / GPU / Ping / Health)
+  - **Preview iframe** live con sfondo a scacchiera (chessboard) per mostrare la trasparenza
+  - Details collapsible "Come aggiungerlo in OBS Studio" (6 step)
+  - Banner upsell inline se non-streamer (402)
+- Integrato in `pages/Live.jsx` sotto le metric cards.
+
+### Test
+- End-to-end curl: 402 su starter, 200 su streamer, token rotate invalida il vecchio, PUT config aggiorna position+theme, HTML endpoint ritorna page 4.5KB
+- Smoke test playwright: pannello visibile, URL popolato, cambio tema+posizione+toggle funzionanti
+
+### Note
+- L'`url` copiabile ha base `APP_ORIGIN` (default `https://forgefps.dev`) — corretto per streamer in produzione
+- La preview iframe usa `window.location.origin` per funzionare anche in preview env
+
+
+## 2026-02 — OBS Overlay v2: fix dati, temi, CSP + design accattivante
+### Bug fix
+1. **Dati sempre null anche con Live Monitor attivo**: l'agent PS emette `cpu_util`/`gpu_util`/`ram_used_pct`, ma l'overlay leggeva `cpu_pct`/`gpu_pct`/`ram_pct` (chiavi diverse -> sempre null). Fix: mapping corretto nel data endpoint.
+2. **Ping mai popolato**: `pc_telemetry` non include `ping_ms` (solo Run-Benchmark lo emette). Fix: prendere ping da `net_results.result.idle_ms`.
+3. **Stale detection**: aggiunto controllo su `ts` dell'ultimo sample. Se > 15s fa -> `live=false`, l'HTML mostra "MONITOR OFF".
+4. **CSP blocca inline styles/scripts (root cause dell'overlay vuoto)**: il middleware `security_headers` in `server.py` applicava `default-src 'none'` globalmente, uccidendo l'overlay HTML. Fix: esenzione route-based -- per path `/api/overlay/{token}` (non `/data`, `/config`, `/token`) applichiamo CSP permissivo con `'unsafe-inline'` per style+script e `frame-ancestors *` (per iframe/OBS). Le altre route mantengono CSP restrittivo.
+
+### Nuovo design (accattivante)
+- Layout griglia 3 colonne (icon 16px | label 42px | value auto)
+- **Header** con brand `// FRAMEFORGE` + status pill LIVE/MONITOR OFF/NO CONNECTION con dot pulsante colorato
+- Icone SVG inline per ogni metrica (FPS play, CPU chip, GPU card, PING signal, HEALTH heart)
+- **Bar sottili animate** sotto CPU e GPU (fill scala con % utilizzo, warn arancione se >=85%)
+- **Badge temperature** con highlight rosso se >=80°C (thermal warning)
+- **Animazione "pop" scale(1.08)** ogni volta che un valore cambia
+- Backdrop-filter blur + saturate per effetto glass, box-shadow accent glow
+- Font system-native (Segoe UI / SF Pro Display / system-ui) + monospace fallback per numeri (Consolas/Monaco)
+
+### Temi finalmente distintivi
+- **Neon**: bg 88% opacity, giallo #E5FF00 accent + glow, border-left 3px giallo, gradient top line
+- **Dark**: bg 92%, ciano #00E0FF accent + glow, look tech elegante
+- **Minimal**: bg 55%, tutto bianco pulito, no border-left, no gradient top (piu' discreto)
+
+### Test
+- curl end-to-end: data endpoint con telemetry POST -> valori popolati (fps 142, cpu 45%, gpu 68%, temp 72/65°C, ping 18ms)
+- CSP headers verificati: `/api/overlay/{token}` permissivo, altre route restrittive
+- Screenshot playwright: 3 temi (neon/dark/minimal) tutti visibili e distinti in iframe
+
+### 2026-07-25 (36) — Banner upgrade unificato per tutte le feature gated Pro/Streamer (FATTO)
+- Nuovo componente `frontend/src/components/PlanUpgradeBanner.jsx` (props: tier "pro"|"streamer", title, description, features[], currentPlan, compact, testid). Design coerente con FullBenchmarkReport lock-state: border-2 accent, glow blur, feature preview 2x2, CTA `/pricing?plan=xxx`, "piano attuale" pill.
+- Applicato a:
+  - `Advisor.jsx`: fetch `/subscriptions/status` al mount; se `!is_pro` mostra banner "AI Advisor personalizzato" invece di DiagnosePanel+chat. 4 feature preview: Chat AI context-aware, Diagnose one-click, Screenshot analysis, 5 coach specializzati. testid: advisor-locked.
+  - `Live.jsx`: stesso pattern; se `!is_pro` mostra banner "Live Monitor & Alert" invece di stats+chart+ObsOverlay. Poll telemetry disabilitato quando gated (evita 402 spam). testid: live-locked.
+  - `FullBenchmarkReport.jsx` refactor: sostituito il locked-state custom (46 righe) con `<PlanUpgradeBanner tier="streamer" .../>`. Stesso testid `fullbench-locked`.
+  - `ObsOverlayPanel.jsx` refactor: sostituito locked-state (compact) con `<PlanUpgradeBanner tier="streamer" compact .../>`. testid `overlay-locked`. Aggiunte icone Radio/Layout/Monitor/Zap invece di Lock/Sparkles nell'import.
+- Verificato via screenshot (starter e streamer):
+  - starter/@example → banner "PASSA A PRO" su Advisor e Live, "PASSA A STREAMER" su Full Benchmark. Nessun chat-input, nessuna stat visibile.
+  - streamer/admin (plan=streamer) → chat-input presente, stat-fps=142, obs-overlay-panel visibile, nessun banner. Regressione zero.
+- Consistency win: tutti i 4 banner (Pro Advisor, Pro Live, Streamer FullBench, Streamer OBS) usano lo stesso componente => stesso look/motion/CTA, manutenzione centralizzata.
+
+### 2026-07-25 (37) — i18n banner upgrade IT/EN + feature copy piu' tecnica (FATTO)
+- Aggiunta namespace `plan_banner` in i18n.js (IT+EN) con chiavi: eyebrow_pro/eyebrow_streamer, cta_pro/cta_streamer, current_plan, + sotto-nsp `advisor/live/fullbench/overlay` (title/desc/f1-f4).
+- `PlanUpgradeBanner.jsx`: ora usa `useTranslation()` per eyebrow/CTA/current_plan. Supporta `<b>...</b>` inline nella description (renderRich sanitizza a `<strong className="text-white">`). Rimossa dipendenza dal caller per stringhe UI comuni.
+- Callers refattorizzati per passare solo `t("plan_banner.<page>.<key>")`:
+  - `Advisor.jsx`, `Live.jsx`, `FullBenchmarkReport.jsx`, `ObsOverlayPanel.jsx`.
+- Copy migliorata (piu' concreta e tecnica):
+  - Advisor: Claude Sonnet 4.6 chat context-aware (<2s streaming, cita driver/temp reali), One-click Diagnose (+15 FPS/-8ms), Screenshot vision (BSOD/task manager/BIOS/OBS log), 5 coach specializzati.
+  - Live: 8 metriche @1Hz (elenco esplicito FPS/CPU/GPU/power/temp/RAM/VRAM/latency MsUntilDisplayed), Grafico live 5min con 300 sample rolling + Bottleneck Detector CPU/GPU/VRAM-bound, Alert push termici 40-110°C con cooldown 5min, Session Summary streamer con avg/min/max/1%low export PNG/Web Share.
+  - Full Benchmark: Rileva thermal throttling (ratio <85% dopo 30s burst), RAM hierarchy L2 1MB / L3 32MB / DRAM 512MB, Disk multi-queue QD1+QD32 IOPS gaming vs asset streaming, Live thermal trace Recharts sample-by-sample.
+  - OBS Overlay: 1 URL 0 setup (Browser Source 300x200 + token rigenerabile), 3 temi (Neon/Dark/Minimal) + 4 posizioni angoli, Metriche a scelta (toggle FPS/CPU/GPU/ping/Health), Zero FPS impact (HTML/CSS <10KB, no DirectX/Vulkan touch).
+- Bugfix collaterale: `ObsOverlayPanel` non passava `currentPlan` -> mostrava sempre "starter"; ora legge il piano dal detail del 402 e lo passa.
+- Verificato via screenshot IT e EN su Advisor/Live/FullBench/OBS: banner correttamente localizzati, bold funzionante, feature con testo tecnico.
+
+### 2026-07-25 (38) — Refactor DiagnosePanel/FirstScanBanner + fix chiavi React (FATTO)
+- **DiagnosePanel** 297 -> 33 righe (-91%). Split in 4 file:
+  - `hooks/useDiagnose.js` (148): stato/effetti/handler (run, toggleApplied, submitFeedback, savePlanned, dismiss, toggleVerify, toggleCollapsed) + fetch iniziale (diagnose/latest + applied-tweaks + outcome)
+  - `components/DiagnoseStates.jsx` (114): DiagnoseIdleCTA, DiagnoseLoading, DiagnoseErrorView, DiagnoseEmpty (viste stateless)
+  - `components/DiagnoseResultView.jsx` (64): vista "done" con header/lista actions/footer
+  - `components/DiagnosePanel.jsx` (33): orchestratore, switch state -> view
+- **FirstScanBanner** 228 -> 22 righe (-90%). Split in 4 file:
+  - `hooks/useFirstScanPolling.js` (83): polling con exponential backoff (3s -> 10s dopo 60s), differenzia utente veterano vs first-scan
+  - `components/ScanCompleteBanner.jsx` (47): banner verde post-scan con CPU/GPU/RAM + CTA My PC/Dashboard
+  - `components/ScanPendingBanner.jsx` (86): guida 4 step con StepCard riutilizzabile e step definiti come dati (STEPS.en/it), key={step.id}
+  - `components/FirstScanBanner.jsx` (22): orchestratore, switch status -> view
+- **Fix chiavi React (index -> stable id)**:
+  - `Pricing.jsx`: tier.items -> `${tier.key}-${i}-${it.slice(0,20)}`; features_matrix row -> `row.label` (+ nested cells `${row.label}-${j}`); trust_signals -> `t.label`; faq -> `f.q`
+  - `PrivacyTelemetry.jsx`: collected_list/never_list -> `it`; tiers -> `tier.t`; nested items -> `it`
+  - `Terms.jsx`: sections -> `s.h`
+- Verificato via screenshot:
+  - AI Advisor con admin=streamer -> diagnose-panel + diagnose-result renderizzano (5 azioni AI complete, dismiss, save, mark active), chat sotto attiva
+  - /pricing -> 3 tiers + 8 FAQ items rendono correttamente
+  - /privacy-telemetry -> collected/never/tiers rendering
+  - /terms -> title + 9 sections rendering
+- Zero regressioni funzionali: tutti i data-testid preservati (diagnose-panel, diagnose-btn, diagnose-loading, diagnose-error, diagnose-result, diagnose-actions-list, diagnose-again, diagnose-connect-cta, first-scan-pending/done, first-scan-step-1/2/3/4, faq-item-N).
+
+### 2026-07-25 (39) — Fix overlay OBS tagliato in basso (FATTO)
+- Root cause: con 5 metriche attive (FPS/CPU/GPU/PING/HEALTH) la card era ~220x220px, ma la size consigliata in UI era 300x200 -> body padding 20+20 lasciava solo 160px verticali -> overflow -> fondo tagliato.
+- Layout piu' compatto in `routers/overlay.py`:
+  - body padding 20px -> 8px, aggiunto card max-width: calc(100vw - 16px)
+  - card padding 14/16/12/16 -> 10/12/8/12, min-width 240 -> 220
+  - header margin/padding 10+8 -> 6+5
+  - metric grid 16/42/1fr -> 14/38/1fr, gap 10 -> 8, padding 6/0 -> 3/0
+  - metric num 20px -> 16px, label 10px -> 9px, icon 14 -> 12
+- Nuova dimensione: 5 metriche = 220x173 (fit anche 300x200 con 11px di margine)
+- Copy aggiornata (frontend + i18n IT/EN): consigliati 340x260 (safe zone anche con testo lungo o eventuali metriche future)
+- Verificato via viewport 300x200 e 340x260: `cutoff:false` in entrambi i casi, screenshot rendering pulito con tutti 5 metric visibili
+- Nota: modifica applicata solo su PREVIEW; per PRODUCTION (forgefps.dev) e' necessario redeploy.
+
+### 2026-07-25 (40) — Bugfix menu utente + Novita' & Feedback community section (FATTO)
+- **Bug fix menu utente**: `ProfileMenu` linkava `/app/settings` e `/app/settings#discord` → route inesistenti → catch-all → redirect a landing. Corretti a `/app/account` e `/app/account#discord` (route esistente).
+- **Nuova sezione "Community" in sidebar** (sotto Admin):
+  - `📜 What's New / Novita'` → pagina `/app/changelog` con timeline release da `/api/changelog`, badge NEW dinamico con conteggio unseen (rosso, aggiornato ogni 60s + al cambio route). Mark-seen automatico al mount.
+  - `💬 Feedback` → apre `FeedbackModal.jsx` (tipo bug/idea/altro + textarea + screenshot opzionale + page context automatico via useLocation).
+- **Backend `routers/community.py`**:
+  - `GET /api/changelog` → legge `data/changelog.json` (4 release seeded con storico)
+  - `GET /api/changelog/status` → `{latest, last_seen, unseen}` per il badge
+  - `POST /api/changelog/mark-seen` → upsert in collezione `changelog_seen` per user
+  - `POST /api/feedback` → salva in Mongo (`feedback` collection) + best-effort webhook Discord (`DISCORD_WEBHOOK_FEEDBACK` env, opzionale) con embed colorato per tipo e file upload multipart per screenshot base64
+- **Frontend**:
+  - `pages/AppChangelog.jsx` (in-app, JSON-driven, separato dal `/changelog` marketing pubblico curato manualmente)
+  - `components/FeedbackModal.jsx` con 3 pillole tipo, counter caratteri (max 4000), file picker screenshot (max 1.5MB, PNG/JPG), success state con animazione check
+  - `Layout.jsx` NAV_GROUPS esteso con `section.community` + supporto `action` (button che apre modal) + supporto `badge: "unseen"` con conteggio dinamico
+  - i18n keys aggiunti: `nav.changelog`, `nav.feedback`, `section.community` (IT+EN)
+- Verificato via screenshot (admin login):
+  - Sidebar mostra "COMMUNITY" > "What's New" (badge rosso "4") + "Feedback"
+  - Click Feedback -> modal si apre correttamente con pillole colorate
+  - Click What's New -> pagina renderizza 4 release con LATEST pill su v0.7.6, highlights + all-changes con NEW/FIX badge colorati
+  - Badge sparisce dopo visita (mark-seen ok)
+- Note produzione: fix + feature entrambi in preview; forgefps.dev necessita redeploy.
+
+### 2026-07-25 (41) — Fix flash console silent agent + banner update in-app (FATTO)
+- **Root cause**: `forgefps-agent.exe` buildato con PyInstaller `--console` -> Windows crea la console window PRIMA che Python parta -> anche con ShowWindow(SW_HIDE) restano ~100-500ms di flash visibile durante boot interpreter + import.
+- **Fix v0.7.6 a 2 layer** (`agent-build/forgefps_agent.py`):
+  1. **VBS launcher primario**: nuovo `_write_hidden_launcher()` scrive `%APPDATA%\FrameForge\launcher.vbs` che usa `WshShell.Run(cmd, 0, False)` con SW_HIDE. `register_frameforge_protocol()` ora registra `wscript.exe launcher.vbs "%1"` come handler del protocollo -> process spawnato gia' hidden -> **zero flash**.
+  2. **Belt-and-suspenders `_hide_console_if_silent()`**: chiamato subito dopo argparse (prima di qualsiasi print), nasconde la console via ctypes ShowWindow + redirect stdout/stderr a devnull. Attivo solo se URI contiene `silent=1`. Fallback per il caso in cui .vbs non si riesca a scrivere.
+  3. **Silent+no-token**: se URI silent e token mancante -> `sys.exit(2)` invece di prompt input (evita processo orfano invisibile).
+- **Version tracking** (`X-Agent-Version` header):
+  - Agent v0.7.6 invia `X-Agent-Version: 0.7.6` su `/api/agent/script` (interactive + silent)
+  - Backend `/api/agent/script` legge header e upserta `pc_specs.agent_version + agent_version_at`
+  - Nuovo endpoint `GET /api/agent/status` -> `{installed_version, latest_version, is_outdated, has_ever_run, download_url}`. `latest_version` estratto dinamicamente dall'URL upstream (unico source of truth).
+- **Banner in-app** `AgentUpdateBanner.jsx` (globale, in Layout sopra PlanStatusBanner):
+  - Mostrato solo se `has_ever_run && (installed_version < latest || installed=null)`
+  - Design: bordo giallo lampeggiante, versione installata -> latest con freccia, CTA "Update now" -> `/app/desktop`, dismiss per-versione in sessionStorage (riappare al release successivo)
+  - i18n IT+EN inline
+- Versione bumpata a v0.7.6 in: `AGENT_VERSION`, `version_info.txt` (filevers/prodvers/FileVersion/ProductVersion)
+- Verificato via curl `/api/agent/status` + screenshot banner rendering + dismiss funzionante.
+- ⚠️ Richiede: (1) build+release v0.7.6 GitHub (workflow gia' presente), (2) bump `AGENT_ZIP_UPSTREAM` in backend a v0.7.6, (3) redeploy forgefps.dev.

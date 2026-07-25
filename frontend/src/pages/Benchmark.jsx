@@ -11,6 +11,7 @@ import FleetPercentileCard from "@/components/FleetPercentileCard";
 import BenchmarkSparkline from "@/components/BenchmarkSparkline";
 import NextActionBanner from "@/components/NextActionBanner";
 import GpuReferenceCard from "@/components/GpuReferenceCard";
+import FullBenchmarkReport from "@/components/FullBenchmarkReport";
 
 const BENCH_METRICS = [
   { key: "score", lk: "m_score", unit: "/100", higherBetter: true },
@@ -169,6 +170,7 @@ export default function Benchmark() {
   const [bench, setBench] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [tab, setTab] = useState("quick"); // "quick" | "full"
 
   const load = async () => {
     setLoading(true);
@@ -257,6 +259,28 @@ export default function Benchmark() {
 
       <BrowserPopupHint testid="bench-popup-hint" />
 
+      {/* Tabs: Quick vs Full Benchmark */}
+      <div className="flex items-center gap-1 border-b border-[#2A2A35] mb-5">
+        <button
+          onClick={() => setTab("quick")}
+          data-testid="tab-quick-bench"
+          className={`px-4 py-2 text-xs uppercase tracking-widest font-mono transition-colors border-b-2 ${tab === "quick" ? "text-[#E5FF00] border-[#E5FF00]" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}
+        >
+          Quick Benchmark
+        </button>
+        <button
+          onClick={() => setTab("full")}
+          data-testid="tab-full-bench"
+          className={`px-4 py-2 text-xs uppercase tracking-widest font-mono transition-colors border-b-2 ${tab === "full" ? "text-[#00E0FF] border-[#00E0FF]" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}
+        >
+          Full Benchmark <span className="text-[#00E0FF] text-[9px] ml-1">v2</span>
+        </button>
+      </div>
+
+      {tab === "full" ? (
+        <FullBenchmarkReport />
+      ) : (
+      <>
       <div className="mb-4">
         <GpuReferenceCard />
       </div>
@@ -283,6 +307,8 @@ export default function Benchmark() {
             {t("bench.run_first", { defaultValue: "Esegui il primo benchmark" })}
           </button>
         </div>
+      )}
+      </>
       )}
     </div>
   );

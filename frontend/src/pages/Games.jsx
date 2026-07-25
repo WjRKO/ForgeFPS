@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Gauge, Loader2, Swords, MonitorDown, Search, Sparkles, RefreshCw, Settings2, Save, Zap } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
+import { PrimaryButton } from "@/components/hud";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
 
 const RES = ["1080p", "1440p", "4K"];
@@ -269,10 +270,9 @@ export default function Games() {
               <input data-testid="game-input" value={game} onChange={(e) => setGame(e.target.value)} placeholder={t("games.analyze_ph")}
                 onKeyDown={(e) => e.key === "Enter" && estimate()}
                 className="flex-1 bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 text-sm" />
-              <button data-testid="game-search-btn" onClick={() => estimate()} disabled={loading}
-                className="bg-[#E5FF00] text-black px-4 font-bold hover:bg-[#D4EC00] transition-colors disabled:opacity-60 flex items-center">
+              <PrimaryButton testid="game-search-btn" onClick={() => estimate()} disabled={loading} className="!px-4">
                 {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
-              </button>
+              </PrimaryButton>
             </div>
             <div className="flex gap-2 mt-3">
               {RES.map((r) => (

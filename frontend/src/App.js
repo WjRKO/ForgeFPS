@@ -14,10 +14,12 @@ const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const Security = lazy(() => import("@/pages/Security"));
 const PrivacyTelemetry = lazy(() => import("@/pages/PrivacyTelemetry"));
 const Changelog = lazy(() => import("@/pages/Changelog"));
+const AppChangelog = lazy(() => import("@/pages/AppChangelog"));
 const Terms = lazy(() => import("@/pages/Terms"));
 const AuthMobile = lazy(() => import("@/pages/AuthMobile"));
 const Guide = lazy(() => import("@/pages/Guide"));
 const Pricing = lazy(() => import("@/pages/Pricing"));
+const PaymentSuccess = lazy(() => import("@/pages/PaymentSuccess"));
 const DemoApp = lazy(() => import("@/pages/DemoApp"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Advisor = lazy(() => import("@/pages/Advisor"));
@@ -33,6 +35,7 @@ const Network = lazy(() => import("@/pages/Network"));
 const BiosRestore = lazy(() => import("@/pages/BiosRestore"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const Account = lazy(() => import("@/pages/Account"));
+const Billing = lazy(() => import("@/pages/Billing"));
 const Report = lazy(() => import("@/pages/Report"));
 
 const Fallback = () => (
@@ -81,6 +84,7 @@ function App() {
               <Route path="/guida" element={<Guide />} />
               <Route path="/guide" element={<Navigate to="/guida" replace />} />
               <Route path="/pricing" element={<Pricing />} />
+              <Route path="/payment/success" element={<PaymentSuccess />} />
               <Route path="/demo" element={<DemoApp />} />
               <Route path="/login" element={<Guest><Auth mode="login" /></Guest>} />
               <Route path="/register" element={<Guest><Auth mode="register" /></Guest>} />
@@ -105,6 +109,8 @@ function App() {
                 <Route path="commands" element={<Commands />} />
                 <Route path="desktop" element={<DesktopAgent />} />
                 <Route path="account" element={<Account />} />
+                <Route path="billing" element={<Billing />} />
+                <Route path="changelog" element={<AppChangelog />} />
                 <Route path="admin" element={<AdminOnly><Admin /></AdminOnly>} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />

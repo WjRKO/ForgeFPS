@@ -60,8 +60,8 @@ export default function PrivacyTelemetry() {
           <div className="bg-[#0F0F12] border border-[#00FF66]/30 border-l-2 border-l-[#00FF66] p-6" data-testid="collected-col">
             <div className="text-xs font-mono uppercase tracking-widest text-[#00FF66] mb-4">{c.collected}</div>
             <ul className="space-y-3">
-              {c.collected_list.map((it, i) => (
-                <li key={i} className="flex items-center gap-3 text-sm text-zinc-200">
+              {c.collected_list.map((it) => (
+                <li key={it} className="flex items-center gap-3 text-sm text-zinc-200">
                   <span className="w-5 h-5 border border-[#00FF66] flex items-center justify-center shrink-0"><Check size={12} className="text-[#00FF66]" /></span>{it}
                 </li>
               ))}
@@ -70,8 +70,8 @@ export default function PrivacyTelemetry() {
           <div className="bg-[#0F0F12] border border-[#FF3B30]/30 border-l-2 border-l-[#FF3B30] p-6" data-testid="never-col">
             <div className="text-xs font-mono uppercase tracking-widest text-[#FF3B30] mb-4">{c.never}</div>
             <ul className="space-y-3">
-              {c.never_list.map((it, i) => (
-                <li key={i} className="flex items-center gap-3 text-sm text-zinc-200">
+              {c.never_list.map((it) => (
+                <li key={it} className="flex items-center gap-3 text-sm text-zinc-200">
                   <span className="w-5 h-5 border border-[#FF3B30] flex items-center justify-center shrink-0"><X size={12} className="text-[#FF3B30]" /></span>{it}
                 </li>
               ))}
@@ -91,16 +91,16 @@ export default function PrivacyTelemetry() {
         {/* Tiers */}
         <h2 className="font-display font-black text-2xl tracking-tight mb-6">{c.tiers_title}</h2>
         <div className="grid md:grid-cols-3 gap-4">
-          {c.tiers.map((tier, i) => (
-            <div key={i} className="bg-[#0F0F12] border border-[#1A1A24] p-6" data-testid={`tier-${tier.t.toLowerCase()}`}>
+          {c.tiers.map((tier) => (
+            <div key={tier.t} className="bg-[#0F0F12] border border-[#1A1A24] p-6" data-testid={`tier-${tier.t.toLowerCase()}`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="w-10 h-10 border border-[#2A2A35] flex items-center justify-center text-[#E5FF00]"><tier.icon size={18} /></div>
                 <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 border border-[#1A1A24] px-2 py-1">[ {tier.tag} ]</span>
               </div>
               <h3 className="font-display font-bold text-lg mb-3">{tier.t}</h3>
               <ul className="space-y-2">
-                {tier.items.map((it, j) => (
-                  <li key={j} className="flex items-center gap-2 text-sm text-zinc-400"><Check size={13} className="text-[#00FF66] shrink-0" /> {it}</li>
+                {tier.items.map((it) => (
+                  <li key={it} className="flex items-center gap-2 text-sm text-zinc-400"><Check size={13} className="text-[#00FF66] shrink-0" /> {it}</li>
                 ))}
               </ul>
             </div>

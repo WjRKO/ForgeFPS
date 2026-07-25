@@ -10,7 +10,7 @@ from database import db, client
 from auth import build_auth_router, seed_admin
 from helpers import refresh_product_price
 from settings import get_cors_origins, get_cors_origin_regex
-from routers import advisor, builds, products, pc, push_routes, admin, profiles, discord as discord_router
+from routers import advisor, builds, products, pc, push_routes, admin, profiles, discord as discord_router, subscriptions, payments, overlay, community
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("boostpc")
@@ -20,7 +20,7 @@ auth_router, get_current_user = build_auth_router(db)
 scheduler = AsyncIOScheduler()
 
 app.include_router(auth_router)
-for module in (advisor, builds, products, pc, push_routes, admin, profiles, discord_router):
+for module in (advisor, builds, products, pc, push_routes, admin, profiles, discord_router, subscriptions, payments, overlay, community):
     app.include_router(module.build(get_current_user))
 
 
@@ -48,11 +48,28 @@ app.add_middleware(
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+    # Overlay HTML pages need permissive CSP + iframe embed (per OBS Browser Source
+    # in ambienti di preview con iframe). Skippiamo l'X-Frame-Options e usiamo un
+    # CSP piu' permissivo per queste route.
+    path = request.url.path
+    is_overlay_html = path.startswith("/api/overlay/") and not (path.endswith("/data") or path.endswith("/config") or path.endswith("/token"))
+    if is_overlay_html:
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "connect-src 'self'; "
+            "img-src 'self' data:; "
+            "font-src 'self' data:; "
+            "frame-ancestors *;"
+        )
+        # NO X-Frame-Options: gli overlay devono poter essere embeddati (OBS/iframe preview)
+    else:
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
     return response
 
 PRICE_CHECK_BATCH = 100
@@ -66,6 +83,47 @@ async def scheduled_price_check():
             await refresh_product_price(product)
         except Exception as e:
             logger.warning(f"Price check failed for {product.get('id')}: {e}")
+
+
+async def scheduled_trial_reminders():
+    """Ogni giorno alle 09:00 UTC: manda email di reminder ai trial in scadenza T-3 e T-1.
+
+    Idempotent via campo `trial_reminder_sent_at` sul doc user.
+    """
+    from datetime import datetime, timezone, timedelta
+    from email_service import send_trial_ending
+    now = datetime.now(timezone.utc)
+    logger.info("Running scheduled trial reminders...")
+
+    cursor = db.users.find({
+        "plan": {"$in": ["pro_trial", "streamer_trial"]},
+        "trial_expires_at": {"$ne": None},
+    })
+    sent = 0
+    async for user in cursor:
+        try:
+            exp_str = user.get("trial_expires_at")
+            if not exp_str:
+                continue
+            exp = datetime.fromisoformat(exp_str.replace("Z", "+00:00")) if isinstance(exp_str, str) else exp_str
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            delta = exp - now
+            days_left = delta.days + (1 if delta.seconds > 0 else 0)
+            if days_left not in (1, 3):
+                continue
+            # Idempotency: non rimandare se gia' inviato per questa soglia
+            already = (user.get("trial_reminder_sent") or {}).get(f"t_{days_left}")
+            if already:
+                continue
+            await send_trial_ending(user["email"], user.get("name", ""), user.get("plan", "pro_trial"), days_left)
+            await db.users.update_one({"_id": user["_id"]}, {"$set": {
+                f"trial_reminder_sent.t_{days_left}": now.isoformat(),
+            }})
+            sent += 1
+        except Exception as e:
+            logger.warning("trial reminder failed for %s: %s", user.get("email"), e)
+    logger.info("Trial reminders sent: %d", sent)
 
 
 async def _ensure_indexes():
@@ -96,6 +154,7 @@ async def startup():
     await seed_admin(db)
     _write_test_credentials()
     scheduler.add_job(scheduled_price_check, "interval", minutes=45, id="price_check", replace_existing=True)
+    scheduler.add_job(scheduled_trial_reminders, "cron", hour=9, minute=0, id="trial_reminders", replace_existing=True)
     scheduler.start()
     # Discord: annuncia release nuove (non-blocking se webhook non configurato)
     try:

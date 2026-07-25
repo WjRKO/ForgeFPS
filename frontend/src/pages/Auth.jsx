@@ -1,14 +1,27 @@
+import api from "@/lib/api";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Zap, Loader2, Check } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Zap, Loader2, Check, Gift } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { trackConversion } from "@/lib/gtag";
 
+// Localizzata per il badge trial mostrato quando /register?plan=pro_trial|streamer_trial
+const TRIAL_BADGE = {
+  it: {
+    pro_trial: { title: "Stai attivando il trial di Pro", body: "14 giorni gratis + tutte le feature Pro. Nessuna carta richiesta ora." },
+    streamer_trial: { title: "Stai attivando il trial di Streamer", body: "14 giorni gratis + tutte le feature Creator. Nessuna carta richiesta ora." },
+  },
+  en: {
+    pro_trial: { title: "You're starting the Pro trial", body: "14 days free + all Pro features. No card required now." },
+    streamer_trial: { title: "You're starting the Streamer trial", body: "14 days free + all Creator features. No card required now." },
+  },
+};
+
 export default function Auth({ mode }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isLogin = mode === "login";
   usePageMeta(
     isLogin ? t("auth.meta_login_title") : t("auth.meta_register_title"),
@@ -16,6 +29,10 @@ export default function Auth({ mode }) {
   );
   const { login, register, formatApiErrorDetail } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const planHint = searchParams.get("plan");
+  const lang = (i18n.language || "").startsWith("en") ? "en" : "it";
+  const trialCopy = !isLogin && planHint && TRIAL_BADGE[lang]?.[planHint];
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,6 +51,20 @@ export default function Auth({ mode }) {
       } else {
         await register(name, email, password);
         trackConversion("signup");
+        // v0.7.5: se l'utente e' arrivato da /pricing con planHint, attiviamo
+        // subito il trial via POST /subscriptions/start-trial. Il backend crea
+        // il record con trial_expires_at = now + 14gg. Se il POST fallisce
+        // (es. utente gia' con trial usato) proseguiamo comunque al dashboard.
+        if (planHint === "pro_trial" || planHint === "streamer_trial") {
+          try {
+            await api.post("/subscriptions/start-trial", { plan: planHint });
+            window.localStorage.removeItem("ff_pending_plan");
+          } catch (trialErr) {
+            // Salva l'intent per un retry manuale dal dashboard
+            try { window.localStorage.setItem("ff_pending_plan", planHint); } catch {}
+            console.warn("[trial] auto-start failed", trialErr?.response?.data || trialErr);
+          }
+        }
         // Attiva il tour di onboarding solo per i neo-registrati (una tantum)
         try { window.localStorage.setItem("ff_show_tour_pending", "1"); } catch {}
       }
@@ -54,6 +85,16 @@ export default function Auth({ mode }) {
         <div className="bg-[#0F0F12] border border-[#2A2A35] p-8">
           <h1 className="font-display font-bold text-2xl tracking-tight mb-1">{isLogin ? t("auth.login_title") : t("auth.register_title")}</h1>
           <p className="text-zinc-500 text-sm mb-6">{isLogin ? t("auth.login_sub") : t("auth.register_sub")}</p>
+
+          {trialCopy && (
+            <div className="mb-6 border border-[#E5FF00]/40 bg-[#E5FF00]/5 p-3.5 flex items-start gap-2.5" data-testid="trial-badge">
+              <Gift size={16} className="text-[#E5FF00] shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-[#E5FF00]">{trialCopy.title}</div>
+                <div className="text-xs text-zinc-400 mt-0.5 leading-relaxed">{trialCopy.body}</div>
+              </div>
+            </div>
+          )}
 
           {error && <div data-testid="auth-error" className="mb-4 text-sm text-[#FF3B30] border border-[#FF3B30]/40 bg-[#FF3B30]/10 px-3 py-2">{error}</div>}
 
