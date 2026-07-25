@@ -1257,3 +1257,24 @@ Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi
 - Versione bumpata a v0.7.6 in: `AGENT_VERSION`, `version_info.txt` (filevers/prodvers/FileVersion/ProductVersion)
 - Verificato via curl `/api/agent/status` + screenshot banner rendering + dismiss funzionante.
 - ⚠️ Richiede: (1) build+release v0.7.6 GitHub (workflow gia' presente), (2) bump `AGENT_ZIP_UPSTREAM` in backend a v0.7.6, (3) redeploy forgefps.dev.
+
+### 2026-07-25 (42) — Agent v0.7.6: auto-update + progress bar + zero-flash GUI (FATTO)
+- **c1 · Auto-update in-place** (`_check_and_apply_update()` in forgefps_agent.py):
+  - Al boot dopo protocol registration, chiama endpoint pubblico `/api/agent/latest-version` (no auth cookie richiesto → creato in `pc.py`)
+  - Se `latest > AGENT_VERSION` → scarica ZIP in `%APPDATA%\FrameForge\update\`, estrae, trova nuovo exe
+  - Genera `update.bat` che: aspetta 2s, copia sopra l'exe, rilancia con `--from-updater --skip-update-check`, cleanup
+  - Main exe fa sys.exit(0). Zero loop grazie a `--from-updater`. Silenzioso su timeout/rete morta.
+- **b4 · Progress bar reale** (`class Progress`):
+  - Barra ANSI 24-char con cyan/green icon (✔/✘) + pct + msg troncato a 60 char
+  - Fallback log-style `[N/T] OK · msg` se stdout non-TTY (console nascosta o redirect)
+  - `apply_all_tweaks()` refactorato: 15+ `print("[STEP]/...")` sparsi → `prog.step("msg")` sequenziale + `prog.done()` finale
+  - Zero dipendenze esterne (no rich/tqdm → PyInstaller bundle stabile)
+- **b1 · Zero flash console anche per GUI launch**:
+  - Nuovi flag CLI: `--no-console`, `--from-updater`, `--skip-update-check`
+  - `launcher.vbs` ora passa `--no-console` all'exe
+  - `_hide_console_if_silent()` esteso: nasconde se `--no-console` OR `silent=1` in URI
+  - Effetto: qualunque protocol click (silent + non-silent) → console mai visibile. La PS window che spawna resta visibile (e' l'UI vera).
+- Aggiornato `data/changelog.json`: entry v0.7.6 con highlights + changes accurati
+- Verificato: `/api/agent/latest-version` risponde `{version:"0.7.5", download_url:...}` (server-side gia' pronto; bumpa a 0.7.6 quando la release e' pubblicata).
+- Sintassi Python OK, backend up.
+- ⚠️ Richiede build+release v0.7.6 su GitHub per attivare auto-update; poi bump `AGENT_ZIP_UPSTREAM` per far scattare l'update automatico agli utenti su 0.7.5.
