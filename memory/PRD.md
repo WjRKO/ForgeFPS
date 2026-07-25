@@ -1217,3 +1217,25 @@ Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi
 - Copy aggiornata (frontend + i18n IT/EN): consigliati 340x260 (safe zone anche con testo lungo o eventuali metriche future)
 - Verificato via viewport 300x200 e 340x260: `cutoff:false` in entrambi i casi, screenshot rendering pulito con tutti 5 metric visibili
 - Nota: modifica applicata solo su PREVIEW; per PRODUCTION (forgefps.dev) e' necessario redeploy.
+
+### 2026-07-25 (40) — Bugfix menu utente + Novita' & Feedback community section (FATTO)
+- **Bug fix menu utente**: `ProfileMenu` linkava `/app/settings` e `/app/settings#discord` → route inesistenti → catch-all → redirect a landing. Corretti a `/app/account` e `/app/account#discord` (route esistente).
+- **Nuova sezione "Community" in sidebar** (sotto Admin):
+  - `📜 What's New / Novita'` → pagina `/app/changelog` con timeline release da `/api/changelog`, badge NEW dinamico con conteggio unseen (rosso, aggiornato ogni 60s + al cambio route). Mark-seen automatico al mount.
+  - `💬 Feedback` → apre `FeedbackModal.jsx` (tipo bug/idea/altro + textarea + screenshot opzionale + page context automatico via useLocation).
+- **Backend `routers/community.py`**:
+  - `GET /api/changelog` → legge `data/changelog.json` (4 release seeded con storico)
+  - `GET /api/changelog/status` → `{latest, last_seen, unseen}` per il badge
+  - `POST /api/changelog/mark-seen` → upsert in collezione `changelog_seen` per user
+  - `POST /api/feedback` → salva in Mongo (`feedback` collection) + best-effort webhook Discord (`DISCORD_WEBHOOK_FEEDBACK` env, opzionale) con embed colorato per tipo e file upload multipart per screenshot base64
+- **Frontend**:
+  - `pages/AppChangelog.jsx` (in-app, JSON-driven, separato dal `/changelog` marketing pubblico curato manualmente)
+  - `components/FeedbackModal.jsx` con 3 pillole tipo, counter caratteri (max 4000), file picker screenshot (max 1.5MB, PNG/JPG), success state con animazione check
+  - `Layout.jsx` NAV_GROUPS esteso con `section.community` + supporto `action` (button che apre modal) + supporto `badge: "unseen"` con conteggio dinamico
+  - i18n keys aggiunti: `nav.changelog`, `nav.feedback`, `section.community` (IT+EN)
+- Verificato via screenshot (admin login):
+  - Sidebar mostra "COMMUNITY" > "What's New" (badge rosso "4") + "Feedback"
+  - Click Feedback -> modal si apre correttamente con pillole colorate
+  - Click What's New -> pagina renderizza 4 release con LATEST pill su v0.7.6, highlights + all-changes con NEW/FIX badge colorati
+  - Badge sparisce dopo visita (mark-seen ok)
+- Note produzione: fix + feature entrambi in preview; forgefps.dev necessita redeploy.

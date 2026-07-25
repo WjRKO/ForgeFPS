@@ -1,0 +1,58 @@
+[
+  {
+    "version": "0.7.6",
+    "date": "2026-07-25",
+    "highlights": [
+      "Novita' & Feedback: nuova sezione in fondo alla sidebar",
+      "OBS Overlay piu' compatto, contenuto non piu' tagliato",
+      "Banner upgrade unificati con traduzione IT/EN"
+    ],
+    "changes": [
+      { "type": "feature", "text": "Nuova pagina Changelog con storico release e badge NEW sui nuovi update" },
+      { "type": "feature", "text": "Feedback rapido: modal con bug/idea/altro + screenshot opzionale" },
+      { "type": "fix", "text": "OBS overlay tagliato in basso: padding e font ridotti, ora entra anche a 300x200. Nuovo default consigliato: 340x260" },
+      { "type": "fix", "text": "Menu utente: 'Profilo & Sicurezza' e 'Collega Discord' portavano alla landing (route errata /app/settings -> /app/account)" }
+    ]
+  },
+  {
+    "version": "0.7.5",
+    "date": "2026-07-24",
+    "highlights": [
+      "Banner upgrade unificato per tutte le feature Pro/Streamer",
+      "AI Advisor: DiagnosePanel refactorato in moduli piu' piccoli"
+    ],
+    "changes": [
+      { "type": "feature", "text": "Nuovo componente PlanUpgradeBanner condiviso, con i18n EN/IT e feature descrittive piu' tecniche (numeri reali, API, soglie)" },
+      { "type": "feature", "text": "Advisor e Live Monitor mostrano il banner di upgrade se il piano non basta" },
+      { "type": "refactor", "text": "DiagnosePanel 297 -> 33 righe (hook + 4 sotto-viste)" },
+      { "type": "refactor", "text": "FirstScanBanner 228 -> 22 righe (polling in hook, step-card riutilizzabile)" }
+    ]
+  },
+  {
+    "version": "0.7.4",
+    "date": "2026-07-23",
+    "highlights": [
+      "OBS Browser Source overlay per streamer",
+      "Full Benchmark v2 esclusivo Streamer"
+    ],
+    "changes": [
+      { "type": "feature", "text": "URL overlay per OBS Studio: FPS/CPU/GPU/temp/ping sopra lo stream, 3 temi + 4 posizioni" },
+      { "type": "feature", "text": "Full Benchmark Report con burst+sustained CPU, RAM L2/L3/DRAM, disk multi-QD, thermal trace live" },
+      { "type": "feature", "text": "Bufferbloat v2: sub-grade idle/loaded/consistency + p99 tail latency" },
+      { "type": "feature", "text": "PDF Export con tabella tweak applicati e timestamp" }
+    ]
+  },
+  {
+    "version": "0.7.3",
+    "date": "2026-07-22",
+    "highlights": [
+      "Resend email transazionali",
+      "Stripe Checkout Sandbox integrato"
+    ],
+    "changes": [
+      { "type": "feature", "text": "5 template email transazionali (welcome, trial start, trial ending, payment success, payment failed)" },
+      { "type": "feature", "text": "Stripe Checkout con 3 tier: Free / Pro / Streamer" },
+      { "type": "feature", "text": "TrialUpgradeBanner dinamico nel menu utente" }
+    ]
+  }
+]

@@ -14,6 +14,7 @@ const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const Security = lazy(() => import("@/pages/Security"));
 const PrivacyTelemetry = lazy(() => import("@/pages/PrivacyTelemetry"));
 const Changelog = lazy(() => import("@/pages/Changelog"));
+const AppChangelog = lazy(() => import("@/pages/AppChangelog"));
 const Terms = lazy(() => import("@/pages/Terms"));
 const AuthMobile = lazy(() => import("@/pages/AuthMobile"));
 const Guide = lazy(() => import("@/pages/Guide"));
@@ -109,6 +110,7 @@ function App() {
                 <Route path="desktop" element={<DesktopAgent />} />
                 <Route path="account" element={<Account />} />
                 <Route path="billing" element={<Billing />} />
+                <Route path="changelog" element={<AppChangelog />} />
                 <Route path="admin" element={<AdminOnly><Admin /></AdminOnly>} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
