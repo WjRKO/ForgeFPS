@@ -19,6 +19,9 @@ $MODE    = $Mode
 $BACKUP  = Join-Path $env:TEMP 'forgefps_backup.json'
 $BACKUP_LEGACY = Join-Path $env:TEMP 'boostpc_backup.json'  # v0.7.3+: fallback lettura vecchio nome
 $script:PROFILE = @(__PROFILE_IDS__)
+$INSTALLED_VER = '__INSTALLED_AGENT_VER__'
+$LATEST_VER    = '__LATEST_AGENT_VER__'
+$AGENT_DL_URL  = '__AGENT_DL_URL__'
 
 if ([string]::IsNullOrWhiteSpace($TOKEN)) {
   Write-Host ''
@@ -44,6 +47,13 @@ $script:BK = @{}
 # v0.7.3+: fallback lettura vecchio nome per upgrade indolore
 $__bkFile = if (Test-Path $BACKUP) { $BACKUP } elseif (Test-Path $BACKUP_LEGACY) { $BACKUP_LEGACY } else { '' }
 if ($__bkFile) { try { $script:BK = Get-Content $__bkFile -Raw | ConvertFrom-Json | ConvertTo-HashtableSafe } catch { $script:BK = @{} } }
+# v0.7.7: mappa tweak-id -> chiavi di backup che quel tweak ha creato (per revert granulare)
+$script:TWKEYS = @{}
+if ($script:BK.ContainsKey('__tweak_keys__')) {
+  $__tk = $script:BK['__tweak_keys__']
+  if ($__tk) { foreach ($p in $__tk.PSObject.Properties) { $script:TWKEYS[$p.Name] = @($p.Value) } }
+  $script:BK.Remove('__tweak_keys__')
+}
 
 function Backup-Reg($path, $name, $type) {
   $key = "$path::$name"
@@ -81,10 +91,26 @@ function Disable-ServiceSafe($name) {
   return $true
 }
 function Save-Backup {
-  $script:BK | ConvertTo-Json -Depth 6 | Set-Content $BACKUP
+  $__out = @{}
+  foreach ($k in $script:BK.Keys) { $__out[$k] = $script:BK[$k] }
+  if ($script:TWKEYS.Count -gt 0) { $__out['__tweak_keys__'] = $script:TWKEYS }
+  $__out | ConvertTo-Json -Depth 6 | Set-Content $BACKUP
   # v0.7.3+: se esiste ancora il legacy, rimuovilo (dopo il primo save su nuovo path)
   if (Test-Path $BACKUP_LEGACY) { Remove-Item $BACKUP_LEGACY -ErrorAction SilentlyContinue }
 }
+
+# v0.7.7: applica un tweak tracciando quali chiavi di backup ha creato -> revert granulare
+function Invoke-ApplyTracked($t) {
+  $__pre = @($script:BK.Keys)
+  & $t.apply
+  $__new = @($script:BK.Keys | Where-Object { $__pre -notcontains $_ })
+  if ($__new.Count -gt 0) {
+    $__ex = @(); if ($script:TWKEYS.ContainsKey($t.id)) { $__ex = @($script:TWKEYS[$t.id]) }
+    $script:TWKEYS[$t.id] = @(@($__ex + $__new) | Select-Object -Unique)
+  }
+}
+function Get-RevertableIds { return @($script:TWKEYS.Keys) }
+function Get-BackupIds { if ($script:TWKEYS.Count -gt 0) { return @($script:TWKEYS.Keys) } return @($script:BK.Keys) }
 
 function Get-RegVal($path, $name) { return (Get-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue).$name }
 function Get-GpuPnp { $g = Get-CimInstance Win32_VideoController | Where-Object { $_.PNPDeviceID -like 'PCI*' } | Select-Object -First 1; return $g.PNPDeviceID }
@@ -1187,6 +1213,47 @@ $script:BLOAT = @('Microsoft.549981C3F5F10','Microsoft.BingNews','Microsoft.Bing
   'king.com.CandyCrushSaga','Microsoft.SkypeApp')
 function Do-Debloat { foreach ($pkg in $script:BLOAT) { $app = Get-AppxPackage -Name $pkg -ErrorAction SilentlyContinue; if ($app) { $app | Remove-AppxPackage -ErrorAction SilentlyContinue } } }
 
+# ---------------- Bloatware auto-discovery (v0.7.7, allineato a tweaks.py) ----------------
+$script:BLOAT_PATTERNS = @('Microsoft.Bing*','Microsoft.Advertising*','Microsoft.OneConnect','*CandyCrush*',
+  '*Disney*','*Netflix*','*Facebook*','*Twitter*','*Spotify*','*.DellCustomerConnect','*.DellDigitalDelivery',
+  '*.HPPCHardwareDiagnostics*','*HPJumpStart*','*LenovoVantage*','*LenovoUtility*','*Dropbox*Promo*','*McAfee*','*Norton*')
+$script:BLOAT_NEVER = @('Microsoft.WindowsStore','Microsoft.WindowsCalculator','Microsoft.Windows.Photos',
+  'Microsoft.ScreenSketch','Microsoft.WindowsTerminal','Microsoft.Windows.SecHealthUI','Microsoft.DesktopAppInstaller',
+  'Microsoft.WindowsCamera','Microsoft.WindowsSoundRecorder','Microsoft.WindowsNotepad','Microsoft.HEIFImageExtension',
+  'Microsoft.WebpImageExtension','Microsoft.RawImageExtension','Microsoft.VP9VideoExtensions','Microsoft.HEVCVideoExtension',
+  'Microsoft.AV1VideoExtension','Microsoft.WebMediaExtensions','Microsoft.MPEG2VideoExtension',
+  'Microsoft.LanguageExperiencePack*','Microsoft.UI.Xaml*','Microsoft.VCLibs*','Microsoft.NET.Native*')
+
+function Test-BloatProtected($name) {
+  foreach ($nr in $script:BLOAT_NEVER) {
+    if ($nr.EndsWith('*')) { if ($name -like $nr) { return $true } }
+    elseif ($name -ieq $nr) { return $true }
+  }
+  return $false
+}
+
+function Get-BloatCandidates {
+  $found = @{}
+  foreach ($p in $script:BLOAT) {
+    $a = Get-AppxPackage -Name $p -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($a) { $found[$a.Name] = $a }
+  }
+  foreach ($pat in $script:BLOAT_PATTERNS) {
+    Get-AppxPackage -Name $pat -ErrorAction SilentlyContinue | ForEach-Object { $found[$_.Name] = $_ }
+  }
+  $out = @()
+  foreach ($k in @($found.Keys | Sort-Object)) {
+    if (Test-BloatProtected $k) { continue }
+    $a = $found[$k]
+    $sizeMb = 0
+    try { if ($a.InstallLocation -and (Test-Path $a.InstallLocation)) {
+      $sizeMb = [math]::Round(((Get-ChildItem $a.InstallLocation -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum) / 1MB, 1)
+    } } catch {}
+    $out += @{ name = $a.Name; version = "$($a.Version)"; size_mb = $sizeMb; curated = ($script:BLOAT -contains $a.Name) }
+  }
+  return ,@($out)
+}
+
 # ---------------- Tweak catalogue (cat / id / name / desc / state / apply) ----------------
 $script:TWEAKS = @(
   # GAMING & FPS
@@ -1457,39 +1524,59 @@ $script:PRESETS = @{
 }
 
 # ---------------- Restore ----------------
+# v0.7.7: logica per-chiave estratta da Invoke-Restore per il revert granulare.
+function Restore-OneKey($k, $v) {
+  if ($k -eq '__tweak_keys__') { return }
+  if ($k -eq 'power_plan') { if ($v) { powercfg -setactive $v 2>$null }; return }
+  if ($k -eq 'hib') { powercfg -h on 2>$null; return }
+  if ($k.StartsWith('svc::')) {
+    $svcName = $k.Substring(5); $st = "$v"
+    $mode = switch -Wildcard ($st) { 'Auto*' {'Automatic'} 'Manual' {'Manual'} 'Disabled' {'Disabled'} default {'Manual'} }
+    Set-Service $svcName -StartupType $mode 2>$null
+    if ($mode -ne 'Disabled') { Start-Service $svcName 2>$null }
+    return
+  }
+  if ($k -eq 'ntfs::lastaccess') { fsutil behavior set disablelastaccess ([int]$v) 2>$null | Out-Null; return }
+  if ($k.StartsWith('dns::')) { Set-DnsClientServerAddress -InterfaceAlias $k.Substring(5) -ResetServerAddresses 2>$null; return }
+  $parts = $k -split '::', 2
+  if ($parts.Count -ne 2) { return }
+  $path = $parts[0]; $name = $parts[1]
+  if ($v -eq '__ABSENT__') { Remove-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue }
+  else {
+    $tv = "$v" -split '\|', 2; $tp = $tv[0]; $vv = $tv[1]
+    if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
+    if ($tp -eq 'DWord') { New-ItemProperty -Path $path -Name $name -PropertyType DWord -Value ([int64]$vv) -Force | Out-Null }
+    else { New-ItemProperty -Path $path -Name $name -PropertyType String -Value $vv -Force | Out-Null }
+  }
+}
+
+# v0.7.7: ripristina SOLO le chiavi di backup create da un singolo tweak.
+function Invoke-RestoreTweak($id) {
+  if (-not $script:TWKEYS.ContainsKey($id)) { return 'Nessun backup per questo tweak.' }
+  $keys = @($script:TWKEYS[$id])
+  foreach ($k in $keys) {
+    if ($script:BK.ContainsKey($k)) { Restore-OneKey $k $script:BK[$k]; $script:BK.Remove($k) }
+  }
+  $script:TWKEYS.Remove($id)
+  if ($id -eq 'network') { netsh int tcp set global autotuninglevel=normal 2>$null | Out-Null }
+  Save-Backup
+  return 'Tweak ripristinato al valore precedente.'
+}
+
 function Invoke-Restore {
   # v0.7.3+: legge anche dal file legacy se il nuovo non esiste
   $__rf = if (Test-Path $BACKUP) { $BACKUP } elseif (Test-Path $BACKUP_LEGACY) { $BACKUP_LEGACY } else { '' }
   if (-not $__rf) { return 'Nessun backup trovato.' }
   $b = Get-Content $__rf -Raw | ConvertFrom-Json | ConvertTo-HashtableSafe
-  if ($b.ContainsKey('power_plan') -and $b['power_plan']) { powercfg -setactive $b['power_plan'] 2>$null }
-  if ($b.ContainsKey('hib')) { powercfg -h on 2>$null }
   foreach ($k in $b.Keys) {
-    if ($k -eq 'power_plan' -or $k -eq 'hib') { continue }
-    if ($k.StartsWith('svc::')) {
-      $svcName = $k.Substring(5); $st = $b[$k]
-      $mode = switch -Wildcard ($st) { 'Auto*' {'Automatic'} 'Manual' {'Manual'} 'Disabled' {'Disabled'} default {'Manual'} }
-      Set-Service $svcName -StartupType $mode 2>$null
-      if ($mode -ne 'Disabled') { Start-Service $svcName 2>$null }
-      continue
-    }
-    if ($k -eq 'ntfs::lastaccess') { fsutil behavior set disablelastaccess ([int]$b[$k]) 2>$null | Out-Null; continue }
-    if ($k.StartsWith('dns::')) { Set-DnsClientServerAddress -InterfaceAlias $k.Substring(5) -ResetServerAddresses 2>$null; continue }
-    $parts = $k -split '::', 2
-    if ($parts.Count -ne 2) { continue }
-    $path = $parts[0]; $name = $parts[1]; $v = $b[$k]
-    if ($v -eq '__ABSENT__') { Remove-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue }
-    else {
-      $tv = $v -split '\|', 2; $tp = $tv[0]; $vv = $tv[1]
-      if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
-      if ($tp -eq 'DWord') { New-ItemProperty -Path $path -Name $name -PropertyType DWord -Value ([int64]$vv) -Force | Out-Null }
-      else { New-ItemProperty -Path $path -Name $name -PropertyType String -Value $vv -Force | Out-Null }
-    }
+    if ($k -eq '__tweak_keys__') { continue }
+    Restore-OneKey $k $b[$k]
   }
   netsh int tcp set global autotuninglevel=normal 2>$null | Out-Null
   Remove-Item $BACKUP -ErrorAction SilentlyContinue
   Remove-Item $BACKUP_LEGACY -ErrorAction SilentlyContinue
   $script:BK = @{}
+  $script:TWKEYS = @{}
   return 'Impostazioni ripristinate ai valori precedenti.'
 }
 
@@ -1620,6 +1707,7 @@ function Show-WebGui {
     --danger: #FF3355;
     --info: #00E0FF;
     --text: #e6e6ec;
+    --fg: #e6e6ec;
     --muted: #7d7d8a;
     --dim: #4a4a55;
   }
@@ -2299,6 +2387,149 @@ function Show-WebGui {
     100% { box-shadow: 0 0 0 0 rgba(0,255,102,0); }
   }
   .card.just-applied { animation: appliedPulse 900ms ease-out; }
+
+  /* ===== v0.7.7 — Update banner ===== */
+  .update-banner {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 28px; background: rgba(0,224,255,0.07);
+    border-bottom: 1px solid var(--info); font-size: 12px; color: var(--text);
+    flex-shrink: 0; animation: fadeUp 260ms ease;
+  }
+  .update-banner[hidden] { display: none; }
+  .upd-icon { color: var(--info); font-weight: 800; font-size: 15px; }
+  .upd-text { flex: 1; min-width: 0; }
+  .upd-text b { color: var(--info); }
+  .upd-btn {
+    margin-left: auto; border: 1px solid var(--info); color: var(--info);
+    padding: 6px 14px; text-decoration: none; font-family: "Consolas", monospace;
+    text-transform: uppercase; font-size: 10px; letter-spacing: 0.12em;
+    white-space: nowrap; transition: background 120ms ease, color 120ms ease;
+  }
+  .upd-btn:hover { background: var(--info); color: #000; }
+  .upd-dismiss {
+    background: none; border: none; color: var(--muted);
+    font-size: 17px; line-height: 1; cursor: pointer; padding: 0 2px;
+  }
+  .upd-dismiss:hover { color: var(--text); }
+
+  /* ===== v0.7.7 — Revert singolo tweak ===== */
+  .actions { align-items: center; }
+  .btn-revert-one {
+    background: transparent; color: var(--info); border: 1px solid var(--info);
+    padding: 6px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.2px; cursor: pointer; font-family: inherit; margin-left: 8px;
+    transition: background 120ms ease, color 120ms ease;
+  }
+  .btn-revert-one:hover { background: var(--info); color: #000; }
+  .card.compact .btn-revert-one { padding: 4px 12px; font-size: 10px; }
+
+  /* ===== v0.7.7 — Monitor Live ===== */
+  .mon-head, .bloat-head {
+    grid-column: 1 / -1; display: flex; align-items: flex-end;
+    justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+  .mon-title {
+    font-family: "Consolas", monospace; font-size: 11px; color: var(--accent);
+    letter-spacing: 0.2em; margin-bottom: 4px;
+  }
+  .mon-sub { font-size: 12px; color: var(--muted); max-width: 760px; line-height: 1.5; }
+  .mon-sub b { color: var(--ok); }
+  .mon-grid {
+    grid-column: 1 / -1; display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px;
+  }
+  .mon-tile {
+    background: var(--card); border: 1px solid var(--border);
+    padding: 14px 16px 10px; transition: border-color 160ms ease;
+    animation: fadeUp 260ms ease both;
+  }
+  .mon-tile:hover { border-color: #3a3a48; }
+  .mon-label {
+    font-family: "Consolas", monospace; font-size: 10px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.15em;
+  }
+  .mon-value { font-family: "Consolas", monospace; font-size: 30px; font-weight: 800; margin: 6px 0 4px; line-height: 1; }
+  .mon-unit { font-size: 13px; color: var(--muted); margin-left: 2px; font-weight: 400; }
+  .mon-spark { width: 100%; height: 36px; display: block; opacity: 0.85; }
+  .mon-live-dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--ok); margin-right: 6px;
+    box-shadow: 0 0 8px rgba(0,255,102,0.6);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+
+  /* ===== v0.7.7 — Bloatware tab ===== */
+  .bloat-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .bloat-list {
+    grid-column: 1 / -1; display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 10px;
+  }
+  .bloat-row {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--card); border: 1px solid var(--border); padding: 12px 14px;
+    cursor: pointer; transition: border-color 120ms ease, background 120ms ease;
+    animation: fadeUp 260ms ease both;
+  }
+  .bloat-row:hover { border-color: #3a3a48; background: var(--card-hi); }
+  .bloat-row.selected { border-color: var(--danger); }
+  .bloat-name { font-size: 13px; font-weight: 600; color: var(--text); word-break: break-all; }
+  .bloat-meta {
+    font-size: 10px; color: var(--muted); margin-top: 4px;
+    display: flex; gap: 8px; flex-wrap: wrap; font-family: "Consolas", monospace;
+  }
+  .bloat-badge { border: 1px solid var(--border); padding: 1px 6px; color: var(--muted); }
+  .bloat-badge.curated { border-color: var(--warn); color: var(--warn); }
+
+  /* ===== v0.7.7 — Responsive: finestra ridotta ===== */
+  @media (max-width: 1080px) {
+    header { padding: 14px 18px 12px; }
+    .preset-bar, .filter-chips, .tabs { padding-left: 18px; padding-right: 18px; }
+    main { padding: 16px 18px 10px; }
+    footer { padding: 10px 18px 12px; }
+    .backup-panel { right: 18px; }
+    .meta-row { grid-template-columns: 1fr; align-items: start; gap: 10px; }
+    .header-actions { flex-wrap: wrap; justify-content: flex-start; }
+    .update-banner { padding: 8px 18px; }
+  }
+  @media (max-width: 860px) {
+    .brand-sub { display: none; }
+    .brand { font-size: 18px; }
+    .preset-bar { flex-wrap: wrap; gap: 8px; }
+    .preset-btn { padding: 6px 14px; font-size: 12px; }
+    .search-hero { flex-basis: 100%; margin-left: 0; max-width: none; order: 10; }
+    .tabs { overflow-x: auto; scrollbar-width: thin; }
+    .tab { padding: 10px 12px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
+    footer { grid-template-columns: 1fr; gap: 10px; }
+    .log { height: 70px; }
+    .btn-bar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .summary-strip { flex-basis: 100%; margin-bottom: 0; }
+    .bench-toggle { flex-basis: 100%; }
+    .btn-primary, .btn-danger { flex: 1; padding: 12px 16px; white-space: nowrap; }
+    main { grid-template-columns: 1fr; }
+    .mon-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .mon-value { font-size: 24px; }
+    .bloat-list { grid-template-columns: 1fr; }
+    .progress-ring-info { display: none; }
+    .live-sync-text, .mobile-btn span:last-child, .logout-btn span:last-child { display: none; }
+    .filter-chips { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: thin; }
+    .chip { white-space: nowrap; flex-shrink: 0; }
+    .sort-select { flex-shrink: 0; }
+  }
+
+  /* ===== v0.7.7 — Responsive: fullscreen / monitor larghi ===== */
+  @media (min-width: 1500px) {
+    body { font-size: 15px; }
+    header { padding: 24px 40px 18px; }
+    .preset-bar, .filter-chips, .tabs { padding-left: 40px; padding-right: 40px; }
+    main { padding: 24px 40px 16px; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; }
+    footer { padding: 14px 40px 16px; }
+    .backup-panel { right: 40px; }
+    .update-banner { padding-left: 40px; padding-right: 40px; }
+    .log { height: 160px; }
+    .name { font-size: 15px; }
+    .desc-block { font-size: 13px; }
+    .mon-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  }
 </style>
 </head>
 <body>
@@ -2306,7 +2537,7 @@ function Show-WebGui {
     <div class="brand-row">
       <div class="brand">FRAMEFORGE AGENT</div>
       <div class="brand-sub">Trova i colli di bottiglia. Ottimizza in sicurezza.</div>
-      <div class="ver-pill">GUI v2.5</div>
+      <div class="ver-pill">GUI v3.0</div>
     </div>
     <div class="safety">
       <strong>SICUREZZA</strong> - Non tocchiamo mai Windows Defender, Firewall o servizi di sicurezza. Ogni modifica ha backup automatico ed e reversibile.
@@ -2358,6 +2589,8 @@ function Show-WebGui {
       </div>
     </div>
   </header>
+
+  <div class="update-banner" id="updateBanner" data-testid="agent-update-banner" hidden></div>
 
   <div class="preset-bar">
     <div class="preset-label">Preset:</div>
@@ -2445,9 +2678,11 @@ function Show-WebGui {
     { key: "input",   label: "Latenza & Input" },
     { key: "network", label: "Rete & Streaming" },
     { key: "system",  label: "Sistema & Debloat" },
+    { key: "bloatware", label: "Bloatware" },
+    { key: "monitor", label: "Monitor Live" },
     { key: "profiles", label: "Profili Cloud" }
   ];
-  let state = { tweaks: [], hw: {}, admin: false, backup: 0, backup_ids: [], presets: {}, profiles: null };
+  let state = { tweaks: [], hw: {}, admin: false, backup: 0, backup_ids: [], presets: {}, profiles: null, revertable: [], agent: {} };
   let selected = new Set();
   let activeCat = "gaming";
   let searchQ = "";
@@ -2667,6 +2902,13 @@ function Show-WebGui {
         const count = state.profiles?.profiles?.length ?? "…";
         return `<button class="tab ${c.key === activeCat ? "active" : ""}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${count}</span></button>`;
       }
+      if (c.key === "monitor") {
+        return `<button class="tab ${c.key === activeCat ? "active" : ""}" data-cat="${c.key}" data-testid="tab-${c.key}"><span class="mon-live-dot"></span>${c.label}</button>`;
+      }
+      if (c.key === "bloatware") {
+        const count = bloat ? (bloat.apps || []).length : "…";
+        return `<button class="tab ${c.key === activeCat ? "active" : ""}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${count}</span></button>`;
+      }
       const inCat = state.tweaks.filter(t => t.cat === c.key && !t.fit.skip);
       const todo = inCat.filter(t => !isApplied(t)).length;
       const total = inCat.length;
@@ -2675,6 +2917,8 @@ function Show-WebGui {
     [...el.querySelectorAll(".tab")].forEach(b => b.onclick = () => {
       activeCat = b.dataset.cat;
       if (activeCat === "profiles" && !state.profiles) loadProfiles();
+      if (activeCat === "bloatware" && !bloat) loadBloat();
+      if (activeCat === "monitor") startMonitor(); else stopMonitor();
       renderTabs();
       renderCards();
     });
@@ -2683,6 +2927,8 @@ function Show-WebGui {
   function renderCards() {
     const el = document.getElementById("cards");
     if (activeCat === "profiles") { renderProfilesTab(el); return; }
+    if (activeCat === "monitor") { renderMonitorTab(el); return; }
+    if (activeCat === "bloatware") { renderBloatwareTab(el); return; }
     let items = state.tweaks.filter(t => t.cat === activeCat).filter(t => {
       if (!searchQ) return true;
       const q = searchQ.toLowerCase();
@@ -2730,7 +2976,7 @@ function Show-WebGui {
           ${hint}
           <div class="actions">
             ${applied
-              ? `<span class="applied-note">&#10003; gia attivo</span>`
+              ? `<span class="applied-note">&#10003; gia attivo</span>${(state.revertable||[]).indexOf(t.id) >= 0 ? `<button class="btn-revert-one" data-revert="${t.id}" data-testid="revert-one-${t.id}">&#8617; Ripristina</button>` : ""}`
               : `<button class="btn-apply-one" data-apply="${t.id}" ${t.fit.skip?"disabled":""} data-testid="apply-one-${t.id}">Applica</button>`}
           </div>
         </div>`;
@@ -2743,6 +2989,7 @@ function Show-WebGui {
       if (card) card.classList.toggle("selected", e.target.checked);
     });
     el.querySelectorAll(".btn-apply-one").forEach(b => b.onclick = () => applyOne(b.dataset.apply));
+    el.querySelectorAll(".btn-revert-one").forEach(b => b.onclick = () => revertOne(b.dataset.revert));
     // Chevron expand/collapse in compact mode
     el.querySelectorAll(".chevron").forEach(ch => ch.onclick = (e) => {
       e.stopPropagation();
@@ -2914,9 +3161,12 @@ function Show-WebGui {
     state.tweaks = d.tweaks || [];
     state.hw = d.hw || {}; state.admin = !!d.admin;
     state.backup = d.backup || 0; state.backup_ids = d.backup_ids || []; state.presets = d.presets || {};
+    state.revertable = d.revertable || [];
+    state.agent = d.agent || {};
     renderHeader(); renderTabs(); renderCards();
     renderProgressRing();
     updateSummaryStrip();
+    renderUpdateBanner();
     if (showToast) toast("\u21bb Aggiornato", "ok");
   }
 
@@ -2928,7 +3178,7 @@ function Show-WebGui {
     const picks = state.tweaks.filter(t => selected.has(t.id));
     const rebootCount = picks.filter(needsReboot).length;
     const d = await api("/api/apply", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ ids: appliedIds, benchmark: bench }) });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; renderHeader(); renderCards(); renderProgressRing(); }
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; if (d.revertable) state.revertable = d.revertable; renderHeader(); renderCards(); renderProgressRing(); }
     selected.clear();
     updateSummaryStrip();
     setApplying(false);
@@ -2954,7 +3204,7 @@ function Show-WebGui {
     setApplying(true);
     const t = state.tweaks.find(x => x.id === id);
     const d = await api("/api/apply-one", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ id }) });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; renderHeader(); renderCards(); renderProgressRing(); }
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; if (d.revertable) state.revertable = d.revertable; renderHeader(); renderCards(); renderProgressRing(); }
     setApplying(false);
     // Pulse animation on the just-applied card
     const c = document.querySelector(`.card[data-id="${id}"]`);
@@ -2977,9 +3227,208 @@ function Show-WebGui {
     if (!confirm("Ripristinare TUTTE le modifiche dal backup?")) return;
     setApplying(true);
     const d = await api("/api/restore", { method: "POST", headers:{"X-FF-Token":TOKEN} });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = 0; state.backup_ids = []; renderHeader(); renderCards(); }
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = 0; state.backup_ids = []; state.revertable = []; renderHeader(); renderCards(); renderProgressRing(); }
     setApplying(false);
     toast("\u21a9 Ripristinato", "ok");
+  }
+
+  // ===== v0.7.7 — Revert singolo tweak =====
+  async function revertOne(id) {
+    const t = state.tweaks.find(x => x.id === id);
+    if (!confirm(`Ripristinare "${t ? t.name : id}" al valore precedente?`)) return;
+    setApplying(true);
+    const d = await api("/api/restore-one", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ id }) });
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || 0; state.backup_ids = d.backup_ids || []; state.revertable = d.revertable || []; renderHeader(); renderTabs(); renderCards(); renderProgressRing(); }
+    setApplying(false);
+    toast("\u21a9 Tweak ripristinato", "ok");
+  }
+
+  // ===== v0.7.7 — Monitor Live locale =====
+  const MON_METRICS = [
+    { k: "cpu_util", label: "CPU", unit: "%", max: 100 },
+    { k: "cpu_temp", label: "CPU Temp", unit: "\u00b0C", temp: true },
+    { k: "gpu_util", label: "GPU", unit: "%", max: 100 },
+    { k: "gpu_temp", label: "GPU Temp", unit: "\u00b0C", temp: true },
+    { k: "ram_used_pct", label: "RAM", unit: "%", max: 100 },
+    { k: "vram_used_pct", label: "VRAM", unit: "%", max: 100 },
+    { k: "gpu_clock", label: "GPU Clock", unit: " MHz" },
+    { k: "gpu_power", label: "GPU Power", unit: " W" },
+  ];
+  let monHist = {}; let monTimer = 0; let monBusy = false; let monFirst = true;
+  function startMonitor() { if (!monTimer) { monPoll(); monTimer = setInterval(monPoll, 3000); } }
+  function stopMonitor() { if (monTimer) { clearInterval(monTimer); monTimer = 0; } }
+  async function monPoll() {
+    if (activeCat !== "monitor") { stopMonitor(); return; }
+    if (monBusy) return;
+    monBusy = true;
+    try {
+      const s = await api("/api/telemetry-local");
+      MON_METRICS.forEach(m => {
+        if (typeof s[m.k] === "number") {
+          (monHist[m.k] = monHist[m.k] || []).push(s[m.k]);
+          if (monHist[m.k].length > 40) monHist[m.k].shift();
+        }
+      });
+      monFirst = false;
+      if (activeCat === "monitor") renderMonitorTiles();
+    } catch (e) {}
+    monBusy = false;
+  }
+  function sparkline(vals, color) {
+    if (!vals || vals.length < 2) return "";
+    const w = 150, h = 36;
+    const mn = Math.min(...vals), mx = Math.max(...vals);
+    const rng = (mx - mn) || 1;
+    const pts = vals.map((v, i) => `${(i / (vals.length - 1) * w).toFixed(1)},${(h - 3 - ((v - mn) / rng) * (h - 6)).toFixed(1)}`).join(" ");
+    return `<svg class="mon-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5"/></svg>`;
+  }
+  function monColor(m, v) {
+    if (v == null) return "var(--dim)";
+    if (m.temp) return v >= 85 ? "var(--danger)" : v >= 72 ? "var(--warn)" : "var(--ok)";
+    if (m.max) return v >= 92 ? "var(--danger)" : v >= 75 ? "var(--warn)" : "var(--info)";
+    return "var(--info)";
+  }
+  function renderMonitorTab(el) {
+    el.innerHTML = `
+      <div class="mon-head">
+        <div>
+          <div class="mon-title">// MONITOR LIVE</div>
+          <div class="mon-sub">Telemetria locale in tempo reale, aggiornata ogni 3 secondi. Attiva <b>Sync Cloud</b> in alto a destra per inviarla anche al Command Center di FrameForge.</div>
+        </div>
+      </div>
+      <div class="mon-grid" id="monGrid" data-testid="monitor-grid"></div>`;
+    renderMonitorTiles();
+    startMonitor();
+  }
+  function renderMonitorTiles() {
+    const grid = document.getElementById("monGrid");
+    if (!grid) return;
+    grid.innerHTML = MON_METRICS.map(m => {
+      const hist = monHist[m.k] || [];
+      const v = hist.length ? hist[hist.length - 1] : null;
+      const col = monColor(m, v);
+      const valTxt = v == null ? (monFirst ? "..." : "n/d") : `${v}<span class="mon-unit">${m.unit}</span>`;
+      return `<div class="mon-tile" data-testid="mon-${m.k}">
+        <div class="mon-label">${m.label}</div>
+        <div class="mon-value" style="color:${col}">${valTxt}</div>
+        ${sparkline(hist, col)}
+      </div>`;
+    }).join("");
+  }
+
+  // ===== v0.7.7 — Bloatware tab =====
+  let bloat = null; let bloatSel = new Set(); let bloatBusy = false;
+  async function loadBloat() {
+    if (activeCat === "bloatware") document.getElementById("cards").innerHTML = `<div class="empty">Scansione app installate in corso...</div>`;
+    try {
+      const d = await api("/api/bloatware");
+      bloat = { apps: d.apps || [] };
+    } catch (e) { bloat = { apps: [], err: true }; }
+    bloatSel = new Set();
+    renderTabs();
+    if (activeCat === "bloatware") renderCards();
+  }
+  function updateBloatBtn() {
+    const b = document.getElementById("bloatRemoveBtn");
+    if (b) { b.disabled = !bloatSel.size || bloatBusy; b.textContent = bloatSel.size ? `Rimuovi ${bloatSel.size} selezionate` : "Rimuovi selezionate"; }
+  }
+  function renderBloatwareTab(el) {
+    if (!bloat) { el.innerHTML = `<div class="empty">Scansione app installate in corso...</div>`; return; }
+    const apps = bloat.apps || [];
+    if (bloat.err) { el.innerHTML = `<div class="empty">Errore durante la scansione. Riapri la tab per riprovare.</div>`; bloat = null; return; }
+    if (!apps.length) { el.innerHTML = `<div class="empty">&#10003; Nessun bloatware rilevato: il tuo sistema e gia pulito.</div>`; return; }
+    const rows = apps.map(a => `
+      <label class="bloat-row${bloatSel.has(a.name) ? " selected" : ""}" data-testid="bloat-${esc(a.name)}">
+        <input type="checkbox" class="cb bloat-cb" data-name="${esc(a.name)}" ${bloatSel.has(a.name) ? "checked" : ""} />
+        <div class="bloat-info">
+          <div class="bloat-name">${esc(a.name)}</div>
+          <div class="bloat-meta">${a.curated ? `<span class="bloat-badge curated">lista curata</span>` : `<span class="bloat-badge">auto-rilevata</span>`}${a.size_mb ? ` <span>${a.size_mb} MB</span>` : ""}${a.version ? ` <span>v${esc(a.version)}</span>` : ""}</div>
+        </div>
+      </label>`).join("");
+    el.innerHTML = `
+      <div class="bloat-head">
+        <div>
+          <div class="mon-title">// BLOATWARE TROVATO: ${apps.length} APP</div>
+          <div class="mon-sub">App preinstallate e promozionali rimovibili in sicurezza, tutte reinstallabili dal Microsoft Store. Store, Calculator, Photos e i runtime di sistema sono protetti e non compaiono mai in questa lista.</div>
+        </div>
+        <div class="bloat-actions">
+          <button class="chip" id="bloatSelAll" data-testid="bloat-select-all">Seleziona tutte</button>
+          <button class="btn-danger" id="bloatRemoveBtn" data-testid="bloat-remove-btn" disabled>Rimuovi selezionate</button>
+        </div>
+      </div>
+      <div class="bloat-list">${rows}</div>`;
+    el.querySelectorAll(".bloat-cb").forEach(cb => cb.onchange = () => {
+      const n = cb.dataset.name;
+      if (cb.checked) bloatSel.add(n); else bloatSel.delete(n);
+      const row = cb.closest(".bloat-row");
+      if (row) row.classList.toggle("selected", cb.checked);
+      updateBloatBtn();
+    });
+    const selAll = document.getElementById("bloatSelAll");
+    if (selAll) selAll.onclick = () => {
+      if (bloatSel.size === apps.length) bloatSel.clear();
+      else apps.forEach(a => bloatSel.add(a.name));
+      el.querySelectorAll(".bloat-cb").forEach(cb => {
+        cb.checked = bloatSel.has(cb.dataset.name);
+        const row = cb.closest(".bloat-row");
+        if (row) row.classList.toggle("selected", cb.checked);
+      });
+      updateBloatBtn();
+    };
+    const rmBtn = document.getElementById("bloatRemoveBtn");
+    if (rmBtn) rmBtn.onclick = removeBloat;
+    updateBloatBtn();
+  }
+  async function removeBloat() {
+    if (!bloatSel.size || bloatBusy) return;
+    if (!confirm(`Rimuovere ${bloatSel.size} app? Potrai reinstallarle dal Microsoft Store in qualsiasi momento.`)) return;
+    bloatBusy = true;
+    const btn = document.getElementById("bloatRemoveBtn");
+    if (btn) { btn.disabled = true; btn.textContent = "Rimozione in corso..."; }
+    try {
+      const d = await api("/api/bloatware/remove", { method: "POST", headers: {"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ names: Array.from(bloatSel) }) });
+      bloat = { apps: (d && d.apps) || [] };
+      bloatSel = new Set();
+      bigToast({
+        title: "\u2713 Bloatware rimosso",
+        body: `<b>${(d && d.removed) || 0}</b> app rimosse dal sistema. Reinstallabili in qualsiasi momento dal Microsoft Store.`,
+        actions: [{ label: "OK", primary: true, onClick: () => {} }],
+      });
+    } catch (e) { toast("Errore durante la rimozione", "err"); }
+    bloatBusy = false;
+    renderTabs();
+    if (activeCat === "bloatware") renderCards();
+  }
+
+  // ===== v0.7.7 — Banner aggiornamento agent =====
+  function verLt(a, b) {
+    if (!b) return false;
+    if (!a) return true;
+    const pa = String(a).split(".").map(Number), pb = String(b).split(".").map(Number);
+    for (let i = 0; i < 3; i++) {
+      const x = pa[i] || 0, y = pb[i] || 0;
+      if (x < y) return true;
+      if (x > y) return false;
+    }
+    return false;
+  }
+  function renderUpdateBanner() {
+    const el = document.getElementById("updateBanner");
+    if (!el) return;
+    const ag = state.agent || {};
+    const latest = (ag.latest && ag.latest.indexOf("__") < 0) ? ag.latest : "";
+    const installed = (ag.installed && ag.installed.indexOf("__") < 0) ? ag.installed : "";
+    const show = latest && verLt(installed, latest) && !sessionStorage.getItem("ff_upd_dismiss");
+    if (!show) { el.setAttribute("hidden", ""); return; }
+    const cur = installed ? `hai la v${esc(installed)}` : "la tua versione e precedente alla 0.7.6";
+    el.innerHTML = `
+      <span class="upd-icon">&#8593;</span>
+      <span class="upd-text"><b>FrameForge Agent v${esc(latest)}</b> disponibile (${cur}): auto-update, zero-flash console e nuovi tweak.</span>
+      <a class="upd-btn" href="${esc(ag.dl || "#")}" target="_blank" rel="noopener" data-testid="update-download-btn">Scarica v${esc(latest)}</a>
+      <button class="upd-dismiss" id="updDismiss" title="Nascondi per questa sessione" data-testid="update-dismiss-btn">&times;</button>`;
+    el.removeAttribute("hidden");
+    const d = document.getElementById("updDismiss");
+    if (d) d.onclick = () => { sessionStorage.setItem("ff_upd_dismiss", "1"); el.setAttribute("hidden", ""); };
   }
 
   // events
@@ -3268,7 +3717,9 @@ function Show-WebGui {
         elseif ($path -eq '/api/state' -and $method -eq 'GET') {
           $dto = @{
             hw = $script:HW; admin = $isAdmin; backup = $script:BK.Count
-            backup_ids = @($script:BK.Keys)
+            backup_ids = (Get-BackupIds)
+            revertable = (Get-RevertableIds)
+            agent = @{ installed = $INSTALLED_VER; latest = $LATEST_VER; dl = $AGENT_DL_URL }
             tweaks = Get-TweakDto
             presets = @{
               competitive = @($script:PRESETS.competitivo)
@@ -3303,7 +3754,7 @@ function Show-WebGui {
           if ($bench) { WebLog 'Benchmark PRIMA in corso...'; $before = Run-Benchmark; WebLog ("  Performance Score PRIMA: {0}" -f $before.overall) }
           foreach ($id in $ids) {
             $t = $script:TWMAP[$id]; if (-not $t) { continue }
-            WebLog ("-> {0}" -f $t.name); & $t.apply
+            WebLog ("-> {0}" -f $t.name); Invoke-ApplyTracked $t
           }
           Save-Backup
           if ($bench) {
@@ -3315,13 +3766,56 @@ function Show-WebGui {
           Send-Data (Get-Specs) (Get-Health) (Get-StartupList)
           WebLog '[ OK ] Ottimizzazioni applicate. Dati inviati a FrameForge. Riavvio consigliato.'
           $script:APPLYING = $false
-          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = @($script:BK.Keys); before = $before; after = $after }
+          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = (Get-BackupIds); revertable = (Get-RevertableIds); before = $before; after = $after }
         }
         elseif ($path -eq '/api/apply-one' -and $method -eq 'POST') {
           $body = Read-Body $ctx | ConvertFrom-Json
           $t = $script:TWMAP[$body.id]
-          if ($t) { WebLog ("-> {0}" -f $t.name); & $t.apply; Save-Backup }
-          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = @($script:BK.Keys) }
+          if ($t) { WebLog ("-> {0}" -f $t.name); Invoke-ApplyTracked $t; Save-Backup }
+          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = (Get-BackupIds); revertable = (Get-RevertableIds) }
+        }
+        elseif ($path -eq '/api/restore-one' -and $method -eq 'POST') {
+          # v0.7.7: revert granulare di un singolo tweak dalle chiavi tracciate
+          $body = Read-Body $ctx | ConvertFrom-Json
+          $t = $script:TWMAP[$body.id]
+          $tname = if ($t) { $t.name } else { "$($body.id)" }
+          WebLog ("Ripristino singolo tweak: {0}" -f $tname)
+          $msg = Invoke-RestoreTweak "$($body.id)"
+          WebLog ('  ' + $msg)
+          Send-Json $ctx @{ ok = $true; message = $msg; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = (Get-BackupIds); revertable = (Get-RevertableIds) }
+        }
+        elseif ($path -eq '/api/telemetry-local' -and $method -eq 'GET') {
+          # v0.7.7: sample telemetria per il pannello Monitor Live della GUI
+          $s = Get-TelemetrySample
+          Send-Json $ctx $s
+        }
+        elseif ($path -eq '/api/bloatware' -and $method -eq 'GET') {
+          # v0.7.7: auto-discovery bloatware (curated list + pattern OEM/promo)
+          $apps = Get-BloatCandidates
+          Send-Json $ctx @{ apps = $apps }
+        }
+        elseif ($path -eq '/api/bloatware/remove' -and $method -eq 'POST') {
+          $body = Read-Body $ctx | ConvertFrom-Json
+          $names = @($body.names)
+          $removed = 0
+          foreach ($n in $names) {
+            $n = "$n"
+            if (-not $n -or (Test-BloatProtected $n)) { continue }
+            $app = Get-AppxPackage -Name $n -ErrorAction SilentlyContinue
+            if ($app) {
+              WebLog ("Rimuovo bloatware: {0}" -f $n)
+              $app | Remove-AppxPackage -ErrorAction SilentlyContinue
+              if (-not (Get-AppxPackage -Name $n -ErrorAction SilentlyContinue)) { $removed++ }
+            }
+          }
+          WebLog ("[ OK ] Bloatware: {0}/{1} app rimosse (reinstallabili dallo Store)." -f $removed, $names.Count)
+          Send-Json $ctx @{ ok = $true; removed = $removed; apps = (Get-BloatCandidates) }
+        }
+        elseif ($path -eq '/api/reboot' -and $method -eq 'POST') {
+          # v0.7.7 fix: il bottone 'Riavvia ora' puntava a un endpoint inesistente (404)
+          WebLog 'Riavvio del PC tra 5 secondi...'
+          Send-Json $ctx @{ ok = $true }
+          shutdown /r /t 5 /c "FrameForge: riavvio per attivare le ottimizzazioni" 2>$null
         }
         elseif ($path -eq '/api/profiles-cloud' -and $method -eq 'GET') {
           # Proxy to FrameForge cloud: /api/agent/profiles (X-Agent-Token auth).
@@ -3386,7 +3880,7 @@ function Show-WebGui {
         }
         elseif ($path -eq '/api/restore' -and $method -eq 'POST') {
           WebLog 'Ripristino dal backup...'; $msg = Invoke-Restore; WebLog ('  ' + $msg)
-          Send-Json $ctx @{ ok = $true; message = $msg; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = @($script:BK.Keys) }
+          Send-Json $ctx @{ ok = $true; message = $msg; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = (Get-BackupIds); revertable = (Get-RevertableIds) }
         }
         elseif ($path -eq '/api/close') {
           Send-Json $ctx @{ ok = $true }

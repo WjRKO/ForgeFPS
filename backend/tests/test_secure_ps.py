@@ -31,7 +31,7 @@ class TestPSScriptSecurity:
         r = requests.get(f"{BASE_URL}/api/agent/script", params={"t": agent_token})
         assert r.status_code == 200
         # First non-empty line should be Param(...)
-        first = r.text.lstrip().splitlines()[0]
+        first = r.text.lstrip().lstrip("\ufeff").splitlines()[0]
         assert first.startswith("Param("), f"Script should start with 'Param(', got: {first[:80]}"
 
     def test_token_is_runtime_param_not_embedded(self, agent_token):
