@@ -1349,3 +1349,11 @@ Tutto lato server (`backend/ps_agent.py`, script scaricato fresco a ogni avvio �
   4. Match del processo reale usa il nome del browser scelto (non piu' hardcoded msedge.exe).
 - IMPORTANTE: fix lato server → serve UN ALTRO REDEPLOY per portarlo su forgefps.dev. Al prossimo avvio dell'agent, se fallisce ancora, la console stampera' il motivo esatto (chiedere screenshot).
 - Nota deploy precedente: primo tentativo fallito per errore infra (docker-push "manifest invalid"), secondo tentativo riuscito.
+
+### 2026-07-25 (48) — Redesign pagina "Live Monitoring" (Command Center) (FATTO, testato)
+- Blueprint dal design_agent (salvato in /app/design_guidelines.json → page_specific_guidelines.live_monitoring). Approvato dall'utente prima dell'implementazione; richiesta esplicita: mantenere l'OBS overlay.
+- `Live.jsx` riscritta: header + pill "Telemetria attiva"; top bar = MonitorLiveControl (live) o hero offline centrato con CTA Volt (monitor-launch-btn); 4 bento card (PERFORMANCE con FPS gigante giallo >144 + latenza, CPU con temp color-coded ≥75/≥85, GPU con temp+watt, MEMORIA RAM+VRAM), valori "--" ghosted offline; griglia lg:3 col → grafici 2/3 con TAB (Performance FPS scala libera FIX CLIPPING + latenza asse dx / Temperature 0-110 / Utilizzo 0-100) + riga min/media/max; sidebar: BottleneckDetector, alert termici compatti, Reflex collassabile; SessionSummary full-width; ObsOverlayPanel mantenuto in fondo. Container max-w-7xl.
+- i18n: nuove chiavi live.link_active, tab_*, card_*, min/avg/max, launch_btn, manual_cmd, launching, launch_failed (IT+EN).
+- Testing agent iteration_37: 100% frontend checklist (tabs, alert save, reflex, summary reset, OBS, offline hero+preflight, IT/EN, mobile 390px no overflow). Fixati i 2 minor: traduzioni EN launch_btn & co., scala therm 0→110.
+- NOTA DB dev: admin@boostpc.io settato a plan 'streamer' per testare contenuto sbloccato; 60+ sample telemetria seedati (Counter-Strike 2).
+- Richiede redeploy per essere visibile su forgefps.dev.

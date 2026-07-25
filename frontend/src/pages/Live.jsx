@@ -114,7 +114,7 @@ function TelemetryCharts({ chart, waitingText, t }) {
             <LineChart data={chart}>
               <CartesianGrid stroke="#1A1A24" strokeDasharray="3 3" />
               <XAxis dataKey="i" tick={{ fill: "#52525b", fontSize: 10 }} />
-              <YAxis yAxisId="left" tick={{ fill: "#52525b", fontSize: 10 }} domain={fixedDomain ? [0, 100] : ["auto", "auto"]} />
+              <YAxis yAxisId="left" tick={{ fill: "#52525b", fontSize: 10 }} domain={fixedDomain ? [0, tab === "therm" ? 110 : 100] : ["auto", "auto"]} />
               {tab === "perf" && <YAxis yAxisId="right" orientation="right" tick={{ fill: "#52525b", fontSize: 10 }} domain={["auto", "auto"]} />}
               <Tooltip contentStyle={{ background: "#0A0A0C", border: "1px solid #2A2A35", fontSize: 12 }} />
               {lines.map((l) => (
