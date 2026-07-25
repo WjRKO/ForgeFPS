@@ -1182,3 +1182,25 @@ Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi
   - OBS Overlay: 1 URL 0 setup (Browser Source 300x200 + token rigenerabile), 3 temi (Neon/Dark/Minimal) + 4 posizioni angoli, Metriche a scelta (toggle FPS/CPU/GPU/ping/Health), Zero FPS impact (HTML/CSS <10KB, no DirectX/Vulkan touch).
 - Bugfix collaterale: `ObsOverlayPanel` non passava `currentPlan` -> mostrava sempre "starter"; ora legge il piano dal detail del 402 e lo passa.
 - Verificato via screenshot IT e EN su Advisor/Live/FullBench/OBS: banner correttamente localizzati, bold funzionante, feature con testo tecnico.
+
+### 2026-07-25 (38) — Refactor DiagnosePanel/FirstScanBanner + fix chiavi React (FATTO)
+- **DiagnosePanel** 297 -> 33 righe (-91%). Split in 4 file:
+  - `hooks/useDiagnose.js` (148): stato/effetti/handler (run, toggleApplied, submitFeedback, savePlanned, dismiss, toggleVerify, toggleCollapsed) + fetch iniziale (diagnose/latest + applied-tweaks + outcome)
+  - `components/DiagnoseStates.jsx` (114): DiagnoseIdleCTA, DiagnoseLoading, DiagnoseErrorView, DiagnoseEmpty (viste stateless)
+  - `components/DiagnoseResultView.jsx` (64): vista "done" con header/lista actions/footer
+  - `components/DiagnosePanel.jsx` (33): orchestratore, switch state -> view
+- **FirstScanBanner** 228 -> 22 righe (-90%). Split in 4 file:
+  - `hooks/useFirstScanPolling.js` (83): polling con exponential backoff (3s -> 10s dopo 60s), differenzia utente veterano vs first-scan
+  - `components/ScanCompleteBanner.jsx` (47): banner verde post-scan con CPU/GPU/RAM + CTA My PC/Dashboard
+  - `components/ScanPendingBanner.jsx` (86): guida 4 step con StepCard riutilizzabile e step definiti come dati (STEPS.en/it), key={step.id}
+  - `components/FirstScanBanner.jsx` (22): orchestratore, switch status -> view
+- **Fix chiavi React (index -> stable id)**:
+  - `Pricing.jsx`: tier.items -> `${tier.key}-${i}-${it.slice(0,20)}`; features_matrix row -> `row.label` (+ nested cells `${row.label}-${j}`); trust_signals -> `t.label`; faq -> `f.q`
+  - `PrivacyTelemetry.jsx`: collected_list/never_list -> `it`; tiers -> `tier.t`; nested items -> `it`
+  - `Terms.jsx`: sections -> `s.h`
+- Verificato via screenshot:
+  - AI Advisor con admin=streamer -> diagnose-panel + diagnose-result renderizzano (5 azioni AI complete, dismiss, save, mark active), chat sotto attiva
+  - /pricing -> 3 tiers + 8 FAQ items rendono correttamente
+  - /privacy-telemetry -> collected/never/tiers rendering
+  - /terms -> title + 9 sections rendering
+- Zero regressioni funzionali: tutti i data-testid preservati (diagnose-panel, diagnose-btn, diagnose-loading, diagnose-error, diagnose-result, diagnose-actions-list, diagnose-again, diagnose-connect-cta, first-scan-pending/done, first-scan-step-1/2/3/4, faq-item-N).

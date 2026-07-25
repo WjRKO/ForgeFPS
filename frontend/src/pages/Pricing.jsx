@@ -330,7 +330,7 @@ function PricingCard({ tier, annual, c, onCta, isLogged, lang }) {
 
       <ul className="space-y-2.5 mb-8 flex-1">
         {tier.items.map((it, i) => (
-          <li key={i} className="flex items-start gap-2.5 text-sm text-zinc-300">
+          <li key={`${tier.key}-${i}-${it.slice(0, 20)}`} className="flex items-start gap-2.5 text-sm text-zinc-300">
             <Check size={15} className="shrink-0 mt-0.5" style={{ color: tier.accent }} /> {it}
           </li>
         ))}
@@ -375,11 +375,11 @@ function ComparisonTable({ c }) {
             </tr>
           </thead>
           <tbody>
-            {c.features_matrix.map((row, i) => (
-              <tr key={i} className="border-b border-[#1A1A24] hover:bg-[#0F0F12] transition-colors">
+            {c.features_matrix.map((row) => (
+              <tr key={row.label} className="border-b border-[#1A1A24] hover:bg-[#0F0F12] transition-colors">
                 <td className="p-3.5 text-zinc-300">{row.label}</td>
                 {row.values.map((v, j) => (
-                  <td key={j} className={`p-3.5 text-center ${row.highlight_streamer && j === 2 ? "bg-[#00E0FF]/5" : ""}`}>
+                  <td key={`${row.label}-${j}`} className={`p-3.5 text-center ${row.highlight_streamer && j === 2 ? "bg-[#00E0FF]/5" : ""}`}>
                     {v === true ? <Check size={16} className="inline text-[#00FF66]" /> :
                      v === false ? <XIcon size={14} className="inline text-zinc-700" /> :
                      <span className="text-xs text-zinc-300">{v}</span>}
@@ -409,10 +409,10 @@ function ComparisonTable({ c }) {
 function TrustSignals({ c }) {
   return (
     <section className="mt-16 grid sm:grid-cols-2 lg:grid-cols-4 gap-4" data-testid="trust-signals">
-      {c.trust_signals.map((t, i) => {
+      {c.trust_signals.map((t) => {
         const Icon = t.icon;
         return (
-          <div key={i} className="bg-[#0F0F12] border border-[#2A2A35] p-5">
+          <div key={t.label} className="bg-[#0F0F12] border border-[#2A2A35] p-5">
             <Icon size={18} className="text-[#E5FF00] mb-3" />
             <div className="font-bold text-sm text-zinc-100 mb-1">{t.label}</div>
             <div className="text-xs text-zinc-500 leading-relaxed">{t.desc}</div>
@@ -450,7 +450,7 @@ function FaqSection({ c }) {
         <h2 className="font-display font-black text-3xl tracking-tighter">{c.faq_title}</h2>
       </div>
       <div>
-        {c.faq.map((f, i) => <FaqItem key={i} q={f.q} a={f.a} idx={i} />)}
+        {c.faq.map((f, i) => <FaqItem key={f.q} q={f.q} a={f.a} idx={i} />)}
       </div>
     </section>
   );
