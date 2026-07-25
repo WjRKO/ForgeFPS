@@ -47,6 +47,18 @@ AGENT_ZIP_UPSTREAM = os.environ.get(
 _AGENT_ZIP_CACHE_PATH = f"/tmp/forgefps-agent-cache-{hashlib.sha256(AGENT_ZIP_UPSTREAM.encode()).hexdigest()[:10]}.zip"
 
 
+def _extract_latest_version() -> str:
+    """Estrae la versione dall'URL upstream (unico source of truth).
+    Es. '.../releases/download/v0.7.5/...' -> '0.7.5'. Fallback: '0.7.5'.
+    """
+    import re as _re
+    m = _re.search(r"/download/v(\d+\.\d+\.\d+)/", AGENT_ZIP_UPSTREAM)
+    return m.group(1) if m else "0.7.5"
+
+
+LATEST_AGENT_VERSION = _extract_latest_version()
+
+
 def _render_launcher_bat(token: str, backend: str, standalone: bool) -> bytes:
     """Genera il contenuto di un launcher Windows .bat con token pre-compilato.
 
@@ -940,17 +952,55 @@ def build(get_current_user):
         return PlainTextResponse(script, headers={"Content-Disposition": "attachment; filename=forgefps_agent.py"})
 
     @r.get("/agent/script")
-    async def agent_script(t: str = "", profile: str = ""):
+    async def agent_script(t: str = "", profile: str = "", x_agent_version: str = Header(default="")):
         rec = await db.agent_tokens.find_one({"token": t})
         if not rec:
             return PlainTextResponse(
                 "Write-Host '[ERR ] Token non valido. Riapri la pagina FrameForge Agent.' -ForegroundColor Red",
                 media_type="text/plain")
+        # v0.7.6: registra la versione dell'agent locale se dichiarata (solo v0.7.6+
+        # invia questo header). Se assente -> agent vecchio, resta "unknown" nel
+        # doc utente e il banner di update apparira' finche' non aggiornano.
+        if x_agent_version and len(x_agent_version) <= 20:
+            try:
+                await db.pc_specs.update_one(
+                    {"user_id": rec["user_id"]},
+                    {"$set": {"agent_version": x_agent_version, "agent_version_at": now_iso()}},
+                    upsert=True,
+                )
+            except Exception:
+                pass
         script = await _build_agent_script(rec["user_id"], profile)
         # Prepend UTF-8 BOM: Windows PowerShell 5.1 legge i .ps1 senza BOM in ANSI (Windows-1252),
         # causando caratteri glitchati per emoji/UTF-8 (es. · … 📚 👤). Il BOM forza UTF-8.
         return PlainTextResponse("\ufeff" + script, media_type="text/plain; charset=utf-8",
                                  headers={"Content-Disposition": "attachment; filename=forgefps.ps1"})
+
+    @r.get("/agent/status")
+    async def agent_status(user: dict = Depends(get_current_user)):
+        """Ritorna lo stato dell'agent locale dell'utente: versione installata (se
+        rilevata dall'header X-Agent-Version) vs versione ultima disponibile.
+        Usato dal banner "Aggiorna l'agent" nella dashboard."""
+        latest = LATEST_AGENT_VERSION
+        specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"agent_version": 1, "updated_at": 1})
+        installed = (specs or {}).get("agent_version") or None
+        has_ever_run = bool(specs and specs.get("updated_at"))
+        # Outdated se:
+        #  - l'utente ha usato l'agent almeno una volta (ha pc_specs.updated_at)
+        #  - E non ha mai riportato la versione (agent < 0.7.6) OPPURE riportata < latest
+        def _lt(a: str, b: str) -> bool:
+            try:
+                return tuple(int(x) for x in a.split(".")) < tuple(int(x) for x in b.split("."))
+            except Exception:
+                return False
+        is_outdated = bool(has_ever_run and (not installed or _lt(installed, latest)))
+        return {
+            "installed_version": installed,
+            "latest_version": latest,
+            "is_outdated": is_outdated,
+            "has_ever_run": has_ever_run,
+            "download_url": AGENT_ZIP_UPSTREAM,
+        }
 
     @r.get("/agent/script-info")
     async def agent_script_info(t: str = "", profile: str = "", user: dict = Depends(get_current_user)):

@@ -1239,3 +1239,21 @@ Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi
   - Click What's New -> pagina renderizza 4 release con LATEST pill su v0.7.6, highlights + all-changes con NEW/FIX badge colorati
   - Badge sparisce dopo visita (mark-seen ok)
 - Note produzione: fix + feature entrambi in preview; forgefps.dev necessita redeploy.
+
+### 2026-07-25 (41) — Fix flash console silent agent + banner update in-app (FATTO)
+- **Root cause**: `forgefps-agent.exe` buildato con PyInstaller `--console` -> Windows crea la console window PRIMA che Python parta -> anche con ShowWindow(SW_HIDE) restano ~100-500ms di flash visibile durante boot interpreter + import.
+- **Fix v0.7.6 a 2 layer** (`agent-build/forgefps_agent.py`):
+  1. **VBS launcher primario**: nuovo `_write_hidden_launcher()` scrive `%APPDATA%\FrameForge\launcher.vbs` che usa `WshShell.Run(cmd, 0, False)` con SW_HIDE. `register_frameforge_protocol()` ora registra `wscript.exe launcher.vbs "%1"` come handler del protocollo -> process spawnato gia' hidden -> **zero flash**.
+  2. **Belt-and-suspenders `_hide_console_if_silent()`**: chiamato subito dopo argparse (prima di qualsiasi print), nasconde la console via ctypes ShowWindow + redirect stdout/stderr a devnull. Attivo solo se URI contiene `silent=1`. Fallback per il caso in cui .vbs non si riesca a scrivere.
+  3. **Silent+no-token**: se URI silent e token mancante -> `sys.exit(2)` invece di prompt input (evita processo orfano invisibile).
+- **Version tracking** (`X-Agent-Version` header):
+  - Agent v0.7.6 invia `X-Agent-Version: 0.7.6` su `/api/agent/script` (interactive + silent)
+  - Backend `/api/agent/script` legge header e upserta `pc_specs.agent_version + agent_version_at`
+  - Nuovo endpoint `GET /api/agent/status` -> `{installed_version, latest_version, is_outdated, has_ever_run, download_url}`. `latest_version` estratto dinamicamente dall'URL upstream (unico source of truth).
+- **Banner in-app** `AgentUpdateBanner.jsx` (globale, in Layout sopra PlanStatusBanner):
+  - Mostrato solo se `has_ever_run && (installed_version < latest || installed=null)`
+  - Design: bordo giallo lampeggiante, versione installata -> latest con freccia, CTA "Update now" -> `/app/desktop`, dismiss per-versione in sessionStorage (riappare al release successivo)
+  - i18n IT+EN inline
+- Versione bumpata a v0.7.6 in: `AGENT_VERSION`, `version_info.txt` (filevers/prodvers/FileVersion/ProductVersion)
+- Verificato via curl `/api/agent/status` + screenshot banner rendering + dismiss funzionante.
+- ⚠️ Richiede: (1) build+release v0.7.6 GitHub (workflow gia' presente), (2) bump `AGENT_ZIP_UPSTREAM` in backend a v0.7.6, (3) redeploy forgefps.dev.
