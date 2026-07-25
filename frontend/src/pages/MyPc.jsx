@@ -7,6 +7,7 @@ import i18n from "@/i18n";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import SpecsForm from "@/components/SpecsForm";
 import HealthHistoryCard from "@/components/HealthHistoryCard";
+import { HwInsightsPanel } from "@/components/HwInsightsPanel";
 import SyncTimeline from "@/components/SyncTimeline";
 import { PageHeader } from "@/components/hud";
 import { useSilentLaunch } from "@/hooks/useSilentLaunch";
@@ -339,6 +340,8 @@ export default function MyPc() {
           )}
         </div>
       )}
+
+      <HwInsightsPanel />
 
       <HealthHistoryCard />
 

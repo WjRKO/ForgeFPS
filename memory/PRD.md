@@ -1374,3 +1374,11 @@ Scelte utente: Build a+b, Upgrade d+e+g.
 ### 2026-07-25 (51) — Bottone "Traccia" nel confronto Prima/Dopo (FATTO, testato e2e)
 - Upgrade.jsx: aggiunto `ba-track-btn` (Volt, full width) in fondo a ba-result → riusa trackParts() (POST /upgrade/track con le recommendations). i18n it/en `upgrade.ba_track`.
 - Test e2e screenshot: analyze → compare Fortnite (+35%, 4 barre) → click traccia → toast "1 components added to the Price Tracker" ✓.
+
+### 2026-07-25 (52) — Hardware Insights (a,b,c,d,e,f,h — scelte utente, no ReBAR) (FATTO, testato)
+- Agent (ps_agent.py Get-Specs, arriva via script server → no rebuild exe): ram_speed_nominal_mhz (XMP check), max_refresh_hz (EDID via WmiMonitorListedSupportedSourceModes), disks[{letter,type NVMe/SATA SSD/HDD,size_gb,free_gb}] (Get-Volume+Get-Partition+Get-PhysicalDisk), game_drives (parse libraryfolders.vdf Steam), hvci_on (Win32_DeviceGuard/registry), gpu_driver_date, bios_date. Sintassi PS validata (pwsh 7.4 parser).
+- Backend helpers.py: compute_hw_insights(d) rule engine → [{id,severity,params}] (xmp≥400MHz gap, single_channel, refresh gap≥30Hz, game_on_hdd, disk_full<10%, hvci, gpu_driver_old>180gg, bios_old>2anni); _insight_text_it per prompt AI; specs_to_text ora include riga Dischi + blocco "Problemi hardware rilevati" → AI Advisor/Upgrade/FPS li ricevono automaticamente.
+- Route GET /api/hw-insights (pc.py). Testato curl: 6 insight con dati seedati admin.
+- Frontend: components/HwInsightsPanel.jsx (severità high/med/low con bordi/badge colorati, titolo+desc+fix localizzati con interpolazione params) renderizzato in MyPc.jsx sotto Health Score. i18n `hwins.*` IT+EN completo. Screenshot ✓ (6 righe).
+- Seed dev admin: specs estese con problemi simulati (XMP off 2133/3600, 60/165Hz, Steam su HDD D:, HVCI on, driver 8 mesi, BIOS 2023).
+- Richiede redeploy per produzione (sia backend che script agent).

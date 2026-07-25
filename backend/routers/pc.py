@@ -12,7 +12,7 @@ from fastapi.responses import PlainTextResponse
 import ai_engine
 import push
 from database import db, now_iso
-from helpers import specs_to_text, compute_health, get_or_create_agent_token, grade_bufferbloat
+from helpers import specs_to_text, compute_health, compute_hw_insights, get_or_create_agent_token, grade_bufferbloat
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
 from services.gpu_catalog_service import find_gpu_reference, compute_health_vs_reference
@@ -896,6 +896,14 @@ def build(get_current_user):
     async def get_games(user: dict = Depends(get_current_user)):
         doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0, "games": 1, "updated_at": 1})
         return {"games": (doc or {}).get("games", []), "updated_at": (doc or {}).get("updated_at")}
+
+    @r.get("/hw-insights")
+    async def hw_insights(user: dict = Depends(get_current_user)):
+        doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0, "data": 1})
+        d = (doc or {}).get("data") or {}
+        if not d:
+            return {"available": False, "insights": []}
+        return {"available": True, "insights": compute_hw_insights(d)}
 
     @r.get("/pc-health")
     async def pc_health(user: dict = Depends(get_current_user)):

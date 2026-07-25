@@ -420,6 +420,77 @@ function Get-Specs {
   }
   $v = Get-CimInstance Win32_VideoController | Select-Object -First 1
   if ($v.CurrentHorizontalResolution) { $s.resolution = "$($v.CurrentHorizontalResolution)x$($v.CurrentVerticalResolution)" }
+
+  # ----- v0.7.7 Hardware Insights: dati extra per consigli mirati -----
+  # (a) velocita' nominale RAM (per check XMP: nominale vs configurata)
+  if ($pm1.Speed -and $pm1.Speed -gt 0) { $s.ram_speed_nominal_mhz = "$($pm1.Speed)" }
+  # (c) refresh massimo supportato dal monitor (EDID)
+  try {
+    $maxHz = 0
+    Get-CimInstance -Namespace root\wmi -ClassName WmiMonitorListedSupportedSourceModes -ErrorAction SilentlyContinue | ForEach-Object {
+      foreach ($m in $_.MonitorSourceModes) {
+        if ($m.VerticalRefreshRateNumerator -and $m.VerticalRefreshRateDenominator -gt 0) {
+          $hz = [math]::Round($m.VerticalRefreshRateNumerator / $m.VerticalRefreshRateDenominator)
+          if ($hz -gt $maxHz -and $hz -le 600) { $maxHz = $hz }
+        }
+      }
+    }
+    if ($maxHz -gt 0) { $s.max_refresh_hz = "$maxHz" }
+  } catch {}
+  # (d) dischi fissi: tipo (NVMe/SATA SSD/HDD), dimensione e spazio libero
+  try {
+    $disks = @()
+    foreach ($vol in (Get-Volume -ErrorAction SilentlyContinue | Where-Object { $_.DriveLetter -and $_.DriveType -eq 'Fixed' })) {
+      $dtype = 'Unknown'
+      try {
+        $part = Get-Partition -DriveLetter $vol.DriveLetter -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($part) {
+          $pd = Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { "$($_.DeviceId)" -eq "$($part.DiskNumber)" } | Select-Object -First 1
+          if ($pd) {
+            if ("$($pd.BusType)" -eq 'NVMe') { $dtype = 'NVMe SSD' }
+            elseif ("$($pd.MediaType)" -eq 'SSD') { $dtype = 'SATA SSD' }
+            elseif ("$($pd.MediaType)" -eq 'HDD') { $dtype = 'HDD' }
+            elseif ("$($pd.MediaType)") { $dtype = "$($pd.MediaType)" }
+          }
+        }
+      } catch {}
+      $disks += @{ letter = "$($vol.DriveLetter)"; type = $dtype
+                   size_gb = [math]::Round($vol.Size/1GB); free_gb = [math]::Round($vol.SizeRemaining/1GB) }
+    }
+    if ($disks.Count -gt 0) { $s.disks = $disks }
+  } catch {}
+  # (d) su quali dischi vivono le librerie Steam
+  try {
+    $steamP = (Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction SilentlyContinue).SteamPath
+    if ($steamP) {
+      $vdf = Join-Path $steamP 'steamapps\libraryfolders.vdf'
+      if (Test-Path $vdf) {
+        $gl = @()
+        foreach ($mt in ([regex]::Matches((Get-Content $vdf -Raw), '"path"\s+"([^"]+)"'))) {
+          $L = $mt.Groups[1].Value.Substring(0,1).ToUpper()
+          if ($L -match '[A-Z]' -and $gl -notcontains $L) { $gl += $L }
+        }
+        if ($gl.Count -gt 0) { $s.game_drives = $gl }
+      }
+    }
+  } catch {}
+  # (e) Core Isolation / Memory Integrity (HVCI): costa ~5-10% FPS
+  try {
+    $dg = Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction SilentlyContinue
+    if ($dg) { $s.hvci_on = (@($dg.SecurityServicesRunning) -contains 2) }
+    else {
+      $he = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity' -Name Enabled -ErrorAction SilentlyContinue).Enabled
+      if ($null -ne $he) { $s.hvci_on = ($he -eq 1) }
+    }
+  } catch {}
+  # (f) eta' driver GPU e BIOS
+  try {
+    $vdd = (Get-CimInstance Win32_VideoController | Where-Object { $_.Name -eq $s.gpu } | Select-Object -First 1).DriverDate
+    if (-not $vdd) { $vdd = $v.DriverDate }
+    if ($vdd) { $s.gpu_driver_date = $vdd.ToString('yyyy-MM-dd') }
+  } catch {}
+  try { if ($bi.ReleaseDate) { $s.bios_date = $bi.ReleaseDate.ToString('yyyy-MM-dd') } } catch {}
+
   return $s
 }
 
