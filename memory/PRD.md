@@ -1360,3 +1360,13 @@ Tutto lato server (`backend/ps_agent.py`, script scaricato fresco a ogni avvio �
 
 ### 2026-07-25 (49) — GpuReferenceCard spostata nel tab "Full Benchmark v2" (FATTO)
 - `Benchmark.jsx`: la card "// GPU VS REFERENCE" (PassMark G3D, Time Spy, VRAM, TDP + bottone Avvia Full Benchmark) rimossa dal tab Quick e renderizzata sopra `FullBenchmarkReport` nel tab Full. Verificato con screenshot (0 occorrenze in Quick, 1 in Full).
+
+### 2026-07-25 (50) — Miglioramenti "Consiglia Build" + "Upgrade & FPS" (FATTO, testato)
+Scelte utente: Build a+b, Upgrade d+e+g.
+- BuildGenerator.jsx: (b) 3 preset one-click (Competitive 1080p €1200 / Streaming 1440p €1800 / 4K Ultra €3000) che compilano e generano subito; (a) build salvate espandibili (click header → BuildCard completa con componenti/prezzi/tips; delete/track con stopPropagation).
+- Upgrade.jsx riscritta: (g) header hardware rilevato (CPU/GPU/RAM da /pc-specs); (e) chips giochi installati (da /api/games, riempiono il campo gioco); (d) blocco "Prima vs dopo l'upgrade" nel risultato analisi → POST /api/fps/upgrade-compare con upgrades=recommendations → badge guadagno % + 4 righe preset con barre doppie (grigia=ora, verde=dopo) + note AI.
+- Backend: models.FpsUpgradeInput, ai_engine.estimate_fps_upgrade() (prompt before/after con bottleneck residui), route POST /fps/upgrade-compare in pc.py (richiede specs, gestione 402 budget LLM).
+- i18n IT+EN: build.presets_title/preset_defs, upgrade.hw_title/games_quick/ba_*.
+- Testing agent iteration_38: 100% backend (6/6 pytest) e 100% frontend. Note non bloccanti: route è /app/builds (plurale); stato `game` condiviso tra pannello FPS e blocco ba (voluto).
+- Seed dev: admin ha pc_specs (i7-12700K, RTX 3070 Ti, 32GB) + 5 giochi.
+- Richiede redeploy per produzione.
