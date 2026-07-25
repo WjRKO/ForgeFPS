@@ -233,6 +233,15 @@ def build(get_current_user):
   .tmp:empty {{ display:none; }}
   .offline {{ opacity:0.5; }}
   .offline .val {{ color:#71717A; }}
+  .waiting {{ color:#71717A !important; opacity:0.5; font-weight:400 !important; }}
+  .card.waiting-live .brand::after {{
+    content: '  \u25CF LIVE OFF';
+    color: #FF9500;
+    letter-spacing:1px;
+    margin-left:8px;
+    animation: pulse 1.5s ease-in-out infinite;
+  }}
+  @keyframes pulse {{ 0%,100% {{ opacity:0.5 }} 50% {{ opacity:1 }} }}
 </style></head>
 <body>
 <div class="card" id="ovl">
@@ -255,7 +264,13 @@ def build(get_current_user):
         const valEl = row.querySelector('[data-field="' + metric + '"]');
         if (valEl) {{
           const v = d[metric];
-          valEl.textContent = (v == null) ? '--' : (metric === 'gpu_pct' || metric === 'cpu_pct' || metric === 'ram_pct') ? Math.round(v) : v;
+          if (v == null) {{
+            valEl.textContent = '--';
+            valEl.classList.add('waiting');
+          }} else {{
+            valEl.textContent = (metric === 'gpu_pct' || metric === 'cpu_pct' || metric === 'ram_pct') ? Math.round(v) : v;
+            valEl.classList.remove('waiting');
+          }}
         }}
         // Temp badge (per CPU/GPU)
         const tempEl = row.querySelector('.tmp');
@@ -265,6 +280,9 @@ def build(get_current_user):
           tempEl.textContent = (tv == null || tv === 0) ? '' : tv + '°C';
         }}
       }});
+      // Mostra indicatore "waiting" se telemetry non attivo
+      const hasLiveMetrics = ['fps','cpu_pct','gpu_pct','ping_ms'].some(k => d[k] != null);
+      card.classList.toggle('waiting-live', !hasLiveMetrics);
     }} catch (e) {{
       card.classList.add('offline');
     }}

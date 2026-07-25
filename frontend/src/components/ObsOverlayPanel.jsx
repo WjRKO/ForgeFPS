@@ -127,6 +127,14 @@ export default function ObsOverlayPanel() {
         Aggiungi questo URL come <strong className="text-zinc-300">Browser Source</strong> in OBS Studio (larghezza 300px, altezza 200px consigliati). Aggiorna in tempo reale mentre il Live Monitor gira.
       </p>
 
+      {/* Warning se monitor non attivo */}
+      <div className="flex items-start gap-2 bg-[#FF9500]/10 border border-[#FF9500]/40 p-3" data-testid="overlay-monitor-hint">
+        <Radio size={14} className="text-[#FF9500] shrink-0 mt-0.5" />
+        <div className="text-[11px] text-[#FFB347] leading-relaxed">
+          <strong>Importante</strong>: l'overlay mostra i dati (FPS, CPU%, temp) solo quando il <strong className="text-white">Live Monitor gira sul PC</strong>. Se in OBS vedi valori vuoti, lancia il monitor con il bottone qui sopra. Health Score e temperatura CPU vengono mostrati sempre (persistono in DB).
+        </div>
+      </div>
+
       {/* URL row */}
       <div className="flex flex-wrap items-center gap-2">
         <input
