@@ -1157,3 +1157,15 @@ Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi
 - curl end-to-end: data endpoint con telemetry POST -> valori popolati (fps 142, cpu 45%, gpu 68%, temp 72/65°C, ping 18ms)
 - CSP headers verificati: `/api/overlay/{token}` permissivo, altre route restrittive
 - Screenshot playwright: 3 temi (neon/dark/minimal) tutti visibili e distinti in iframe
+
+### 2026-07-25 (36) — Banner upgrade unificato per tutte le feature gated Pro/Streamer (FATTO)
+- Nuovo componente `frontend/src/components/PlanUpgradeBanner.jsx` (props: tier "pro"|"streamer", title, description, features[], currentPlan, compact, testid). Design coerente con FullBenchmarkReport lock-state: border-2 accent, glow blur, feature preview 2x2, CTA `/pricing?plan=xxx`, "piano attuale" pill.
+- Applicato a:
+  - `Advisor.jsx`: fetch `/subscriptions/status` al mount; se `!is_pro` mostra banner "AI Advisor personalizzato" invece di DiagnosePanel+chat. 4 feature preview: Chat AI context-aware, Diagnose one-click, Screenshot analysis, 5 coach specializzati. testid: advisor-locked.
+  - `Live.jsx`: stesso pattern; se `!is_pro` mostra banner "Live Monitor & Alert" invece di stats+chart+ObsOverlay. Poll telemetry disabilitato quando gated (evita 402 spam). testid: live-locked.
+  - `FullBenchmarkReport.jsx` refactor: sostituito il locked-state custom (46 righe) con `<PlanUpgradeBanner tier="streamer" .../>`. Stesso testid `fullbench-locked`.
+  - `ObsOverlayPanel.jsx` refactor: sostituito locked-state (compact) con `<PlanUpgradeBanner tier="streamer" compact .../>`. testid `overlay-locked`. Aggiunte icone Radio/Layout/Monitor/Zap invece di Lock/Sparkles nell'import.
+- Verificato via screenshot (starter e streamer):
+  - starter/@example → banner "PASSA A PRO" su Advisor e Live, "PASSA A STREAMER" su Full Benchmark. Nessun chat-input, nessuna stat visibile.
+  - streamer/admin (plan=streamer) → chat-input presente, stat-fps=142, obs-overlay-panel visibile, nessun banner. Regressione zero.
+- Consistency win: tutti i 4 banner (Pro Advisor, Pro Live, Streamer FullBench, Streamer OBS) usano lo stesso componente => stesso look/motion/CTA, manutenzione centralizzata.

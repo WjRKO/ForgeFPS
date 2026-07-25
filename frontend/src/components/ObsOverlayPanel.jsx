@@ -6,10 +6,10 @@
  * - Setting: posizione (4 opzioni), tema (3 opzioni), toggle per singola metric
  */
 import { useEffect, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
-import { Copy, RefreshCw, ExternalLink, Loader2, Check, Radio, Lock, Sparkles } from "lucide-react";
+import { Copy, RefreshCw, ExternalLink, Loader2, Check, Radio, Monitor, Zap, Layout } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
+import PlanUpgradeBanner from "@/components/PlanUpgradeBanner";
 
 const POSITIONS = [
   { id: "top-left", label: "Alto SX" },
@@ -96,25 +96,23 @@ export default function ObsOverlayPanel() {
 
   if (locked) {
     return (
-      <div className="relative overflow-hidden bg-gradient-to-br from-[#0F0F12] to-[#0A0A0F] border-2 border-[#00E0FF]/40 p-6" data-testid="overlay-locked">
-        <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-[#00E0FF]/10 blur-3xl pointer-events-none" />
-        <div className="relative">
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-[#00E0FF] font-mono mb-2">
-            <Lock size={11} /> Feature esclusiva Streamer
-          </div>
-          <h3 className="font-display font-black text-2xl mb-2 text-white">OBS Browser Overlay</h3>
-          <p className="text-sm text-zinc-400 max-w-2xl mb-4 leading-relaxed">
+      <PlanUpgradeBanner
+        tier="streamer"
+        title="OBS Browser Overlay"
+        description={(
+          <>
             Un URL da aggiungere come <strong className="text-white">Browser Source in OBS</strong>: mostra in overlay FPS, CPU/GPU%, temperature, ping e Health Score sopra il tuo stream. Nessuna app aggiuntiva.
-          </p>
-          <Link
-            to="/pricing?plan=streamer"
-            data-testid="overlay-upgrade-btn"
-            className="inline-flex items-center gap-2 bg-[#00E0FF] text-black font-bold uppercase tracking-widest text-xs px-5 py-2.5 hover:bg-[#33E9FF] transition-colors"
-          >
-            <Sparkles size={13} /> Passa a Streamer
-          </Link>
-        </div>
-      </div>
+          </>
+        )}
+        features={[
+          { icon: Radio, title: "Live overlay in OBS", desc: "URL da aggiungere come Browser Source: FPS, temp, CPU/GPU sopra lo stream." },
+          { icon: Layout, title: "3 temi + 4 posizioni", desc: "Neon giallo, Dark ciano o Minimal. Angoli configurabili in un click." },
+          { icon: Monitor, title: "Metriche personalizzabili", desc: "Attiva/disattiva FPS, CPU%, GPU%, ping, Health Score dal pannello." },
+          { icon: Zap, title: "Auto-refresh in tempo reale", desc: "Aggiorna con il Live Monitor senza mai ricaricare la scena OBS." },
+        ]}
+        compact
+        testid="overlay-locked"
+      />
     );
   }
 

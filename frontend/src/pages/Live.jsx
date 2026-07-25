@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Cpu, Gauge, Thermometer, MemoryStick, Zap, Radio, Gamepad2, Bell, Timer, Sparkles, PlayCircle } from "lucide-react";
+import { Cpu, Gauge, Thermometer, MemoryStick, Zap, Radio, Gamepad2, Bell, Timer, Sparkles, PlayCircle, Activity, BellRing, LineChart as LineChartIcon } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -12,6 +12,7 @@ import BrowserPopupHint from "@/components/BrowserPopupHint";
 import MonitorPreflight from "@/components/MonitorPreflight";
 import MonitorLiveControl from "@/components/MonitorLiveControl";
 import BottleneckDetector from "@/components/BottleneckDetector";
+import PlanUpgradeBanner from "@/components/PlanUpgradeBanner";
 
 const freshAcc = () => ({ startTs: null, lastTs: null, fps: [], cpuTempMax: 0, gpuTempMax: 0, cpuSum: 0, cpuN: 0, gpuSum: 0, gpuN: 0, latSum: 0, latN: 0, latMax: 0, games: {}, samples: 0 });
 
@@ -61,6 +62,7 @@ export default function Live() {
   const [summary, setSummary] = useState(null);
   const [preflightOpen, setPreflightOpen] = useState(false);
   const [launching, setLaunching] = useState(false);
+  const [planInfo, setPlanInfo] = useState(null); // null=loading
   const acc = useRef(freshAcc());
   const seenRef = useRef(new Set());
   const timer = useRef(null);
@@ -68,8 +70,10 @@ export default function Live() {
   useEffect(() => {
     api.get("/agent/token").then(({ data }) => setToken(data.token)).catch((e) => console.error("load agent token failed", e));
     api.get("/alerts").then(({ data }) => setAlerts(data)).catch((e) => console.error("load alerts failed", e));
+    api.get("/subscriptions/status").then(({ data }) => setPlanInfo(data)).catch(() => setPlanInfo({ is_pro: false, plan_effective: "starter" }));
   }, []);
   useEffect(() => {
+    if (planInfo && !planInfo.is_pro) return; // skip telemetry poll if gated
     const load = async () => {
       try {
         const { data } = await api.get("/pc-telemetry");
@@ -96,7 +100,7 @@ export default function Live() {
     load();
     timer.current = setInterval(load, 1000);
     return () => clearInterval(timer.current);
-  }, []);
+  }, [planInfo]);
 
   const resetSession = () => { acc.current = freshAcc(); setSummary(null); toast.success(t("live.session_reset_done")); };
 
@@ -121,6 +125,27 @@ export default function Live() {
         </div>
       </div>
 
+      {planInfo && !planInfo.is_pro ? (
+        <PlanUpgradeBanner
+          tier="pro"
+          title="Live Monitor & Alert"
+          description={(
+            <>
+              Vedi in <strong className="text-white">tempo reale</strong> FPS, CPU/GPU%, temperature, VRAM, ping e latenza mentre giochi.
+              Ricevi <strong className="text-white">alert push</strong> se il PC si scalda troppo, esporta il riepilogo sessione (avg/min/max/1% low) e visualizza tutto in un grafico live.
+            </>
+          )}
+          features={[
+            { icon: Activity, title: "Telemetria live 1s", desc: "8 metriche aggiornate ogni secondo: FPS, CPU, GPU, temp, VRAM, latenza." },
+            { icon: LineChartIcon, title: "Grafico storico in tempo reale", desc: "Timeline con tutti i sample della sessione, esportabile come immagine." },
+            { icon: BellRing, title: "Alert push soglie", desc: "Notifica quando CPU/GPU superano la temperatura configurata (con cooldown)." },
+            { icon: Sparkles, title: "Session Summary streamer", desc: "Card brandizzata con avg/min/max/1% low e temperature max, condivisibile in PNG." },
+          ]}
+          currentPlan={planInfo.plan_effective || "starter"}
+          testid="live-locked"
+        />
+      ) : (
+        <>
       {data.live && <BottleneckDetector />}
 
       {data.live ? (
@@ -254,6 +279,8 @@ export default function Live() {
           </ResponsiveContainer>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

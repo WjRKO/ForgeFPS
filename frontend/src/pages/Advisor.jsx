@@ -3,13 +3,15 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { Send, Plus, Trash2, Loader2, MessageSquareCode, Terminal, Cpu, Copy, Check,
-  ThumbsUp, ThumbsDown, RefreshCw, Image as ImageIcon, X as XIcon, Sparkles } from "lucide-react";
+  ThumbsUp, ThumbsDown, RefreshCw, Image as ImageIcon, X as XIcon, Sparkles,
+  Brain, Stethoscope, Camera, Zap } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import api, { API } from "@/lib/api";
 import { PrimaryButton } from "@/components/hud";
 import { PageHeader } from "@/components/hud";
 import DiagnosePanel from "@/components/DiagnosePanel";
+import PlanUpgradeBanner from "@/components/PlanUpgradeBanner";
 
 function CodeBlock({ children }) {
   const [copied, setCopied] = useState(false);
@@ -62,6 +64,7 @@ export default function Advisor() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [specs, setSpecs] = useState(null);
+  const [planInfo, setPlanInfo] = useState(null); // null=loading, {is_pro, plan_effective}
   const [mode, setMode] = useState(() => (typeof localStorage !== "undefined" && localStorage.getItem("advisor_mode")) || "default");
   // Personalized suggestions from backend (hardware-aware) — used only for "default" coach
   const [personalizedDefault, setPersonalizedDefault] = useState(null);
@@ -87,6 +90,7 @@ export default function Advisor() {
   useEffect(() => {
     loadSessions();
     api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {});
+    api.get("/subscriptions/status").then(({ data }) => setPlanInfo(data)).catch(() => setPlanInfo({ is_pro: false, plan_effective: "starter" }));
     const lng = (i18n.resolvedLanguage || "it").slice(0, 2);
     api.get(`/advisor/suggestions?lang=${lng}`).then(({ data }) => { if (data?.suggestions?.length) setPersonalizedDefault(data.suggestions); }).catch(() => {});
   }, []);
@@ -231,6 +235,27 @@ export default function Advisor() {
           </div>
         )} />
 
+      {planInfo && !planInfo.is_pro ? (
+        <PlanUpgradeBanner
+          tier="pro"
+          title="AI Advisor personalizzato"
+          description={(
+            <>
+              Chatta con un coach AI che <strong className="text-white">conosce il tuo hardware</strong>, la tua Health Score, il tuo benchmark e i tuoi programmi all&apos;avvio.
+              Ricevi <strong className="text-white">azioni prioritizzate</strong> con impatto stimato, comandi PowerShell pronti da copiare e diagnosi one-click.
+            </>
+          )}
+          features={[
+            { icon: Brain, title: "Chat AI context-aware", desc: "Claude Sonnet 4.6 con contesto completo del tuo PC — nessun consiglio generico." },
+            { icon: Stethoscope, title: "Diagnose one-click", desc: "3-5 azioni prioritarie per il tuo hardware con impatto e difficoltà." },
+            { icon: Camera, title: "Screenshot analysis", desc: "Allega uno screenshot: l'AI legge errori, task manager, BIOS." },
+            { icon: Zap, title: "5 coach specializzati", desc: "FPS, Streaming, Troubleshoot, Build e Default: cambia focus in un click." },
+          ]}
+          currentPlan={planInfo.plan_effective || "starter"}
+          testid="advisor-locked"
+        />
+      ) : (
+        <>
       <DiagnosePanel hasSpecs={!!specs?.data?.cpu} />
 
       <div className="grid lg:grid-cols-[240px_1fr] gap-4">
@@ -305,6 +330,8 @@ export default function Advisor() {
           />
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
