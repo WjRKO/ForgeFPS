@@ -1,0 +1,64 @@
+{
+  "categories": {
+    "latency": {
+      "name": "Latency & Input",
+      "icon": "zap",
+      "color": "#00E0FF",
+      "desc": "Riduce input lag e latenza rete: TCP, Nagle, mouse accel, DNS, QoS.",
+      "desc_en": "Reduces input lag and network latency: TCP, Nagle, mouse accel, DNS, QoS."
+    },
+    "gaming": {
+      "name": "Gaming",
+      "icon": "gamepad2",
+      "color": "#E5FF00",
+      "desc": "Game Mode, GPU Scheduling, Fullscreen Optimizations, priority games.",
+      "desc_en": "Game Mode, GPU Scheduling, Fullscreen Optimizations, priority games."
+    },
+    "privacy": {
+      "name": "Privacy",
+      "icon": "shield",
+      "color": "#B388FF",
+      "desc": "Telemetria Windows, Content Delivery, suggerimenti Microsoft.",
+      "desc_en": "Windows telemetry, Content Delivery, Microsoft suggestions."
+    },
+    "bloatware": {
+      "name": "Bloatware",
+      "icon": "trash2",
+      "color": "#FF6B6B",
+      "desc": "Rimozione app UWP preinstallate non essenziali (auto-discovery + reinstallabili).",
+      "desc_en": "Removes UWP preinstalled non-essential apps (auto-discovery + reinstallable)."
+    },
+    "system": {
+      "name": "System Deep",
+      "icon": "cpu",
+      "color": "#00FF66",
+      "desc": "Kernel in RAM, Power Throttling, SysMain, piano energetico Ultimate.",
+      "desc_en": "Kernel in RAM, Power Throttling, SysMain, Ultimate power plan."
+    },
+    "visual": {
+      "name": "Visual & Effects",
+      "icon": "sparkles",
+      "color": "#FF9F5A",
+      "desc": "Effetti visivi Windows, animazioni, ombreggiature (prestazioni).",
+      "desc_en": "Windows visual effects, animations, shadows (performance)."
+    }
+  },
+  "tweaks": [
+    { "id": "tcp-nagle-off", "category": "latency", "name": "Disabilita Nagle Algorithm", "why": "Nagle bufferizza pacchetti TCP piccoli per ottimizzare la banda, ma introduce 40-200ms di latenza. Su giochi online serve responsivita', non banda.", "impact": "+5-15ms input lag online", "difficulty": "safe", "requires_reboot": false },
+    { "id": "mouse-accel-off", "category": "latency", "name": "Accelerazione mouse off", "why": "L'accelerazione varia la sensibilita' in base alla velocita' del movimento: rovina la muscle memory nei giochi FPS. 1:1 tracking = mira riproducibile.", "impact": "Mira 1:1 precisa", "difficulty": "safe", "requires_reboot": false },
+    { "id": "dns-cloudflare", "category": "latency", "name": "DNS Cloudflare 1.1.1.1", "why": "Il DNS del tuo ISP e' spesso lento e loggato. Cloudflare 1.1.1.1 e' il piu' veloce al mondo (13ms avg) e non registra le query.", "impact": "-20-100ms su prima connessione a un server", "difficulty": "safe", "requires_reboot": false },
+    { "id": "qos-bandwidth", "category": "latency", "name": "QoS: rimuovi 20% banda riservata", "why": "Windows riserva di default il 20% della banda per traffico 'best effort' Microsoft. Rimuovendolo riprendi tutta la banda per il gioco.", "impact": "+20% banda disponibile", "difficulty": "safe", "requires_reboot": false },
+    { "id": "game-mode", "category": "gaming", "name": "Game Mode + GPU Scheduling", "why": "Game Mode dedica priorita' CPU/GPU al processo del gioco. Hardware GPU Scheduling (HAGS) taglia latenza rendering. Game DVR off elimina overhead XBox game bar.", "impact": "+5-10% FPS medio", "difficulty": "safe", "requires_reboot": false },
+    { "id": "games-priority", "category": "gaming", "name": "Priorita' processi gaming", "why": "Nel registry Windows c'e' un profilo scheduler 'Games' dove imposti GPU/CPU priority. Di default e' su medium. Portandolo a High i tuoi giochi ottengono time-slice piu' generosi.", "impact": "+3-8% frame time consistency", "difficulty": "safe", "requires_reboot": false },
+    { "id": "fullscreen-exclusive", "category": "gaming", "name": "Fullscreen esclusivo reale", "why": "Windows 10/11 forza fullscreen 'borderless' per compatibilita' con GameBar. Ma il vero fullscreen esclusivo taglia 1-2 frame di latenza (DirectFlip vs desktop compositor).", "impact": "-1 to -3 frame di input lag", "difficulty": "safe", "requires_reboot": false },
+    { "id": "diagtrack-off", "category": "privacy", "name": "Disabilita telemetria Windows", "why": "DiagTrack (Diagnostic Tracking) invia log e dati d'uso a Microsoft ogni ora. Disabilitarlo blocca la telemetria E libera CPU/network.", "impact": "Privacy + 1-2% CPU idle in meno", "difficulty": "safe", "requires_reboot": false },
+    { "id": "content-delivery-off", "category": "privacy", "name": "Disabilita ads/suggerimenti Windows", "why": "Il Content Delivery Manager mostra app suggerite nel menu Start, notifiche promozionali e installa silentemente 'apps consigliate'. Roba invasiva.", "impact": "Zero pubblicita' + Start menu pulito", "difficulty": "safe", "requires_reboot": false },
+    { "id": "bloatware-remove", "category": "bloatware", "name": "Rimuovi bloatware preinstallato", "why": "Auto-discovery: unione lista esplicita (Candy Crush, Solitario, Skype, BingNews...) + pattern wildcard (Bing*, Disney*, Netflix*, OEM Dell/HP/Lenovo, McAfee/Norton trial). Whitelist NEVER_REMOVE protegge Store/Calculator/Photos/runtime.", "impact": "500MB-2GB spazio + boot piu' rapido", "difficulty": "safe", "requires_reboot": false },
+    { "id": "power-plan-max", "category": "system", "name": "Piano energetico prestazioni massime", "why": "Su desktop attiva 'Ultimate Performance' (schema nascosto). Su laptop attiva 'High Performance' (evita di scaricare la batteria in 30 minuti).", "impact": "+2-5% CPU sustained clock", "difficulty": "safe", "requires_reboot": false },
+    { "id": "power-throttle-off", "category": "system", "name": "Power Throttling CPU off (desktop)", "why": "Windows 10+ 'throttla' i processi in background per risparmiare energia. Sul desktop non serve — vuoi max clock sempre. Sul laptop lo lasciamo attivo.", "impact": "+3-7% CPU responsiveness", "difficulty": "moderate", "requires_reboot": true, "conditional": "desktop only" },
+    { "id": "kernel-in-ram", "category": "system", "name": "Kernel Windows sempre in RAM", "why": "Con >=16GB RAM, forza il kernel a NON essere paginato su disco. Riduce latenza di system call quando la RAM e' abbondante.", "impact": "-1-3ms system call latency", "difficulty": "moderate", "requires_reboot": true, "conditional": "RAM >= 16GB" },
+    { "id": "sysmain-off", "category": "system", "name": "SysMain/Superfetch off (SSD)", "why": "SysMain (ex-Superfetch) e' progettato per HDD: precarica file da disco. Su SSD e' inutile e occupa CPU/RAM. Verifica anche che TRIM sia attivo.", "impact": "~3% CPU idle + 200MB RAM", "difficulty": "safe", "requires_reboot": false, "conditional": "SSD only" },
+    { "id": "edge-boost-off", "category": "system", "name": "Microsoft Edge preload off", "why": "Edge parte in background all'avvio di Windows per 'aprirsi piu' velocemente'. Se non usi Edge, sta occupando 200-400MB di RAM per niente.", "impact": "-200-400MB RAM idle", "difficulty": "safe", "requires_reboot": false },
+    { "id": "visual-perf", "category": "visual", "name": "Effetti visivi: modalita' prestazioni", "why": "Disabilita animazioni, ombre, trasparenze e transizioni. Windows si sente 'piu' snappy' e libera GPU cycles per il gioco.", "impact": "+0.5% GPU frametime + UX piu' reattiva", "difficulty": "safe", "requires_reboot": false }
+  ]
+}

@@ -30,6 +30,7 @@ const NAV_GROUPS = [
   ]},
   { section: "section.tools", items: [
     { to: "/app/desktop", label: "nav.desktop", icon: MonitorDown, id: "desktop" },
+    { to: "/app/tweaks", label: "nav.tweaks", icon: SlidersHorizontal, id: "tweaks" },
     { to: "/app/report", label: "nav.report", icon: FileBarChart, id: "report" },
     { to: "/app/commands", label: "nav.commands", icon: TerminalSquare, id: "commands" },
     { to: "/app/network", label: "nav.network", icon: Gauge, id: "network" },

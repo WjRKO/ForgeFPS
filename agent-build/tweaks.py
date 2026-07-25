@@ -279,15 +279,104 @@ BLOAT_APPS = [
     "king.com.CandyCrushSaga", "Microsoft.SkypeApp",
 ]
 
+# Pattern wildcard per scoprire dinamicamente bloatware NON in lista esplicita.
+# Matcha nomi UWP tipici di app OEM/promo (produttori, publisher, categorie).
+# NOTA: usiamo -like pattern PowerShell, non regex Python (perche' li passiamo
+# direttamente a Get-AppxPackage -Name).
+BLOAT_PATTERNS = [
+    "Microsoft.Bing*",           # BingNews, BingWeather, BingSearch (varianti)
+    "Microsoft.Advertising*",    # Ad SDK
+    "Microsoft.OneConnect",      # Mobile Plans
+    "*CandyCrush*",              # tutte le varianti Candy Crush
+    "*Disney*",                  # Disney Magic Kingdom preinstallata
+    "*Netflix*",                 # Netflix stub app
+    "*Facebook*", "*Twitter*", "*Spotify*",  # social app OEM
+    "*.DellCustomerConnect", "*.DellDigitalDelivery",
+    "*.HPPCHardwareDiagnostics*", "*HPJumpStart*",
+    "*LenovoVantage*", "*LenovoUtility*",
+    "*Dropbox*Promo*",
+    "*McAfee*", "*Norton*",      # trial antivirus (potenzialmente installati come OEM)
+]
+
+# App da NON rimuovere mai (whitelist di sicurezza — mai matchare i pattern qui)
+NEVER_REMOVE = {
+    "Microsoft.WindowsStore",      # senza Store non reinstalli nulla
+    "Microsoft.WindowsCalculator",
+    "Microsoft.Windows.Photos",
+    "Microsoft.ScreenSketch",       # Snipping Tool
+    "Microsoft.WindowsTerminal",
+    "Microsoft.Windows.SecHealthUI",  # Windows Security
+    "Microsoft.DesktopAppInstaller",  # winget
+    "Microsoft.WindowsCamera",
+    "Microsoft.WindowsSoundRecorder",
+    "Microsoft.WindowsNotepad",
+    "Microsoft.HEIFImageExtension",
+    "Microsoft.WebpImageExtension",
+    "Microsoft.RawImageExtension",
+    "Microsoft.VP9VideoExtensions",
+    "Microsoft.HEVCVideoExtension",
+    "Microsoft.AV1VideoExtension",
+    "Microsoft.WebMediaExtensions",
+    "Microsoft.MPEG2VideoExtension",
+    "Microsoft.LanguageExperiencePack*",  # lingue installate dall'utente
+    "Microsoft.UI.Xaml*",           # runtime WinUI
+    "Microsoft.VCLibs*",            # C++ runtime
+    "Microsoft.NET.Native*",        # .NET Native runtime
+}
+
+
+def _discover_bloatware(ctx: TweakContext) -> list:
+    """Ritorna la lista aggregata di pacchetti UWP candidati alla rimozione:
+    - unione tra BLOAT_APPS (esplicita) + match dei BLOAT_PATTERNS
+    - filtro NEVER_REMOVE (case-insensitive prefix match sui pattern con *)
+    - deduplicated
+    """
+    found = set(BLOAT_APPS)
+
+    # Query wildcard pattern (una call PS per tutti i pattern via -in)
+    for pat in BLOAT_PATTERNS:
+        out = ctx.ps(
+            f"Get-AppxPackage -Name '{pat}' -ErrorAction SilentlyContinue | "
+            f"Select-Object -ExpandProperty Name"
+        ) or ""
+        for line in out.splitlines():
+            name = line.strip()
+            if not name:
+                continue
+            # Whitelist check (glob-style, semplice)
+            if _matches_never_remove(name):
+                continue
+            found.add(name)
+    return sorted(found)
+
+
+def _matches_never_remove(pkg_name: str) -> bool:
+    """True se il pacchetto e' in whitelist NEVER_REMOVE (supporta suffix *)."""
+    lower = pkg_name.lower()
+    for nr in NEVER_REMOVE:
+        nr_low = nr.lower()
+        if nr_low.endswith("*"):
+            if lower.startswith(nr_low[:-1]):
+                return True
+        elif lower == nr_low:
+            return True
+    return False
+
 
 def _t_bloatware_apply(ctx: TweakContext, bk: Dict[str, Any]) -> None:
+    """v0.7.6: auto-discovery. Non usa piu' solo BLOAT_APPS hardcoded ma:
+    - unione con match dinamico dei BLOAT_PATTERNS
+    - filtro NEVER_REMOVE per sicurezza
+    """
+    candidates = _discover_bloatware(ctx)
     removed = []
-    for pkg in BLOAT_APPS:
+    for pkg in candidates:
         out = ctx.ps("$a=Get-AppxPackage -Name %s -ErrorAction SilentlyContinue; "
                      "if($a){ $a | Remove-AppxPackage -ErrorAction SilentlyContinue; 'ok' }" % pkg)
         if out.strip() == "ok":
             removed.append(pkg)
     bk["bloat_removed"] = removed
+    bk["bloat_candidates_last_seen"] = candidates
 
 
 def _t_bloatware_verify(ctx: TweakContext, bk: Dict[str, Any]) -> bool:
@@ -468,8 +557,8 @@ TWEAKS: List[Tweak] = [
     Tweak(
         id="bloatware-remove", category="bloatware",
         name="Rimuovi bloatware preinstallato",
-        why="Rimuove app UWP preinstallate che rallentano boot e occupano RAM: Candy Crush, Solitario, Skype, BingNews, MixedReality Portal, ecc. Tutte reinstallabili dallo Store.",
-        impact="~500MB spazio + boot piu' rapido", difficulty="safe",
+        why="Rimuove app UWP preinstallate che rallentano boot e occupano RAM: Candy Crush, Solitario, Skype, BingNews, MixedReality Portal, ecc. v0.7.6: auto-discovery via pattern (Bing*, CandyCrush*, Disney*, Netflix*, OEM Dell/HP/Lenovo, McAfee/Norton trial). Whitelist NEVER_REMOVE protegge Store/Calculator/Photos/runtime.",
+        impact="500MB-2GB spazio + boot piu' rapido", difficulty="safe",
         apply=_t_bloatware_apply, verify=_t_bloatware_verify,
     ),
 

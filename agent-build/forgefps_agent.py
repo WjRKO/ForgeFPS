@@ -425,7 +425,12 @@ def parse_and_verify_uri(uri: str, agent_token: str):
             print("       Fix: apri la GUI locale -> 'Cambia account' e reincolla il token dell'account attuale,")
             print("       oppure lancia 'Avvia-FrameForge.bat' dal ZIP scaricato dall'account attuale.")
             return {"invalid_reason": "sig_mismatch", "silent_hint": silent}
-        return {"mode": mode, "ts": ts, "silent": silent}
+        # v0.7.6: estrai anche categories e tweak_id (non firmati, sono UX hints).
+        # Non sono security-critical: alterando questi param si puo' solo cambiare
+        # QUALI tweak vengono applicati tra quelli gia' autenticati via 'mode'.
+        categories = (qs.get("categories") or [""])[0]
+        tweak_id = (qs.get("tweak_id") or [""])[0]
+        return {"mode": mode, "ts": ts, "silent": silent, "categories": categories, "tweak_id": tweak_id}
     except Exception as e:
         print(f"[ERR ] Errore parsing URI: {e}")
         return None
@@ -494,6 +499,11 @@ if _args.uri:
     if payload and not payload.get("invalid_reason"):
         _args.mode = payload["mode"]
         _SILENT_FROM_URI = bool(payload.get("silent"))
+        # v0.7.6: URI param categories/tweak_id -> _args (override CLI)
+        if payload.get("categories"):
+            _args.categories = payload["categories"]
+        if payload.get("tweak_id"):
+            _args.tweak_id = payload["tweak_id"]
         # Se la mode e' 'gui' o 'optimize' apriamo direttamente la finestra sicura
         if _args.mode in ("gui", "optimize") and not _SILENT_FROM_URI:
             _args.mode = "securegui"
@@ -1134,7 +1144,7 @@ def launch_silent_mode(mode: str) -> bool:
     silent avremmo un processo orfano - il backend impedisce comunque questa
     combinazione a livello di API (silent + monitor = rifiutato).
     """
-    if mode not in ("sync", "benchmark", "cleanup", "optimize"):
+    if mode not in ("sync", "benchmark", "cleanup", "optimize", "apply-one", "restore-one", "restore"):
         # Whitelist di mode adatte al lancio silent (non-interattive, terminano).
         print(f"[WARN] Mode '{mode}' non supporta il lancio silent. Uso GUI.")
         return False

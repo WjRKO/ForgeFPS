@@ -1301,3 +1301,21 @@ Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi
 - **Refactor**: `apply_all_tweaks()` da 130 righe → 40 righe (orchestrator sopra `apply_selected()`). Aggiunto `_build_tweak_context()` che rileva hardware profile una volta.
 - Verificato: sintassi OK, import `from tweaks import ...` funziona, `get_by_categories(['latency'])` filtra correttamente, `get_by_id('tcp-nagle-off')` risolve.
 - ⚠️ Da fare: aggiungere UI dashboard per selezionare categorie/singoli tweak (in un altro giro). Per ora esposto solo via CLI + URI protocol.
+
+### 2026-07-25 (44) — UI dashboard tweak + bloatware auto-discovery (FATTO)
+- **UI dashboard tweak** (`pages/Tweaks.jsx`, sidebar entry "Windows Tweaks"):
+  - `GET /api/tweaks/catalog` → serve metadata da `backend/data/tweaks_catalog.json` (16 tweak in 6 categorie con id/name/why/impact/difficulty/requires_reboot/conditional)
+  - `POST /api/tweaks/apply-uri` → firma URI custom-protocol con `mode+ts` HMAC + parametri UX `categories=X,Y` e `tweak_id=Z` (non firmati, sono hint)
+  - Frontend: checkbox individuali per tweak, checkbox aggregata per categoria (con mixed state), "Recommended" (solo safe), "All", "None". Sticky Apply bar in fondo che triggera window.location = uri
+  - Icona colorata per categoria (Zap=cyan latency, Gamepad=yellow gaming, Shield=purple privacy, Trash=red bloatware, Cpu=green system, Sparkles=orange visual). Badge SAFE/MEDIUM/ADVANCED + REBOOT + conditional (Desktop/SSD/RAM>=16GB)
+  - i18n IT+EN: `nav.tweaks`
+- **Agent URI parser esteso** (`forgefps_agent.py`):
+  - `parse_and_verify_uri` estrae anche `categories` e `tweak_id` dai query params (safe: alterando questi si puo' solo cambiare QUALI tweak vengono applicati tra quelli gia' autenticati via mode)
+  - Payload iniettato in `_args.categories` e `_args.tweak_id` prima del dispatch main
+  - Whitelist silent mode estesa: `apply-one`, `restore-one`, `restore` ora supportati via URI protocol
+- **Bloatware auto-discovery** (`tweaks.py`):
+  - `BLOAT_APPS` (13 esplicite v0.7.5) + `BLOAT_PATTERNS` (18 wildcard: Bing*, Disney*, Netflix*, OEM Dell/HP/Lenovo, McAfee/Norton, ecc)
+  - `NEVER_REMOVE` whitelist (22 entry): Store, Calculator, Photos, Camera, Terminal, Notepad, tutti i runtime WinUI/VCLibs/.NET Native, LanguageExperiencePack*
+  - Nuova funzione `_discover_bloatware(ctx)`: unisce lista + match pattern via `Get-AppxPackage -Name <pattern>`, filtra NEVER_REMOVE (glob-style prefix match)
+  - `_t_bloatware_apply` ora rimuove candidati dinamici invece della lista fissa. Salva `bk["bloat_candidates_last_seen"]` per storico
+- Verificato: catalog + apply-uri via curl OK, sintassi Python OK, frontend renderizza 6 categorie 16 tweak, "Recommended" seleziona 14/16 (esclude i moderate con reboot), screenshot conferma UI polished.

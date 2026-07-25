@@ -4,6 +4,7 @@ import hmac
 import time
 import hashlib
 import zipfile
+from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Header
@@ -1011,6 +1012,67 @@ def build(get_current_user):
             "has_ever_run": has_ever_run,
             "download_url": AGENT_ZIP_UPSTREAM,
         }
+
+    # Modalita' accettate dal FrameForge Agent quando aperto via protocollo frameforge://
+    _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "bufferbloat", "fullbench", "monitor", "prematch", "booster", "restore", "gui", "apply-one", "restore-one"}
+
+    _TWEAKS_CATALOG_PATH = Path(__file__).parent.parent / "data" / "tweaks_catalog.json"
+
+    @r.get("/tweaks/catalog")
+    async def tweaks_catalog(user: dict = Depends(get_current_user)):
+        """v0.7.6: cataloga i tweak esposti dal Recipe System dell'agent.
+        Metadata-only (no callables). La UI usa questa per costruire l'elenco
+        selezionabile: id/name/why/impact/category/difficulty/requires_reboot.
+        """
+        try:
+            with open(_TWEAKS_CATALOG_PATH, "r", encoding="utf-8") as f:
+                import json as _json
+                return _json.load(f)
+        except FileNotFoundError:
+            return {"categories": {}, "tweaks": []}
+
+    @r.post("/tweaks/apply-uri")
+    async def tweaks_apply_uri(
+        payload: dict,
+        user: dict = Depends(get_current_user),
+    ):
+        """v0.7.6: genera un URI custom-protocol firmato per applicare un subset
+        di tweak (per categoria o per id). Il frontend chiama questo e poi apre
+        `location.href = uri` per triggerare l'agent locale.
+
+        Body:
+          - categories: List[str] (opzionale)  — es. ["latency", "gaming"]
+          - tweak_ids:  List[str] (opzionale)  — es. ["tcp-nagle-off", "mouse-accel-off"]
+          - silent:     bool  (default True)   — false = mostra progress bar in console
+          - action:     "apply" | "restore"    — default "apply"
+        Precedenza: tweak_ids > categories > tutti.
+        """
+        cats = payload.get("categories") or []
+        tids = payload.get("tweak_ids") or []
+        silent = payload.get("silent", True)
+        action = payload.get("action", "apply")
+        if action not in ("apply", "restore"):
+            raise HTTPException(400, "action deve essere 'apply' o 'restore'")
+
+        # mode base: se un solo tweak_id -> apply-one / restore-one
+        # altrimenti optimize (con filtro categorie) o restore (con filtro categorie)
+        if len(tids) == 1:
+            mode = "apply-one" if action == "apply" else "restore-one"
+        else:
+            mode = "optimize" if action == "apply" else "restore"
+
+        token = await get_or_create_agent_token(str(user["_id"]))
+        ts = int(time.time())
+        msg = f"{mode}|{ts}".encode("utf-8")
+        sig = hmac.new(token.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+
+        parts = [f"mode={mode}", f"silent={1 if silent else 0}", f"ts={ts}", f"sig={sig}"]
+        if tids:
+            parts.append(f"tweak_id={tids[0]}")  # per apply-one/restore-one usiamo il primo
+        if cats:
+            parts.append(f"categories={','.join(cats)}")
+        uri = "frameforge://launch?" + "&".join(parts)
+        return {"uri": uri, "mode": mode, "action": action, "count": max(len(tids), len(cats)), "ts": ts}
 
     @r.get("/agent/script-info")
     async def agent_script_info(t: str = "", profile: str = "", user: dict = Depends(get_current_user)):

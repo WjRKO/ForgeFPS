@@ -3,12 +3,16 @@
     "version": "0.7.6",
     "date": "2026-07-25",
     "highlights": [
+      "UI dashboard per selezione tweak (pagina Windows Tweaks)",
+      "Bloatware auto-discovery con pattern wildcard + whitelist",
       "Recipe System tweak: 16 tweak declarativi in 6 categorie",
       "Auto-update in-place dell'agent (zero download manuale)",
       "Progress bar reale + verify post-apply + revert per singolo tweak",
       "Zero flash console: hidden anche per protocol GUI launches"
     ],
     "changes": [
+      { "type": "feature", "text": "Nuova pagina 'Windows Tweaks' in sidebar: elenco 16 tweak per categoria con checkbox individuali/gruppo, 'Recommended' auto-seleziona solo i safe, sticky Apply bar triggera protocol handler URI firmato" },
+      { "type": "feature", "text": "Bloatware auto-discovery: unione lista esplicita + 18 pattern wildcard (Bing*, Disney*, Netflix*, OEM Dell/HP/Lenovo, McAfee/Norton) + whitelist NEVER_REMOVE con 22 entry (protegge Store/Calculator/Photos/runtime WinUI/VCLibs)" },
       { "type": "refactor", "text": "Recipe System declarativo: 16 tweak in 6 categorie (Latency/Gaming/Privacy/Bloatware/System/Visual). Ogni tweak ha id, why, impact, difficulty, hardware_gate, apply/verify/revert" },
       { "type": "feature", "text": "Categorie selezionabili: --categories 'latency,gaming' applica solo quelle. --tweak-id 'tcp-nagle-off' applica un solo tweak" },
       { "type": "feature", "text": "Verify step post-apply: dopo ogni tweak rilegge il registry per confermare che GPO/antivirus non lo abbiano revertato. Progress bar mostra icona ✔/⚠" },
