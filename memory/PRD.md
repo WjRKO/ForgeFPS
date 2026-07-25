@@ -1357,3 +1357,6 @@ Tutto lato server (`backend/ps_agent.py`, script scaricato fresco a ogni avvio �
 - Testing agent iteration_37: 100% frontend checklist (tabs, alert save, reflex, summary reset, OBS, offline hero+preflight, IT/EN, mobile 390px no overflow). Fixati i 2 minor: traduzioni EN launch_btn & co., scala therm 0→110.
 - NOTA DB dev: admin@boostpc.io settato a plan 'streamer' per testare contenuto sbloccato; 60+ sample telemetria seedati (Counter-Strike 2).
 - Richiede redeploy per essere visibile su forgefps.dev.
+
+### 2026-07-25 (49) — GpuReferenceCard spostata nel tab "Full Benchmark v2" (FATTO)
+- `Benchmark.jsx`: la card "// GPU VS REFERENCE" (PassMark G3D, Time Spy, VRAM, TDP + bottone Avvia Full Benchmark) rimossa dal tab Quick e renderizzata sopra `FullBenchmarkReport` nel tab Full. Verificato con screenshot (0 occorrenze in Quick, 1 in Full).
