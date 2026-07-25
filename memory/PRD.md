@@ -1370,3 +1370,7 @@ Scelte utente: Build a+b, Upgrade d+e+g.
 - Testing agent iteration_38: 100% backend (6/6 pytest) e 100% frontend. Note non bloccanti: route è /app/builds (plurale); stato `game` condiviso tra pannello FPS e blocco ba (voluto).
 - Seed dev: admin ha pc_specs (i7-12700K, RTX 3070 Ti, 32GB) + 5 giochi.
 - Richiede redeploy per produzione.
+
+### 2026-07-25 (51) — Bottone "Traccia" nel confronto Prima/Dopo (FATTO, testato e2e)
+- Upgrade.jsx: aggiunto `ba-track-btn` (Volt, full width) in fondo a ba-result → riusa trackParts() (POST /upgrade/track con le recommendations). i18n it/en `upgrade.ba_track`.
+- Test e2e screenshot: analyze → compare Fortnite (+35%, 4 barre) → click traccia → toast "1 components added to the Price Tracker" ✓.

@@ -214,6 +214,10 @@ export default function Upgrade() {
                       <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-1.5 bg-[#00FF66]" /> {t("upgrade.ba_after")}</span>
                     </div>
                     {ba.notes && <p className="text-xs text-zinc-500 mt-3">{ba.notes}</p>}
+                    <button data-testid="ba-track-btn" onClick={trackParts} disabled={tracking}
+                      className="mt-4 w-full flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold py-2.5 text-sm hover:bg-[#D4EC00] transition-colors disabled:opacity-60 btn-volt">
+                      {tracking ? <Loader2 size={14} className="animate-spin" /> : <LineIcon size={14} />} {t("upgrade.ba_track")}
+                    </button>
                   </div>
                 )}
               </div>
