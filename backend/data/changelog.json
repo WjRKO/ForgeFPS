@@ -3,15 +3,26 @@
     "version": "0.7.6",
     "date": "2026-07-25",
     "highlights": [
-      "Novita' & Feedback: nuova sezione in fondo alla sidebar",
-      "OBS Overlay piu' compatto, contenuto non piu' tagliato",
-      "Banner upgrade unificati con traduzione IT/EN"
+      "UI dashboard per selezione tweak (pagina Windows Tweaks)",
+      "Bloatware auto-discovery con pattern wildcard + whitelist",
+      "Recipe System tweak: 16 tweak declarativi in 6 categorie",
+      "Auto-update in-place dell'agent (zero download manuale)",
+      "Progress bar reale + verify post-apply + revert per singolo tweak",
+      "Zero flash console: hidden anche per protocol GUI launches"
     ],
     "changes": [
-      { "type": "feature", "text": "Nuova pagina Changelog con storico release e badge NEW sui nuovi update" },
-      { "type": "feature", "text": "Feedback rapido: modal con bug/idea/altro + screenshot opzionale" },
+      { "type": "feature", "text": "Nuova pagina 'Windows Tweaks' in sidebar: elenco 16 tweak per categoria con checkbox individuali/gruppo, 'Recommended' auto-seleziona solo i safe, sticky Apply bar triggera protocol handler URI firmato" },
+      { "type": "feature", "text": "Bloatware auto-discovery: unione lista esplicita + 18 pattern wildcard (Bing*, Disney*, Netflix*, OEM Dell/HP/Lenovo, McAfee/Norton) + whitelist NEVER_REMOVE con 22 entry (protegge Store/Calculator/Photos/runtime WinUI/VCLibs)" },
+      { "type": "refactor", "text": "Recipe System declarativo: 16 tweak in 6 categorie (Latency/Gaming/Privacy/Bloatware/System/Visual). Ogni tweak ha id, why, impact, difficulty, hardware_gate, apply/verify/revert" },
+      { "type": "feature", "text": "Categorie selezionabili: --categories 'latency,gaming' applica solo quelle. --tweak-id 'tcp-nagle-off' applica un solo tweak" },
+      { "type": "feature", "text": "Verify step post-apply: dopo ogni tweak rilegge il registry per confermare che GPO/antivirus non lo abbiano revertato. Progress bar mostra icona ✔/⚠" },
+      { "type": "feature", "text": "Revert per singolo tweak: --mode restore-one --tweak-id X ripristina solo quel tweak (non tutto)" },
+      { "type": "feature", "text": "Agent auto-update: al boot verifica /api/agent/latest-version, scarica lo ZIP, updater.bat sostituisce l'exe e rilancia. Zero azione manuale." },
+      { "type": "feature", "text": "Progress bar UI: barra ANSI 24-char con % + icona check/fail + msg troncato, oppure log strutturato se stdout non-TTY. Sostituisce 15+ print sparsi in apply_all_tweaks" },
+      { "type": "fix", "text": "Zero flash console anche su GUI launch: launcher.vbs passa --no-console, l'exe nasconde subito la console (prima solo su URI silent=1)" },
+      { "type": "feature", "text": "Novita' & Feedback in sidebar: pagina changelog live + modal feedback (bug/idea/altro) con screenshot opzionale" },
       { "type": "fix", "text": "OBS overlay tagliato in basso: padding e font ridotti, ora entra anche a 300x200. Nuovo default consigliato: 340x260" },
-      { "type": "fix", "text": "Menu utente: 'Profilo & Sicurezza' e 'Collega Discord' portavano alla landing (route errata /app/settings -> /app/account)" }
+      { "type": "fix", "text": "Menu utente: 'Profilo & Sicurezza' e 'Collega Discord' portavano alla landing (route /app/settings -> /app/account)" }
     ]
   },
   {

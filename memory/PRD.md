@@ -1257,3 +1257,65 @@ Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi
 - Versione bumpata a v0.7.6 in: `AGENT_VERSION`, `version_info.txt` (filevers/prodvers/FileVersion/ProductVersion)
 - Verificato via curl `/api/agent/status` + screenshot banner rendering + dismiss funzionante.
 - ⚠️ Richiede: (1) build+release v0.7.6 GitHub (workflow gia' presente), (2) bump `AGENT_ZIP_UPSTREAM` in backend a v0.7.6, (3) redeploy forgefps.dev.
+
+### 2026-07-25 (42) — Agent v0.7.6: auto-update + progress bar + zero-flash GUI (FATTO)
+- **c1 · Auto-update in-place** (`_check_and_apply_update()` in forgefps_agent.py):
+  - Al boot dopo protocol registration, chiama endpoint pubblico `/api/agent/latest-version` (no auth cookie richiesto → creato in `pc.py`)
+  - Se `latest > AGENT_VERSION` → scarica ZIP in `%APPDATA%\FrameForge\update\`, estrae, trova nuovo exe
+  - Genera `update.bat` che: aspetta 2s, copia sopra l'exe, rilancia con `--from-updater --skip-update-check`, cleanup
+  - Main exe fa sys.exit(0). Zero loop grazie a `--from-updater`. Silenzioso su timeout/rete morta.
+- **b4 · Progress bar reale** (`class Progress`):
+  - Barra ANSI 24-char con cyan/green icon (✔/✘) + pct + msg troncato a 60 char
+  - Fallback log-style `[N/T] OK · msg` se stdout non-TTY (console nascosta o redirect)
+  - `apply_all_tweaks()` refactorato: 15+ `print("[STEP]/...")` sparsi → `prog.step("msg")` sequenziale + `prog.done()` finale
+  - Zero dipendenze esterne (no rich/tqdm → PyInstaller bundle stabile)
+- **b1 · Zero flash console anche per GUI launch**:
+  - Nuovi flag CLI: `--no-console`, `--from-updater`, `--skip-update-check`
+  - `launcher.vbs` ora passa `--no-console` all'exe
+  - `_hide_console_if_silent()` esteso: nasconde se `--no-console` OR `silent=1` in URI
+  - Effetto: qualunque protocol click (silent + non-silent) → console mai visibile. La PS window che spawna resta visibile (e' l'UI vera).
+- Aggiornato `data/changelog.json`: entry v0.7.6 con highlights + changes accurati
+- Verificato: `/api/agent/latest-version` risponde `{version:"0.7.5", download_url:...}` (server-side gia' pronto; bumpa a 0.7.6 quando la release e' pubblicata).
+- Sintassi Python OK, backend up.
+- ⚠️ Richiede build+release v0.7.6 su GitHub per attivare auto-update; poi bump `AGENT_ZIP_UPSTREAM` per far scattare l'update automatico agli utenti su 0.7.5.
+
+### 2026-07-25 (43) — Agent Recipe System (A+B+E+H) (FATTO)
+- **A · Recipe System declarativo** (`agent-build/tweaks.py`, 613 righe, nuovo modulo):
+  - `@dataclass Tweak` con: id, category, name, why, impact, difficulty, requires_reboot, version, hardware_gate, apply/verify/revert
+  - `@dataclass TweakContext` per DI (evita circular imports): run/ps/reg_get/set_reg/_clean + is_laptop/ram_gb/is_ssd
+  - `CATEGORIES` (dict) e `TWEAKS` (list) come source of truth: 16 tweak in 6 categorie (latency=4, gaming=3, privacy=2, bloatware=1, system=5, visual=1)
+  - Ogni tweak espone il "why" tecnico per UI/tooltip ("Nagle bufferizza pacchetti TCP piccoli...") e "impact" quantificato ("+5-15ms input lag online")
+- **B · Categorie selezionabili** (CLI):
+  - `--categories latency,gaming` → applica solo quelle categorie
+  - `--mode list-tweaks` → enumera tutti i 16 tweak raggruppati per categoria
+- **E · Revert per singolo tweak**:
+  - `--mode restore-one --tweak-id tcp-nagle-off` → ripristina solo quel tweak
+  - `--mode apply-one --tweak-id X` → applica solo quel tweak
+  - Ogni tweak definisce `revert()` se necessario (es. sysmain, diagtrack, power_plan); fallback generico key-based per gli altri
+- **H · Verify step post-apply**:
+  - Ogni `Tweak.verify(ctx, bk) -> bool` viene chiamato subito dopo `apply()`
+  - Rileva GPO/antivirus che revertano registry keys (es. quando l'AV enterprise blocca modifiche a HKLM)
+  - Progress bar mostra ✔ (verified) o ⚠ (applied ma non verificato)
+  - Backup salva `bk["tweaks"][id] = {applied, verified, at}` per storico UI
+- **Backup compat**: schema key-based v0.7.5 preservato + nuova sezione `bk["tweaks"]` per metadata. Retrocompat totale con backup esistenti.
+- **Refactor**: `apply_all_tweaks()` da 130 righe → 40 righe (orchestrator sopra `apply_selected()`). Aggiunto `_build_tweak_context()` che rileva hardware profile una volta.
+- Verificato: sintassi OK, import `from tweaks import ...` funziona, `get_by_categories(['latency'])` filtra correttamente, `get_by_id('tcp-nagle-off')` risolve.
+- ⚠️ Da fare: aggiungere UI dashboard per selezionare categorie/singoli tweak (in un altro giro). Per ora esposto solo via CLI + URI protocol.
+
+### 2026-07-25 (44) — UI dashboard tweak + bloatware auto-discovery (FATTO)
+- **UI dashboard tweak** (`pages/Tweaks.jsx`, sidebar entry "Windows Tweaks"):
+  - `GET /api/tweaks/catalog` → serve metadata da `backend/data/tweaks_catalog.json` (16 tweak in 6 categorie con id/name/why/impact/difficulty/requires_reboot/conditional)
+  - `POST /api/tweaks/apply-uri` → firma URI custom-protocol con `mode+ts` HMAC + parametri UX `categories=X,Y` e `tweak_id=Z` (non firmati, sono hint)
+  - Frontend: checkbox individuali per tweak, checkbox aggregata per categoria (con mixed state), "Recommended" (solo safe), "All", "None". Sticky Apply bar in fondo che triggera window.location = uri
+  - Icona colorata per categoria (Zap=cyan latency, Gamepad=yellow gaming, Shield=purple privacy, Trash=red bloatware, Cpu=green system, Sparkles=orange visual). Badge SAFE/MEDIUM/ADVANCED + REBOOT + conditional (Desktop/SSD/RAM>=16GB)
+  - i18n IT+EN: `nav.tweaks`
+- **Agent URI parser esteso** (`forgefps_agent.py`):
+  - `parse_and_verify_uri` estrae anche `categories` e `tweak_id` dai query params (safe: alterando questi si puo' solo cambiare QUALI tweak vengono applicati tra quelli gia' autenticati via mode)
+  - Payload iniettato in `_args.categories` e `_args.tweak_id` prima del dispatch main
+  - Whitelist silent mode estesa: `apply-one`, `restore-one`, `restore` ora supportati via URI protocol
+- **Bloatware auto-discovery** (`tweaks.py`):
+  - `BLOAT_APPS` (13 esplicite v0.7.5) + `BLOAT_PATTERNS` (18 wildcard: Bing*, Disney*, Netflix*, OEM Dell/HP/Lenovo, McAfee/Norton, ecc)
+  - `NEVER_REMOVE` whitelist (22 entry): Store, Calculator, Photos, Camera, Terminal, Notepad, tutti i runtime WinUI/VCLibs/.NET Native, LanguageExperiencePack*
+  - Nuova funzione `_discover_bloatware(ctx)`: unisce lista + match pattern via `Get-AppxPackage -Name <pattern>`, filtra NEVER_REMOVE (glob-style prefix match)
+  - `_t_bloatware_apply` ora rimuove candidati dinamici invece della lista fissa. Salva `bk["bloat_candidates_last_seen"]` per storico
+- Verificato: catalog + apply-uri via curl OK, sintassi Python OK, frontend renderizza 6 categorie 16 tweak, "Recommended" seleziona 14/16 (esclude i moderate con reboot), screenshot conferma UI polished.

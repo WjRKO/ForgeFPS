@@ -951,6 +951,16 @@ def build(get_current_user):
         script = AGENT_SCRIPT.replace("__BACKEND_URL__", backend).replace("__AGENT_TOKEN__", token)
         return PlainTextResponse(script, headers={"Content-Disposition": "attachment; filename=forgefps_agent.py"})
 
+    @r.get("/agent/latest-version")
+    async def agent_latest_version():
+        """Endpoint pubblico usato dal self-updater dell'agent (che non ha auth cookie).
+        Ritorna solo la versione + URL di download della release corrente. Nessun
+        dato utente. Cachable a livello CDN."""
+        return {
+            "version": LATEST_AGENT_VERSION,
+            "download_url": AGENT_ZIP_UPSTREAM,
+        }
+
     @r.get("/agent/script")
     async def agent_script(t: str = "", profile: str = "", x_agent_version: str = Header(default="")):
         rec = await db.agent_tokens.find_one({"token": t})
@@ -1001,6 +1011,9 @@ def build(get_current_user):
             "has_ever_run": has_ever_run,
             "download_url": AGENT_ZIP_UPSTREAM,
         }
+
+    # Modalita' accettate dal FrameForge Agent quando aperto via protocollo frameforge://
+    _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "bufferbloat", "fullbench", "monitor", "prematch", "booster", "restore", "gui", "apply-one", "restore-one"}
 
     @r.get("/agent/script-info")
     async def agent_script_info(t: str = "", profile: str = "", user: dict = Depends(get_current_user)):

@@ -21,6 +21,14 @@ import argparse
 import urllib.parse
 import urllib.request
 
+# v0.7.6 (A+B+E+H): Recipe System dei tweak in un modulo separato
+from tweaks import (
+    TWEAKS, CATEGORIES, TweakContext,
+    get_by_categories, get_by_id, apply_selected,
+    revert_tweak as tweaks_revert_tweak,
+    revert_by_categories as tweaks_revert_by_cats,
+)
+
 _parser = argparse.ArgumentParser(description="FrameForge Agent")
 _parser.add_argument("--token", default=os.environ.get("FORGEFPS_TOKEN", "__AGENT_TOKEN__"))
 _parser.add_argument("--backend", default=os.environ.get("FORGEFPS_BACKEND", "https://forgefps.dev"))
@@ -28,6 +36,16 @@ _parser.add_argument("--mode", default="optimize")
 _parser.add_argument("--uri", default="", help="URI custom-protocol firmato (frameforge://launch?...)")
 _parser.add_argument("--register-protocol", action="store_true",
                      help="Registra frameforge:// nel registro utente e esce (idempotente)")
+_parser.add_argument("--no-console", action="store_true",
+                     help="v0.7.6+: forza hide console anche in modalita' non-silent (usato da launcher.vbs)")
+_parser.add_argument("--from-updater", action="store_true",
+                     help="v0.7.6+: flag interno set dal .bat updater dopo self-update")
+_parser.add_argument("--skip-update-check", action="store_true",
+                     help="v0.7.6+: salta il check auto-update all'avvio")
+_parser.add_argument("--categories", default="",
+                     help="v0.7.6+: comma-separated list di categorie da applicare (latency,gaming,privacy,bloatware,system,visual). Default: tutte.")
+_parser.add_argument("--tweak-id", default="",
+                     help="v0.7.6+: applica/ripristina un singolo tweak (usato con --mode restore-one)")
 _args, _ = _parser.parse_known_args()
 
 # v0.7.6: hide the console window IMMEDIATELY if this launch was triggered
@@ -35,8 +53,12 @@ _args, _ = _parser.parse_known_args()
 # happen BEFORE any print() — otherwise the console flashes on screen even for
 # a fraction of a second, which the user perceives as a scary "terminal popup".
 # The signature check happens later; hiding the window is a pure UX layer.
+# Extended in v0.7.6: also hide when --no-console is explicitly set (from vbs
+# launcher for regular GUI launches — the actual UI is the PowerShell window
+# that we spawn, so our own console has zero value).
 def _hide_console_if_silent(uri: str) -> None:
-    if not uri or "silent=1" not in uri:
+    should_hide = _args.no_console or (uri and "silent=1" in uri)
+    if not should_hide:
         return
     try:
         hwnd = ctypes.windll.kernel32.GetConsoleWindow()
@@ -63,6 +85,149 @@ AGENT_VERSION = "0.7.6"
 _BACKUP_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKUP_FILE = os.path.join(_BACKUP_DIR, "forgefps_backup.json")
 _LEGACY_BACKUP_FILE = os.path.join(_BACKUP_DIR, "boostpc_backup.json")
+
+
+# ---------------------------------------------------------------------------
+# Progress bar UX (v0.7.6) — b4
+# ---------------------------------------------------------------------------
+# Progress bar reale (ANSI + custom) invece di sequenze di print("[STEP]...").
+# - Se stdout e' un TTY (console visibile) -> barra grafica con \r updates
+# - Se stdout e' nascosto/redirected -> log strutturato "[N/T] task: msg" (no \r)
+# Nessuna dipendenza esterna: zero peso aggiuntivo al bundle PyInstaller.
+class Progress:
+    def __init__(self, total: int, title: str = ""):
+        self.total = max(1, int(total))
+        self.n = 0
+        self.title = title
+        self._tty = sys.stdout.isatty() if hasattr(sys.stdout, "isatty") else False
+        if self._tty and title:
+            sys.stdout.write(f"\n\033[1;33m▸ {title}\033[0m\n")
+            sys.stdout.flush()
+
+    def step(self, msg: str = "", success: bool = True) -> None:
+        self.n += 1
+        try:
+            if self._tty:
+                # rendering grafico: bar + pct + msg (60ch max, right-truncated)
+                bar_w = 24
+                filled = int(bar_w * self.n / self.total)
+                bar = "█" * filled + "░" * (bar_w - filled)
+                pct = int(100 * self.n / self.total)
+                icon = "\033[32m✔\033[0m" if success else "\033[31m✘\033[0m"
+                msg_trunc = (msg[:57] + "...") if len(msg) > 60 else msg
+                sys.stdout.write(f"\r  \033[36m[{bar}]\033[0m {pct:3d}% {icon} {msg_trunc:<62}")
+                sys.stdout.flush()
+                if self.n >= self.total:
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
+            else:
+                # fallback log-style: una riga per step, no overwrite
+                mark = "OK" if success else "ERR"
+                print(f"[{self.n}/{self.total}] {mark} · {msg}")
+        except Exception:
+            pass
+
+    def done(self, msg: str = "Completato") -> None:
+        if self._tty:
+            sys.stdout.write(f"\n  \033[1;32m✔ {msg}\033[0m\n")
+            sys.stdout.flush()
+        else:
+            print(f"[DONE] {msg}")
+
+
+# ---------------------------------------------------------------------------
+# Auto-update in-place (v0.7.6) — c1
+# ---------------------------------------------------------------------------
+# All'avvio (dopo protocol registration) contatta /api/agent/status e:
+#  - se l'agent locale e' outdated -> scarica il nuovo .zip in %APPDATA%\FrameForge\update\
+#  - estrae, poi genera un update.bat che:
+#     1) attende 2s (l'exe corrente esce)
+#     2) copia il nuovo .exe sopra quello attuale
+#     3) rilancia con --from-updater --skip-update-check
+#  - il main exe esce con exit(0) senza toccare nulla
+# Non blocca l'avvio: se timeout o rete morta -> continua normalmente.
+def _update_dir() -> str:
+    return os.path.join(os.environ.get("APPDATA", tempfile.gettempdir()), "FrameForge", "update")
+
+
+def _current_agent_version_tuple() -> tuple:
+    try:
+        return tuple(int(x) for x in AGENT_VERSION.split("."))
+    except Exception:
+        return (0, 0, 0)
+
+
+def _check_and_apply_update() -> bool:
+    """Ritorna True se ha avviato l'updater (chi chiama deve fare sys.exit).
+    False se non serve aggiornare o se qualcosa e' fallito (continua normale)."""
+    if _args.from_updater or _args.skip_update_check or not getattr(sys, "frozen", False):
+        return False  # dev mode / updater loop protection
+    try:
+        url = f"{BACKEND_URL}/api/agent/status"
+        # Endpoint richiede auth cookie: qui usiamo un endpoint pubblico separato
+        # per la versione. Fallback: prendiamo la versione dal file .json embedded
+        # nel release GitHub. Timeout aggressivo per non bloccare l'avvio.
+        pub_url = f"{BACKEND_URL}/api/agent/latest-version"
+        req = urllib.request.Request(pub_url, headers={"User-Agent": "FrameForge-Updater", "X-Agent-Version": AGENT_VERSION})
+        with urllib.request.urlopen(req, timeout=4) as r:
+            data = json.loads(r.read().decode("utf-8"))
+        latest = data.get("version", "")
+        zip_url = data.get("download_url", "")
+        if not latest or not zip_url:
+            return False
+        latest_t = tuple(int(x) for x in latest.split(".")) if all(x.isdigit() for x in latest.split(".")) else (0, 0, 0)
+        if latest_t <= _current_agent_version_tuple():
+            return False  # gia' aggiornato
+        # Scarica lo zip
+        upd_dir = _update_dir()
+        os.makedirs(upd_dir, exist_ok=True)
+        zip_path = os.path.join(upd_dir, "forgefps-agent.zip")
+        req2 = urllib.request.Request(zip_url, headers={"User-Agent": "FrameForge-Updater"})
+        with urllib.request.urlopen(req2, timeout=30) as r:
+            with open(zip_path, "wb") as f:
+                shutil.copyfileobj(r, f)
+        # Estrai
+        import zipfile as _zip
+        with _zip.ZipFile(zip_path) as z:
+            z.extractall(upd_dir)
+        # Trova il nuovo exe (potrebbe essere in upd_dir o in una sotto-cartella)
+        new_exe = None
+        for root_p, _dirs, files in os.walk(upd_dir):
+            for fn in files:
+                if fn.lower() == "forgefps-agent.exe":
+                    new_exe = os.path.join(root_p, fn)
+                    break
+            if new_exe:
+                break
+        if not new_exe or not os.path.exists(new_exe):
+            return False
+        current_exe = _agent_exe_path()
+        # Genera l'updater .bat (sopravvive alla morte del nostro processo)
+        bat_path = os.path.join(upd_dir, "update.bat")
+        bat_content = (
+            "@echo off\r\n"
+            "REM FrameForge Agent updater - auto-generated\r\n"
+            "timeout /t 2 /nobreak >nul\r\n"
+            f'copy /Y "{new_exe}" "{current_exe}" >nul\r\n'
+            f'start "" "{current_exe}" --from-updater --skip-update-check\r\n'
+            "REM cleanup temp update dir best-effort\r\n"
+            f'rd /S /Q "{upd_dir}" >nul 2>&1\r\n'
+        )
+        with open(bat_path, "w", encoding="utf-8") as f:
+            f.write(bat_content)
+        # Lancia il .bat hidden e ritorna True (main deve sys.exit)
+        CREATE_NO_WINDOW = 0x08000000
+        subprocess.Popen(
+            ["cmd.exe", "/c", bat_path],
+            creationflags=CREATE_NO_WINDOW,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+        )
+        return True
+    except Exception:
+        return False
+
 
 # Persistent token storage in %APPDATA%\FrameForge\token.dat (v0.6.8+).
 # Se l'utente non passa --token via CLI, provo a leggerlo da disco. Se non c'e',
@@ -152,7 +317,7 @@ def _write_hidden_launcher() -> str:
             "Set shell = CreateObject(\"WScript.Shell\")\n"
             "If WScript.Arguments.Count < 1 Then WScript.Quit 1\n"
             "uri = WScript.Arguments(0)\n"
-            f'cmd = """{exe}"" --backend ""{backend}"" --uri """ & Replace(uri, """", """""") & """"\n'
+            f'cmd = """{exe}"" --no-console --backend ""{backend}"" --uri """ & Replace(uri, """", """""") & """"\n'
             "shell.Run cmd, 0, False\n"  # 0 = SW_HIDE, False = don't wait
         )
         with open(vbs_path, "w", encoding="utf-8") as f:
@@ -260,7 +425,12 @@ def parse_and_verify_uri(uri: str, agent_token: str):
             print("       Fix: apri la GUI locale -> 'Cambia account' e reincolla il token dell'account attuale,")
             print("       oppure lancia 'Avvia-FrameForge.bat' dal ZIP scaricato dall'account attuale.")
             return {"invalid_reason": "sig_mismatch", "silent_hint": silent}
-        return {"mode": mode, "ts": ts, "silent": silent}
+        # v0.7.6: estrai anche categories e tweak_id (non firmati, sono UX hints).
+        # Non sono security-critical: alterando questi param si puo' solo cambiare
+        # QUALI tweak vengono applicati tra quelli gia' autenticati via 'mode'.
+        categories = (qs.get("categories") or [""])[0]
+        tweak_id = (qs.get("tweak_id") or [""])[0]
+        return {"mode": mode, "ts": ts, "silent": silent, "categories": categories, "tweak_id": tweak_id}
     except Exception as e:
         print(f"[ERR ] Errore parsing URI: {e}")
         return None
@@ -329,6 +499,11 @@ if _args.uri:
     if payload and not payload.get("invalid_reason"):
         _args.mode = payload["mode"]
         _SILENT_FROM_URI = bool(payload.get("silent"))
+        # v0.7.6: URI param categories/tweak_id -> _args (override CLI)
+        if payload.get("categories"):
+            _args.categories = payload["categories"]
+        if payload.get("tweak_id"):
+            _args.tweak_id = payload["tweak_id"]
         # Se la mode e' 'gui' o 'optimize' apriamo direttamente la finestra sicura
         if _args.mode in ("gui", "optimize") and not _SILENT_FROM_URI:
             _args.mode = "securegui"
@@ -834,8 +1009,8 @@ def _cleanup():
     print("[ OK ] File temporanei, cache Windows Update e DNS puliti.")
 
 
-def apply_all_tweaks():
-    bk = _load_backup()
+def _build_tweak_context():
+    """v0.7.6 (A): Detecta hardware profile e crea il TweakContext per il Recipe System."""
     ct = ps("(Get-CimInstance Win32_SystemEnclosure).ChassisTypes -join ','")
     is_laptop = any(x in (ct or "").split(",") for x in ["8", "9", "10", "14", "30", "31", "32"])
     try:
@@ -843,128 +1018,68 @@ def apply_all_tweaks():
     except Exception:
         ram_gb = 0
     is_ssd = "SSD" in (ps("(Get-Partition -DriveLetter C -ErrorAction SilentlyContinue | Get-Disk | Get-PhysicalDisk).MediaType") or "")
-    print("\n[STEP] Profilo hardware: %s, RAM %d GB, disco %s -> tweak adattati." %
-          ("Laptop" if is_laptop else "Desktop", ram_gb, "SSD" if is_ssd else "HDD"))
-    print("[STEP] Applico ottimizzazioni profonde (con backup)...")
+    return TweakContext(
+        run=run, ps=ps, reg_get=reg_get, set_reg=set_reg, _clean=_clean,
+        is_laptop=is_laptop, ram_gb=ram_gb, is_ssd=is_ssd,
+    )
+
+
+def apply_all_tweaks():
+    """v0.7.6 (A+B+E+H) — orchestrator sopra il Recipe System in tweaks.py.
+    - Rispetta --categories="latency,gaming" (o applica tutti)
+    - Rispetta --tweak-id="tcp-nagle-off" per applicare un solo tweak
+    - Ogni tweak viene verificato dopo l'apply e marcato in bk["tweaks"][id]
+    - Progress bar reale con simbolo ✔/⚠ per verified/applied-but-not-verified
+    """
+    bk = _load_backup()
+    ctx = _build_tweak_context()
+    print("\n[STEP] Profilo hardware: %s, RAM %d GB, disco %s" %
+          ("Laptop" if ctx.is_laptop else "Desktop", ctx.ram_gb, "SSD" if ctx.is_ssd else "HDD"))
     _cleanup()
 
-    cur = ps("(powercfg /getactivescheme)")
-    m = re.search(r"([0-9a-fA-F-]{36})", cur or "")
-    if m and "power_plan" not in bk:
-        bk["power_plan"] = m.group(1)
-    if is_laptop:
-        run("powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c")
-        print("    Piano energetico: High Performance (adattivo: laptop, protetta batteria/temperature).")
+    # Selezione: --tweak-id (uno solo) o --categories (filtro) o tutti
+    if _args.tweak_id:
+        one = get_by_id(_args.tweak_id)
+        if not one:
+            print(f"[ERR ] Tweak id '{_args.tweak_id}' non trovato.")
+            return
+        selected = [one]
+        title = f"Applico 1 tweak: {one.name}"
     else:
-        ultimate = "e9a42b02-d5df-448d-aa00-03f14749eb61"
-        run(f"powercfg -duplicatescheme {ultimate}")
-        if "0x0" not in (run(f"powercfg -setactive {ultimate}") or "").lower():
-            pass
-        run("powercfg -setactive e9a42b02-d5df-448d-aa00-03f14749eb61")
-        print("    Piano energetico: prestazioni massime.")
+        cats = [c.strip() for c in (_args.categories or "").split(",") if c.strip()]
+        selected = get_by_categories(cats)
+        if cats:
+            title = f"Applico {len(selected)} tweak in categorie: {', '.join(cats)}"
+        else:
+            title = f"Applico {len(selected)} ottimizzazioni (tutte le categorie)"
 
-    set_reg(bk, r"HKCU:\Software\Microsoft\GameBar", "AllowAutoGameMode", "DWord", 1)
-    set_reg(bk, r"HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode", "DWord", 2)
-    set_reg(bk, r"HKCU:\System\GameConfigStore", "GameDVR_Enabled", "DWord", 0)
-    set_reg(bk, r"HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR", "AllowGameDVR", "DWord", 0)
-    print("    Game Mode + GPU Scheduling attivi, Game DVR disattivato.")
-
-    sp = r"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
-    set_reg(bk, sp, "SystemResponsiveness", "DWord", 0)
-    set_reg(bk, sp, "NetworkThrottlingIndex", "DWord", 4294967295)
-    games = sp + r"\Tasks\Games"
-    set_reg(bk, games, "GPU Priority", "DWord", 8)
-    set_reg(bk, games, "Priority", "DWord", 6)
-    set_reg(bk, games, "Scheduling Category", "String", "High")
-    set_reg(bk, games, "SFIO Priority", "String", "High")
-    set_reg(bk, r"HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation", "DWord", 26)
-    print("    Priorita GPU/CPU per i giochi + network throttling off.")
-
-    set_reg(bk, r"HKCU:\Control Panel\Mouse", "MouseSpeed", "String", "0")
-    set_reg(bk, r"HKCU:\Control Panel\Mouse", "MouseThreshold1", "String", "0")
-    set_reg(bk, r"HKCU:\Control Panel\Mouse", "MouseThreshold2", "String", "0")
-    print("    Accelerazione mouse disattivata (mira piu precisa).")
-
-    set_reg(bk, r"HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects",
-            "VisualFXSetting", "DWord", 2)
-    print("    Effetti visivi: modalita prestazioni.")
-
-    ifaces = ps("Get-ChildItem 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces' | "
-                "Select-Object -ExpandProperty PSChildName")
-    for guid in [l.strip() for l in (ifaces or "").splitlines() if l.strip()]:
-        p = r"HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\%s" % guid
-        set_reg(bk, p, "TcpAckFrequency", "DWord", 1)
-        set_reg(bk, p, "TCPNoDelay", "DWord", 1)
-    run("netsh int tcp set global autotuninglevel=normal")
-    run("netsh int tcp set global ecncapability=enabled")
-    run("netsh int tcp set global rss=enabled")
-    print("    Nagle disattivato + TCP ottimizzato (meno latenza online).")
-
-    alias = _clean(ps("$a=Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1; $a.Name"))
-    if alias and ("dns::" + alias) not in bk:
-        bk["dns::" + alias] = "reset"
-        ps("Set-DnsClientServerAddress -InterfaceAlias '%s' -ServerAddresses ('1.1.1.1','1.0.0.1')" % alias)
-        print(f"    DNS impostati su Cloudflare (1.1.1.1) su '{alias}'.")
-
-    st = _clean(ps("(Get-Service DiagTrack -ErrorAction SilentlyContinue).StartType"))
-    if st and "svc::DiagTrack" not in bk:
-        bk["svc::DiagTrack"] = st
-        run("net stop DiagTrack")
-        run("sc config DiagTrack start= disabled")
-        print("    Telemetria (DiagTrack) disattivata.")
-
-    cdm = r"HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
-    set_reg(bk, cdm, "SilentInstalledAppsEnabled", "DWord", 0)
-    set_reg(bk, cdm, "SystemPaneSuggestionsEnabled", "DWord", 0)
-    set_reg(bk, r"HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent",
-            "DisableWindowsConsumerFeatures", "DWord", 1)
-    print("    Suggerimenti/ads di Windows disattivati.")
-
-    bloat = ["Microsoft.549981C3F5F10", "Microsoft.BingNews", "Microsoft.BingWeather", "Microsoft.GetHelp",
-             "Microsoft.Getstarted", "Microsoft.WindowsFeedbackHub", "Microsoft.MicrosoftSolitaireCollection",
-             "Microsoft.People", "Microsoft.WindowsMaps", "Microsoft.3DBuilder", "Microsoft.MixedReality.Portal",
-             "king.com.CandyCrushSaga", "Microsoft.SkypeApp"]
-    removed = 0
-    for pkg in bloat:
-        out = ps("$a=Get-AppxPackage -Name %s -ErrorAction SilentlyContinue; "
-                 "if($a){ $a | Remove-AppxPackage -ErrorAction SilentlyContinue; 'ok' }" % pkg)
-        if out.strip() == "ok":
-            removed += 1
-    print(f"    Debloat: rimosse {removed} app superflue (reinstallabili dallo Store).")
-
-    gcs = r"HKCU:\System\GameConfigStore"
-    set_reg(bk, gcs, "GameDVR_FSEBehaviorMode", "DWord", 2)
-    set_reg(bk, gcs, "GameDVR_HonorUserFSEBehaviorMode", "DWord", 1)
-    set_reg(bk, gcs, "GameDVR_DXGIHonorFSEWindowsCompatible", "DWord", 1)
-    print("    Fullscreen Optimizations disattivate (fullscreen esclusivo reale).")
-
-    set_reg(bk, r"HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched", "NonBestEffortLimit", "DWord", 0)
-    print("    Banda riservata QoS (20%) rimossa.")
-
-    if not is_laptop:
-        set_reg(bk, r"HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff", "DWord", 1)
-        print("    Power throttling CPU disattivato (adattivo: desktop).")
-
-    if ram_gb >= 16:
-        set_reg(bk, r"HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
-                "DisablePagingExecutive", "DWord", 1)
-        print(f"    Kernel tenuto in RAM (adattivo: {ram_gb} GB rilevati).")
-
-    if is_ssd:
-        st_sm = _clean(ps("(Get-Service SysMain -ErrorAction SilentlyContinue).StartType"))
-        if st_sm and "svc::SysMain" not in bk:
-            bk["svc::SysMain"] = st_sm
-            run("net stop SysMain")
-            run("sc config SysMain start= disabled")
-        run("fsutil behavior set DisableDeleteNotify 0")
-        print("    Adattivo SSD: SysMain/Superfetch off + TRIM verificato.")
-
-    set_reg(bk, r"HKLM:\SOFTWARE\Policies\Microsoft\Edge", "StartupBoostEnabled", "DWord", 0)
-    set_reg(bk, r"HKLM:\SOFTWARE\Policies\Microsoft\Edge", "BackgroundModeEnabled", "DWord", 0)
-    print("    Edge preload/background disattivato.")
-
+    prog = Progress(total=len(selected), title=title)
+    stats = apply_selected(selected, ctx, bk, progress=prog)
     _save_backup(bk)
-    print("\n[ OK ] Ottimizzazioni applicate. Riavvio consigliato. Per annullare: opzione 4 (Ripristina).")
+
+    prog.done(
+        f"Applicati {stats['applied']}/{len(selected)} · verificati {stats['verified']} · "
+        f"skipped {stats['skipped']} (hardware gate) · falliti {stats['failed']}"
+    )
+    if stats["reboot_needed"]:
+        print("\n[INFO] Alcuni tweak richiedono riavvio per attivarsi completamente.")
+
+
+def apply_tweak_by_id(tweak_id: str) -> bool:
+    """v0.7.6 (E): Applica un singolo tweak per id (wrapper CLI-friendly)."""
+    bk = _load_backup()
+    ctx = _build_tweak_context()
+    one = get_by_id(tweak_id)
+    if not one:
+        print(f"[ERR ] Tweak '{tweak_id}' non trovato. Elenco disponibili:")
+        for t in TWEAKS:
+            print(f"  - {t.id} ({t.category})")
+        return False
+    prog = Progress(total=1, title=f"Applico: {one.name}")
+    stats = apply_selected([one], ctx, bk, progress=prog)
+    _save_backup(bk)
+    prog.done(f"{stats['applied']} applicati, {stats['verified']} verificati")
+    return stats["applied"] > 0
 
 
 def optimize_with_benchmark():
@@ -1029,7 +1144,7 @@ def launch_silent_mode(mode: str) -> bool:
     silent avremmo un processo orfano - il backend impedisce comunque questa
     combinazione a livello di API (silent + monitor = rifiutato).
     """
-    if mode not in ("sync", "benchmark", "cleanup", "optimize"):
+    if mode not in ("sync", "benchmark", "cleanup", "optimize", "apply-one", "restore-one", "restore"):
         # Whitelist di mode adatte al lancio silent (non-interattive, terminano).
         print(f"[WARN] Mode '{mode}' non supporta il lancio silent. Uso GUI.")
         return False
@@ -1135,6 +1250,11 @@ if __name__ == "__main__":
         register_frameforge_protocol(silent=True)
     except Exception:
         pass
+    # v0.7.6: auto-update in-place. Se una nuova versione e' disponibile,
+    # scarica ed esegue l'updater .bat, poi esce. In dev-mode (non frozen)
+    # o dopo un self-update (--from-updater) skippa per non fare loop.
+    if _check_and_apply_update():
+        sys.exit(0)
     # v0.7.1+: se URI includeva silent=1 -> esegui in background e esci subito.
     # Nessuna finestra visibile all'utente. Per sync/benchmark ambientali dal web.
     if _SILENT_FROM_URI:
@@ -1177,6 +1297,49 @@ if __name__ == "__main__":
         sys.exit(0)
     if _args.mode == "restore":
         restore_tweaks()
+        try: input("\nPremi INVIO per chiudere...")
+        except Exception: pass
+        sys.exit(0)
+
+    # v0.7.6 (E): revert per singolo tweak — `--mode restore-one --tweak-id tcp-nagle-off`
+    if _args.mode == "restore-one":
+        if not _args.tweak_id:
+            print("[ERR ] --tweak-id richiesto con --mode restore-one")
+            print("       Es: forgefps-agent.exe --mode restore-one --tweak-id tcp-nagle-off")
+            sys.exit(1)
+        bk = _load_backup()
+        ctx = _build_tweak_context()
+        ok = tweaks_revert_tweak(ctx, bk, _args.tweak_id)
+        _save_backup(bk)
+        print(f"[{'OK' if ok else 'ERR'}] Revert tweak '{_args.tweak_id}': {'completato' if ok else 'fallito o non trovato'}")
+        try: input("\nPremi INVIO per chiudere...")
+        except Exception: pass
+        sys.exit(0 if ok else 1)
+
+    # v0.7.6 (B): applica singolo tweak — `--mode apply-one --tweak-id tcp-nagle-off`
+    if _args.mode == "apply-one":
+        if not _args.tweak_id:
+            print("[ERR ] --tweak-id richiesto con --mode apply-one")
+            sys.exit(1)
+        ok = apply_tweak_by_id(_args.tweak_id)
+        try: input("\nPremi INVIO per chiudere...")
+        except Exception: pass
+        sys.exit(0 if ok else 1)
+
+    # v0.7.6 (A): elenca i tweak disponibili — utility per power user e dashboard
+    if _args.mode == "list-tweaks":
+        print(f"\nFrameForge Agent v{AGENT_VERSION} — Recipe System")
+        print(f"{len(TWEAKS)} tweak disponibili in {len(CATEGORIES)} categorie:\n")
+        for cat_id, cat in CATEGORIES.items():
+            group = [t for t in TWEAKS if t.category == cat_id]
+            if not group:
+                continue
+            print(f"  {cat['icon']} {cat['name']} ({cat_id}) — {cat['desc']}")
+            for t in group:
+                reboot = " [reboot]" if t.requires_reboot else ""
+                gate = " [conditional]" if t.hardware_gate else ""
+                print(f"      - {t.id}: {t.name}  ({t.impact}){reboot}{gate}")
+            print()
         try: input("\nPremi INVIO per chiudere...")
         except Exception: pass
         sys.exit(0)
