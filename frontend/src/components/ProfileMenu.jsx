@@ -183,7 +183,7 @@ export default function ProfileMenu() {
 
           {/* Sezione 2 — menu */}
           <div className="p-1.5">
-            <MenuItem to="/app/settings" icon={User} label={t("profile.account", { defaultValue: "Profilo & Sicurezza" })} testid="menu-settings" />
+            <MenuItem to="/app/account" icon={User} label={t("profile.account", { defaultValue: "Profilo & Sicurezza" })} testid="menu-settings" />
             <MenuItem to="/app/billing" icon={CreditCard} label={t("profile.billing", { defaultValue: "Fatturazione" })} testid="menu-billing" />
             {!isPaid && (
               <MenuItem to="/pricing" icon={Sparkles} label={t("profile.plans", { defaultValue: "Piani & Trial" })} accent="#E5FF00" testid="menu-plans" />
@@ -197,7 +197,7 @@ export default function ProfileMenu() {
                 </div>
               </div>
             ) : (
-              <MenuItem to="/app/settings#discord" icon={DISCORD_ICON} label={t("profile.discord_connect", { defaultValue: "Collega Discord" })} testid="menu-discord" />
+              <MenuItem to="/app/account#discord" icon={DISCORD_ICON} label={t("profile.discord_connect", { defaultValue: "Collega Discord" })} testid="menu-discord" />
             )}
             <MenuItem href="https://discord.gg/frameforge" external icon={Bug} label={t("profile.feedback", { defaultValue: "Segnala bug / feedback" })} testid="menu-feedback" />
             <div className="my-1 border-t border-[#2A2A35]" />
