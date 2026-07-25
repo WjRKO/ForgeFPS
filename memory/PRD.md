@@ -1338,3 +1338,14 @@ Tutto lato server (`backend/ps_agent.py`, script scaricato fresco a ogni avvio �
 - `backend/routers/pc.py`: AGENT_ZIP_UPSTREAM default → v0.7.6 (LATEST_AGENT_VERSION auto-estratta = 0.7.6).
 - Effetti attivati e verificati e2e: `/api/agent/latest-version` = 0.7.6; script PS embedda LATEST_VER/DL_URL 0.7.6; banner web "0.7.5 → v0.7.6" visibile su /app/desktop; SHA in pagina = fd294dd4...; `/api/agent/download-zip` serve il nuovo ZIP col launcher personalizzato (SHA diverso dall'upstream by design, il token utente è iniettato nel .bat).
 - Da qui: gli exe v0.7.6 si auto-aggiorneranno alle prossime release; gli utenti 0.7.5 vedono i banner (web + in-GUI).
+
+### 2026-07-25 (47) — Debug "non vedo la nuova GUI": fallback GUI classica + hardening browser (FATTO, richiede redeploy)
+- Sintomo utente (produzione): "[WARN] Interfaccia web non disponibile, uso la GUI classica..." → l'utente vede la vecchia GUI WinForms, NON la Web GUI v3.0. Nel suo screenshot manca la riga "[STEP] GUI locale su..." → il fallimento avviene PRIMA (rilevamento Edge o HttpListener.Start), non nel nuovo codice.
+- Verifiche fatte: prod serve il nuovo codice (latest-version 0.7.6, changelog GUI 3.0 live); sintassi 5.1 OK (PSScriptAnalyzer PSUseCompatibleSyntax target 5.1: zero issue); harness pwsh su Linux con browser fake: Show-WebGui parte, endpoint /api/state, /api/telemetry-local, /api/bloatware, /api/restore-one rispondono (unici errori = cmdlet Windows assenti su Linux).
+- Fix in `ps_agent.py::Show-WebGui`:
+  1. Rilevamento browser esteso: Edge/Chrome/Brave in Program Files, Program Files (x86), LOCALAPPDATA (installazioni per-utente) + registry App Paths (msedge.exe/chrome.exe).
+  2. Se nessun Chromium: fallback `Start-Process $localUrl` nel browser predefinito (GUI in tab normale, loop tenuto vivo dall'inactivity timeout 30s + polling 400ms).
+  3. Diagnostica: listener.Start fallito → stampa il motivo; catch esterno di Show-WebGui stampa messaggio+riga invece di inghiottire l'eccezione.
+  4. Match del processo reale usa il nome del browser scelto (non piu' hardcoded msedge.exe).
+- IMPORTANTE: fix lato server → serve UN ALTRO REDEPLOY per portarlo su forgefps.dev. Al prossimo avvio dell'agent, se fallisce ancora, la console stampera' il motivo esatto (chiedere screenshot).
+- Nota deploy precedente: primo tentativo fallito per errore infra (docker-push "manifest invalid"), secondo tentativo riuscito.

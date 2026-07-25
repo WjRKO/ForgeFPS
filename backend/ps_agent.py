@@ -1582,13 +1582,34 @@ function Invoke-Restore {
 
 # ---------------- Modern Web GUI (Edge --app + local HTTP server) ----------------
 function Show-WebGui {
-  # Trova msedge
-  $edgePaths = @(
+  # v0.7.7: trova un browser Chromium (Edge/Chrome/Brave, anche installazioni per-utente
+  # o via registry App Paths). Se non c'e', fallback al browser predefinito.
+  $script:GUI_BROWSER_FALLBACK = $false
+  $candidates = @(
     "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
-    "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+    "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+    "$env:LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe",
+    "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+    "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+    "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe",
+    "$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe",
+    "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\Application\brave.exe"
   )
-  $edgeExe = $edgePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-  if (-not $edgeExe) { return $false }
+  $edgeExe = $null
+  foreach ($c in $candidates) { if ($c -and (Test-Path $c)) { $edgeExe = $c; break } }
+  if (-not $edgeExe) {
+    foreach ($reg in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe',
+                       'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe')) {
+      try {
+        $p = (Get-ItemProperty -Path $reg -ErrorAction SilentlyContinue).'(default)'
+        if ($p -and (Test-Path $p)) { $edgeExe = $p; break }
+      } catch {}
+    }
+  }
+  if (-not $edgeExe) {
+    Say '[INFO] Nessun browser Edge/Chrome trovato: apro la GUI nel browser predefinito.' 'DarkGray'
+    $script:GUI_BROWSER_FALLBACK = $true
+  }
 
   $isAdmin = Test-Admin
 
@@ -1613,7 +1634,7 @@ function Show-WebGui {
   # Avvia listener SOLO su 127.0.0.1
   $listener = New-Object System.Net.HttpListener
   $listener.Prefixes.Add("http://127.0.0.1:$port/")
-  try { $listener.Start() } catch { return $false }
+  try { $listener.Start() } catch { Say ("[WARN] Server GUI locale non avviabile: {0}" -f $_.Exception.Message) 'Yellow'; return $false }
 
   function WebLog($m) { [void]$script:WEBLOG.Add(@{ ts=(Get-Date).ToString("HH:mm:ss"); msg=$m }) }
   function Send-Json { param($ctx, $obj, [int]$status=200)
@@ -3672,22 +3693,34 @@ function Show-WebGui {
     "--disable-features=Translate,BackForwardCache"
   )
   try {
-    $edge = Start-Process -FilePath $edgeExe -ArgumentList $edgeArgs -PassThru
-  } catch { try { $listener.Stop() } catch {}; return $false }
+    if ($script:GUI_BROWSER_FALLBACK) {
+      $edge = $null
+      Start-Process $localUrl | Out-Null
+    } else {
+      $edge = Start-Process -FilePath $edgeExe -ArgumentList $edgeArgs -PassThru
+    }
+  } catch {
+    # Ultimo tentativo: browser predefinito
+    try { $edge = $null; Start-Process $localUrl | Out-Null }
+    catch { Say ("[WARN] Impossibile aprire il browser: {0}" -f $_.Exception.Message) 'Yellow'; try { $listener.Stop() } catch {}; return $false }
+  }
 
   # Il launcher msedge.exe fa "hop and exit" se c'e' gia' un'istanza Edge attiva.
   # Cerco il process reale (quello con il nostro user-data-dir) dopo un breve wait.
   Start-Sleep -Milliseconds 1800
   $realEdge = $null
-  try {
-    $procs = Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" -ErrorAction SilentlyContinue
-    foreach ($p in $procs) {
-      if ($p.CommandLine -and $p.CommandLine -like "*$profileDir*") {
-        $realEdge = Get-Process -Id $p.ProcessId -ErrorAction SilentlyContinue
-        break
+  if (-not $script:GUI_BROWSER_FALLBACK) {
+    $browserName = [System.IO.Path]::GetFileName($edgeExe)
+    try {
+      $procs = Get-CimInstance Win32_Process -Filter "Name='$browserName'" -ErrorAction SilentlyContinue
+      foreach ($p in $procs) {
+        if ($p.CommandLine -and $p.CommandLine -like "*$profileDir*") {
+          $realEdge = Get-Process -Id $p.ProcessId -ErrorAction SilentlyContinue
+          break
+        }
       }
-    }
-  } catch {}
+    } catch {}
+  }
   if (-not $realEdge -and $edge -and -not $edge.HasExited) { $realEdge = $edge }
   # Se ancora non c'e' un process vivo, uso un inactivity timeout come safety net.
 
@@ -4308,7 +4341,7 @@ if ($MODE -eq 'optimize') {
 
   Say "`n[STEP] Apro il pannello ottimizzazioni..." 'Cyan'
   $ok = $false
-  try { $ok = Show-WebGui } catch { $ok = $false }
+  try { $ok = Show-WebGui } catch { Say ("[WARN] Errore Web GUI: {0} (riga {1})" -f $_.Exception.Message, $_.InvocationInfo.ScriptLineNumber) 'Yellow'; $ok = $false }
   if (-not $ok) {
     Say '[WARN] Interfaccia web non disponibile, uso la GUI classica...' 'Yellow'
     $ok = Show-Gui
