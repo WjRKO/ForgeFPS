@@ -1,100 +1,73 @@
 {
-  "project_context": "FrameForge - A dark, cyber/tech 'HUD' aesthetic for gamers & streamers.",
-  "mission": "Declutter all application pages (EXCEPT Landing Page), strictly maintain existing style/colors, make layouts less chaotic, and ensure lightweight/fast rendering.",
-  "design_strategy": {
-    "chaos_reduction": "Standardize layout rhythm. Stop mixing disparate card sizes. Use a strict grid. Reduce ambient glow and neon border overuse. Make 80% of the UI monochrome zinc/black and reserve Volt Yellow (#E5FF00) strictly for primary actions or active states.",
-    "performance": "Replace heavy JS-driven layout animations with lightweight CSS transitions. Use CSS 'content-visibility' for off-screen heavy components (like charts). Implement simple pulsing CSS skeletons instead of complex loading states.",
-    "consistency": "Use standard layout primitives across all 20+ app pages. Every page must feel like part of the same unified 'OS' terminal."
-  },
+  "theme": "dark",
   "typography": {
-    "fonts": {
-      "display": "Preserve existing display font (used for headings).",
-      "sans": "Preserve existing sans-serif font (used for body).",
-      "mono": "Preserve existing monospace font (used for metrics, code blocks, eyebrow labels, and numeric data to prevent jitter)."
-    },
-    "rules": {
-      "headings": "font-display uppercase tracking-tight text-zinc-100",
-      "eyebrows": "font-mono text-xs uppercase tracking-[0.2em] text-[#E5FF00] mb-2 block",
-      "metrics": "font-mono tabular-nums",
-      "body": "text-sm text-zinc-400"
-    }
+    "headings": "Display sans-serif, uppercase, tracking-tighter (e.g., font-black tracking-tighter uppercase). Use for section titles and massive metric numbers.",
+    "body": "Clean Sans-serif for readable blocks.",
+    "metrics": "Monospace, tabular-nums. CRITICAL for all changing live numbers to prevent layout shifting.",
+    "labels": "Tiny, uppercase, wide tracking (text-xs font-bold tracking-widest text-zinc-500) for metric overlines."
   },
   "colors": {
-    "backgrounds": {
-      "base": "#09090B",
-      "surface_1": "#0F0F12",
-      "surface_2": "#0A0A0C",
-      "glass": "bg-[#09090B]/95 backdrop-blur-md"
-    },
-    "borders": {
-      "default": "#2A2A35",
-      "focus": "#E5FF00",
-      "subtle": "#1A1A24"
-    },
-    "accents": {
-      "primary": "#E5FF00",
+    "background_base": "#09090B",
+    "surface": "#0F0F12",
+    "border_default": "#1A1A24",
+    "border_highlight": "#2A2A35",
+    "primary_accent": "#E5FF00",
+    "semantic": {
       "success": "#00FF66",
       "info": "#00E0FF",
+      "warning": "#FF6B00",
       "danger": "#FF3B30"
     },
-    "declutter_rules": [
-      "No full-screen gradients.",
-      "Remove unnecessary glowing drop-shadows on standard cards.",
-      "Limit the number of active accent colors on screen. If a section is informational, rely on Zinc/White/Black. Save neon for alerts or primary CTAs."
-    ]
-  },
-  "grids_and_layouts": {
-    "page_container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full",
-    "vertical_rhythm": "space-y-8 or gap-8 between major sections. Use gap-4 or space-y-4 inside cards.",
-    "bento_density": "For dense data (Live, MyPc): Use grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4. Keep heights consistent using 'h-full flex flex-col'."
-  },
-  "component_primitives": {
-    "PageHeader": {
-      "description": "Standardized header for every app page.",
-      "structure": "<div className=\"mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4\">\n  <div>\n    <span className=\"font-mono text-[#E5FF00] text-xs uppercase tracking-widest\">// {eyebrow}</span>\n    <h1 className=\"text-3xl font-display text-white uppercase tracking-tight mt-1\">{title}</h1>\n    {subtitle && <p className=\"text-zinc-400 text-sm mt-2 max-w-2xl\">{subtitle}</p>}\n  </div>\n  {actions && <div className=\"flex items-center gap-3\">{actions}</div>}\n</div>"
-    },
-    "HUDCard": {
-      "description": "Standard container replacing random div styles. Strict sharp edges.",
-      "classes": "bg-[#0F0F12] border border-[#2A2A35] rounded-none p-5 relative overflow-hidden flex flex-col",
-      "optional_accent": "Add a absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-[#E5FF00]/50 to-transparent for active/featured cards."
-    },
-    "DataMetric": {
-      "description": "For Live telemetry and MyPc hardware stats. Group logically.",
-      "structure": "<div className=\"flex flex-col gap-1 p-4 bg-[#0A0A0C] border border-[#2A2A35]\">\n  <span className=\"text-xs text-zinc-500 font-mono uppercase\">{label}</span>\n  <div className=\"flex items-baseline gap-2\">\n    <span className=\"text-2xl font-mono text-zinc-100 tabular-nums\">{value}</span>\n    <span className=\"text-sm text-zinc-500 font-mono\">{unit}</span>\n  </div>\n</div>"
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#A1A1AA",
+      "muted": "#52525B"
     }
   },
-  "page_specific_guidance": {
-    "Live_and_MyPc": "High-density telemetry. Strip away decorative graphics that cause reflows. Use the `DataMetric` pattern inside a strict 4-column grid. Ensure all numbers use `tabular-nums` to prevent horizontal jitter during rapid updates.",
-    "Tracker": "Amazon-style product cards must be unified. Use the `HUDCard` primitive. Align product image, strict 2-line truncated title, and price. Remove nested borders to reduce visual noise.",
-    "Advisor_and_BuildGenerator": "Step-by-step layout. Use a single central column (max-w-4xl) for form inputs rather than wide stretching fields. Group sections with subtle `border-b border-[#2A2A35] pb-6`.",
-    "Auth_Account_Security": "Forms must use standard Shadcn/UI inputs styled with square corners (`rounded-none`), `#09090B` backgrounds, and `#2A2A35` borders. Focus state must strictly use `#E5FF00` ring.",
-    "DesktopAgent": "Clearly separate the instructions. Use a distinct `#0A0A0C` terminal block for the .ps1 script with a subtle copy button. Emphasize the token securely."
+  "visual_enhancers": {
+    "corners": "CRITICAL: sharp corners everywhere. rounded-none. No exceptions. This is an OS terminal/HUD.",
+    "shadows": "No glowing drop-shadows on standard cards. Flat, 2D aesthetic.",
+    "borders": "1px solid borders using border-[#1A1A24] or border-[#2A2A35].",
+    "accents": "Limit neon accents. 80% of UI must be monochrome (zinc/black). Use neon strictly for active indicators and primary actions."
   },
-  "performance_and_motion": {
-    "loading_states": "Do not use heavy Lottie/JS loaders. Use CSS skeletons: `<div className=\"animate-pulse bg-[#2A2A35] h-full w-full\" />`",
-    "transitions": "Limit to simple CSS transitions on interactive elements: `transition-colors duration-200` or `transition-opacity`. Avoid animating width/height or layout properties to prevent jank.",
-    "charts": "If using Recharts, disable heavy animation on mount for the 'Live' page to ensure immediate render."
+  "layouts": {
+    "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "grid": "Grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4",
+    "density": "High density, functional spacing. No wasted space."
   },
-  "accessibility_and_ux": {
-    "contrast": "Ensure text meets APCA/WCAG standards. Do not use dark gray text on black backgrounds for critical info (minimum text-zinc-400).",
-    "focus": "All interactive elements must have a visible focus state: `focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#E5FF00] focus-visible:border-[#E5FF00]`",
-    "overlays": "CRITICAL: Do not use fully transparent backgrounds in headers, overlays, dropdowns, or modals. Always use `bg-[#09090B]/95 backdrop-blur-md`."
+  "page_specific_guidelines": {
+    "live_monitoring": {
+      "strategy": "The 'Command Center' - A high-density, real-time HUD prioritizing legible telemetry and performance hierarchy over aesthetics. Inspired by racing telemetry dashboards and military OS interfaces.",
+      "states": {
+        "offline": "Center a stylized 'AGENT OFFLINE' block. Ghosted/dimmed stats grids with '--' values in text-zinc-800. A massive, terminal-style 'INITIALIZE TELEMETRY [LAUNCH]' button in Volt Yellow.",
+        "live": "Full color saturation for indicators, metrics pulsating natively."
+      },
+      "layout_structure": {
+        "top_bar": "col-span-full flex justify-between items-center bg-[#0F0F12] border border-[#2A2A35] p-4. Contains Live Status Pill (pulsing success green dot + 'TELEMETRY LINK: ACTIVE'), Current Game name (monospace), Session Started timer, and Launch/Stop Toggle Button.",
+        "metrics_grid": "Grid-cols-2 lg:grid-cols-4 gap-4 col-span-full. 4 Bento cards for instant readouts.",
+        "main_content": "Grid-cols-1 lg:grid-cols-3 gap-4 col-span-full. Left 2 columns for Charts, Right 1 column for secondary tools (Bottleneck, Summary, Alerts)."
+      },
+      "components": {
+        "real_time_stats": [
+          "Card 1 (Performance): FPS (Huge, White or Volt Yellow if > 144) + Render Latency (ms).",
+          "Card 2 (CPU): Util % + Temp °C. Color code temp > 85 to Warning/Danger.",
+          "Card 3 (GPU): Util %, Temp °C, Power W.",
+          "Card 4 (Memory): RAM % + VRAM %."
+        ],
+        "charting_strategy": "DO NOT combine all into one chart. Use Tabs ('PERFORMANCE', 'THERMALS', 'UTILIZATION') or stack 3 separate slim charts. \n1. Performance: FPS (primary) & Render Latency. Y-Axis MUST be domain={['auto', 'auto']} to avoid clipping high FPS.\n2. Thermals: CPU °C & GPU °C. Y-Axis domain={[0, 100]}.\n3. Utilization: CPU % & GPU %. Y-Axis domain={[0, 100]}.\nUse Recharts LineChart with dot={false}, isAnimationActive={false} (for better 1s tick performance), strokeWidth={2}.",
+        "bottleneck_detector": "Placed top of sidebar. OS-alert style box. If CPU-bound, border turns Warning Orange; if GPU-bound, border Info Blue. Monospace diagnosis text (e.g., 'SYSTEM STATUS: GPU BOUND').",
+        "session_summary": "Data table list, border-[#2A2A35], tabular layout. Includes Reset button (Volt Yellow outline).",
+        "obs_overlay": "Input field with API link, 'COPY' button. Dark gray bg, text-zinc-400.",
+        "thermal_alerts": "Form with tight mono inputs (max °C), enable checkbox, and a sharp submit button.",
+        "reflex_tips": "Minimalist static list with subtle left-border accents for info."
+      }
+    }
   },
   "instructions_to_main_agent": {
-    "target_files": "This project uses .js files, NOT .tsx. Output pure React JS.",
-    "landing_page": "CRITICAL: Do NOT touch, modify, or rewrite the Landing Page. It is perfect as is.",
-    "theme": "Do NOT invent new colors, themes, or gradients. Stick strictly to the #09090B / #E5FF00 HUD aesthetic.",
-    "data_testid": "ALL interactive and key informational elements MUST include a `data-testid` attribute (kebab-case, role-based) to facilitate automated testing.",
-    "execution_mode": "Go file by file through the dashboard pages. Replace chaotic, nested divs with the streamlined `HUDCard` and `PageContainer` standard primitives. Remove redundant visual noise."
+    "charting": "Implement separate charts or a tabbed interface for charts to solve the clipping and overlapping issues. Disable recharts animations for 1s interval data to prevent UI jank.",
+    "fonts": "Apply font-mono tabular-nums for all live updating numeric values.",
+    "styles": "Strict adherence to rounded-none and #09090B/#0F0F12 backgrounds.",
+    "testing": "Ensure all buttons, inputs, and tab triggers have robust data-testid attributes."
   },
-  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": {
-    "1": "You tend to converge toward generic, 'on distribution' outputs. Avoid 'AI slop'. Make creative, distinctive frontends that surprise and delight, while adhering strictly to the FrameForge HUD theme.",
-    "2": "Create depth through layered design elements with z-index hierarchy, but keep borders and backgrounds flat/matte (cyberpunk style) rather than bubbly/soft.",
-    "3": "You MUST NOT apply universal transition (e.g., transition: all). Always add transitions for specific properties (colors, opacity).",
-    "4": "You MUST NOT center align the app container. Do not add `.App { text-align: center; }`.",
-    "5": "Always use sharp-edged modern button styles matching the theme, with interaction animations & color relevant to the app style.",
-    "6": "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 etc for icons. Use standard icon libraries (e.g., Lucide).",
-    "7": "Use `sonner` for toasts. Sonner components are located in `/app/src/components/ui/sonner.js`.",
-    "8": "Prioritize using pre-existing components from src/components/ui when applicable."
-  }
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": "1. Prioritize pre-existing components from src/components/ui but customize them heavily to remove default border-radius (rounded-none). 2. NEVER use AI emojis. 3. Ensure micro-animations on interactive elements (hover:bg-zinc-800 transition-colors). 4. Do not center align the app container. 5. Include data-testid on every interactive element (e.g., data-testid='launch-telemetry-btn'). 6. DO NOT use completely transparent backgrounds where content scrolls underneath."
 }
