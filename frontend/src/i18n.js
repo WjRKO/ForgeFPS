@@ -166,6 +166,10 @@ const resources = {
       },
       live: {
         eyebrow: "// Monitoraggio Live", title: "Telemetria in tempo reale", live: "LIVE", agent_off: "Agent non attivo",
+        link_active: "Telemetria attiva",
+        tab_perf: "Performance", tab_therm: "Temperature", tab_util: "Utilizzo",
+        card_perf: "Performance", card_cpu: "CPU", card_gpu: "GPU", card_mem: "Memoria",
+        min: "min", avg: "media", max: "max",
         start_title: "Avvia il monitoraggio dal tuo PC",
         start_desc: "Apri PowerShell, incolla il comando e lascia la finestra aperta. I dati appariranno qui in tempo reale.",
         alert_title: "Alert temperature critiche (push)", push_active: "Notifiche push attive",
@@ -827,6 +831,10 @@ const resources = {
       },
       live: {
         eyebrow: "// Live Monitoring", title: "Real-time telemetry", live: "LIVE", agent_off: "Agent not running",
+        link_active: "Telemetry link active",
+        tab_perf: "Performance", tab_therm: "Thermals", tab_util: "Utilization",
+        card_perf: "Performance", card_cpu: "CPU", card_gpu: "GPU", card_mem: "Memory",
+        min: "min", avg: "avg", max: "max",
         start_title: "Start monitoring from your PC",
         start_desc: "Open PowerShell, paste the command and keep the window open. Data will appear here in real time.",
         alert_title: "Critical temperature alerts (push)", push_active: "Push notifications on",
