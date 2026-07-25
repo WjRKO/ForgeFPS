@@ -48,11 +48,28 @@ app.add_middleware(
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+    # Overlay HTML pages need permissive CSP + iframe embed (per OBS Browser Source
+    # in ambienti di preview con iframe). Skippiamo l'X-Frame-Options e usiamo un
+    # CSP piu' permissivo per queste route.
+    path = request.url.path
+    is_overlay_html = path.startswith("/api/overlay/") and not (path.endswith("/data") or path.endswith("/config") or path.endswith("/token"))
+    if is_overlay_html:
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "connect-src 'self'; "
+            "img-src 'self' data:; "
+            "font-src 'self' data:; "
+            "frame-ancestors *;"
+        )
+        # NO X-Frame-Options: gli overlay devono poter essere embeddati (OBS/iframe preview)
+    else:
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
     return response
 
 PRICE_CHECK_BATCH = 100

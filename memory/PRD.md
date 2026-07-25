@@ -1129,3 +1129,31 @@ Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi
 ### Note
 - L'`url` copiabile ha base `APP_ORIGIN` (default `https://forgefps.dev`) — corretto per streamer in produzione
 - La preview iframe usa `window.location.origin` per funzionare anche in preview env
+
+
+## 2026-02 — OBS Overlay v2: fix dati, temi, CSP + design accattivante
+### Bug fix
+1. **Dati sempre null anche con Live Monitor attivo**: l'agent PS emette `cpu_util`/`gpu_util`/`ram_used_pct`, ma l'overlay leggeva `cpu_pct`/`gpu_pct`/`ram_pct` (chiavi diverse -> sempre null). Fix: mapping corretto nel data endpoint.
+2. **Ping mai popolato**: `pc_telemetry` non include `ping_ms` (solo Run-Benchmark lo emette). Fix: prendere ping da `net_results.result.idle_ms`.
+3. **Stale detection**: aggiunto controllo su `ts` dell'ultimo sample. Se > 15s fa -> `live=false`, l'HTML mostra "MONITOR OFF".
+4. **CSP blocca inline styles/scripts (root cause dell'overlay vuoto)**: il middleware `security_headers` in `server.py` applicava `default-src 'none'` globalmente, uccidendo l'overlay HTML. Fix: esenzione route-based -- per path `/api/overlay/{token}` (non `/data`, `/config`, `/token`) applichiamo CSP permissivo con `'unsafe-inline'` per style+script e `frame-ancestors *` (per iframe/OBS). Le altre route mantengono CSP restrittivo.
+
+### Nuovo design (accattivante)
+- Layout griglia 3 colonne (icon 16px | label 42px | value auto)
+- **Header** con brand `// FRAMEFORGE` + status pill LIVE/MONITOR OFF/NO CONNECTION con dot pulsante colorato
+- Icone SVG inline per ogni metrica (FPS play, CPU chip, GPU card, PING signal, HEALTH heart)
+- **Bar sottili animate** sotto CPU e GPU (fill scala con % utilizzo, warn arancione se >=85%)
+- **Badge temperature** con highlight rosso se >=80°C (thermal warning)
+- **Animazione "pop" scale(1.08)** ogni volta che un valore cambia
+- Backdrop-filter blur + saturate per effetto glass, box-shadow accent glow
+- Font system-native (Segoe UI / SF Pro Display / system-ui) + monospace fallback per numeri (Consolas/Monaco)
+
+### Temi finalmente distintivi
+- **Neon**: bg 88% opacity, giallo #E5FF00 accent + glow, border-left 3px giallo, gradient top line
+- **Dark**: bg 92%, ciano #00E0FF accent + glow, look tech elegante
+- **Minimal**: bg 55%, tutto bianco pulito, no border-left, no gradient top (piu' discreto)
+
+### Test
+- curl end-to-end: data endpoint con telemetry POST -> valori popolati (fps 142, cpu 45%, gpu 68%, temp 72/65°C, ping 18ms)
+- CSP headers verificati: `/api/overlay/{token}` permissivo, altre route restrittive
+- Screenshot playwright: 3 temi (neon/dark/minimal) tutti visibili e distinti in iframe

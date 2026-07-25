@@ -143,25 +143,50 @@ def build(get_current_user):
         if not cfg:
             raise HTTPException(status_code=404, detail="Overlay non trovato")
         uid = cfg["user_id"]
-        # Ultimo sample telemetry
-        tel = await db.pc_telemetry.find_one({"user_id": uid}, {"_id": 0, "samples": {"$slice": -1}})
+        # Ultimo sample telemetry — l'agent PS emette chiavi diverse dal nostro naming:
+        #   cpu_util, gpu_util, ram_used_pct (non cpu_pct/gpu_pct/ram_pct)
+        # Facciamo il mapping qui.
+        tel = await db.pc_telemetry.find_one({"user_id": uid}, {"_id": 0, "samples": {"$slice": -1}, "updated_at": 1})
         last = None
+        stale_seconds = None
         if tel and tel.get("samples"):
             last = tel["samples"][-1]
+            # Stale check: se l'ultimo sample e' > 10s fa, consideriamo il monitor "off"
+            try:
+                sample_ts = last.get("ts")
+                if sample_ts:
+                    from dateutil import parser as _p
+                    ts_dt = _p.parse(sample_ts)
+                    if ts_dt.tzinfo is None:
+                        ts_dt = ts_dt.replace(tzinfo=timezone.utc)
+                    stale_seconds = int((datetime.now(timezone.utc) - ts_dt).total_seconds())
+            except Exception:
+                stale_seconds = None
+        is_live = last is not None and (stale_seconds is None or stale_seconds < 15)
+        # Ultimo ping_ms dal net_results o benchmark
+        ping_ms = None
+        try:
+            net = await db.net_results.find_one({"user_id": uid}, {"_id": 0, "result.idle_ms": 1})
+            if net and net.get("result", {}).get("idle_ms") is not None:
+                ping_ms = int(net["result"]["idle_ms"])
+        except Exception:
+            pass
         # Ultimo health score
         health = await db.health_history.find_one({"user_id": uid}, {"_id": 0, "score": 1, "grade": 1}, sort=[("created_at", -1)])
         payload = {
             "fps": (last or {}).get("fps"),
-            "cpu_pct": (last or {}).get("cpu_pct"),
-            "gpu_pct": (last or {}).get("gpu_pct"),
+            # Mapping dai campi ps_agent -> overlay
+            "cpu_pct": (last or {}).get("cpu_util"),
+            "gpu_pct": (last or {}).get("gpu_util"),
             "cpu_temp": (last or {}).get("cpu_temp"),
             "gpu_temp": (last or {}).get("gpu_temp"),
-            "ram_pct": (last or {}).get("ram_pct"),
-            "ping_ms": (last or {}).get("ping_ms"),
+            "ram_pct": (last or {}).get("ram_used_pct"),
+            "ping_ms": ping_ms,
             "health_score": (health or {}).get("score"),
             "health_grade": (health or {}).get("grade"),
             "ts": (last or {}).get("ts"),
-            "live": last is not None,
+            "stale_seconds": stale_seconds,
+            "live": is_live,
         }
         return JSONResponse(payload, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
 
@@ -175,7 +200,7 @@ def build(get_current_user):
             help_html = """<!doctype html>
 <html><head><meta charset="utf-8"><title>FrameForge Overlay - Token non valido</title>
 <style>
-  html, body { margin:0; padding:0; background:transparent; font-family:'JetBrains Mono', monospace; overflow:hidden; }
+  html, body { margin:0; padding:0; background:transparent; font-family:'Consolas','Monaco','Courier New',monospace; overflow:hidden; }
   body { display:flex; justify-content:flex-start; align-items:flex-start; min-height:100vh; padding:16px; box-sizing:border-box; }
   .err { background:rgba(139,0,0,0.85); border-left:3px solid #FF3B30; padding:12px 16px; color:#F4F4F5; font-size:12px; min-width:260px; }
   .err .brand { font-size:9px; text-transform:uppercase; letter-spacing:2px; color:#FF3B30; font-weight:900; margin-bottom:8px; }
@@ -188,7 +213,10 @@ def build(get_current_user):
   <div style="margin-top:6px;opacity:0.8;">Vai su <b>forgefps.dev/app/live</b>, rigenera il token e aggiorna l'URL in OBS.</div>
 </div>
 </body></html>"""
-            return HTMLResponse(help_html, status_code=200, headers={"Cache-Control": "no-store, no-cache"})
+            return HTMLResponse(help_html, status_code=200, headers={
+                "Cache-Control": "no-store, no-cache",
+                "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline';",
+            })
 
         position = cfg.get("position", "top-right")
         theme = cfg.get("theme", "neon")
@@ -207,108 +235,293 @@ def build(get_current_user):
         }
         vert, horiz = pos_map.get(position, ("flex-start", "flex-end"))
 
-        # Theme -> colors
+        # Theme palette (bg, accent, accent-glow, border-accent-alpha, secondary-text)
         theme_map = {
-            "neon":    {"bg": "rgba(10,10,15,0.72)", "border": "#E5FF00", "accent": "#E5FF00", "text": "#F4F4F5"},
-            "minimal": {"bg": "rgba(0,0,0,0.55)",   "border": "#FFFFFF33", "accent": "#FFFFFF", "text": "#FFFFFF"},
-            "dark":    {"bg": "rgba(0,0,0,0.85)",   "border": "#00E0FF", "accent": "#00E0FF", "text": "#F4F4F5"},
+            "neon": {
+                "bg": "rgba(10,10,15,0.88)",
+                "accent": "#E5FF00",
+                "accent_glow": "rgba(229,255,0,0.35)",
+                "border": "rgba(229,255,0,0.35)",
+                "text": "#F4F4F5",
+                "muted": "#71717A",
+                "trim": "#0F0F12",
+            },
+            "dark": {
+                "bg": "rgba(6,6,10,0.92)",
+                "accent": "#00E0FF",
+                "accent_glow": "rgba(0,224,255,0.30)",
+                "border": "rgba(0,224,255,0.30)",
+                "text": "#E4E4E7",
+                "muted": "#52525B",
+                "trim": "#0A0A10",
+            },
+            "minimal": {
+                "bg": "rgba(0,0,0,0.55)",
+                "accent": "#FFFFFF",
+                "accent_glow": "rgba(255,255,255,0.20)",
+                "border": "rgba(255,255,255,0.18)",
+                "text": "#F4F4F5",
+                "muted": "#A1A1AA",
+                "trim": "transparent",
+            },
         }
         c = theme_map.get(theme, theme_map["neon"])
 
-        rows = []
-        if show_fps:    rows.append(("FPS",    "fps",         "",  ""))
-        if show_cpu:    rows.append(("CPU",    "cpu_pct",     "%", "cpu_temp"))
-        if show_gpu:    rows.append(("GPU",    "gpu_pct",     "%", "gpu_temp"))
-        if show_ping:   rows.append(("PING",   "ping_ms",     " ms", ""))
-        if show_health: rows.append(("HEALTH", "health_score", "/100", ""))
-
-        rows_html = "\n".join(
-            f'<div class="row" data-metric="{key}"><span class="lbl">{lbl}</span>'
-            f'<span class="val"><span data-field="{key}">--</span><span class="u">{unit}</span>'
-            + (f'<span class="tmp" data-field="{temp_field}"></span>' if temp_field else '')
-            + '</span></div>'
-            for lbl, key, unit, temp_field in rows
-        )
+        # Build metric rows dynamically. Each has: key, label, icon SVG path, unit, whether it takes a temp badge.
+        ICONS = {
+            "fps": "M8 5v14l11-7L8 5z",  # play
+            "cpu_pct": "M4 4h16v16H4V4zm2 2v12h12V6H6zm2 2h8v2H8V8zm0 3h8v2H8v-2zm0 3h5v2H8v-2z",  # chip
+            "gpu_pct": "M2 4h20v14H2V4zm2 2v10h16V6H4zm2 2h4v2H6V8zm6 0h6v2h-6V8zM6 12h4v2H6v-2zm6 0h6v2h-6v-2z",  # gpu
+            "ping_ms": "M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1 15h-2v-2h2v2zm2.07-7.75-.9.92C13.45 10.9 13 11.5 13 13h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z",  # help/signal
+            "health_score": "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z",  # heart
+        }
+        METRIC_META = [
+            ("fps", "FPS", "", "", show_fps, False),
+            ("cpu_pct", "CPU", "%", "cpu_temp", show_cpu, True),
+            ("gpu_pct", "GPU", "%", "gpu_temp", show_gpu, True),
+            ("ping_ms", "PING", "ms", "", show_ping, False),
+            ("health_score", "HEALTH", "", "", show_health, False),
+        ]
+        rows_html = []
+        for key, lbl, unit, temp_key, show, has_bar in METRIC_META:
+            if not show:
+                continue
+            icon_path = ICONS.get(key, "")
+            temp_span = f'<span class="temp" data-field="{temp_key}"></span>' if temp_key else ""
+            unit_span = f'<span class="unit">{unit}</span>' if unit else ""
+            bar_span = f'<div class="bar-track"><div class="bar-fill" data-bar="{key}"></div></div>' if has_bar else ""
+            rows_html.append(
+                f'<div class="metric" data-metric="{key}">'
+                f'<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="{icon_path}"/></svg>'
+                f'<div class="label">{lbl}</div>'
+                f'<div class="value"><span class="num" data-field="{key}">--</span>{unit_span}{temp_span}</div>'
+                f'{bar_span}'
+                f'</div>'
+            )
+        rows_str = "\n".join(rows_html)
 
         html = f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>FrameForge Overlay</title>
 <style>
-  html, body {{ margin:0; padding:0; background:transparent; font-family:'JetBrains Mono', monospace; overflow:hidden; }}
-  body {{ display:flex; justify-content:{horiz}; align-items:{vert}; min-height:100vh; padding:16px; box-sizing:border-box; }}
+  * {{ box-sizing: border-box; }}
+  html, body {{ margin:0; padding:0; background:transparent !important; overflow:hidden;
+                font-family: 'Segoe UI', 'SF Pro Display', system-ui, -apple-system, sans-serif; }}
+  body {{ display:flex; justify-content:{horiz}; align-items:{vert};
+          min-height:100vh; padding:20px; }}
   .card {{
-    background:{c['bg']}; border-left:3px solid {c['border']}; padding:10px 14px;
-    color:{c['text']}; font-size:13px; letter-spacing:0.5px;
-    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-    min-width:150px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    background: {c['bg']};
+    border: 1px solid {c['border']};
+    border-left: 3px solid {c['accent']};
+    padding: 14px 16px 12px 16px;
+    color: {c['text']};
+    min-width: 240px;
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    box-shadow:
+      0 8px 32px rgba(0,0,0,0.55),
+      0 0 40px {c['accent_glow']};
+    position: relative;
   }}
-  .brand {{ font-size:9px; text-transform:uppercase; letter-spacing:2px; color:{c['accent']}; opacity:0.9; margin-bottom:6px; font-weight:900; }}
-  .row {{ display:flex; justify-content:space-between; align-items:baseline; padding:2px 0; gap:16px; }}
-  .lbl {{ opacity:0.7; font-size:10px; text-transform:uppercase; letter-spacing:1.5px; }}
-  .val {{ font-weight:700; font-size:14px; color:{c['accent']}; font-variant-numeric: tabular-nums; }}
-  .val .u {{ opacity:0.6; font-size:10px; margin-left:2px; font-weight:500; }}
-  .tmp {{ display:inline-block; margin-left:6px; padding:1px 5px; font-size:9px; background:rgba(255,255,255,0.08); color:{c['text']}; border-radius:2px; }}
-  .tmp:empty {{ display:none; }}
-  .offline {{ opacity:0.5; }}
-  .offline .val {{ color:#71717A; }}
-  .waiting {{ color:#71717A !important; opacity:0.5; font-weight:400 !important; }}
-  .card.waiting-live .brand::after {{
-    content: '  \u25CF LIVE OFF';
-    color: #FF9500;
-    letter-spacing:1px;
-    margin-left:8px;
-    animation: pulse 1.5s ease-in-out infinite;
+  .card::before {{
+    content: '';
+    position: absolute; top:0; left:0; width:100%; height:2px;
+    background: linear-gradient(90deg, transparent, {c['accent']}, transparent);
+    opacity: 0.7;
   }}
-  @keyframes pulse {{ 0%,100% {{ opacity:0.5 }} 50% {{ opacity:1 }} }}
+  .header {{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid {c['border']};
+  }}
+  .brand {{
+    font-family: 'Consolas','Monaco','Courier New',monospace;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: {c['accent']};
+    text-shadow: 0 0 8px {c['accent_glow']};
+  }}
+  .status {{
+    display:inline-flex; align-items:center; gap: 5px;
+    font-family: 'Consolas','Monaco','Courier New',monospace;
+    font-size: 8px; font-weight: 700; letter-spacing: 1.2px;
+    color: {c['muted']};
+    text-transform: uppercase;
+  }}
+  .status .dot {{
+    width: 6px; height: 6px; border-radius: 50%;
+    background: {c['muted']};
+    box-shadow: 0 0 4px transparent;
+    transition: all 0.25s ease;
+  }}
+  .card.live .status {{ color: #00FF66; }}
+  .card.live .status .dot {{
+    background: #00FF66;
+    box-shadow: 0 0 8px rgba(0,255,102,0.8);
+    animation: pulse 1.6s ease-in-out infinite;
+  }}
+  .card.offline .status {{ color: #FF9500; }}
+  .card.offline .status .dot {{ background: #FF9500; box-shadow: 0 0 6px rgba(255,149,0,0.6); animation: pulse 2s ease-in-out infinite; }}
+  @keyframes pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.4; }} }}
+
+  .metric {{
+    display: grid;
+    grid-template-columns: 16px 42px 1fr;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    position: relative;
+  }}
+  .metric .icon {{
+    width: 14px; height: 14px;
+    color: {c['muted']};
+    transition: color 0.3s ease;
+  }}
+  .card.live .metric .icon {{ color: {c['accent']}; opacity: 0.85; }}
+  .metric .label {{
+    font-family: 'Consolas','Monaco','Courier New',monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    color: {c['muted']};
+    text-transform: uppercase;
+  }}
+  .metric .value {{
+    display:flex; align-items: baseline; gap: 4px;
+    justify-content: flex-end;
+  }}
+  .metric .num {{
+    font-family: 'Consolas','Monaco','Courier New',monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: {c['accent']};
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.5px;
+    line-height: 1;
+    transition: color 0.3s ease, transform 0.2s ease;
+  }}
+  .metric .num.pop {{ transform: scale(1.08); }}
+  .metric .unit {{
+    font-family: 'Consolas','Monaco','Courier New',monospace;
+    font-size: 10px;
+    font-weight: 500;
+    color: {c['muted']};
+  }}
+  .metric .temp {{
+    display:inline-block;
+    margin-left: 4px;
+    padding: 1px 5px;
+    font-family: 'Consolas','Monaco','Courier New',monospace;
+    font-size: 9px;
+    font-weight: 600;
+    background: {c['trim']};
+    color: {c['text']};
+    border: 1px solid {c['border']};
+    border-radius: 2px;
+    opacity: 0.9;
+  }}
+  .metric .temp:empty {{ display:none; }}
+  .metric .temp.hot {{ background: rgba(255,59,48,0.2); color: #FF3B30; border-color: rgba(255,59,48,0.4); }}
+  .metric .num.waiting {{ color: {c['muted']}; font-weight: 400; }}
+  .bar-track {{
+    grid-column: 1 / -1;
+    height: 3px;
+    background: {c['trim']};
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: -2px;
+  }}
+  .bar-fill {{
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, {c['accent']}, {c['accent']}88);
+    box-shadow: 0 0 6px {c['accent_glow']};
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }}
+  .bar-fill.warn {{ background: linear-gradient(90deg, #FF9500, #FF3B30); box-shadow: 0 0 6px rgba(255,149,0,0.4); }}
+
+  /* Theme-specific tweaks */
+  {"" if theme != "minimal" else ".card { border-left: none; } .card::before { display: none; }"}
 </style></head>
 <body>
 <div class="card" id="ovl">
-  <div class="brand">// FRAMEFORGE</div>
-  {rows_html}
+  <div class="header">
+    <div class="brand">// FRAMEFORGE</div>
+    <div class="status"><span class="dot"></span><span class="txt">CONNECTING</span></div>
+  </div>
+  {rows_str}
 </div>
 <script>
   const TOKEN = {token!r};
   const DATA_URL = window.location.origin + '/api/overlay/' + TOKEN + '/data';
   const card = document.getElementById('ovl');
+  const statusTxt = card.querySelector('.status .txt');
+  const prevVals = {{}};
   async function tick() {{
     try {{
       const r = await fetch(DATA_URL, {{ cache: 'no-store' }});
       if (!r.ok) throw new Error('http ' + r.status);
       const d = await r.json();
+      card.classList.toggle('live', d.live);
       card.classList.toggle('offline', !d.live);
-      const rows = card.querySelectorAll('.row');
-      rows.forEach(row => {{
+      statusTxt.textContent = d.live ? 'LIVE' : 'MONITOR OFF';
+      card.querySelectorAll('.metric').forEach(row => {{
         const metric = row.dataset.metric;
-        const valEl = row.querySelector('[data-field="' + metric + '"]');
-        if (valEl) {{
-          const v = d[metric];
+        const numEl = row.querySelector('[data-field="' + metric + '"]');
+        const v = d[metric];
+        if (numEl) {{
           if (v == null) {{
-            valEl.textContent = '--';
-            valEl.classList.add('waiting');
+            numEl.textContent = '--';
+            numEl.classList.add('waiting');
           }} else {{
-            valEl.textContent = (metric === 'gpu_pct' || metric === 'cpu_pct' || metric === 'ram_pct') ? Math.round(v) : v;
-            valEl.classList.remove('waiting');
+            const rounded = (metric === 'cpu_pct' || metric === 'gpu_pct' || metric === 'ram_pct') ? Math.round(v) : v;
+            const prev = prevVals[metric];
+            if (prev != null && prev !== rounded) {{
+              numEl.classList.add('pop');
+              setTimeout(() => numEl.classList.remove('pop'), 220);
+            }}
+            numEl.textContent = rounded;
+            numEl.classList.remove('waiting');
+            prevVals[metric] = rounded;
           }}
         }}
-        // Temp badge (per CPU/GPU)
-        const tempEl = row.querySelector('.tmp');
+        // Temp badge
+        const tempEl = row.querySelector('.temp');
         if (tempEl) {{
           const tf = tempEl.dataset.field;
           const tv = d[tf];
-          tempEl.textContent = (tv == null || tv === 0) ? '' : tv + '°C';
+          if (tv == null || tv === 0) {{
+            tempEl.textContent = '';
+          }} else {{
+            tempEl.textContent = tv + '°C';
+            tempEl.classList.toggle('hot', tv >= 80);
+          }}
+        }}
+        // Bar
+        const barEl = row.querySelector('.bar-fill');
+        if (barEl) {{
+          const bv = (v == null) ? 0 : Math.min(100, Math.max(0, v));
+          barEl.style.width = bv + '%';
+          barEl.classList.toggle('warn', bv >= 85);
         }}
       }});
-      // Mostra indicatore "waiting" se telemetry non attivo
-      const hasLiveMetrics = ['fps','cpu_pct','gpu_pct','ping_ms'].some(k => d[k] != null);
-      card.classList.toggle('waiting-live', !hasLiveMetrics);
     }} catch (e) {{
+      card.classList.remove('live');
       card.classList.add('offline');
+      statusTxt.textContent = 'NO CONNECTION';
     }}
   }}
   tick();
   setInterval(tick, 1000);
 </script>
 </body></html>"""
-        return HTMLResponse(html, headers={"Cache-Control": "no-store, no-cache"})
+        return HTMLResponse(html, headers={
+            "Cache-Control": "no-store, no-cache",
+            # CSP permissivo per l'overlay: serve inline style + script.
+            # Nessuna risorsa esterna (solo self + inline).
+            "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self' data:;",
+        })
 
     return r
