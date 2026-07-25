@@ -1169,3 +1169,16 @@ Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi
   - starter/@example → banner "PASSA A PRO" su Advisor e Live, "PASSA A STREAMER" su Full Benchmark. Nessun chat-input, nessuna stat visibile.
   - streamer/admin (plan=streamer) → chat-input presente, stat-fps=142, obs-overlay-panel visibile, nessun banner. Regressione zero.
 - Consistency win: tutti i 4 banner (Pro Advisor, Pro Live, Streamer FullBench, Streamer OBS) usano lo stesso componente => stesso look/motion/CTA, manutenzione centralizzata.
+
+### 2026-07-25 (37) — i18n banner upgrade IT/EN + feature copy piu' tecnica (FATTO)
+- Aggiunta namespace `plan_banner` in i18n.js (IT+EN) con chiavi: eyebrow_pro/eyebrow_streamer, cta_pro/cta_streamer, current_plan, + sotto-nsp `advisor/live/fullbench/overlay` (title/desc/f1-f4).
+- `PlanUpgradeBanner.jsx`: ora usa `useTranslation()` per eyebrow/CTA/current_plan. Supporta `<b>...</b>` inline nella description (renderRich sanitizza a `<strong className="text-white">`). Rimossa dipendenza dal caller per stringhe UI comuni.
+- Callers refattorizzati per passare solo `t("plan_banner.<page>.<key>")`:
+  - `Advisor.jsx`, `Live.jsx`, `FullBenchmarkReport.jsx`, `ObsOverlayPanel.jsx`.
+- Copy migliorata (piu' concreta e tecnica):
+  - Advisor: Claude Sonnet 4.6 chat context-aware (<2s streaming, cita driver/temp reali), One-click Diagnose (+15 FPS/-8ms), Screenshot vision (BSOD/task manager/BIOS/OBS log), 5 coach specializzati.
+  - Live: 8 metriche @1Hz (elenco esplicito FPS/CPU/GPU/power/temp/RAM/VRAM/latency MsUntilDisplayed), Grafico live 5min con 300 sample rolling + Bottleneck Detector CPU/GPU/VRAM-bound, Alert push termici 40-110°C con cooldown 5min, Session Summary streamer con avg/min/max/1%low export PNG/Web Share.
+  - Full Benchmark: Rileva thermal throttling (ratio <85% dopo 30s burst), RAM hierarchy L2 1MB / L3 32MB / DRAM 512MB, Disk multi-queue QD1+QD32 IOPS gaming vs asset streaming, Live thermal trace Recharts sample-by-sample.
+  - OBS Overlay: 1 URL 0 setup (Browser Source 300x200 + token rigenerabile), 3 temi (Neon/Dark/Minimal) + 4 posizioni angoli, Metriche a scelta (toggle FPS/CPU/GPU/ping/Health), Zero FPS impact (HTML/CSS <10KB, no DirectX/Vulkan touch).
+- Bugfix collaterale: `ObsOverlayPanel` non passava `currentPlan` -> mostrava sempre "starter"; ora legge il piano dal detail del 402 e lo passa.
+- Verificato via screenshot IT e EN su Advisor/Live/FullBench/OBS: banner correttamente localizzati, bold funzionante, feature con testo tecnico.

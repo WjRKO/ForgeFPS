@@ -12,6 +12,7 @@
  * Empty state se `latest === null`: CTA per lanciare il test dall'agent.
  */
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Cpu, MemoryStick, HardDrive, Globe, Thermometer, Loader2, Zap, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip as ReTooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import api from "@/lib/api";
@@ -67,6 +68,7 @@ function StatRow({ label, value, sub, deltaProps, testid }) {
 }
 
 export default function FullBenchmarkReport() {
+  const { t } = useTranslation();
   const [state, setState] = useState({ loading: true, latest: null, prev: null, history: [], locked: false, lockInfo: null });
 
   const load = async () => {
@@ -107,20 +109,13 @@ export default function FullBenchmarkReport() {
     return (
       <PlanUpgradeBanner
         tier="streamer"
-        title="Full Benchmark v2"
-        description={(
-          <>
-            Un test approfondito da <strong className="text-white">2-4 minuti</strong> che il Quick Benchmark non pu&ograve; darti:
-            multi-thread <strong className="text-white">burst + sustained</strong> con rilevamento thermal throttling,
-            gerarchia RAM <strong className="text-white">L2/L3/DRAM</strong>, disk multi-QD, rete estesa,
-            e <strong className="text-white">thermal trace</strong> real-time.
-          </>
-        )}
+        title={t("plan_banner.fullbench.title")}
+        description={t("plan_banner.fullbench.desc")}
         features={[
-          { icon: Cpu, title: "Rileva thermal throttling", desc: "Compara burst vs sustained per capire se il tuo cooler regge sotto stress." },
-          { icon: MemoryStick, title: "RAM hierarchy L2/L3/DRAM", desc: "Non solo bandwidth totale — vedi dove il collo di bottiglia della memoria." },
-          { icon: HardDrive, title: "Disk multi-queue", desc: "Random 4K QD1/QD32 IOPS: pattern realistici per gaming e asset streaming." },
-          { icon: Thermometer, title: "Thermal trace real-time", desc: "Grafico CPU/GPU temp durante il test intero, con max/avg." },
+          { icon: Cpu, title: t("plan_banner.fullbench.f1_t"), desc: t("plan_banner.fullbench.f1_d") },
+          { icon: MemoryStick, title: t("plan_banner.fullbench.f2_t"), desc: t("plan_banner.fullbench.f2_d") },
+          { icon: HardDrive, title: t("plan_banner.fullbench.f3_t"), desc: t("plan_banner.fullbench.f3_d") },
+          { icon: Thermometer, title: t("plan_banner.fullbench.f4_t"), desc: t("plan_banner.fullbench.f4_d") },
         ]}
         currentPlan={state.lockInfo?.current || "starter"}
         testid="fullbench-locked"

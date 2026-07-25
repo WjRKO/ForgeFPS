@@ -6,6 +6,7 @@
  * - Setting: posizione (4 opzioni), tema (3 opzioni), toggle per singola metric
  */
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Copy, RefreshCw, ExternalLink, Loader2, Check, Radio, Monitor, Zap, Layout } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -31,8 +32,10 @@ const METRIC_TOGGLES = [
 ];
 
 export default function ObsOverlayPanel() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
+  const [lockedPlan, setLockedPlan] = useState("starter");
   const [cfg, setCfg] = useState(null);
   const [copied, setCopied] = useState(false);
   const [rotating, setRotating] = useState(false);
@@ -44,8 +47,10 @@ export default function ObsOverlayPanel() {
       setCfg(data);
       setLocked(false);
     } catch (e) {
-      if (e?.response?.status === 402) setLocked(true);
-      else toast.error("Errore caricamento overlay");
+      if (e?.response?.status === 402) {
+        setLocked(true);
+        setLockedPlan(e.response.data?.detail?.current || "starter");
+      } else toast.error("Errore caricamento overlay");
     } finally {
       setLoading(false);
     }
@@ -98,18 +103,15 @@ export default function ObsOverlayPanel() {
     return (
       <PlanUpgradeBanner
         tier="streamer"
-        title="OBS Browser Overlay"
-        description={(
-          <>
-            Un URL da aggiungere come <strong className="text-white">Browser Source in OBS</strong>: mostra in overlay FPS, CPU/GPU%, temperature, ping e Health Score sopra il tuo stream. Nessuna app aggiuntiva.
-          </>
-        )}
+        title={t("plan_banner.overlay.title")}
+        description={t("plan_banner.overlay.desc")}
         features={[
-          { icon: Radio, title: "Live overlay in OBS", desc: "URL da aggiungere come Browser Source: FPS, temp, CPU/GPU sopra lo stream." },
-          { icon: Layout, title: "3 temi + 4 posizioni", desc: "Neon giallo, Dark ciano o Minimal. Angoli configurabili in un click." },
-          { icon: Monitor, title: "Metriche personalizzabili", desc: "Attiva/disattiva FPS, CPU%, GPU%, ping, Health Score dal pannello." },
-          { icon: Zap, title: "Auto-refresh in tempo reale", desc: "Aggiorna con il Live Monitor senza mai ricaricare la scena OBS." },
+          { icon: Radio, title: t("plan_banner.overlay.f1_t"), desc: t("plan_banner.overlay.f1_d") },
+          { icon: Layout, title: t("plan_banner.overlay.f2_t"), desc: t("plan_banner.overlay.f2_d") },
+          { icon: Monitor, title: t("plan_banner.overlay.f3_t"), desc: t("plan_banner.overlay.f3_d") },
+          { icon: Zap, title: t("plan_banner.overlay.f4_t"), desc: t("plan_banner.overlay.f4_d") },
         ]}
+        currentPlan={lockedPlan}
         compact
         testid="overlay-locked"
       />

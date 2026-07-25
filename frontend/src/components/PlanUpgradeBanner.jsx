@@ -4,16 +4,21 @@
  * Design: coerente con FullBenchmarkReport locked-state (border gradient, glow,
  * feature preview grid, CTA a /pricing?plan=xxx, "current plan" pill).
  *
+ * i18n: eyebrow, cta e "current plan" via `plan_banner.*`. Title/description/
+ * features vengono passati dai caller (traducendoli dai propri namespace,
+ * es. `plan_banner.advisor.*`).
+ *
  * Props:
  *   tier          "pro" | "streamer"       — piano richiesto
- *   title         string                    — heading grande (es. "Full Benchmark v2")
- *   description   ReactNode                 — paragrafo descrittivo (max ~2 righe)
+ *   title         string                    — heading grande
+ *   description   string (may contain <b>)  — paragrafo descrittivo
  *   features      [{ icon, title, desc }]   — 2-4 feature preview (icon = lucide)
  *   currentPlan   string                    — piano attuale utente (default: "starter")
  *   compact       bool                      — variante ridotta (per sezioni inline)
- *   testid        string                    — data-testid root (default plan-upgrade-banner)
+ *   testid        string                    — data-testid root
  */
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Lock, Sparkles } from "lucide-react";
 
 const TIER_CFG = {
@@ -21,21 +26,30 @@ const TIER_CFG = {
     accent: "#E5FF00",
     accentGlow: "#E5FF00",
     accentSoft: "#B388FF",
-    label: "Pro",
-    ctaLabel: "Passa a Pro",
     query: "?plan=pro",
-    eyebrow: "Feature esclusiva Pro",
+    eyebrowKey: "plan_banner.eyebrow_pro",
+    ctaKey: "plan_banner.cta_pro",
   },
   streamer: {
     accent: "#00E0FF",
     accentGlow: "#00E0FF",
     accentSoft: "#B388FF",
-    label: "Streamer",
-    ctaLabel: "Passa a Streamer",
     query: "?plan=streamer",
-    eyebrow: "Feature esclusiva Streamer",
+    eyebrowKey: "plan_banner.eyebrow_streamer",
+    ctaKey: "plan_banner.cta_streamer",
   },
 };
+
+// Render minimal HTML (only <b>...</b>) safely from a translated string.
+function renderRich(text) {
+  if (!text) return null;
+  const parts = text.split(/(<b>[^<]*<\/b>)/g);
+  return parts.map((p, i) => {
+    const m = p.match(/^<b>([^<]*)<\/b>$/);
+    if (m) return <strong key={i} className="text-white">{m[1]}</strong>;
+    return <span key={i}>{p}</span>;
+  });
+}
 
 export default function PlanUpgradeBanner({
   tier = "pro",
@@ -46,6 +60,7 @@ export default function PlanUpgradeBanner({
   compact = false,
   testid = "plan-upgrade-banner",
 }) {
+  const { t } = useTranslation();
   const cfg = TIER_CFG[tier] || TIER_CFG.pro;
   const padding = compact ? "p-6" : "p-8";
   const titleSize = compact ? "text-2xl" : "text-3xl";
@@ -56,7 +71,6 @@ export default function PlanUpgradeBanner({
       style={{ borderColor: `${cfg.accent}66` }}
       data-testid={testid}
     >
-      {/* Decorative glows */}
       <div
         className="absolute -top-24 -right-24 w-72 h-72 rounded-full blur-3xl pointer-events-none"
         style={{ backgroundColor: `${cfg.accentGlow}1A` }}
@@ -72,19 +86,19 @@ export default function PlanUpgradeBanner({
           style={{ color: cfg.accent }}
           data-testid={`${testid}-eyebrow`}
         >
-          <Lock size={11} /> {cfg.eyebrow}
+          <Lock size={11} /> {t(cfg.eyebrowKey)}
         </div>
         <h3 className={`font-display font-black ${titleSize} mb-2 text-white`} data-testid={`${testid}-title`}>
           {title}
         </h3>
         {description && (
-          <div className="text-sm text-zinc-400 max-w-2xl mb-6 leading-relaxed" data-testid={`${testid}-desc`}>
-            {description}
-          </div>
+          <p className="text-sm text-zinc-400 max-w-2xl mb-6 leading-relaxed" data-testid={`${testid}-desc`}>
+            {renderRich(description)}
+          </p>
         )}
 
         {features.length > 0 && (
-          <div className={`grid ${features.length > 2 ? "sm:grid-cols-2" : "sm:grid-cols-2"} gap-3 mb-6 max-w-3xl`}>
+          <div className="grid sm:grid-cols-2 gap-3 mb-6 max-w-3xl">
             {features.map((f, i) => {
               const Icon = f.icon;
               return (
@@ -108,15 +122,13 @@ export default function PlanUpgradeBanner({
           <Link
             to={`/pricing${cfg.query}`}
             data-testid={`${testid}-cta`}
-            className="inline-flex items-center gap-2 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors"
+            className="inline-flex items-center gap-2 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-opacity hover:opacity-90"
             style={{ backgroundColor: cfg.accent, color: "#000" }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
           >
-            <Sparkles size={13} /> {cfg.ctaLabel}
+            <Sparkles size={13} /> {t(cfg.ctaKey)}
           </Link>
           <span className="text-[11px] text-zinc-500">
-            Il tuo piano attuale: <strong className="text-zinc-300">{currentPlan}</strong>
+            {t("plan_banner.current_plan")} <strong className="text-zinc-300">{currentPlan}</strong>
           </span>
         </div>
       </div>

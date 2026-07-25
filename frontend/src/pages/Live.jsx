@@ -128,18 +128,13 @@ export default function Live() {
       {planInfo && !planInfo.is_pro ? (
         <PlanUpgradeBanner
           tier="pro"
-          title="Live Monitor & Alert"
-          description={(
-            <>
-              Vedi in <strong className="text-white">tempo reale</strong> FPS, CPU/GPU%, temperature, VRAM, ping e latenza mentre giochi.
-              Ricevi <strong className="text-white">alert push</strong> se il PC si scalda troppo, esporta il riepilogo sessione (avg/min/max/1% low) e visualizza tutto in un grafico live.
-            </>
-          )}
+          title={t("plan_banner.live.title")}
+          description={t("plan_banner.live.desc")}
           features={[
-            { icon: Activity, title: "Telemetria live 1s", desc: "8 metriche aggiornate ogni secondo: FPS, CPU, GPU, temp, VRAM, latenza." },
-            { icon: LineChartIcon, title: "Grafico storico in tempo reale", desc: "Timeline con tutti i sample della sessione, esportabile come immagine." },
-            { icon: BellRing, title: "Alert push soglie", desc: "Notifica quando CPU/GPU superano la temperatura configurata (con cooldown)." },
-            { icon: Sparkles, title: "Session Summary streamer", desc: "Card brandizzata con avg/min/max/1% low e temperature max, condivisibile in PNG." },
+            { icon: Activity, title: t("plan_banner.live.f1_t"), desc: t("plan_banner.live.f1_d") },
+            { icon: LineChartIcon, title: t("plan_banner.live.f2_t"), desc: t("plan_banner.live.f2_d") },
+            { icon: BellRing, title: t("plan_banner.live.f3_t"), desc: t("plan_banner.live.f3_d") },
+            { icon: Sparkles, title: t("plan_banner.live.f4_t"), desc: t("plan_banner.live.f4_d") },
           ]}
           currentPlan={planInfo.plan_effective || "starter"}
           testid="live-locked"

@@ -238,18 +238,13 @@ export default function Advisor() {
       {planInfo && !planInfo.is_pro ? (
         <PlanUpgradeBanner
           tier="pro"
-          title="AI Advisor personalizzato"
-          description={(
-            <>
-              Chatta con un coach AI che <strong className="text-white">conosce il tuo hardware</strong>, la tua Health Score, il tuo benchmark e i tuoi programmi all&apos;avvio.
-              Ricevi <strong className="text-white">azioni prioritizzate</strong> con impatto stimato, comandi PowerShell pronti da copiare e diagnosi one-click.
-            </>
-          )}
+          title={t("plan_banner.advisor.title")}
+          description={t("plan_banner.advisor.desc")}
           features={[
-            { icon: Brain, title: "Chat AI context-aware", desc: "Claude Sonnet 4.6 con contesto completo del tuo PC — nessun consiglio generico." },
-            { icon: Stethoscope, title: "Diagnose one-click", desc: "3-5 azioni prioritarie per il tuo hardware con impatto e difficoltà." },
-            { icon: Camera, title: "Screenshot analysis", desc: "Allega uno screenshot: l'AI legge errori, task manager, BIOS." },
-            { icon: Zap, title: "5 coach specializzati", desc: "FPS, Streaming, Troubleshoot, Build e Default: cambia focus in un click." },
+            { icon: Brain, title: t("plan_banner.advisor.f1_t"), desc: t("plan_banner.advisor.f1_d") },
+            { icon: Stethoscope, title: t("plan_banner.advisor.f2_t"), desc: t("plan_banner.advisor.f2_d") },
+            { icon: Camera, title: t("plan_banner.advisor.f3_t"), desc: t("plan_banner.advisor.f3_d") },
+            { icon: Zap, title: t("plan_banner.advisor.f4_t"), desc: t("plan_banner.advisor.f4_d") },
           ]}
           currentPlan={planInfo.plan_effective || "starter"}
           testid="advisor-locked"
