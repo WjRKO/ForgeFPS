@@ -337,6 +337,26 @@ def build(get_current_user):
         history = await db.benchmarks.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(10)
         return {"latest": (doc or {}).get("benchmark"), "history": history}
 
+    @r.get("/pc-benchmark/full")
+    async def pc_benchmark_full(user: dict = Depends(get_current_user)):
+        """Ultimo Full Benchmark (~2-4min run) + storico ultimi 5.
+
+        Ritorna solo record che contengono il payload `full` (i.e. Full Benchmark,
+        non Quick). Se nessun Full Benchmark e' mai stato eseguito -> latest=None.
+        """
+        uid = str(user["_id"])
+        # Ultimo Full Benchmark (record che ha campo `full`)
+        latest = await db.benchmarks.find_one(
+            {"user_id": uid, "full": {"$exists": True, "$ne": None}},
+            {"_id": 0}, sort=[("created_at", -1)],
+        )
+        # Storico ultimi 5 (per delta e trend)
+        history = await db.benchmarks.find(
+            {"user_id": uid, "full": {"$exists": True, "$ne": None}},
+            {"_id": 0, "user_id": 0},
+        ).sort("created_at", -1).to_list(5)
+        return {"latest": latest, "history": history}
+
     @r.get("/gpu-reference")
     async def gpu_reference(user: dict = Depends(get_current_user)):
         """Lookup GPU dell'utente nel catalogo reference + health check contro il suo

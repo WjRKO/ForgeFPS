@@ -1064,3 +1064,25 @@ Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi
 - `helpers.py compute_health` (62 righe): core testato prod
 - 456 ternaries · 39 array-index-keys · 15 localStorage: da fixare opportunisticamente per FRONTEND_RULES
 - DiagnosePanel/FirstScanBanner refactor: rischia regressioni onboarding
+
+
+## 2026-02 — Full Benchmark Report UI + TechTerm tooltip fix
+### TechTerm tooltip fix (contrasto)
+- **Problema**: tooltip su `?` accanto ai termini tecnici era illeggibile (bg trasparente + testo bianco senza stacco).
+- **Fix** `TechTerm.jsx`: override `TooltipContent` con `bg-[#16161C] border-2 border-[#00E0FF] shadow-[0_10px_32px_rgba(0,0,0,0.85)] px-4 py-3`. Contrasto ora ottimo.
+
+### Full Benchmark Report — nuova UI
+- **Problema identificato**: il Full Benchmark (`mode=fullbench`) veniva eseguito e i dati salvati in `db.benchmarks.full`, ma **nessuna UI li visualizzava**. Il messaggio "Apri FrameForge -> Il mio PC per il report completo" era orfano.
+- **Backend** (`routers/pc.py`): nuovo endpoint `GET /api/pc-benchmark/full` che filtra `db.benchmarks` per record con campo `full` non-null. Ritorna `{latest, history[5]}`.
+- **Frontend** nuovo componente `components/FullBenchmarkReport.jsx`:
+  - Header: durata + timestamp + "Ripeti Full Benchmark" (uses `OneClickLaunchButton` con mode `fullbench`)
+  - Card **CPU**: burst + sustained + ratio + thermal throttle warning banner
+  - Card **RAM hierarchy**: L2/L3/DRAM bandwidth in GB/s
+  - Card **Disk I/O multi-queue**: seq QD1 + rand 4K QD1/QD32 IOPS
+  - Card **Network extended**: 3 host (avg + p95 + min + max + loss)
+  - **Thermal trace chart** (recharts LineChart): CPU/GPU temp nel tempo con avg/max annotations
+  - **History table**: ultimi 5 Full Benchmark per confronto trend
+  - **DeltaBadge**: percentuale variazione vs precedente (verde su miglioramento, arancione su peggioramento)
+  - **Empty state**: CTA "Avvia Full Benchmark" via OneClickLaunchButton
+- **Benchmark.jsx**: aggiunta **tab switcher** "Quick Benchmark" / "Full Benchmark v2" (state `tab` = quick|full).
+- **Test smoke**: verificate tutte le sezioni con dati seed (CPU 842/768 Mops, RAM L2 85.2 GB/s, Disk 2.7GB/s, Net 3 host, Thermal trace + max/avg temp).
