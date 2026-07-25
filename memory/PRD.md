@@ -1331,3 +1331,10 @@ Tutto lato server (`backend/ps_agent.py`, script scaricato fresco a ogni avvio �
 - **Changelog app**: nuova release "GUI 3.0" in `backend/data/changelog.json` (visibile in /app/changelog).
 - **Test**: sintassi PS validata con pwsh 7.4 parser (OK), JS validato con node --check (OK), 12/12 pytest `tests/test_secure_ps.py` (fixato test stale che non gestiva il BOM UTF-8 preesistente), harness mock locale + screenshot: fullscreen 1920px, ridotta 720px, tab Monitor/Bloatware/banner/revert tutti verificati visivamente.
 - NOTA: il banner update si attiverà davvero quando `AGENT_ZIP_UPSTREAM` punterà alla release ≥0.7.6 (oggi punta a v0.7.5 su GitHub).
+
+### 2026-07-25 (46) — Release v0.7.6 pubblicata: bump URL + SHA (FATTO)
+- SHA256 fornito dall'utente `fd294dd4504877d714064fc92aed0270aba77c64d36bd4799685b4187eddba18` VERIFICATO scaricando lo ZIP da GitHub (match esatto).
+- `frontend/src/config/agent.js`: AGENT_EXE_URL → v0.7.6, AGENT_EXE_SHA256 aggiornato, AGENT_EXE_VERSION v0.7.6, AGENT_EXE_DATE 2026-07-25.
+- `backend/routers/pc.py`: AGENT_ZIP_UPSTREAM default → v0.7.6 (LATEST_AGENT_VERSION auto-estratta = 0.7.6).
+- Effetti attivati e verificati e2e: `/api/agent/latest-version` = 0.7.6; script PS embedda LATEST_VER/DL_URL 0.7.6; banner web "0.7.5 → v0.7.6" visibile su /app/desktop; SHA in pagina = fd294dd4...; `/api/agent/download-zip` serve il nuovo ZIP col launcher personalizzato (SHA diverso dall'upstream by design, il token utente è iniettato nel .bat).
+- Da qui: gli exe v0.7.6 si auto-aggiorneranno alle prossime release; gli utenti 0.7.5 vedono i banner (web + in-GUI).
