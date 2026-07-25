@@ -124,7 +124,7 @@ export default function ObsOverlayPanel() {
         <Radio size={16} className="text-[#00E0FF]" /> OBS Browser Overlay
       </div>
       <p className="text-xs text-zinc-500 -mt-3">
-        Aggiungi questo URL come <strong className="text-zinc-300">Browser Source</strong> in OBS Studio (larghezza 300px, altezza 200px consigliati). Aggiorna in tempo reale mentre il Live Monitor gira.
+        Aggiungi questo URL come <strong className="text-zinc-300">Browser Source</strong> in OBS Studio (larghezza 340px, altezza 260px consigliati — assicurati che "custom CSS" sia vuoto). Aggiorna in tempo reale mentre il Live Monitor gira.
       </p>
 
       {/* Warning se monitor non attivo */}

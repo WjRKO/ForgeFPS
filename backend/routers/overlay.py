@@ -307,14 +307,15 @@ def build(get_current_user):
   html, body {{ margin:0; padding:0; background:transparent !important; overflow:hidden;
                 font-family: 'Segoe UI', 'SF Pro Display', system-ui, -apple-system, sans-serif; }}
   body {{ display:flex; justify-content:{horiz}; align-items:{vert};
-          min-height:100vh; padding:20px; }}
+          min-height:100vh; padding:8px; }}
   .card {{
     background: {c['bg']};
     border: 1px solid {c['border']};
     border-left: 3px solid {c['accent']};
-    padding: 14px 16px 12px 16px;
+    padding: 10px 12px 8px 12px;
     color: {c['text']};
-    min-width: 240px;
+    min-width: 220px;
+    max-width: calc(100vw - 16px);
     backdrop-filter: blur(10px) saturate(120%);
     -webkit-backdrop-filter: blur(10px) saturate(120%);
     box-shadow:
@@ -330,8 +331,8 @@ def build(get_current_user):
   }}
   .header {{
     display:flex; align-items:center; justify-content:space-between;
-    margin-bottom: 10px;
-    padding-bottom: 8px;
+    margin-bottom: 6px;
+    padding-bottom: 5px;
     border-bottom: 1px solid {c['border']};
   }}
   .brand {{
@@ -368,22 +369,22 @@ def build(get_current_user):
 
   .metric {{
     display: grid;
-    grid-template-columns: 16px 42px 1fr;
+    grid-template-columns: 14px 38px 1fr;
     align-items: center;
-    gap: 10px;
-    padding: 6px 0;
+    gap: 8px;
+    padding: 3px 0;
     position: relative;
   }}
   .metric .icon {{
-    width: 14px; height: 14px;
+    width: 12px; height: 12px;
     color: {c['muted']};
     transition: color 0.3s ease;
   }}
   .card.live .metric .icon {{ color: {c['accent']}; opacity: 0.85; }}
   .metric .label {{
     font-family: 'Consolas','Monaco','Courier New',monospace;
-    font-size: 10px;
-    letter-spacing: 1.5px;
+    font-size: 9px;
+    letter-spacing: 1.2px;
     font-weight: 700;
     color: {c['muted']};
     text-transform: uppercase;
@@ -394,7 +395,7 @@ def build(get_current_user):
   }}
   .metric .num {{
     font-family: 'Consolas','Monaco','Courier New',monospace;
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 700;
     color: {c['accent']};
     font-variant-numeric: tabular-nums;

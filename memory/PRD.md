@@ -1204,3 +1204,16 @@ Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi
   - /privacy-telemetry -> collected/never/tiers rendering
   - /terms -> title + 9 sections rendering
 - Zero regressioni funzionali: tutti i data-testid preservati (diagnose-panel, diagnose-btn, diagnose-loading, diagnose-error, diagnose-result, diagnose-actions-list, diagnose-again, diagnose-connect-cta, first-scan-pending/done, first-scan-step-1/2/3/4, faq-item-N).
+
+### 2026-07-25 (39) — Fix overlay OBS tagliato in basso (FATTO)
+- Root cause: con 5 metriche attive (FPS/CPU/GPU/PING/HEALTH) la card era ~220x220px, ma la size consigliata in UI era 300x200 -> body padding 20+20 lasciava solo 160px verticali -> overflow -> fondo tagliato.
+- Layout piu' compatto in `routers/overlay.py`:
+  - body padding 20px -> 8px, aggiunto card max-width: calc(100vw - 16px)
+  - card padding 14/16/12/16 -> 10/12/8/12, min-width 240 -> 220
+  - header margin/padding 10+8 -> 6+5
+  - metric grid 16/42/1fr -> 14/38/1fr, gap 10 -> 8, padding 6/0 -> 3/0
+  - metric num 20px -> 16px, label 10px -> 9px, icon 14 -> 12
+- Nuova dimensione: 5 metriche = 220x173 (fit anche 300x200 con 11px di margine)
+- Copy aggiornata (frontend + i18n IT/EN): consigliati 340x260 (safe zone anche con testo lungo o eventuali metriche future)
+- Verificato via viewport 300x200 e 340x260: `cutoff:false` in entrambi i casi, screenshot rendering pulito con tutti 5 metric visibili
+- Nota: modifica applicata solo su PREVIEW; per PRODUCTION (forgefps.dev) e' necessario redeploy.
