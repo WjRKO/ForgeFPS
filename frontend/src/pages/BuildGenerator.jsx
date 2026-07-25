@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Cpu, Loader2, Save, Trash2, Zap, Sparkles, LineChart as LineIcon } from "lucide-react";
+import { Cpu, Loader2, Save, Trash2, Zap, Sparkles, LineChart as LineIcon, ChevronDown, Crosshair, Video, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import api, { formatApiErrorDetail } from "@/lib/api";
@@ -73,10 +73,10 @@ export default function BuildGenerator() {
   };
   useEffect(() => { loadSaved(); }, []);
 
-  const generate = async () => {
+  const generate = async (ov = {}) => {
     setLoading(true); setError(""); setResult(null);
     try {
-      const { data } = await api.post("/builds/generate", { budget, use_case: useCase, resolution, notes });
+      const { data } = await api.post("/builds/generate", { budget, use_case: useCase, resolution, notes, ...ov });
       setResult(data);
     } catch (e) {
       setError(formatApiErrorDetail(e.response?.data?.detail) || t("build.err_generate"));
@@ -91,6 +91,22 @@ export default function BuildGenerator() {
 
   const remove = async (id) => { await api.delete(`/builds/${id}`); loadSaved(); };
 
+  const [openId, setOpenId] = useState(null);
+
+  const PRESETS = [
+    { id: "competitive", icon: Crosshair, budget: 1200, resolution: "1080p", ucIndex: 1 },
+    { id: "streaming", icon: Video, budget: 1800, resolution: "1440p", ucIndex: 0 },
+    { id: "ultra", icon: Monitor, budget: 3000, resolution: "4K", ucIndex: 3 },
+  ];
+  const PRESET_DEFS = t("build.preset_defs", { returnObjects: true });
+
+  const applyPreset = (p) => {
+    if (loading) return;
+    const uc = USE_CASES[p.ucIndex] || USE_CASES[0];
+    setBudget(p.budget); setResolution(p.resolution); setUseCase(uc);
+    generate({ budget: p.budget, resolution: p.resolution, use_case: uc });
+  };
+
   const trackBuild = async (id) => {
     try { const { data } = await api.post(`/builds/${id}/track`); toast.success(t("build.toast_tracked", { count: data.tracked })); }
     catch { toast.error(t("build.toast_track_err")); }
@@ -99,6 +115,29 @@ export default function BuildGenerator() {
   return (
     <div className="max-w-6xl mx-auto fade-up">
       <PageHeader eyebrow={t("build.eyebrow")} title={t("build.title")} />
+
+      {/* Preset one-click */}
+      <div className="mb-4">
+        <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-bold mb-2">{t("build.presets_title")}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {PRESETS.map((p, i) => {
+            const def = PRESET_DEFS[i] || {};
+            const Icon = p.icon;
+            return (
+              <button key={p.id} data-testid={`build-preset-${p.id}`} onClick={() => applyPreset(p)} disabled={loading}
+                className="text-left bg-[#0F0F12] border border-[#2A2A35] p-4 hover:border-[#E5FF00] transition-colors disabled:opacity-50 group">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="flex items-center gap-2 font-display font-bold text-sm">
+                    <Icon size={15} className="text-[#E5FF00]" /> {def.name}
+                  </span>
+                  <span className="font-mono text-xs text-[#E5FF00]">€{p.budget}</span>
+                </div>
+                <div className="text-xs text-zinc-500">{def.desc} · {p.resolution}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="grid lg:grid-cols-[340px_1fr] gap-4">
         <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 h-fit">
@@ -131,7 +170,7 @@ export default function BuildGenerator() {
               placeholder={t("build.notes_ph")}
               className="w-full bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none py-2 px-2 mt-1 text-sm resize-none" />
           </div>
-          <button data-testid="generate-build-btn" onClick={generate} disabled={loading}
+          <button data-testid="generate-build-btn" onClick={() => generate()} disabled={loading}
             className="w-full flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold py-3 hover:bg-[#D4EC00] transition-colors disabled:opacity-60 btn-volt">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Cpu size={16} />} {t("build.generate")}
           </button>
@@ -151,18 +190,28 @@ export default function BuildGenerator() {
               <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-3">{t("build.saved_builds")}</div>
               <div className="space-y-3">
                 {saved.map((s) => (
-                  <div key={s.id} className="bg-[#0F0F12] border border-[#2A2A35] p-5 card-hover">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-display font-semibold">{s.build?.name}</h4>
-                        <div className="text-xs text-zinc-500 mt-1">{s.use_case} · {s.resolution} · €{s.build?.estimated_total}</div>
+                  <div key={s.id} className="bg-[#0F0F12] border border-[#2A2A35] card-hover">
+                    <div className="p-5 cursor-pointer" data-testid={`saved-build-${s.id}`} onClick={() => setOpenId(openId === s.id ? null : s.id)}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-display font-semibold">{s.build?.name}</h4>
+                          <div className="text-xs text-zinc-500 mt-1">{s.use_case} · {s.resolution} · €{s.build?.estimated_total}</div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button data-testid={`delete-build-${s.id}`} onClick={(e) => { e.stopPropagation(); remove(s.id); }} className="text-zinc-500 hover:text-[#FF3B30]"><Trash2 size={16} /></button>
+                          <ChevronDown size={16} className={`text-zinc-500 transition-transform ${openId === s.id ? "rotate-180" : ""}`} />
+                        </div>
                       </div>
-                      <button data-testid={`delete-build-${s.id}`} onClick={() => remove(s.id)} className="text-zinc-500 hover:text-[#FF3B30]"><Trash2 size={16} /></button>
+                      <button data-testid={`track-build-${s.id}`} onClick={(e) => { e.stopPropagation(); trackBuild(s.id); }}
+                        className="mt-3 flex items-center gap-2 border border-[#2A2A35] px-3 py-1.5 text-xs hover:border-[#E5FF00] transition-colors">
+                        <LineIcon size={13} /> {t("build.track_parts")}
+                      </button>
                     </div>
-                    <button data-testid={`track-build-${s.id}`} onClick={() => trackBuild(s.id)}
-                      className="mt-3 flex items-center gap-2 border border-[#2A2A35] px-3 py-1.5 text-xs hover:border-[#E5FF00] transition-colors">
-                      <LineIcon size={13} /> {t("build.track_parts")}
-                    </button>
+                    {openId === s.id && (
+                      <div className="border-t border-[#2A2A35] p-4" data-testid={`saved-build-detail-${s.id}`}>
+                        <BuildCard data={s} />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

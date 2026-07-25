@@ -16,7 +16,7 @@ from helpers import specs_to_text, compute_health, get_or_create_agent_token, gr
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
 from services.gpu_catalog_service import find_gpu_reference, compute_health_vs_reference
-from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput
+from models import SpecsInput, GoalInput, FpsInput, FpsUpgradeInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput
 from routers.profiles import resolve_tweak_ids, TWEAK_CATALOG, TEMPLATES
 from routers.advisor import _check_ai_rate_limit
 from plan_gate import require_pro, require_streamer
@@ -928,6 +928,21 @@ def build(get_current_user):
         specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
         try:
             return await ai_engine.estimate_fps(specs_to_text(specs) if specs else "", data.game, data.resolution)
+        except Exception as e:
+            msg = str(e)
+            if "Budget" in msg and "exceeded" in msg:
+                raise HTTPException(status_code=402,
+                    detail="Credito LLM esaurito. Ricarica da Profilo -> Universal Key -> Add Balance.")
+            raise HTTPException(status_code=502, detail=msg)
+
+    @r.post("/fps/upgrade-compare")
+    async def fps_upgrade_compare(data: FpsUpgradeInput, user: dict = Depends(get_current_user)):
+        specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        if not specs or not specs.get("data"):
+            raise HTTPException(status_code=400,
+                                detail="Nessun hardware rilevato. Usa il FrameForge Agent per inviare le specifiche.")
+        try:
+            return await ai_engine.estimate_fps_upgrade(specs_to_text(specs), data.game, data.resolution, data.upgrades)
         except Exception as e:
             msg = str(e)
             if "Budget" in msg and "exceeded" in msg:

@@ -273,6 +273,33 @@ async def estimate_fps(specs_text: str, game: str, resolution: str) -> dict:
     return await _run_json("fps", FPS_SYSTEM, prompt)
 
 
+async def estimate_fps_upgrade(specs_text: str, game: str, resolution: str, upgrades: list) -> dict:
+    upg = "\n".join(f"- {u}" for u in upgrades[:8]) or "nessuno"
+    prompt = (
+        f"Hardware ATTUALE:\n{specs_text or 'sconosciuto'}\n\n"
+        f"Upgrade proposti (sostituiscono i componenti corrispondenti):\n{upg}\n\n"
+        f"Gioco: {game}. Risoluzione: {resolution}.\n"
+        "Identifica il tier esatto di CPU e GPU attuali e di quelli post-upgrade. Stima gli FPS medi realistici "
+        "PRIMA (hardware attuale) e DOPO (hardware con gli upgrade applicati) basandoti su benchmark noti. "
+        "Considera eventuali colli di bottiglia residui (es. CPU vecchia che limita la nuova GPU). "
+        "Restituisci un JSON con struttura ESATTA:\n"
+        "{\n"
+        '  "game": "nome gioco",\n'
+        '  "resolution": "risoluzione",\n'
+        '  "upgrade_summary": "riassunto upgrade in max 8 parole",\n'
+        '  "estimates": [\n'
+        '    {"preset":"Basso","before":numero,"after":numero},{"preset":"Medio","before":numero,"after":numero},'
+        '{"preset":"Alto","before":numero,"after":numero},{"preset":"Ultra","before":numero,"after":numero}\n'
+        "  ],\n"
+        '  "gain_pct": numero intero (guadagno % medio),\n'
+        '  "notes": "2 frasi in italiano sul beneficio reale e su eventuali bottleneck residui",\n'
+        '  "confidence": "alta|media|bassa"\n'
+        "}\n"
+        "Testi in italiano."
+    )
+    return await _run_json("fps", FPS_SYSTEM, prompt)
+
+
 STARTUP_SYSTEM = ("Sei un esperto di ottimizzazione avvio Windows. Analizzi i programmi in avvio automatico "
                   "e indichi quali disabilitare in sicurezza. Rispondi SOLO con JSON valido, senza markdown.")
 

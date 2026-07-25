@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Rocket, Loader2, TrendingUp, Gauge, Cpu, LineChart as LineIcon, CheckCircle2, MonitorDown } from "lucide-react";
+import { Rocket, Loader2, TrendingUp, Gauge, Cpu, LineChart as LineIcon, CheckCircle2, MonitorDown, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import api, { formatApiErrorDetail } from "@/lib/api";
@@ -9,9 +9,13 @@ import { PageHeader } from "@/components/hud";
 const RES = ["1080p", "1440p", "4K"];
 const PRIO = { alta: "bg-[#FF3B30]/20 text-[#FF3B30]", media: "bg-[#E5FF00]/20 text-[#E5FF00]", bassa: "bg-[#00FF66]/20 text-[#00FF66]" };
 
+const sv = (v) => (typeof v === "string" ? v : typeof v === "number" ? String(v) : v?.name || "");
+
 export default function Upgrade() {
   const { t } = useTranslation();
   const [hasSpecs, setHasSpecs] = useState(null);
+  const [specs, setSpecs] = useState(null);
+  const [games, setGames] = useState([]);
   const [budget, setBudget] = useState(600);
   const [goal, setGoal] = useState(t("upgrade.goal_default"));
   const [loading, setLoading] = useState(false);
@@ -25,10 +29,20 @@ export default function Upgrade() {
   const [fps, setFps] = useState(null);
   const [fpsErr, setFpsErr] = useState("");
 
-  useEffect(() => { api.get("/pc-specs").then(({ data }) => setHasSpecs(!!data?.data?.cpu)).catch(() => setHasSpecs(false)); }, []);
+  const [ba, setBa] = useState(null);
+  const [baLoading, setBaLoading] = useState(false);
+  const [baErr, setBaErr] = useState("");
+
+  useEffect(() => {
+    api.get("/pc-specs").then(({ data }) => {
+      setSpecs(data?.data || null);
+      setHasSpecs(!!data?.data?.cpu);
+    }).catch(() => setHasSpecs(false));
+    api.get("/games").then(({ data }) => setGames((data?.games || []).map(sv).filter(Boolean))).catch(() => {});
+  }, []);
 
   const analyze = async () => {
-    setLoading(true); setErr(""); setUpg(null);
+    setLoading(true); setErr(""); setUpg(null); setBa(null); setBaErr("");
     try { const { data } = await api.post("/upgrade/analyze", { budget, goal }); setUpg(data); }
     catch (e) { setErr(formatApiErrorDetail(e.response?.data?.detail)); }
     finally { setLoading(false); }
@@ -51,11 +65,46 @@ export default function Upgrade() {
     finally { setFpsLoading(false); }
   };
 
+  const compareBA = async () => {
+    if (!game.trim() || !upg || baLoading) return;
+    setBaLoading(true); setBaErr(""); setBa(null);
+    try {
+      const ups = (upg.recommendations || []).map((r) => `${r.category}: ${r.suggested}`);
+      const { data } = await api.post("/fps/upgrade-compare", { game, resolution: res, upgrades: ups });
+      setBa(data);
+    } catch (e) { setBaErr(formatApiErrorDetail(e.response?.data?.detail) || t("upgrade.ba_err")); }
+    finally { setBaLoading(false); }
+  };
+
   const maxFps = fps ? Math.max(...fps.estimates.map((e) => e.fps), 1) : 1;
+  const baMax = ba ? Math.max(...ba.estimates.flatMap((e) => [e.before || 0, e.after || 0]), 1) : 1;
+
+  const GameChips = ({ testPrefix }) => games.length > 0 && (
+    <div className="mb-4">
+      <div className="text-[10px] uppercase tracking-widest text-zinc-600 mb-1.5">{t("upgrade.games_quick")}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {games.slice(0, 10).map((g) => (
+          <button key={g} data-testid={`${testPrefix}-chip-${g}`} type="button" onClick={() => setGame(g)}
+            className={`px-2.5 py-1 text-xs border transition-colors ${game === g ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/10" : "border-[#2A2A35] text-zinc-400 hover:border-zinc-500"}`}>
+            {g}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div className="max-w-6xl mx-auto fade-up">
       <PageHeader eyebrow={t("upgrade.eyebrow")} title={t("upgrade.title")} />
+
+      {specs && (sv(specs.cpu) || sv(specs.gpu)) && (
+        <div className="bg-[#0F0F12] border border-[#1A1A24] px-4 py-3 mb-4 flex flex-wrap items-center gap-x-6 gap-y-1.5" data-testid="hw-header">
+          <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-600">{t("upgrade.hw_title")}</span>
+          {sv(specs.cpu) && <span className="flex items-center gap-1.5 font-mono text-xs text-zinc-300"><Cpu size={13} className="text-[#E5FF00]" />{sv(specs.cpu)}</span>}
+          {sv(specs.gpu) && <span className="flex items-center gap-1.5 font-mono text-xs text-zinc-300"><Gauge size={13} className="text-[#00E0FF]" />{sv(specs.gpu)}</span>}
+          {specs.ram != null && <span className="font-mono text-xs text-zinc-300">RAM {typeof specs.ram === "number" ? `${specs.ram} GB` : sv(specs.ram)}</span>}
+        </div>
+      )}
 
       {hasSpecs === false && (
         <div className="bg-[#0F0F12] border border-[#E5FF00]/40 p-4 mb-4 text-sm text-zinc-300 flex items-center gap-3">
@@ -110,6 +159,64 @@ export default function Upgrade() {
                   {tracking ? <Loader2 size={14} className="animate-spin" /> : <LineIcon size={14} />} {t("upgrade.track_parts")}
                 </button>
               </div>
+
+              {/* ===== Prima vs Dopo l'upgrade ===== */}
+              <div className="mt-5 border-t border-[#1A1A24] pt-4" data-testid="before-after-block">
+                <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-1 flex items-center gap-2">
+                  <Gauge size={13} className="text-[#00E0FF]" /> {t("upgrade.ba_title")}
+                </div>
+                <p className="text-xs text-zinc-600 mb-3">{t("upgrade.ba_hint")}</p>
+                <div className="flex gap-2 mb-2">
+                  <input data-testid="ba-game-input" value={game} onChange={(e) => setGame(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && compareBA()}
+                    placeholder={t("upgrade.game_ph")}
+                    className="flex-1 bg-black border border-[#2A2A35] focus:border-[#00E0FF] outline-none px-3 py-2 text-sm" />
+                  <button data-testid="ba-compare-btn" onClick={compareBA} disabled={baLoading || !game.trim()}
+                    className="flex items-center gap-2 border border-[#00E0FF]/60 text-[#00E0FF] px-4 py-2 text-xs font-bold uppercase tracking-widest hover:bg-[#00E0FF] hover:text-black transition-colors disabled:opacity-50">
+                    {baLoading ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />} {t("upgrade.ba_btn")}
+                  </button>
+                </div>
+                <GameChips testPrefix="ba" />
+                {baErr && <div className="text-xs text-[#FF3B30]" data-testid="ba-error">{baErr}</div>}
+
+                {ba && (
+                  <div className="fade-up" data-testid="ba-result">
+                    <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                      <div className="text-sm text-zinc-300">{ba.game} · {ba.resolution} <span className="text-xs text-zinc-500">({ba.upgrade_summary})</span></div>
+                      {ba.gain_pct != null && (
+                        <span className="bg-[#00FF66]/15 border border-[#00FF66]/50 text-[#00FF66] px-2.5 py-1 text-xs font-bold font-mono" data-testid="ba-gain">
+                          +{ba.gain_pct}% {t("upgrade.ba_gain")}
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      {ba.estimates.map((e, i) => (
+                        <div key={e.preset || i} data-testid={`ba-row-${i}`}>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-zinc-400">{e.preset}</span>
+                            <span className="font-mono tabular-nums">
+                              <span className="text-zinc-500">{e.before}</span>
+                              <span className="text-zinc-600"> → </span>
+                              <span className="text-[#00FF66] font-bold">{e.after} FPS</span>
+                            </span>
+                          </div>
+                          <div className="h-1.5 bg-black border border-[#1A1A24] mb-1">
+                            <div className="h-full bg-zinc-600" style={{ width: `${((e.before || 0) / baMax) * 100}%` }} />
+                          </div>
+                          <div className="h-1.5 bg-black border border-[#1A1A24]">
+                            <div className="h-full bg-[#00FF66]" style={{ width: `${((e.after || 0) / baMax) * 100}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-4 mt-2 text-[10px] uppercase tracking-widest text-zinc-600">
+                      <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-1.5 bg-zinc-600" /> {t("upgrade.ba_before")}</span>
+                      <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-1.5 bg-[#00FF66]" /> {t("upgrade.ba_after")}</span>
+                    </div>
+                    {ba.notes && <p className="text-xs text-zinc-500 mt-3">{ba.notes}</p>}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -120,7 +227,8 @@ export default function Upgrade() {
           <label className="text-xs uppercase tracking-widest text-zinc-500">{t("upgrade.game")}</label>
           <input data-testid="fps-game-input" value={game} onChange={(e) => setGame(e.target.value)} placeholder={t("upgrade.game_ph")}
             onKeyDown={(e) => e.key === "Enter" && estimate()}
-            className="w-full bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 mt-1 mb-4 text-sm" />
+            className="w-full bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 mt-1 mb-3 text-sm" />
+          <GameChips testPrefix="fps" />
           <label className="text-xs uppercase tracking-widest text-zinc-500">{t("build.resolution")}</label>
           <div className="flex gap-2 mt-1 mb-4">
             {RES.map((r) => (
