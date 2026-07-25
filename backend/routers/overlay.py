@@ -170,7 +170,25 @@ def build(get_current_user):
         """HTML page per OBS Browser Source. Transparent bg + auto-poll ogni 1s."""
         cfg = await db.overlay_tokens.find_one({"token": token})
         if not cfg:
-            raise HTTPException(status_code=404, detail="Overlay non trovato")
+            # Fallback: token non valido -> pagina di aiuto invece di 404 secco
+            # (OBS mostrerebbe una schermata vuota; meglio dare feedback all'utente)
+            help_html = """<!doctype html>
+<html><head><meta charset="utf-8"><title>FrameForge Overlay - Token non valido</title>
+<style>
+  html, body { margin:0; padding:0; background:transparent; font-family:'JetBrains Mono', monospace; overflow:hidden; }
+  body { display:flex; justify-content:flex-start; align-items:flex-start; min-height:100vh; padding:16px; box-sizing:border-box; }
+  .err { background:rgba(139,0,0,0.85); border-left:3px solid #FF3B30; padding:12px 16px; color:#F4F4F5; font-size:12px; min-width:260px; }
+  .err .brand { font-size:9px; text-transform:uppercase; letter-spacing:2px; color:#FF3B30; font-weight:900; margin-bottom:8px; }
+  .err b { color:#FFB6B6; }
+</style></head>
+<body>
+<div class="err">
+  <div class="brand">// FRAMEFORGE - ERRORE</div>
+  <div>Token overlay <b>non valido o scaduto</b>.</div>
+  <div style="margin-top:6px;opacity:0.8;">Vai su <b>forgefps.dev/app/live</b>, rigenera il token e aggiorna l'URL in OBS.</div>
+</div>
+</body></html>"""
+            return HTMLResponse(help_html, status_code=200, headers={"Cache-Control": "no-store, no-cache"})
 
         position = cfg.get("position", "top-right")
         theme = cfg.get("theme", "neon")
