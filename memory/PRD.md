@@ -1098,3 +1098,34 @@ Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi
   - Glow decorativo ciano + viola
   - Info piano corrente dell'utente
 - **Test**: admin starter -> 402 + banner visibile con href `/pricing?plan=streamer`. Grant temporaneo streamer -> 200 con dati. Ripristinato a starter dopo test.
+
+
+## 2026-02 — OBS Browser Source Overlay (feature esclusiva Streamer)
+### Backend
+- Nuovo router `/app/backend/routers/overlay.py`, montato in `server.py`
+- Endpoint (streamer-only, plan gate):
+  - `GET /api/overlay/config` — auto-inizializza al primo accesso (default: top-right, neon theme, tutte le metric on). Ritorna URL completo + settings.
+  - `POST /api/overlay/token` — rotate cripto-strong token (`secrets.token_urlsafe(24)`). Invalida il vecchio URL.
+  - `PUT /api/overlay/config` — aggiorna position (top-left|top-right|bottom-left|bottom-right), theme (neon|dark|minimal), toggle per singola metric (fps/cpu/gpu/ping/health)
+- Endpoint pubblici (no-auth, token = capability):
+  - `GET /api/overlay/{token}` — HTML page per OBS Browser Source. Transparent bg + auto-poll ogni 1s. Layout responsive per 4 posizioni + 3 temi.
+  - `GET /api/overlay/{token}/data` — JSON con ultimo sample da `pc_telemetry` + health score. `Cache-Control: no-store`.
+- Storage: `db.overlay_tokens` con `{user_id, token, position, theme, show_*, rotated_at, created_at}`. Indicizzato per token unico.
+
+### Frontend
+- Nuovo componente `components/ObsOverlayPanel.jsx`:
+  - Input readonly con URL + bottoni **Copia URL** (con feedback `Copiato ✓`), **Apri** (target blank), **Rigenera** (arancione, con confirm)
+  - Griglia 4 posizioni + 3 temi con visual selected state
+  - Toggle a pill per ogni metric (FPS / CPU / GPU / Ping / Health)
+  - **Preview iframe** live con sfondo a scacchiera (chessboard) per mostrare la trasparenza
+  - Details collapsible "Come aggiungerlo in OBS Studio" (6 step)
+  - Banner upsell inline se non-streamer (402)
+- Integrato in `pages/Live.jsx` sotto le metric cards.
+
+### Test
+- End-to-end curl: 402 su starter, 200 su streamer, token rotate invalida il vecchio, PUT config aggiorna position+theme, HTML endpoint ritorna page 4.5KB
+- Smoke test playwright: pannello visibile, URL popolato, cambio tema+posizione+toggle funzionanti
+
+### Note
+- L'`url` copiabile ha base `APP_ORIGIN` (default `https://forgefps.dev`) — corretto per streamer in produzione
+- La preview iframe usa `window.location.origin` per funzionare anche in preview env

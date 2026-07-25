@@ -7,6 +7,7 @@ import api from "@/lib/api";
 import { SessionSummary } from "@/components/SessionSummary";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
 import { PrimaryButton } from "@/components/hud";
+import ObsOverlayPanel from "@/components/ObsOverlayPanel";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
 import MonitorPreflight from "@/components/MonitorPreflight";
 import MonitorLiveControl from "@/components/MonitorLiveControl";
@@ -195,6 +196,11 @@ export default function Live() {
       </MetricGroup>
 
       {summary && <SessionSummary summary={summary} onReset={resetSession} />}
+
+      {/* OBS Browser Overlay (Streamer only) */}
+      <div className="mb-6">
+        <ObsOverlayPanel />
+      </div>
 
       <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 mb-6" data-testid="reflex-card">
         <div className="flex items-center gap-2 text-sm font-bold mb-1"><Sparkles size={16} className="text-[#00E0FF]" /> {t("live.reflex_title")}</div>
