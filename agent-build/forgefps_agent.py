@@ -30,9 +30,33 @@ _parser.add_argument("--register-protocol", action="store_true",
                      help="Registra frameforge:// nel registro utente e esce (idempotente)")
 _args, _ = _parser.parse_known_args()
 
+# v0.7.6: hide the console window IMMEDIATELY if this launch was triggered
+# from a "silent" web dashboard button (frameforge://...&silent=1). This must
+# happen BEFORE any print() — otherwise the console flashes on screen even for
+# a fraction of a second, which the user perceives as a scary "terminal popup".
+# The signature check happens later; hiding the window is a pure UX layer.
+def _hide_console_if_silent(uri: str) -> None:
+    if not uri or "silent=1" not in uri:
+        return
+    try:
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if hwnd:
+            ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
+    except Exception:
+        pass  # non-Windows or restricted env: fail silently
+    # Silence any stdout/stderr so subsequent prints don't buffer/leak.
+    try:
+        _null = open(os.devnull, "w")
+        sys.stdout = _null
+        sys.stderr = _null
+    except Exception:
+        pass
+
+_hide_console_if_silent(_args.uri)
+
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.7.5"
+AGENT_VERSION = "0.7.6"
 # v0.7.3+: rinominato da boostpc_backup.json → forgefps_backup.json.
 # Fallback lettura del vecchio nome per una release per non perdere il backup
 # degli utenti che aggiornano dalla v0.7.2 o precedenti.
@@ -207,6 +231,10 @@ if not AGENT_TOKEN or AGENT_TOKEN.startswith("__"):
         # Se stiamo per gestire un URI ma non c'e' un token salvato, non possiamo
         # verificare la firma: guida l'utente al primo setup.
         elif _args.uri:
+            # v0.7.6: se il chiamante voleva "silent" (bottoni dashboard) NON
+            # aprire prompt visibili (la console e' gia' nascosta) — esci muto.
+            if "silent=1" in _args.uri:
+                sys.exit(2)
             print("[WARN] Nessun token salvato: prima apri l'app dalla dashboard")
             print("       (scarica lo ZIP da 'FrameForge Agent'), poi il bottone")
             print("       'Avvia' funzionera' senza download.")
