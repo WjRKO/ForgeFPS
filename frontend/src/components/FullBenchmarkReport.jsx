@@ -12,7 +12,8 @@
  * Empty state se `latest === null`: CTA per lanciare il test dall'agent.
  */
 import { useEffect, useState } from "react";
-import { Cpu, MemoryStick, HardDrive, Globe, Thermometer, Play, Loader2, Zap, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Cpu, MemoryStick, HardDrive, Globe, Thermometer, Play, Loader2, Zap, TrendingUp, TrendingDown, AlertTriangle, Lock, Sparkles } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip as ReTooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import api from "@/lib/api";
 import OneClickLaunchButton from "@/components/OneClickLaunchButton";
@@ -66,7 +67,7 @@ function StatRow({ label, value, sub, deltaProps, testid }) {
 }
 
 export default function FullBenchmarkReport() {
-  const [state, setState] = useState({ loading: true, latest: null, prev: null, history: [] });
+  const [state, setState] = useState({ loading: true, latest: null, prev: null, history: [], locked: false, lockInfo: null });
 
   const load = async () => {
     try {
@@ -77,9 +78,17 @@ export default function FullBenchmarkReport() {
         latest: data?.latest || null,
         prev: hist.length > 1 ? hist[1] : null,
         history: hist,
+        locked: false,
+        lockInfo: null,
       });
-    } catch {
-      setState({ loading: false, latest: null, prev: null, history: [] });
+    } catch (e) {
+      // 402 = plan gate: piano insufficiente. Mostriamo l'upsell banner.
+      if (e?.response?.status === 402) {
+        const detail = e.response.data?.detail || {};
+        setState({ loading: false, latest: null, prev: null, history: [], locked: true, lockInfo: detail });
+        return;
+      }
+      setState({ loading: false, latest: null, prev: null, history: [], locked: false, lockInfo: null });
     }
   };
 
@@ -89,6 +98,60 @@ export default function FullBenchmarkReport() {
     return (
       <div className="flex items-center gap-2 text-zinc-500 py-12 justify-center" data-testid="fullbench-loading">
         <Loader2 size={16} className="animate-spin" /> Caricamento Full Benchmark...
+      </div>
+    );
+  }
+
+  // Plan gate: utente non-Streamer -> banner upsell
+  if (state.locked) {
+    return (
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#0F0F12] to-[#0A0A0F] border-2 border-[#00E0FF]/40 p-8" data-testid="fullbench-locked">
+        {/* Grain / glow decorativo */}
+        <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-[#00E0FF]/10 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-[#B388FF]/8 blur-3xl pointer-events-none" />
+        <div className="relative">
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-[#00E0FF] font-mono mb-3">
+            <Lock size={11} /> Feature esclusiva Streamer
+          </div>
+          <h3 className="font-display font-black text-3xl mb-2 text-white">Full Benchmark v2</h3>
+          <p className="text-sm text-zinc-400 max-w-2xl mb-6 leading-relaxed">
+            Un test approfondito da <strong className="text-white">2-4 minuti</strong> che il Quick Benchmark non pu&ograve; darti:
+            multi-thread <strong className="text-white">burst + sustained</strong> con rilevamento thermal throttling,
+            gerarchia RAM <strong className="text-white">L2/L3/DRAM</strong>, disk multi-QD, rete estesa,
+            e <strong className="text-white">thermal trace</strong> real-time.
+          </p>
+
+          {/* Preview features */}
+          <div className="grid sm:grid-cols-2 gap-3 mb-6 max-w-3xl">
+            {[
+              { icon: Cpu, title: "Rileva thermal throttling", desc: "Compara burst vs sustained per capire se il tuo cooler regge sotto stress." },
+              { icon: MemoryStick, title: "RAM hierarchy L2/L3/DRAM", desc: "Non solo bandwidth totale — vedi dove il collo di bottiglia della memoria." },
+              { icon: HardDrive, title: "Disk multi-queue", desc: "Random 4K QD1/QD32 IOPS: pattern realistici per gaming e asset streaming." },
+              { icon: Thermometer, title: "Thermal trace real-time", desc: "Grafico CPU/GPU temp durante il test intero, con max/avg." },
+            ].map((f, i) => (
+              <div key={i} className="flex items-start gap-3 bg-black/30 border border-[#2A2A35] p-3">
+                <f.icon size={16} className="text-[#00E0FF] shrink-0 mt-0.5" />
+                <div>
+                  <div className="text-xs font-semibold text-white mb-0.5">{f.title}</div>
+                  <div className="text-[11px] text-zinc-500 leading-relaxed">{f.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              to="/pricing?plan=streamer"
+              data-testid="fullbench-upgrade-btn"
+              className="inline-flex items-center gap-2 bg-[#00E0FF] text-black font-bold uppercase tracking-widest text-xs px-6 py-3 hover:bg-[#33E9FF] transition-colors"
+            >
+              <Sparkles size={13} /> Passa a Streamer
+            </Link>
+            <span className="text-[11px] text-zinc-500">
+              Il tuo piano attuale: <strong className="text-zinc-300">{state.lockInfo?.current || "starter"}</strong>
+            </span>
+          </div>
+        </div>
       </div>
     );
   }

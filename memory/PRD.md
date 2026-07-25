@@ -1086,3 +1086,15 @@ Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi
   - **Empty state**: CTA "Avvia Full Benchmark" via OneClickLaunchButton
 - **Benchmark.jsx**: aggiunta **tab switcher** "Quick Benchmark" / "Full Benchmark v2" (state `tab` = quick|full).
 - **Test smoke**: verificate tutte le sezioni con dati seed (CPU 842/768 Mops, RAM L2 85.2 GB/s, Disk 2.7GB/s, Net 3 host, Thermal trace + max/avg temp).
+
+
+## 2026-02 — Full Benchmark = feature esclusiva Streamer (upsell driver)
+- **Backend** (`routers/pc.py`): `GET /api/pc-benchmark/full` ora usa `require_streamer` dep. Ritorna 402 con `{code:"plan_required", required:"streamer", current, upgrade_url}` per pro/starter/trial.
+- **Frontend** (`FullBenchmarkReport.jsx`): gestione 402 -> nuovo stato `locked` con banner upsell dedicato:
+  - Badge "FEATURE ESCLUSIVA STREAMER" in ciano
+  - Titolo grande + value prop 2-4 min
+  - 4 mini-card preview delle features (thermal throttling, RAM hierarchy, disk multi-Q, thermal trace)
+  - CTA prominente "Passa a Streamer" -> `/pricing?plan=streamer`
+  - Glow decorativo ciano + viola
+  - Info piano corrente dell'utente
+- **Test**: admin starter -> 402 + banner visibile con href `/pricing?plan=streamer`. Grant temporaneo streamer -> 200 con dati. Ripristinato a starter dopo test.
