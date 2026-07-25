@@ -125,7 +125,7 @@ async def _ensure_agent_zip_cached() -> bytes:
     return data
 
 
-async def _build_agent_script(user_id: str, profile: str = "") -> str:
+async def _build_agent_script(user_id: str, profile: str = "", agent_version: str = "") -> str:
     backend = os.environ.get("FRONTEND_URL", "http://localhost:8001")
     ids = await resolve_tweak_ids(db, user_id, profile) if profile else []
     profile_literal = ",".join("'" + i.replace("'", "") + "'" for i in ids)
@@ -137,8 +137,14 @@ async def _build_agent_script(user_id: str, profile: str = "") -> str:
     b_apps_literal = ",".join("'" + a.replace("'", "") + "'" for a in bs.get("close_apps", []))
     def _psb(v):
         return "$true" if v else "$false"
+    if not agent_version:
+        _specs = await db.pc_specs.find_one({"user_id": user_id}, {"agent_version": 1})
+        agent_version = (_specs or {}).get("agent_version") or ""
     return (PS_SCRIPT.replace("__BACKEND_URL__", backend)
             .replace("__PROFILE_IDS__", profile_literal)
+            .replace("__INSTALLED_AGENT_VER__", (agent_version or "")[:20].replace("'", ""))
+            .replace("__LATEST_AGENT_VER__", LATEST_AGENT_VERSION)
+            .replace("__AGENT_DL_URL__", AGENT_ZIP_UPSTREAM.replace("'", ""))
             .replace("__PREMATCH_APPS__", pm_apps_literal)
             .replace("__PREMATCH_POWER__", pm_power)
             .replace("__BOOSTER_APPS__", b_apps_literal)
@@ -980,7 +986,7 @@ def build(get_current_user):
                 )
             except Exception:
                 pass
-        script = await _build_agent_script(rec["user_id"], profile)
+        script = await _build_agent_script(rec["user_id"], profile, x_agent_version)
         # Prepend UTF-8 BOM: Windows PowerShell 5.1 legge i .ps1 senza BOM in ANSI (Windows-1252),
         # causando caratteri glitchati per emoji/UTF-8 (es. · … 📚 👤). Il BOM forza UTF-8.
         return PlainTextResponse("\ufeff" + script, media_type="text/plain; charset=utf-8",

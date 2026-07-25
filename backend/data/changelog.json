@@ -1,5 +1,25 @@
 [
   {
+    "version": "GUI 3.0",
+    "date": "2026-07-25",
+    "highlights": [
+      "Monitor Live locale: CPU/GPU/RAM/temp in tempo reale con sparkline",
+      "Tab Bloatware: scansione + rimozione selettiva delle app preinstallate",
+      "Ripristina singolo tweak direttamente dalla card",
+      "Banner aggiornamento agent dentro la GUI",
+      "Layout responsive: finestra ridotta e fullscreen"
+    ],
+    "changes": [
+      { "type": "feature", "text": "Nuova tab 'Monitor Live' nella GUI dell'agent: 8 metriche (CPU %, CPU temp, GPU %, GPU temp, RAM, VRAM, GPU clock, GPU power) aggiornate ogni 3s con sparkline e color coding per soglie termiche" },
+      { "type": "feature", "text": "Nuova tab 'Bloatware': auto-discovery (lista curata + 18 pattern OEM/promo, whitelist di sicurezza per Store/Calculator/Photos/runtime), selezione multipla e rimozione con un click. Tutte le app restano reinstallabili dallo Store" },
+      { "type": "feature", "text": "Revert granulare: ogni tweak applicato mostra il bottone 'Ripristina' sulla card. L'agent traccia quali chiavi di backup ha creato ciascun tweak e ripristina solo quelle" },
+      { "type": "feature", "text": "Banner in-GUI quando e' disponibile una nuova versione dell'agent, con link diretto al download e dismiss per sessione" },
+      { "type": "fix", "text": "Il bottone 'Riavvia ora' dopo i tweak con riavvio ora funziona (l'endpoint locale /api/reboot non esisteva)" },
+      { "type": "improvement", "text": "GUI responsive: layout ottimizzato per finestra ridotta (tab scrollabili, card a colonna singola, footer compatto) e per fullscreen (griglia piu' larga, tipografia scalata)" },
+      { "type": "improvement", "text": "Il pannello 'Backup' ora elenca i nomi dei tweak reversibili invece delle chiavi di registro grezze" }
+    ]
+  },
+  {
     "version": "0.7.6",
     "date": "2026-07-25",
     "highlights": [
