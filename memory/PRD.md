@@ -1278,3 +1278,26 @@ Applicati solo i fix critici REALI, skippati falsi positivi e refactor rischiosi
 - Verificato: `/api/agent/latest-version` risponde `{version:"0.7.5", download_url:...}` (server-side gia' pronto; bumpa a 0.7.6 quando la release e' pubblicata).
 - Sintassi Python OK, backend up.
 - ⚠️ Richiede build+release v0.7.6 su GitHub per attivare auto-update; poi bump `AGENT_ZIP_UPSTREAM` per far scattare l'update automatico agli utenti su 0.7.5.
+
+### 2026-07-25 (43) — Agent Recipe System (A+B+E+H) (FATTO)
+- **A · Recipe System declarativo** (`agent-build/tweaks.py`, 613 righe, nuovo modulo):
+  - `@dataclass Tweak` con: id, category, name, why, impact, difficulty, requires_reboot, version, hardware_gate, apply/verify/revert
+  - `@dataclass TweakContext` per DI (evita circular imports): run/ps/reg_get/set_reg/_clean + is_laptop/ram_gb/is_ssd
+  - `CATEGORIES` (dict) e `TWEAKS` (list) come source of truth: 16 tweak in 6 categorie (latency=4, gaming=3, privacy=2, bloatware=1, system=5, visual=1)
+  - Ogni tweak espone il "why" tecnico per UI/tooltip ("Nagle bufferizza pacchetti TCP piccoli...") e "impact" quantificato ("+5-15ms input lag online")
+- **B · Categorie selezionabili** (CLI):
+  - `--categories latency,gaming` → applica solo quelle categorie
+  - `--mode list-tweaks` → enumera tutti i 16 tweak raggruppati per categoria
+- **E · Revert per singolo tweak**:
+  - `--mode restore-one --tweak-id tcp-nagle-off` → ripristina solo quel tweak
+  - `--mode apply-one --tweak-id X` → applica solo quel tweak
+  - Ogni tweak definisce `revert()` se necessario (es. sysmain, diagtrack, power_plan); fallback generico key-based per gli altri
+- **H · Verify step post-apply**:
+  - Ogni `Tweak.verify(ctx, bk) -> bool` viene chiamato subito dopo `apply()`
+  - Rileva GPO/antivirus che revertano registry keys (es. quando l'AV enterprise blocca modifiche a HKLM)
+  - Progress bar mostra ✔ (verified) o ⚠ (applied ma non verificato)
+  - Backup salva `bk["tweaks"][id] = {applied, verified, at}` per storico UI
+- **Backup compat**: schema key-based v0.7.5 preservato + nuova sezione `bk["tweaks"]` per metadata. Retrocompat totale con backup esistenti.
+- **Refactor**: `apply_all_tweaks()` da 130 righe → 40 righe (orchestrator sopra `apply_selected()`). Aggiunto `_build_tweak_context()` che rileva hardware profile una volta.
+- Verificato: sintassi OK, import `from tweaks import ...` funziona, `get_by_categories(['latency'])` filtra correttamente, `get_by_id('tcp-nagle-off')` risolve.
+- ⚠️ Da fare: aggiungere UI dashboard per selezionare categorie/singoli tweak (in un altro giro). Per ora esposto solo via CLI + URI protocol.

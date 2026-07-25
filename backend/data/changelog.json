@@ -3,11 +3,16 @@
     "version": "0.7.6",
     "date": "2026-07-25",
     "highlights": [
+      "Recipe System tweak: 16 tweak declarativi in 6 categorie",
       "Auto-update in-place dell'agent (zero download manuale)",
-      "Progress bar reale al posto dei step print (UX pro)",
+      "Progress bar reale + verify post-apply + revert per singolo tweak",
       "Zero flash console: hidden anche per protocol GUI launches"
     ],
     "changes": [
+      { "type": "refactor", "text": "Recipe System declarativo: 16 tweak in 6 categorie (Latency/Gaming/Privacy/Bloatware/System/Visual). Ogni tweak ha id, why, impact, difficulty, hardware_gate, apply/verify/revert" },
+      { "type": "feature", "text": "Categorie selezionabili: --categories 'latency,gaming' applica solo quelle. --tweak-id 'tcp-nagle-off' applica un solo tweak" },
+      { "type": "feature", "text": "Verify step post-apply: dopo ogni tweak rilegge il registry per confermare che GPO/antivirus non lo abbiano revertato. Progress bar mostra icona ✔/⚠" },
+      { "type": "feature", "text": "Revert per singolo tweak: --mode restore-one --tweak-id X ripristina solo quel tweak (non tutto)" },
       { "type": "feature", "text": "Agent auto-update: al boot verifica /api/agent/latest-version, scarica lo ZIP, updater.bat sostituisce l'exe e rilancia. Zero azione manuale." },
       { "type": "feature", "text": "Progress bar UI: barra ANSI 24-char con % + icona check/fail + msg troncato, oppure log strutturato se stdout non-TTY. Sostituisce 15+ print sparsi in apply_all_tweaks" },
       { "type": "fix", "text": "Zero flash console anche su GUI launch: launcher.vbs passa --no-console, l'exe nasconde subito la console (prima solo su URI silent=1)" },
