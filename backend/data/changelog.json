@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.7.8",
+    "date": "2026-07-26",
+    "highlights": [
+      "Rebuild definitivo del fix UAC (v0.7.7 aveva un manifest sbagliato)",
+      "Manifest asInvoker esplicito + safety check automatico in CI"
+    ],
+    "changes": [
+      { "type": "fix", "text": "Aggiunto forgefps-agent.manifest esplicito con asInvoker: il default PyInstaller in alcune versioni includeva comunque requireAdministrator anche senza --uac-admin. Ora forzato manualmente" },
+      { "type": "fix", "text": "Safety check nel workflow GitHub Actions: se l'exe generato contiene requireAdministrator, la build fallisce automaticamente prima di creare la release" }
+    ]
+  },
+  {
     "version": "0.7.7",
     "date": "2026-07-26",
     "highlights": [

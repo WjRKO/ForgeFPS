@@ -3913,7 +3913,7 @@ function Show-WebGui {
     const installed = (ag.installed && ag.installed.indexOf("__") < 0) ? ag.installed : "";
     const show = latest && verLt(installed, latest) && !sessionStorage.getItem("ff_upd_dismiss");
     if (!show) { el.setAttribute("hidden", ""); return; }
-    const cur = installed ? `hai la v${esc(installed)}` : "la tua versione e precedente alla 0.7.7";
+    const cur = installed ? `hai la v${esc(installed)}` : "la tua versione e precedente alla 0.7.8";
     el.innerHTML = `
       <span class="upd-icon">&#8593;</span>
       <span class="upd-text"><b>FrameForge Agent v${esc(latest)}</b> disponibile (${cur}): auto-update, zero-flash console e nuovi tweak.</span>
