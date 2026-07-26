@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  FrameForge Agent — Manifest Windows esplicito v0.7.8+
+  Forza asInvoker (nessuna richiesta di elevazione UAC all'avvio).
+  L'agent si auto-eleva SOLO on-demand tramite ShellExecuteW("runas", ...)
+  quando l'utente decide di applicare tweak reali (mode=optimize).
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity
+    version="0.7.8.0"
+    processorArchitecture="*"
+    name="FrameForge.Agent"
+    type="win32"
+  />
+  <description>FrameForge Agent — PC optimization for streamers &amp; gamers</description>
+
+  <!-- ESECUZIONE UTENTE STANDARD: asInvoker => nessun prompt UAC all'avvio -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <!-- Compatibility: Windows 10 / 11 supportati esplicitamente -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" /> <!-- Win10 -->
+    </application>
+  </compatibility>
+
+  <!-- Alta DPI: rispetta lo scaling di Windows senza blur -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true</dpiAware>
+    </windowsSettings>
+  </application>
+</assembly>
