@@ -16,9 +16,13 @@ Write-Host "[2/5] Pulisco build precedenti..." -ForegroundColor Cyan
 if (Test-Path build) { Remove-Item build -Recurse -Force }
 if (Test-Path dist)  { Remove-Item dist  -Recurse -Force }
 
-Write-Host "[3/5] Costruisco la cartella dist\forgefps-agent\ (onedir, metadati, no UPX, UAC admin)..." -ForegroundColor Cyan
+Write-Host "[3/5] Costruisco la cartella dist\forgefps-agent\ (onedir, metadati, no UPX, asInvoker manifest)..." -ForegroundColor Cyan
+# v0.7.7: rimosso --uac-admin.
+# L'exe ora gira in user-space (nessun prompt UAC all'avvio).
+# I mode sync/monitor/benchmark/prematch/booster non richiedono admin.
+# Il mode 'optimize' (applicazione tweak) self-eleva via ShellExecuteW("runas", ...)
+# in forgefps_agent.py:1127 — UAC appare solo se l'utente sceglie di applicare tweak.
 pyinstaller --onedir --name forgefps-agent --console --noupx --clean `
-  --uac-admin `
   --version-file version_info.txt forgefps_agent.py
 
 Write-Host "[4/5] Comprimo dist\forgefps-agent\ in forgefps-agent.zip..." -ForegroundColor Cyan
