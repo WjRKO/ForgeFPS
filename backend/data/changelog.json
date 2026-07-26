@@ -1,5 +1,26 @@
 [
   {
+    "version": "0.7.7",
+    "date": "2026-07-26",
+    "highlights": [
+      "Bug fix critico: rimosso UAC prompt all'avvio dell'agent",
+      "Sync / Live Monitoring / Benchmark tornano silenziosi",
+      "Universal Game Detector: rileva Steam/Epic/GOG/Xbox + fullscreen",
+      "Precision Sensors: Fan RPM, VRM Temp, CPU Power, Vcore",
+      "Multi-source hardware detection con badge confidence 2/2",
+      "Milestone System: 14 traguardi, XP/tier, overlay OBS popup"
+    ],
+    "changes": [
+      { "type": "fix", "text": "Rimosso --uac-admin dal manifest PyInstaller: l'agent gira in user-space, nessun UAC all'avvio. Il mode 'optimize' (applicazione tweak) self-eleva on-demand quando serve davvero" },
+      { "type": "feature", "text": "Universal Game Detector: rileva qualsiasi gioco in esecuzione via Steam RunningAppID + foreground fullscreen + PresentMon fallback, con cover Steam Store e badge sorgente (STEAM/EPIC/GOG/XBOX)" },
+      { "type": "feature", "text": "Precision Sensors strip nella Live page: Fan RPM, VRM Temp, CPU Package Power, Vcore (via LibreHardwareMonitor DLL)" },
+      { "type": "feature", "text": "Multi-source hardware detection: cross-check WMI + Registry + Steam/Epic manifest, badge 2/2 fonti confermate per CPU/GPU/RAM/Storage" },
+      { "type": "feature", "text": "Storage insights: NVMe/SSD/HDD detection, wear percent, health status, driver bus type" },
+      { "type": "feature", "text": "Milestone System v1: 14 traguardi (onboarding, performance, gaming, community), XP tier bronze/silver/gold/platinum, reward reali (feature unlock), OBS overlay popup live per streamer" },
+      { "type": "improvement", "text": "Overlay OBS milestone: popup animato 6 secondi, quattro colori per tier, polling ogni 3s, fire-once garantito lato server" }
+    ]
+  },
+  {
     "version": "GUI 3.0",
     "date": "2026-07-25",
     "highlights": [
