@@ -1388,3 +1388,18 @@ Scelte utente: Build a+b, Upgrade d+e+g.
 - ObsOverlayPanel.jsx: nuova riga controlli md:grid-cols-3 → Layout (Card/Barra), Dimensione (S/M/L), Colore brand (input color con debounce 400ms + Reset). testids: overlay-layout-*, overlay-size-*, overlay-accent-picker/reset.
 - Test: curl PUT (bar/large/#ff2d95 OK, "rosso" → 400), HTML overlay contiene zoom 1.35 + accent + bar CSS (9 match), screenshot pannello+preview bar rosa ✓.
 - Richiede redeploy; in OBS basta refresh della Browser Source.
+
+### 2026-07-26 (54) — Sincronizzazione PC ad alta precisione (opzioni a+c, scelte utente) (FATTO)
+Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati LibreHardwareMonitor.
+- ps_agent.py (arriva via script server, no rebuild exe):
+  - Helpers nuovi: `Get-CpuFromRegistry` (ProcessorNameString), `Get-GpuAdaptersFromRegistry` (enumera Class {4d36e968}), `Get-PrimaryStorage` (Get-Partition+Get-PhysicalDisk+Get-StorageReliabilityCounter → storage_type NVMe/SSD/HDD, storage_bus, storage_health, storage_wear_pct, storage_temp, storage_size_gb, storage_model).
+  - `Get-Specs` esteso: cross-check CPU nome WMI vs Registry (preferisce Registry se più lungo/preciso), rilevamento GPU multi-adapter con ordinamento discrete-first (NVIDIA/GeForce/Radeon RX/Arc > Intel UHD/Iris/Vega iGPU), gpu_secondary (iGPU su laptop ibridi), gpu_provider (NVIDIA/AMD/Intel), ram_manufacturer (SMBIOS filtro Unknown/To be filled), hw_confidence={cpu,gpu,ram,storage} = numero fonti confermate 0-3.
+  - `Get-LhmTemps` esteso: oltre a cpu_temp/gpu_temp ora estrae fan_rpm_max + fan_count (Fan sensors), vrm_temp (MB sensori vrm/mos/vsoc), cpu_power (CPU Package power W), gpu_power_lhm (fallback per AMD/Intel senza nvidia-smi), cpu_vcore (Voltage sensor CPU). Fascia validazione: fan 0-10000rpm, power 0-1000W, vcore 0.3-2.0V.
+  - `Get-Health` e `Get-TelemetrySample` propagano tutti i nuovi campi nel payload (backend model è già free-form dict, no changes richiesti).
+- Frontend:
+  - Live.jsx: nuovo componente `PrecisionCell` + strip condizionale `grid-cols-2 sm:grid-cols-4` sotto le 4 bento card mostra Fan RPM / VRM Temp / CPU Power / Vcore (visibile solo se almeno un valore è presente). testids: precision-sensors, stat-fan-rpm, stat-vrm-temp, stat-cpu-power, stat-cpu-vcore.
+  - MyPc.jsx: composeSpec include gpu_secondary ("GPU + iGPU"), storage_type/health/wear nel campo disco, ram_manufacturer. Badge `hw-conf-{key}` accanto a ogni spec mostra `2/2` (verde), `1/2` (giallo) o `0/2` (grigio) fonti confermate. Tooltip localizzato.
+  - i18n IT+EN: live.st_fan_rpm/st_vrm_temp/st_cpu_power/st_cpu_vcore, mypcpage.hw_sources_tooltip.
+- Backend model: nessuna modifica (SpecsInput.data e TelemetryInput.sample sono già dict[str,Any] free-form).
+- Test: python import + brace-balance PS ok (73 funzioni), curl telemetry con nuovi campi accettato (HTTP 401 auth, non 422 validation), frontend compilato senza errori.
+- Richiede redeploy per produzione (backend serve il nuovo script PS).

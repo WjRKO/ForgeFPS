@@ -203,12 +203,15 @@ function Get-LhmComputer {
 }
 
 function Get-LhmTemps {
-  # Real CPU/GPU temperatures from hardware sensors (incl. motherboard SuperIO). Requires admin.
+  # Real CPU/GPU temperatures + fan RPM + VRM temps + power draw + Vcore
+  # from hardware sensors (incl. motherboard SuperIO). Requires admin.
+  # v0.7.7: multi-sensor extraction — fan_rpm_max, vrm_temp, cpu_power, gpu_power_lhm, cpu_vcore.
   $r = @{}
   $c = Get-LhmComputer
   if (-not $c) { $r._lhm_state = 'no_lhm'; return $r }
   try {
     $cpuTemps = @{}; $gpuTemps = @{}; $mbTemps = @{}
+    $fanRpms = @{}; $cpuPowers = @{}; $gpuPowers = @{}; $vcores = @{}
     $found = New-Object 'System.Collections.Generic.List[string]'
     $all = New-Object 'System.Collections.Generic.List[object]'
     foreach ($hw in $c.Hardware) { [void]$all.Add($hw); foreach ($sh in $hw.SubHardware) { [void]$all.Add($sh) } }
@@ -216,13 +219,27 @@ function Get-LhmTemps {
       $hw.Update()
       $ht = "$($hw.HardwareType)"
       foreach ($sensor in $hw.Sensors) {
-        if ("$($sensor.SensorType)" -ne 'Temperature' -or $null -eq $sensor.Value) { continue }
-        $tv = [double]$sensor.Value
-        $found.Add(("{0}/{1}={2}" -f $ht, $sensor.Name, [int][math]::Round($tv)))
-        if ($tv -le 0 -or $tv -gt 150) { continue }
-        if ($ht -eq 'Cpu') { $cpuTemps["$($sensor.Name)"] = $tv }
-        elseif ($ht -like 'Gpu*') { $gpuTemps["$($sensor.Name)"] = $tv }
-        else { $mbTemps["$($sensor.Name)"] = $tv }
+        if ($null -eq $sensor.Value) { continue }
+        $st = "$($sensor.SensorType)"
+        $sn = "$($sensor.Name)"
+        $sv = [double]$sensor.Value
+        if ($st -eq 'Temperature') {
+          $found.Add(("{0}/T/{1}={2}" -f $ht, $sn, [int][math]::Round($sv)))
+          if ($sv -le 0 -or $sv -gt 150) { continue }
+          if ($ht -eq 'Cpu') { $cpuTemps[$sn] = $sv }
+          elseif ($ht -like 'Gpu*') { $gpuTemps[$sn] = $sv }
+          else { $mbTemps[$sn] = $sv }
+        } elseif ($st -eq 'Fan') {
+          if ($sv -gt 0 -and $sv -lt 10000) { $fanRpms[("{0}/{1}" -f $ht, $sn)] = $sv }
+        } elseif ($st -eq 'Power') {
+          if ($sv -le 0 -or $sv -gt 1000) { continue }
+          if ($ht -eq 'Cpu' -and $sn -match '(?i)package|cpu total|cpu\s*power') { $cpuPowers[$sn] = $sv }
+          elseif ($ht -like 'Gpu*' -and $sn -match '(?i)gpu total|gpu power|package|board') { $gpuPowers[$sn] = $sv }
+        } elseif ($st -eq 'Voltage') {
+          if ($ht -eq 'Cpu' -and $sn -match '(?i)vcore|core\s*#?0|cpu\s*core') {
+            if ($sv -gt 0.3 -and $sv -lt 2.0) { $vcores[$sn] = $sv }
+          }
+        }
       }
     }
     $script:LHM_LAST = ($found -join ', ')
@@ -249,6 +266,36 @@ function Get-LhmTemps {
     foreach ($k in @('GPU Core', 'GPU Hot Spot', 'GPU')) { if ($gpuTemps.ContainsKey($k)) { $gpuVal = $gpuTemps[$k]; break } }
     if ($null -eq $gpuVal -and $gpuTemps.Count -gt 0) { $gpuVal = ($gpuTemps.Values | Measure-Object -Maximum).Maximum }
     if ($null -ne $gpuVal -and $gpuVal -gt 0) { $r.gpu_temp = [int][math]::Round($gpuVal) }
+    # v0.7.7: VRM temp — cerca sensori MB con nomi vrm/vr mos/mos/vcore
+    foreach ($k in $mbTemps.Keys) {
+      if ($k -match '(?i)vrm|vr mos|^mos\s|vcore|vsoc') {
+        $r.vrm_temp = [int][math]::Round($mbTemps[$k]); break
+      }
+    }
+    # v0.7.7: fan RPM max — prendi il valore massimo tra tutti i fan sensor
+    if ($fanRpms.Count -gt 0) {
+      $r.fan_rpm_max = [int][math]::Round(($fanRpms.Values | Measure-Object -Maximum).Maximum)
+      $r.fan_count = $fanRpms.Count
+    }
+    # v0.7.7: CPU package power (W) — priorità a nome "Package" > "CPU Total" > qualunque
+    $cpVal = $null
+    foreach ($k in @('CPU Package', 'Package', 'CPU Total', 'CPU Power')) {
+      if ($cpuPowers.ContainsKey($k)) { $cpVal = $cpuPowers[$k]; break }
+    }
+    if ($null -eq $cpVal -and $cpuPowers.Count -gt 0) { $cpVal = ($cpuPowers.Values | Measure-Object -Maximum).Maximum }
+    if ($null -ne $cpVal -and $cpVal -gt 0) { $r.cpu_power = [int][math]::Round($cpVal) }
+    # v0.7.7: GPU power (W) da LHM — usato come fallback quando nvidia-smi non c'è (es. AMD/Intel dGPU)
+    $gpVal = $null
+    foreach ($k in @('GPU Total', 'GPU Power', 'Board Power', 'Package')) {
+      if ($gpuPowers.ContainsKey($k)) { $gpVal = $gpuPowers[$k]; break }
+    }
+    if ($null -eq $gpVal -and $gpuPowers.Count -gt 0) { $gpVal = ($gpuPowers.Values | Measure-Object -Maximum).Maximum }
+    if ($null -ne $gpVal -and $gpVal -gt 0) { $r.gpu_power_lhm = [int][math]::Round($gpVal) }
+    # v0.7.7: CPU Vcore (V) — utile per monitorare overclock/undervolt
+    if ($vcores.Count -gt 0) {
+      $vv = ($vcores.Values | Measure-Object -Average).Average
+      $r.cpu_vcore = [math]::Round($vv, 3)
+    }
     # Diagnostica: LHM caricato ma nessun sensore CPU trovato
     if (-not $r.ContainsKey('cpu_temp')) {
       if ($cpuTemps.Count -eq 0) { $r._lhm_state = 'no_cpu_sensors' }
@@ -369,6 +416,71 @@ function Get-AvgRamPct {
 
 
 # ---------------- Hardware / health detection ----------------
+
+# v0.7.7: Multi-source cross-validation helpers.
+# Ogni componente viene rilevato da >=2 fonti indipendenti (WMI + Registry / nvidia-smi)
+# per aumentare l'accuratezza e ridurre falsi positivi su laptop ibridi / OEM custom.
+function Get-CpuFromRegistry {
+  try {
+    $p = Get-ItemProperty 'HKLM:\HARDWARE\DESCRIPTION\System\CentralProcessor\0' -ErrorAction SilentlyContinue
+    if ($p -and $p.ProcessorNameString) { return "$($p.ProcessorNameString)".Trim() }
+  } catch {}
+  return $null
+}
+
+function Get-GpuAdaptersFromRegistry {
+  # Enumera i display adapter dal registry di Windows (Class GUID {4d36e968...}).
+  # Restituisce lista di hashtable {name, driver_version, driver_date, provider}.
+  $out = New-Object 'System.Collections.Generic.List[object]'
+  try {
+    $keys = Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue |
+            Where-Object { $_.PSChildName -match '^\d{4}$' }
+    foreach ($k in $keys) {
+      $p = Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue
+      if (-not $p) { continue }
+      $n = "$($p.DriverDesc)"
+      if (-not $n -or $n -match '(?i)Basic|Virtual|Remote|Meta|Parsec|Citrix|DameWare|Idd') { continue }
+      $it = @{
+        name           = $n
+        driver_version = "$($p.DriverVersion)"
+        driver_date    = "$($p.DriverDate)"
+        provider       = "$($p.ProviderName)"
+      }
+      [void]$out.Add($it)
+    }
+  } catch {}
+  return $out
+}
+
+function Get-PrimaryStorage {
+  # Combina Get-Partition + Get-PhysicalDisk per identificare il disco di sistema (C:).
+  # Ritorna {type, bus_type, health, wear_pct, model, size_gb}.
+  $r = @{}
+  try {
+    $part = Get-Partition -DriveLetter 'C' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $part) { return $r }
+    $pd = Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.DeviceId -eq $part.DiskNumber } | Select-Object -First 1
+    if (-not $pd) { return $r }
+    $r.storage_model = "$($pd.FriendlyName)".Trim()
+    $r.storage_bus = "$($pd.BusType)"
+    $mt = "$($pd.MediaType)"
+    # BusType NVMe indica NVMe anche se MediaType dice SSD generico
+    if ($r.storage_bus -eq 'NVMe') { $r.storage_type = 'NVMe' }
+    elseif ($mt -eq 'SSD') { $r.storage_type = 'SSD' }
+    elseif ($mt -eq 'HDD') { $r.storage_type = 'HDD' }
+    else { $r.storage_type = $mt }
+    $r.storage_health = "$($pd.HealthStatus)"
+    if ($pd.Size -gt 0) { $r.storage_size_gb = [int]([math]::Round($pd.Size / 1GB)) }
+    # Wearout percent (solo su SSD/NVMe che espongono lo storage reliability counter)
+    try {
+      $rc = Get-StorageReliabilityCounter -PhysicalDisk $pd -ErrorAction SilentlyContinue
+      if ($rc -and $null -ne $rc.Wear) { $r.storage_wear_pct = [int]$rc.Wear }
+      if ($rc -and $null -ne $rc.Temperature -and $rc.Temperature -gt 0) { $r.storage_temp = [int]$rc.Temperature }
+    } catch {}
+  } catch {}
+  return $r
+}
+
 function Get-Specs {
   $s = @{}
   $os = Get-CimInstance Win32_OperatingSystem
@@ -379,18 +491,61 @@ function Get-Specs {
   $s.cpu = $cpu.Name; $s.cpu_cores = "$($cpu.NumberOfCores)"; $s.cpu_threads = "$($cpu.NumberOfLogicalProcessors)"
   $s.cpu_clock_ghz = "$([math]::Round($cpu.MaxClockSpeed/1000,2))"
   $s.cpu_socket = "$($cpu.SocketDesignation)"
+  # v0.7.7: cross-check CPU name da Registry (fallback + validation).
+  $cpuReg = Get-CpuFromRegistry
+  $cpuSources = 1
+  if ($cpuReg) {
+    $cpuSources = 2
+    # WMI a volte tronca / restituisce nomi generici — se Registry ha una stringa piu' lunga, preferiscila.
+    if ((-not $s.cpu) -or ($cpuReg.Length -gt "$($s.cpu)".Length)) { $s.cpu = $cpuReg }
+  }
+  # Rilevamento GPU: nvidia-smi > WMI (multi-adapter aware) > Registry.
+  # v0.7.7: su laptop ibridi preferiamo sempre la GPU discreta e riportiamo anche la secondaria.
+  $gpuSources = 0
   $nv = & nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader,nounits 2>$null
   if ($nv) {
     $p = ($nv | Select-Object -First 1).Split(',')
     $s.gpu = $p[0].Trim(); $s.gpu_vram_gb = "$([math]::Round([double]$p[1].Trim()/1024))"; $s.gpu_driver_version = $p[2].Trim()
-  } else {
-    $g = Get-CimInstance Win32_VideoController | Where-Object { $_.Name -notmatch 'Basic|Virtual|Remote|Meta|Parsec|Citrix' } | Select-Object -First 1
-    if (-not $g) { $g = Get-CimInstance Win32_VideoController | Select-Object -First 1 }
-    $s.gpu = $g.Name; $s.gpu_driver_version = $g.DriverVersion
-    $vram = Get-GpuVramGb
-    if ($vram) { $s.gpu_vram_gb = "$vram" }
-    elseif ($g.AdapterRAM -gt 0) { $s.gpu_vram_gb = "$([math]::Round($g.AdapterRAM/1GB))" }
+    $s.gpu_provider = 'NVIDIA'
+    $gpuSources++
   }
+  # WMI: prendi tutti i video controller reali (non virtuali).
+  $vcAll = Get-CimInstance Win32_VideoController | Where-Object { $_.Name -and $_.Name -notmatch 'Basic|Virtual|Remote|Meta|Parsec|Citrix|DameWare|Idd' }
+  if (-not $vcAll) { $vcAll = Get-CimInstance Win32_VideoController }
+  # Ordina preferendo discrete (NVIDIA/AMD Radeon RX/Intel Arc) su integrated (UHD/Iris/Vega iGPU).
+  $vcSorted = @($vcAll | Sort-Object -Property @{Expression={
+    $n = "$($_.Name)"
+    if ($n -match '(?i)^NVIDIA|GeForce|Quadro|Tesla|RTX|GTX') { 0 }
+    elseif ($n -match '(?i)Radeon\s+(RX|Pro)') { 0 }
+    elseif ($n -match '(?i)Intel\s+Arc') { 0 }
+    elseif ($n -match '(?i)UHD|Iris|HD Graphics|Vega\s+(3|8|10|11)|Radeon\s+Graphics') { 2 }
+    else { 1 }
+  }})
+  $vcPrimary = $vcSorted | Select-Object -First 1
+  if ($vcPrimary) {
+    $gpuSources++
+    if (-not $s.gpu) {
+      $s.gpu = $vcPrimary.Name; $s.gpu_driver_version = $vcPrimary.DriverVersion
+      $vram = Get-GpuVramGb
+      if ($vram) { $s.gpu_vram_gb = "$vram" }
+      elseif ($vcPrimary.AdapterRAM -gt 0) { $s.gpu_vram_gb = "$([math]::Round($vcPrimary.AdapterRAM/1GB))" }
+      # Determina provider
+      $gn = "$($vcPrimary.Name)"
+      if ($gn -match '(?i)nvidia|geforce|quadro|rtx|gtx') { $s.gpu_provider = 'NVIDIA' }
+      elseif ($gn -match '(?i)radeon|amd\s') { $s.gpu_provider = 'AMD' }
+      elseif ($gn -match '(?i)intel') { $s.gpu_provider = 'Intel' }
+    }
+  }
+  # GPU secondaria (iGPU su laptop / dual-GPU desktop)
+  if ($vcSorted.Count -gt 1) {
+    $vc2 = $vcSorted[1]
+    if ($vc2.Name -and "$($vc2.Name)".Trim() -ne "$($s.gpu)".Trim()) {
+      $s.gpu_secondary = "$($vc2.Name)"
+    }
+  }
+  # Registry cross-check
+  $regGpus = Get-GpuAdaptersFromRegistry
+  if ($regGpus.Count -gt 0) { $gpuSources++ }
   $s.refresh_hz = "$((Get-CimInstance Win32_VideoController | Where-Object {$_.CurrentRefreshRate -gt 0} | Sort-Object CurrentRefreshRate -Descending | Select-Object -First 1).CurrentRefreshRate)"
   $ram = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB)
   $s.ram = "$ram GB"
@@ -399,6 +554,12 @@ function Get-Specs {
   $s.ram_speed_mhz = "$(if ($pm1.ConfiguredClockSpeed -and $pm1.ConfiguredClockSpeed -gt 0) { $pm1.ConfiguredClockSpeed } else { $pm1.Speed })"
   $s.ram_modules = "$(($pm | Measure-Object).Count)"
   $s.ram_type = @{ '20'='DDR'; '21'='DDR2'; '24'='DDR3'; '26'='DDR4'; '34'='DDR5' }["$($pm1.SMBIOSMemoryType)"]
+  # v0.7.7: RAM manufacturer (utile per identificare Corsair/G.Skill/Kingston etc)
+  $ramMfg = "$($pm1.Manufacturer)".Trim()
+  if ($ramMfg -and $ramMfg -notmatch '(?i)^(unknown|to be filled|manufacturer)$' -and $ramMfg.Length -gt 1) {
+    $s.ram_manufacturer = $ramMfg
+  }
+  $ramSources = 2  # Win32_ComputerSystem + Win32_PhysicalMemory concordano
   $b = Get-CimInstance Win32_BaseBoard | Where-Object { $_.Product -and $_.Product -notmatch 'Base Board|Default string|To be filled|None' } | Select-Object -First 1
   if (-not $b) { $b = Get-CimInstance Win32_BaseBoard | Select-Object -First 1 }
   $mfg = "$($b.Manufacturer)"
@@ -491,6 +652,30 @@ function Get-Specs {
   } catch {}
   try { if ($bi.ReleaseDate) { $s.bios_date = $bi.ReleaseDate.ToString('yyyy-MM-dd') } } catch {}
 
+  # v0.7.7: storage primario dettagliato (tipo/salute/wear/temp) — cross-check WMI + Storage cmdlets.
+  try {
+    $ps = Get-PrimaryStorage
+    if ($ps -and $ps.Count -gt 0) {
+      foreach ($k in $ps.Keys) { $s[$k] = $ps[$k] }
+    }
+  } catch {}
+  $storageSources = 0
+  if ($s.storage_type) { $storageSources++ }
+  # WMI Win32_DiskDrive come secondo canale
+  try {
+    $dd = Get-CimInstance Win32_DiskDrive | Where-Object { $_.MediaType -match '(?i)Fixed|SSD|Solid' } | Select-Object -First 1
+    if ($dd) { $storageSources++ }
+  } catch {}
+
+  # v0.7.7: hw_confidence — quante fonti indipendenti hanno confermato ogni componente.
+  # Il frontend usa questi valori per mostrare un badge "2/2 fonti" o "1/2 fonti" (giallo).
+  $s.hw_confidence = @{
+    cpu     = $cpuSources
+    gpu     = $gpuSources
+    ram     = $ramSources
+    storage = $storageSources
+  }
+
   return $s
 }
 
@@ -515,6 +700,13 @@ function Get-Health {
   $gt = & nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>$null
   if ($gt) { $h.gpu_temp = [int]($gt | Select-Object -First 1).Trim() }
   elseif ($lhm.ContainsKey('gpu_temp')) { $h.gpu_temp = $lhm.gpu_temp }
+  # v0.7.7: precision sensors — fan RPM, VRM temp, CPU power, GPU power (LHM fallback), Vcore
+  if ($lhm.ContainsKey('fan_rpm_max')) { $h.fan_rpm_max = $lhm.fan_rpm_max }
+  if ($lhm.ContainsKey('fan_count')) { $h.fan_count = $lhm.fan_count }
+  if ($lhm.ContainsKey('vrm_temp')) { $h.vrm_temp = $lhm.vrm_temp }
+  if ($lhm.ContainsKey('cpu_power')) { $h.cpu_power = $lhm.cpu_power }
+  if ($lhm.ContainsKey('gpu_power_lhm') -and -not $h.ContainsKey('gpu_power')) { $h.gpu_power = $lhm.gpu_power_lhm }
+  if ($lhm.ContainsKey('cpu_vcore')) { $h.cpu_vcore = $lhm.cpu_vcore }
   if ($lhm.ContainsKey('cpu_temp')) {
     $h.cpu_temp = $lhm.cpu_temp
   } else {
@@ -949,6 +1141,11 @@ function Get-TelemetrySample {
       if ($ct -gt 0) { $s.cpu_temp = $ct }
     }
   }
+  # v0.7.7: precision sensors nel sample live (per il grafico + bento "Precision Sensors")
+  if ($lhm.ContainsKey('fan_rpm_max')) { $s.fan_rpm_max = $lhm.fan_rpm_max }
+  if ($lhm.ContainsKey('vrm_temp')) { $s.vrm_temp = $lhm.vrm_temp }
+  if ($lhm.ContainsKey('cpu_power')) { $s.cpu_power = $lhm.cpu_power }
+  if ($lhm.ContainsKey('cpu_vcore')) { $s.cpu_vcore = $lhm.cpu_vcore }
   $nv = & nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,clocks.gr,memory.used,memory.total,power.draw --format=csv,noheader,nounits 2>$null
   if ($nv) {
     $p = ($nv | Select-Object -First 1).Split(',')
@@ -959,7 +1156,11 @@ function Get-TelemetrySample {
     if ($mt -gt 0) { $s.vram_used_pct = [int]([math]::Round($mu / $mt * 100)) }
     $s.gpu_power = [int]([math]::Round([double]$p[5].Trim()))
   }
-  elseif ($lhm.ContainsKey('gpu_temp')) { $s.gpu_temp = $lhm.gpu_temp }
+  elseif ($lhm.ContainsKey('gpu_temp')) {
+    $s.gpu_temp = $lhm.gpu_temp
+    # v0.7.7: se nvidia-smi non c'è (AMD/Intel), usa LHM anche per gpu_power
+    if ($lhm.ContainsKey('gpu_power_lhm')) { $s.gpu_power = $lhm.gpu_power_lhm }
+  }
   return $s
 }
 function Send-Telemetry($sample) {

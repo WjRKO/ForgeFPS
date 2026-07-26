@@ -180,6 +180,7 @@ const resources = {
         chart_title: "Utilizzo & temperature (ultimi campioni)", waiting: "In attesa di dati dall'agent…",
         alerts_saved: "Impostazioni alert salvate!", save_err: "Errore nel salvataggio",
         st_ram: "RAM usata", st_vram: "VRAM usata", st_cpu_temp: "Temp CPU", st_gpu_temp: "Temp GPU", st_gpu_power: "Potenza GPU",
+        st_fan_rpm: "Fan RPM", st_vrm_temp: "Temp VRM", st_cpu_power: "Potenza CPU", st_cpu_vcore: "Vcore CPU",
         grp_perf: "Prestazioni", grp_temp: "Temperature", grp_mem: "Memoria & Rete",
         session_title: "Riepilogo sessione", session_recap: "Session Recap", session_reset: "Nuova sessione",
         session_reset_done: "Sessione azzerata", session_share: "Condividi", session_share_text: "La mia sessione su FrameForge",
@@ -571,6 +572,7 @@ const resources = {
       },
       mypcpage: {
         eyebrow: "// Il mio PC", title: "Analisi del PC",
+        hw_sources_tooltip: "Numero di fonti indipendenti (WMI + Registry + nvidia-smi) che hanno confermato questo componente. 2/2 = massima precisione.",
         intro: "Inserisci le tue specifiche per usare subito Advisor, Upgrade e stima FPS —",
         intro_hl: "senza scaricare nulla", intro2: "Usa \"Rileva dal browser\" per compilare in automatico, oppure inserisci a mano.",
         want_more: "Vuoi Health Score, temperature e ottimizzazioni reali? Usa il FrameForge Agent",
@@ -876,6 +878,7 @@ const resources = {
         chart_title: "Usage & temperatures (latest samples)", waiting: "Waiting for data from the agent…",
         alerts_saved: "Alert settings saved!", save_err: "Error while saving",
         st_ram: "RAM used", st_vram: "VRAM used", st_cpu_temp: "CPU temp", st_gpu_temp: "GPU temp", st_gpu_power: "GPU power",
+        st_fan_rpm: "Fan RPM", st_vrm_temp: "VRM temp", st_cpu_power: "CPU power", st_cpu_vcore: "CPU Vcore",
         grp_perf: "Performance", grp_temp: "Temperatures", grp_mem: "Memory & Network",
         session_title: "Session summary", session_recap: "Session Recap", session_reset: "New session",
         session_reset_done: "Session reset", session_share: "Share", session_share_text: "My FrameForge session",
@@ -1267,6 +1270,7 @@ const resources = {
       },
       mypcpage: {
         eyebrow: "// My PC", title: "PC analysis",
+        hw_sources_tooltip: "Number of independent sources (WMI + Registry + nvidia-smi) that confirmed this component. 2/2 = max precision.",
         intro: "Enter your specs to use Advisor, Upgrade and FPS estimate right away —",
         intro_hl: "no download needed", intro2: "Use \"Detect from browser\" to fill in automatically, or enter manually.",
         want_more: "Want Health Score, temperatures and real optimizations? Use the FrameForge Agent",

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Cpu, Gauge, MemoryStick, Zap, Radio, Bell, Sparkles, PlayCircle, Activity, BellRing, LineChart as LineChartIcon, ChevronDown } from "lucide-react";
+import { Cpu, Gauge, MemoryStick, Zap, Radio, Bell, Sparkles, PlayCircle, Activity, BellRing, LineChart as LineChartIcon, ChevronDown, Fan, Thermometer, Wind } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -68,6 +68,21 @@ function BentoCard({ icon: Icon, label, main, mainUnit, mainClass = "", rows = [
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* --- v0.7.7: compact precision sensor cell (fan / VRM / CPU power / Vcore) --- */
+function PrecisionCell({ icon: Icon, label, value, unit, cls, testid }) {
+  return (
+    <div className="bg-[#0F0F12] border border-[#1A1A24] p-3 rounded-none flex items-center gap-3" data-testid={testid}>
+      <Icon size={16} className="text-zinc-600 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{label}</div>
+        <div className={`font-mono tabular-nums text-base font-black leading-tight ${value == null ? "text-zinc-800" : cls || "text-zinc-100"}`}>
+          {value ?? "--"}<span className="text-xs ml-1 font-normal text-zinc-500">{value != null ? unit : ""}</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -340,6 +355,16 @@ export default function Live() {
           main={last.ram_used_pct} mainUnit="%" testid="stat-ram"
           rows={[{ label: t("live.st_vram"), value: last.vram_used_pct, unit: "%", cls: "text-[#B388FF]", testid: "stat-vram" }]} />
       </div>
+
+      {/* ===== v0.7.7: PRECISION SENSORS STRIP (fan RPM / VRM temp / CPU power / Vcore) ===== */}
+      {(last.fan_rpm_max != null || last.vrm_temp != null || last.cpu_power != null || last.cpu_vcore != null) && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4" data-testid="precision-sensors">
+          <PrecisionCell icon={Fan} label={t("live.st_fan_rpm", "Fan RPM")} value={last.fan_rpm_max} unit="RPM" cls="text-[#00E0FF]" testid="stat-fan-rpm" />
+          <PrecisionCell icon={Thermometer} label={t("live.st_vrm_temp", "VRM Temp")} value={last.vrm_temp} unit="°C" cls={tempClass(last.vrm_temp)} testid="stat-vrm-temp" />
+          <PrecisionCell icon={Zap} label={t("live.st_cpu_power", "CPU Power")} value={last.cpu_power} unit="W" cls="text-[#E5FF00]" testid="stat-cpu-power" />
+          <PrecisionCell icon={Wind} label={t("live.st_cpu_vcore", "Vcore")} value={last.cpu_vcore} unit="V" cls="text-[#B388FF]" testid="stat-cpu-vcore" />
+        </div>
+      )}
 
       {/* ===== MAIN: charts (2/3) + sidebar tools (1/3) ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
