@@ -123,6 +123,12 @@ def build(get_current_user):
             upsert=True,
         )
         doc = await db.overlay_tokens.find_one({"user_id": uid})
+        # v0.7.7 Milestones: first overlay created
+        try:
+            from milestones import bump_counter
+            await bump_counter(db, uid, "overlays_created", 1)
+        except Exception:
+            pass
         return _config_response(doc)
 
     @r.put("/config")

@@ -1,7 +1,7 @@
 import { NavLink, useNavigate, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal, TerminalSquare, Swords, Gauge, Menu, Settings, FileBarChart, Sparkles, MessageSquare } from "lucide-react";
+import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal, TerminalSquare, Swords, Gauge, Menu, Settings, FileBarChart, Sparkles, MessageSquare, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -12,6 +12,7 @@ import PlanStatusBanner from "@/components/PlanStatusBanner";
 import ProfileMenu from "@/components/ProfileMenu";
 import FeedbackModal from "@/components/FeedbackModal";
 import AgentUpdateBanner from "@/components/AgentUpdateBanner";
+import XpSidebarWidget from "@/components/XpSidebarWidget";
 import { Smartphone } from "lucide-react";
 import api from "@/lib/api";
 import { pushSupported, getPushState, enablePush, disablePush } from "@/lib/push";
@@ -22,6 +23,7 @@ const NAV_GROUPS = [
     { to: "/app/pc", label: "nav.pc", icon: Activity, id: "pc" },
     { to: "/app/advisor", label: "nav.advisor", icon: MessageSquareCode, id: "advisor" },
     { to: "/app/gaming", label: "nav.gaming", icon: Gamepad2, id: "gaming" },
+    { to: "/app/milestones", label: "nav.milestones", icon: Trophy, id: "milestones" },
     { to: "/app/tracker", label: "nav.tracker", icon: LineChart, id: "tracker" },
   ]},
   { section: "section.buy", items: [
@@ -208,6 +210,7 @@ export default function Layout() {
             );
           })}
         </nav>
+        <XpSidebarWidget />
       </aside>
 
       <div className="flex-1 md:ml-60 flex flex-col min-w-0">

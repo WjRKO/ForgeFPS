@@ -10,7 +10,7 @@ from database import db, client
 from auth import build_auth_router, seed_admin
 from helpers import refresh_product_price
 from settings import get_cors_origins, get_cors_origin_regex
-from routers import advisor, builds, products, pc, push_routes, admin, profiles, discord as discord_router, subscriptions, payments, overlay, community
+from routers import advisor, builds, products, pc, push_routes, admin, profiles, discord as discord_router, subscriptions, payments, overlay, community, milestones
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("boostpc")
@@ -20,7 +20,7 @@ auth_router, get_current_user = build_auth_router(db)
 scheduler = AsyncIOScheduler()
 
 app.include_router(auth_router)
-for module in (advisor, builds, products, pc, push_routes, admin, profiles, discord_router, subscriptions, payments, overlay, community):
+for module in (advisor, builds, products, pc, push_routes, admin, profiles, discord_router, subscriptions, payments, overlay, community, milestones):
     app.include_router(module.build(get_current_user))
 
 
@@ -55,7 +55,12 @@ async def security_headers(request: Request, call_next):
     # in ambienti di preview con iframe). Skippiamo l'X-Frame-Options e usiamo un
     # CSP piu' permissivo per queste route.
     path = request.url.path
-    is_overlay_html = path.startswith("/api/overlay/") and not (path.endswith("/data") or path.endswith("/config") or path.endswith("/token"))
+    is_overlay_html = (
+        path.startswith("/api/overlay/") and not (path.endswith("/data") or path.endswith("/config") or path.endswith("/token"))
+    ) or (
+        # v0.7.7: Milestone OBS overlay
+        path.startswith("/api/milestones/overlay/") and not path.endswith("/poll")
+    )
     if is_overlay_html:
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "

@@ -244,6 +244,13 @@ def build(get_current_user):
             {"session_id": session_id, "user_id": uid}, {"_id": 0}).sort("created_at", 1).to_list(500)
         await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "user_id": uid,
                                            "role": "user", "content": data.message, "created_at": now_iso()})
+        # v0.7.7 Milestones: track advisor usage
+        try:
+            from milestones import bump_counter, track_daily_active
+            await bump_counter(db, uid, "advisor_messages", 1)
+            await track_daily_active(db, uid)
+        except Exception:
+            pass
         specs = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0})
         specs = await _enrich_specs_for_ai(uid, specs)
         specs_text = pc_context_text(specs)
@@ -503,6 +510,13 @@ def build(get_current_user):
             }},
             upsert=True,
         )
+        # v0.7.7 Milestones: track only new activations (bump when toggling to active=True)
+        if bool(data.active):
+            try:
+                from milestones import bump_counter
+                await bump_counter(db, uid, "tweaks_applied", 1)
+            except Exception:
+                pass
         return {"ok": True, "slug": slug, "active": bool(data.active)}
 
     # -------- Fase 1: Outcome tracking (delta benchmark dopo diagnosi) --------

@@ -30,6 +30,7 @@ const DesktopAgent = lazy(() => import("@/pages/DesktopAgent"));
 const MyPcHub = lazy(() => import("@/pages/MyPcHub"));
 const Upgrade = lazy(() => import("@/pages/Upgrade"));
 const Gaming = lazy(() => import("@/pages/Gaming"));
+const Milestones = lazy(() => import("@/pages/Milestones"));
 const Commands = lazy(() => import("@/pages/Commands"));
 const Network = lazy(() => import("@/pages/Network"));
 const BiosRestore = lazy(() => import("@/pages/BiosRestore"));
@@ -102,6 +103,7 @@ function App() {
                 <Route path="benchmark" element={<MyPcHub initialTab="benchmark" />} />
                 <Route path="network" element={<Network />} />
                 <Route path="gaming" element={<Gaming initialTab="games" />} />
+                <Route path="milestones" element={<Milestones />} />
                 <Route path="profiles" element={<Gaming initialTab="profiles" />} />
                 <Route path="games" element={<Gaming initialTab="games" />} />
                 <Route path="bios" element={<BiosRestore />} />

@@ -328,6 +328,17 @@ def build(get_current_user):
         if data.boost_session is not None:
             await db.boost_sessions.insert_one({**data.boost_session, "user_id": uid, "created_at": now_iso()})
         await db.pc_specs.update_one({"user_id": uid}, {"$set": fields}, upsert=True)
+        # v0.7.7 Milestones: track scan + health + daily active
+        try:
+            from milestones import bump_counter, track_health_score, track_daily_active
+            await bump_counter(db, uid, "pc_scans", 1)
+            await track_daily_active(db, uid)
+            if data.health is not None:
+                _score = compute_health(data.health).get("score")
+                if _score is not None:
+                    await track_health_score(db, uid, int(_score))
+        except Exception:
+            pass
         return {"ok": True}
 
     @r.post("/agent/netresult")
@@ -730,6 +741,14 @@ def build(get_current_user):
              "$push": {"samples": {"$each": [sample], "$slice": -300}}},
             upsert=True)
         await _check_temp_alerts(rec["user_id"], sample)
+        # v0.7.7 Milestones: track distinct games (Universal Game Detector)
+        try:
+            _game_key = sample.get("steam_appid") or sample.get("game_name")
+            if _game_key:
+                from milestones import add_unique
+                await add_unique(db, rec["user_id"], "games_detected", str(_game_key))
+        except Exception:
+            pass
         # Return stop signal: the agent's monitor loop reads this and exits cleanly
         # when the user clicks "Stop" on the web dashboard.
         ctrl = await db.monitor_control.find_one({"user_id": rec["user_id"]}, {"_id": 0}) or {}
