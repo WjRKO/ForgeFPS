@@ -42,7 +42,9 @@ def _iso_age(ts):
 # GitHub Release del ZIP generico dell'agent. Aggiornare a ogni bump di versione.
 AGENT_ZIP_UPSTREAM = os.environ.get(
     "AGENT_ZIP_UPSTREAM",
-    "https://github.com/WjRKO/ForgeFPS/releases/download/v0.7.8/forgefps-agent.zip",
+    # Nota: il tag GitHub e' "v.0.7.8" (refuso al momento della creazione),
+    # ma il file dentro e' la v0.7.8 corretta. Confermato SHA256 ae6ad4b8...
+    "https://github.com/WjRKO/ForgeFPS/releases/download/v.0.7.8/forgefps-agent.zip",
 )
 _AGENT_ZIP_CACHE_PATH = f"/tmp/forgefps-agent-cache-{hashlib.sha256(AGENT_ZIP_UPSTREAM.encode()).hexdigest()[:10]}.zip"
 
@@ -50,9 +52,10 @@ _AGENT_ZIP_CACHE_PATH = f"/tmp/forgefps-agent-cache-{hashlib.sha256(AGENT_ZIP_UP
 def _extract_latest_version() -> str:
     """Estrae la versione dall'URL upstream (unico source of truth).
     Es. '.../releases/download/v0.7.5/...' -> '0.7.5'. Fallback: '0.7.5'.
+    Supporta anche tag con typo tipo 'v.0.7.8' (v + punto invece che senza).
     """
     import re as _re
-    m = _re.search(r"/download/v(\d+\.\d+\.\d+)/", AGENT_ZIP_UPSTREAM)
+    m = _re.search(r"/download/v\.?(\d+\.\d+\.\d+)/", AGENT_ZIP_UPSTREAM)
     return m.group(1) if m else "0.7.5"
 
 

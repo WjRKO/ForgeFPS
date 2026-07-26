@@ -7,7 +7,7 @@
 // da lì in poi i bottoni della dashboard possono aprire la GUI senza download.
 //
 // AGGIORNARE dopo ogni release: URL, SHA256, versione, data.
-export const AGENT_EXE_URL = "https://github.com/WjRKO/ForgeFPS/releases/download/v0.7.8/forgefps-agent.zip";
+export const AGENT_EXE_URL = "https://github.com/WjRKO/ForgeFPS/releases/download/v.0.7.8/forgefps-agent.zip";
 export const AGENT_EXE_SHA256 = "ae6ad4b8e00cc77f16db402522bd5d84b3160b69c733681465ccd0a4e4c20633";
 export const AGENT_EXE_VERSION = "v0.7.8";
 export const AGENT_EXE_DATE = "2026-07-26";
