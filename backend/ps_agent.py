@@ -1126,6 +1126,195 @@ function Send-Running($apps) {
 }
 
 # ---------------- Live telemetry ----------------
+
+# v0.7.7: Universal Game Detector. Combina 4 sorgenti:
+#  a) Steam RunningAppID (registry)  — 100% affidabile per Steam
+#  b) Foreground window + process match contro mappa launcher installati
+#  c) Fullscreen exclusive detection (foreground fills primary monitor)
+#  d) PresentMon (Get-Fps) — riconosce qualsiasi DX/Vulkan process
+# La mappa dei giochi installati (exe -> {name, appid, launcher}) e' costruita una
+# sola volta per sessione e cachata in $script:INSTALLED_GAMES.
+$script:INSTALLED_GAMES = $null
+
+function Get-InstalledGamesMap {
+  if ($null -ne $script:INSTALLED_GAMES) { return $script:INSTALLED_GAMES }
+  $map = @{}
+  # Steam: legge appmanifest_*.acf per ogni library folder e scansiona common\<installdir>
+  try {
+    $steam = (Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction SilentlyContinue).SteamPath
+    if (-not $steam) { $steam = 'C:\Program Files (x86)\Steam' }
+    $libs = @(Join-Path $steam 'steamapps')
+    $vdf = Join-Path $steam 'steamapps\libraryfolders.vdf'
+    if (Test-Path $vdf) {
+      foreach ($m in [regex]::Matches((Get-Content $vdf -Raw), '"path"\s+"([^"]+)"')) {
+        $libs += (Join-Path ($m.Groups[1].Value -replace '\\\\', '\') 'steamapps')
+      }
+    }
+    foreach ($lib in ($libs | Select-Object -Unique)) {
+      if (-not (Test-Path $lib)) { continue }
+      foreach ($acf in (Get-ChildItem $lib -Filter 'appmanifest_*.acf' -ErrorAction SilentlyContinue)) {
+        try {
+          $c = Get-Content $acf.FullName -Raw
+          $name = ([regex]::Match($c, '"name"\s+"([^"]+)"')).Groups[1].Value
+          $appid = ([regex]::Match($c, '"appid"\s+"(\d+)"')).Groups[1].Value
+          $dir = ([regex]::Match($c, '"installdir"\s+"([^"]+)"')).Groups[1].Value
+          if (-not $name -or -not $dir) { continue }
+          $installPath = Join-Path $lib "common\$dir"
+          if (Test-Path $installPath) {
+            foreach ($exe in (Get-ChildItem $installPath -Filter '*.exe' -Recurse -Depth 3 -ErrorAction SilentlyContinue)) {
+              $k = $exe.Name.ToLower()
+              # Skip installer/redist/crash-handler/launcher che non sono il gioco vero
+              if ($k -match '(?i)^(unins|redist|vcredist|dxsetup|crash|handler|setup|installer|launcher_help|touchup|updater|eac|be-service|battleye)') { continue }
+              if (-not $map.ContainsKey($k)) { $map[$k] = @{ name = $name; appid = $appid; launcher = 'steam' } }
+            }
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+  # Epic Games Store: parsing .item JSON manifests
+  try {
+    $ep = Join-Path $env:ProgramData 'Epic\EpicGamesLauncher\Data\Manifests'
+    if (Test-Path $ep) {
+      foreach ($it in (Get-ChildItem $ep -Filter '*.item' -ErrorAction SilentlyContinue)) {
+        try {
+          $j = Get-Content $it.FullName -Raw | ConvertFrom-Json
+          if ($j.LaunchExecutable -and $j.DisplayName) {
+            $k = (Split-Path $j.LaunchExecutable -Leaf).ToLower()
+            if (-not $map.ContainsKey($k)) { $map[$k] = @{ name = "$($j.DisplayName)"; launcher = 'epic' } }
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+  # GOG Galaxy: HKLM registry
+  try {
+    foreach ($k in (Get-ChildItem 'HKLM:\SOFTWARE\WOW6432Node\GOG.com\Games' -ErrorAction SilentlyContinue)) {
+      $p = Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue
+      if ($p.exe -and $p.gameName) {
+        $key = (Split-Path $p.exe -Leaf).ToLower()
+        if (-not $map.ContainsKey($key)) { $map[$key] = @{ name = "$($p.gameName)"; launcher = 'gog' } }
+      }
+    }
+  } catch {}
+  # Xbox Game Pass: cartelle in <drive>:\XboxGames\<GameName>\Content\*.exe
+  try {
+    foreach ($d in @('C:', 'D:', 'E:', 'F:', 'G:')) {
+      $xg = "$d\XboxGames"
+      if (-not (Test-Path $xg)) { continue }
+      foreach ($g in (Get-ChildItem $xg -Directory -ErrorAction SilentlyContinue)) {
+        $content = Join-Path $g.FullName 'Content'
+        if (-not (Test-Path $content)) { continue }
+        foreach ($exe in (Get-ChildItem $content -Filter '*.exe' -Recurse -Depth 3 -ErrorAction SilentlyContinue)) {
+          $k = $exe.Name.ToLower()
+          if ($k -match '(?i)^(unins|redist|crash|handler|setup|installer)') { continue }
+          if (-not $map.ContainsKey($k)) { $map[$k] = @{ name = $g.Name; launcher = 'xbox' } }
+        }
+      }
+    }
+  } catch {}
+  $script:INSTALLED_GAMES = $map
+  return $map
+}
+
+function Get-SteamRunningGame {
+  # Legge HKCU:\Software\Valve\Steam\RunningAppID + nome da Apps\<id>\Name
+  try {
+    $rid = (Get-ItemProperty 'HKCU:\Software\Valve\Steam' -Name RunningAppID -ErrorAction SilentlyContinue).RunningAppID
+    if (-not $rid -or [int]$rid -le 0) { return $null }
+    $rid = [int]$rid
+    $name = ''
+    $ap = Get-ItemProperty "HKCU:\Software\Valve\Steam\Apps\$rid" -Name Name -ErrorAction SilentlyContinue
+    if ($ap -and $ap.Name) { $name = "$($ap.Name)" }
+    # Fallback nome via mappa installata
+    if (-not $name) {
+      $map = Get-InstalledGamesMap
+      foreach ($v in $map.Values) { if ($v.appid -eq "$rid") { $name = $v.name; break } }
+    }
+    if (-not $name) { $name = "Steam App $rid" }
+    return @{ name = $name; appid = "$rid"; source = 'steam_registry' }
+  } catch { return $null }
+}
+
+function Get-ForegroundGame {
+  # Foreground window + fullscreen detection + risoluzione via launcher map.
+  try {
+    if (-not ('FFGDWin' -as [type])) {
+      Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class FFGDWin {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L; public int T; public int R; public int B; }
+}
+"@ 2>$null
+    }
+    Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+    $h = [FFGDWin]::GetForegroundWindow()
+    if ($h -eq [IntPtr]::Zero) { return $null }
+    $rc = New-Object FFGDWin+RECT
+    [void][FFGDWin]::GetWindowRect($h, [ref]$rc)
+    $mw = [System.Windows.Forms.SystemInformation]::PrimaryMonitorSize.Width
+    $mh = [System.Windows.Forms.SystemInformation]::PrimaryMonitorSize.Height
+    $isFull = (($rc.R - $rc.L) -ge ($mw - 2)) -and (($rc.B - $rc.T) -ge ($mh - 2))
+    $gp = [uint32]0; [void][FFGDWin]::GetWindowThreadProcessId($h, [ref]$gp)
+    $p = Get-Process -Id $gp -ErrorAction SilentlyContinue
+    if (-not $p) { return $null }
+    $skipRe = '(?i)^(explorer|dwm|powershell|pwsh|WindowsTerminal|cmd|chrome|msedge|firefox|opera|brave|Code|devenv|obs64|obs32|Taskmgr|SearchHost|ShellExperienceHost|ApplicationFrameHost|LockApp|vlc|Photos|Netflix|Spotify|Discord|Teams|Slack|WhatsApp|Skype|OneDrive|GoogleDriveFS|Dropbox|WINWORD|EXCEL|POWERPNT|Acrobat|SnippingTool|Notepad|Notepad\+\+|steam|steamwebhelper|EpicGamesLauncher|GalaxyClient|Battle\.net|EADesktop|UbisoftConnect)$'
+    if ($p.Name -match $skipRe) { return $null }
+    $exeName = "$($p.Name).exe".ToLower()
+    $map = Get-InstalledGamesMap
+    if ($map.ContainsKey($exeName)) {
+      $hit = $map[$exeName]
+      return @{
+        name = $hit.name
+        appid = $hit.appid
+        source = ('fg_' + $hit.launcher)
+        exe = $p.Name
+        is_fullscreen = $isFull
+      }
+    }
+    # Non nella mappa: se fullscreen, e' comunque probabilmente un gioco (indie/portable/emulatore).
+    if ($isFull) {
+      return @{
+        name = ($p.Name -replace '[_\-]+', ' ')
+        source = 'fg_fullscreen'
+        exe = $p.Name
+        is_fullscreen = $true
+      }
+    }
+    return $null
+  } catch { return $null }
+}
+
+function Get-CurrentGame {
+  # Orchestratore: Steam registry > Foreground fullscreen > PresentMon (Get-Fps).
+  # Ritorna @{name, appid?, source, exe?, is_fullscreen?} o $null.
+  $g = Get-SteamRunningGame
+  if ($g) { return $g }
+  $g = Get-ForegroundGame
+  if ($g) { return $g }
+  # PresentMon fallback: se sta gia' catturando FPS, quel processo E' un gioco.
+  try {
+    $f = Get-Fps
+    if ($f -and $f.game -and $f.fps -ge 10) {
+      $exeName = "$($f.game).exe".ToLower()
+      $map = Get-InstalledGamesMap
+      if ($map.ContainsKey($exeName)) {
+        $hit = $map[$exeName]
+        return @{
+          name = $hit.name; appid = $hit.appid
+          source = ('pm_' + $hit.launcher); exe = $f.game
+        }
+      }
+      return @{ name = ($f.game -replace '[_\-]+', ' '); source = 'presentmon'; exe = $f.game }
+    }
+  } catch {}
+  return $null
+}
+
 function Get-TelemetrySample {
   $s = @{ ts = (Get-Date).ToString('o') }
   $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
@@ -1161,6 +1350,17 @@ function Get-TelemetrySample {
     # v0.7.7: se nvidia-smi non c'è (AMD/Intel), usa LHM anche per gpu_power
     if ($lhm.ContainsKey('gpu_power_lhm')) { $s.gpu_power = $lhm.gpu_power_lhm }
   }
+  # v0.7.7: Universal Game Detector — Steam registry / foreground fullscreen / PresentMon
+  try {
+    $cg = Get-CurrentGame
+    if ($cg) {
+      $s.game_name = $cg.name
+      if ($cg.appid) { $s.steam_appid = $cg.appid }
+      if ($cg.source) { $s.game_source = $cg.source }
+      if ($cg.exe) { $s.game_exe = $cg.exe }
+      if ($null -ne $cg.is_fullscreen) { $s.game_fullscreen = [bool]$cg.is_fullscreen }
+    }
+  } catch {}
   return $s
 }
 function Send-Telemetry($sample) {

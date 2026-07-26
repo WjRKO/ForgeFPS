@@ -905,6 +905,56 @@ def build(get_current_user):
             return {"available": False, "insights": []}
         return {"available": True, "insights": compute_hw_insights(d)}
 
+    @r.get("/game/details/{appid}")
+    async def game_details(appid: str, user: dict = Depends(get_current_user)):
+        """v0.7.7 Universal Game Detector — recupera info Steam Store (cover, genere, dev)
+        con cache MongoDB 7 giorni. Riduce chiamate esterne e latenza sul dashboard live."""
+        if not appid or not appid.isdigit() or len(appid) > 12:
+            raise HTTPException(400, "invalid appid")
+        cached = await db.game_cache.find_one({"appid": appid}, {"_id": 0})
+        if cached and cached.get("cached_at"):
+            try:
+                age = (datetime.now(timezone.utc) - datetime.fromisoformat(cached["cached_at"])).days
+                if age < 7:
+                    return cached
+            except Exception:
+                pass
+        import httpx as _httpx
+        try:
+            async with _httpx.AsyncClient(timeout=8.0, follow_redirects=True) as c:
+                resp = await c.get(
+                    f"https://store.steampowered.com/api/appdetails",
+                    params={"appids": appid, "l": "english", "cc": "us"},
+                    headers={"User-Agent": "FrameForge/1.0"},
+                )
+            j = resp.json() if resp.status_code == 200 else {}
+            node = (j or {}).get(appid) or {}
+            if not node.get("success"):
+                info = {"appid": appid, "found": False, "cached_at": now_iso()}
+            else:
+                d = node.get("data") or {}
+                info = {
+                    "appid": appid,
+                    "found": True,
+                    "name": d.get("name"),
+                    "header_image": d.get("header_image"),
+                    "capsule_image": d.get("capsule_image"),
+                    "developers": (d.get("developers") or [])[:3],
+                    "publishers": (d.get("publishers") or [])[:3],
+                    "genres": [g.get("description") for g in (d.get("genres") or []) if g.get("description")][:5],
+                    "release_date": (d.get("release_date") or {}).get("date"),
+                    "cached_at": now_iso(),
+                }
+        except Exception as e:
+            info = {"appid": appid, "found": False, "error": str(e)[:200], "cached_at": now_iso()}
+        try:
+            await db.game_cache.update_one({"appid": appid}, {"$set": info}, upsert=True)
+        except Exception:
+            pass
+        # strip mongo _id from returned dict
+        info.pop("_id", None)
+        return info
+
     @r.get("/pc-health")
     async def pc_health(user: dict = Depends(get_current_user)):
         doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})

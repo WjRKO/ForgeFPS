@@ -8,6 +8,7 @@ import { SessionSummary } from "@/components/SessionSummary";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
 import { PrimaryButton } from "@/components/hud";
 import ObsOverlayPanel from "@/components/ObsOverlayPanel";
+import CurrentGameCard from "@/components/CurrentGameCard";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
 import MonitorPreflight from "@/components/MonitorPreflight";
 import MonitorLiveControl from "@/components/MonitorLiveControl";
@@ -335,6 +336,15 @@ export default function Live() {
             setLaunching(false);
           }
         }}
+      />
+
+      {/* ===== v0.7.7: UNIVERSAL GAME DETECTOR CARD ===== */}
+      <CurrentGameCard
+        appid={last.steam_appid}
+        gameName={last.game_name || last.game}
+        source={last.game_source}
+        exe={last.game_exe}
+        fullscreen={last.game_fullscreen}
       />
 
       {/* ===== 4 BENTO METRIC CARDS ===== */}
