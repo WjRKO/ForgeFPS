@@ -24,11 +24,28 @@ jobs:
       - name: Install PyInstaller
         run: python -m pip install --upgrade pip pyinstaller
 
-      - name: Build onedir (metadati + no UPX + asInvoker manifest)
+      - name: Build onedir (asInvoker manifest ESPLICITO)
         working-directory: agent-build
         run: >
           pyinstaller --onedir --name forgefps-agent --console --noupx --clean
+          --manifest forgefps-agent.manifest
           --version-file version_info.txt forgefps_agent.py
+
+      - name: SAFETY CHECK - verifica manifest embedded (fail build se sbagliato)
+        shell: pwsh
+        working-directory: agent-build
+        run: |
+          $exeBytes = [System.IO.File]::ReadAllBytes("dist/forgefps-agent/forgefps-agent.exe")
+          $exeText = [System.Text.Encoding]::ASCII.GetString($exeBytes)
+          if ($exeText -match "requireAdministrator") {
+            Write-Host "::error::EXE CONTAINS requireAdministrator - build FAILED"
+            exit 1
+          }
+          if ($exeText -notmatch "asInvoker") {
+            Write-Host "::error::EXE does NOT contain asInvoker - build FAILED"
+            exit 1
+          }
+          Write-Host "OK: manifest verified - asInvoker present, no requireAdministrator"
 
       - name: Zip forgefps-agent folder
         shell: pwsh
@@ -38,6 +55,7 @@ jobs:
       - name: Compute SHA256 (ZIP)
         shell: pwsh
         working-directory: agent-build
+        id: hash
         run: |
           $h = (Get-FileHash dist/forgefps-agent.zip -Algorithm SHA256).Hash.ToLower()
           echo "SHA256 = $h"
@@ -45,7 +63,6 @@ jobs:
           echo "" >> $env:GITHUB_STEP_SUMMARY
           echo "**SHA256:** ``$h``" >> $env:GITHUB_STEP_SUMMARY
           echo "SHA256=$h" >> $env:GITHUB_OUTPUT
-        id: hash
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -55,6 +72,6 @@ jobs:
           body: |
             **SHA256 (ZIP):** `${{ steps.hash.outputs.SHA256 }}`
 
-            v0.7.7 — Bug fix critico: rimosso UAC prompt all'avvio dell'exe.
-            Sync / Live Monitoring / Benchmark ora silenziosi come da UX originale.
-            Il mode 'optimize' (applicazione tweak reali) self-eleva on-demand.
+            v0.7.8 — Rebuild definitivo senza UAC prompt.
+            Manifest esplicito asInvoker + safety check che fa fallire la build
+            se rileva requireAdministrator embedded nell'exe.
