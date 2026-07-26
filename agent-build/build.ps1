@@ -16,14 +16,28 @@ Write-Host "[2/5] Pulisco build precedenti..." -ForegroundColor Cyan
 if (Test-Path build) { Remove-Item build -Recurse -Force }
 if (Test-Path dist)  { Remove-Item dist  -Recurse -Force }
 
-Write-Host "[3/5] Costruisco la cartella dist\forgefps-agent\ (onedir, metadati, no UPX, asInvoker manifest)..." -ForegroundColor Cyan
-# v0.7.7: rimosso --uac-admin.
-# L'exe ora gira in user-space (nessun prompt UAC all'avvio).
-# I mode sync/monitor/benchmark/prematch/booster non richiedono admin.
-# Il mode 'optimize' (applicazione tweak) self-eleva via ShellExecuteW("runas", ...)
-# in forgefps_agent.py:1127 — UAC appare solo se l'utente sceglie di applicare tweak.
+Write-Host "[3/5] Costruisco la cartella dist\forgefps-agent\ (onedir, metadati, no UPX, manifest esplicito asInvoker)..." -ForegroundColor Cyan
+# v0.7.8: manifest ESPLICITO forgefps-agent.manifest con asInvoker.
+# Sostituisce il default PyInstaller (che in alcune versioni puo' includere
+# comunque requireAdministrator anche senza --uac-admin).
+# La build FALLISCE al passo [4/5] se il manifest embedded ha requireAdministrator.
 pyinstaller --onedir --name forgefps-agent --console --noupx --clean `
+  --manifest forgefps-agent.manifest `
   --version-file version_info.txt forgefps_agent.py
+if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
+
+Write-Host "[3.5/5] Verifica manifest embedded (safety check)..." -ForegroundColor Cyan
+$exeBytes = [System.IO.File]::ReadAllBytes("dist\forgefps-agent\forgefps-agent.exe")
+$exeText = [System.Text.Encoding]::ASCII.GetString($exeBytes)
+if ($exeText -match "requireAdministrator") {
+  Write-Host "[FAIL] L'exe contiene ancora 'requireAdministrator' - build ANNULLATA" -ForegroundColor Red
+  exit 1
+}
+if ($exeText -notmatch "asInvoker") {
+  Write-Host "[FAIL] Manifest asInvoker NON trovato nell'exe - build ANNULLATA" -ForegroundColor Red
+  exit 1
+}
+Write-Host "[OK] Manifest verificato: asInvoker presente, nessun requireAdministrator" -ForegroundColor Green
 
 Write-Host "[4/5] Comprimo dist\forgefps-agent\ in forgefps-agent.zip..." -ForegroundColor Cyan
 Compress-Archive -Path 'dist\forgefps-agent' -DestinationPath 'dist\forgefps-agent.zip' -Force
