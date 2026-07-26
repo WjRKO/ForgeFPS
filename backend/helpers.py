@@ -66,6 +66,70 @@ def _monitor_line(d: dict) -> str:
     return f"Monitor: {res}"
 
 
+# ---------- Hardware Insights (v0.7.7): regole deterministiche sui dati rilevati ----------
+def _num(v):
+    try:
+        return float(str(v).replace("GB", "").strip())
+    except Exception:
+        return None
+
+
+def _age_days(date_str):
+    try:
+        dt = datetime.fromisoformat(str(date_str)[:10]).replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - dt).days
+    except Exception:
+        return None
+
+
+def compute_hw_insights(d: dict) -> list:
+    """Ritorna [{id, severity, params}] ordinati per severita'. Testi localizzati sul frontend."""
+    out = []
+    cfg, nom = _num(d.get("ram_speed_mhz")), _num(d.get("ram_speed_nominal_mhz"))
+    if cfg and nom and nom - cfg >= 400:
+        out.append({"id": "xmp", "severity": "high", "params": {"configured": int(cfg), "nominal": int(nom)}})
+    if _num(d.get("ram_modules")) == 1:
+        out.append({"id": "single_channel", "severity": "medium", "params": {}})
+    cur, mx = _num(d.get("refresh_hz")), _num(d.get("max_refresh_hz"))
+    if cur and mx and mx - cur >= 30:
+        out.append({"id": "refresh", "severity": "high", "params": {"current": int(cur), "max": int(mx)}})
+    drives = {str(x.get("letter", "")).upper(): x for x in (d.get("disks") or []) if isinstance(x, dict)}
+    for gl in (d.get("game_drives") or []):
+        disk = drives.get(str(gl).upper())
+        if disk and disk.get("type") == "HDD":
+            out.append({"id": "game_on_hdd", "severity": "medium", "params": {"letter": str(gl).upper()}})
+            break
+    for letter, disk in drives.items():
+        size, free = _num(disk.get("size_gb")), _num(disk.get("free_gb"))
+        if size and free is not None and size > 0 and free / size < 0.10:
+            out.append({"id": "disk_full", "severity": "medium", "params": {"letter": letter, "free": int(free)}})
+    if d.get("hvci_on") is True:
+        out.append({"id": "hvci", "severity": "medium", "params": {}})
+    ad = _age_days(d.get("gpu_driver_date"))
+    if ad is not None and ad > 180:
+        out.append({"id": "gpu_driver_old", "severity": "medium" if ad > 365 else "low", "params": {"months": ad // 30}})
+    bd = _age_days(d.get("bios_date"))
+    if bd is not None and bd > 730:
+        out.append({"id": "bios_old", "severity": "low", "params": {"years": round(bd / 365)}})
+    order = {"high": 0, "medium": 1, "low": 2}
+    out.sort(key=lambda x: order.get(x["severity"], 3))
+    return out
+
+
+def _insight_text_it(i: dict) -> str:
+    p = i.get("params", {})
+    return {
+        "xmp": f"RAM configurata a {p.get('configured')} MHz ma supporta {p.get('nominal')} MHz: profilo XMP/EXPO NON attivo nel BIOS",
+        "single_channel": "RAM in single channel (1 solo modulo installato)",
+        "refresh": f"Il monitor supporta {p.get('max')} Hz ma Windows e' impostato a {p.get('current')} Hz",
+        "game_on_hdd": f"Giochi Steam installati su HDD meccanico (disco {p.get('letter')}:)",
+        "disk_full": f"Disco {p.get('letter')}: quasi pieno ({p.get('free')} GB liberi)",
+        "hvci": "Memory Integrity (Core Isolation/VBS) attiva: costa circa 5-10% di FPS",
+        "gpu_driver_old": f"Driver GPU vecchio di circa {p.get('months')} mesi",
+        "bios_old": f"BIOS vecchio di circa {p.get('years')} anni",
+    }.get(i.get("id"), i.get("id", ""))
+
+
 def specs_to_text(specs: dict) -> str:
     if not specs:
         return ""
@@ -90,6 +154,15 @@ def specs_to_text(specs: dict) -> str:
         lines.append(f"Modello sistema: {d['system_model']}")
     if d.get("resolution"):
         lines.append(_monitor_line(d))
+    disks = [x for x in (d.get("disks") or []) if isinstance(x, dict)]
+    if disks:
+        parts = [f"{x.get('letter')}: {x.get('type')} {x.get('size_gb')}GB ({x.get('free_gb')}GB liberi)" for x in disks]
+        lines.append("Dischi: " + ", ".join(parts))
+    insights = compute_hw_insights(d)
+    if insights:
+        lines.append("Problemi hardware rilevati automaticamente (tienine conto e citali nei consigli):")
+        for i in insights:
+            lines.append(f"- {_insight_text_it(i)}")
     return "\n".join(lines)
 
 

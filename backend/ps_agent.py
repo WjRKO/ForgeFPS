@@ -203,12 +203,15 @@ function Get-LhmComputer {
 }
 
 function Get-LhmTemps {
-  # Real CPU/GPU temperatures from hardware sensors (incl. motherboard SuperIO). Requires admin.
+  # Real CPU/GPU temperatures + fan RPM + VRM temps + power draw + Vcore
+  # from hardware sensors (incl. motherboard SuperIO). Requires admin.
+  # v0.7.7: multi-sensor extraction — fan_rpm_max, vrm_temp, cpu_power, gpu_power_lhm, cpu_vcore.
   $r = @{}
   $c = Get-LhmComputer
   if (-not $c) { $r._lhm_state = 'no_lhm'; return $r }
   try {
     $cpuTemps = @{}; $gpuTemps = @{}; $mbTemps = @{}
+    $fanRpms = @{}; $cpuPowers = @{}; $gpuPowers = @{}; $vcores = @{}
     $found = New-Object 'System.Collections.Generic.List[string]'
     $all = New-Object 'System.Collections.Generic.List[object]'
     foreach ($hw in $c.Hardware) { [void]$all.Add($hw); foreach ($sh in $hw.SubHardware) { [void]$all.Add($sh) } }
@@ -216,13 +219,27 @@ function Get-LhmTemps {
       $hw.Update()
       $ht = "$($hw.HardwareType)"
       foreach ($sensor in $hw.Sensors) {
-        if ("$($sensor.SensorType)" -ne 'Temperature' -or $null -eq $sensor.Value) { continue }
-        $tv = [double]$sensor.Value
-        $found.Add(("{0}/{1}={2}" -f $ht, $sensor.Name, [int][math]::Round($tv)))
-        if ($tv -le 0 -or $tv -gt 150) { continue }
-        if ($ht -eq 'Cpu') { $cpuTemps["$($sensor.Name)"] = $tv }
-        elseif ($ht -like 'Gpu*') { $gpuTemps["$($sensor.Name)"] = $tv }
-        else { $mbTemps["$($sensor.Name)"] = $tv }
+        if ($null -eq $sensor.Value) { continue }
+        $st = "$($sensor.SensorType)"
+        $sn = "$($sensor.Name)"
+        $sv = [double]$sensor.Value
+        if ($st -eq 'Temperature') {
+          $found.Add(("{0}/T/{1}={2}" -f $ht, $sn, [int][math]::Round($sv)))
+          if ($sv -le 0 -or $sv -gt 150) { continue }
+          if ($ht -eq 'Cpu') { $cpuTemps[$sn] = $sv }
+          elseif ($ht -like 'Gpu*') { $gpuTemps[$sn] = $sv }
+          else { $mbTemps[$sn] = $sv }
+        } elseif ($st -eq 'Fan') {
+          if ($sv -gt 0 -and $sv -lt 10000) { $fanRpms[("{0}/{1}" -f $ht, $sn)] = $sv }
+        } elseif ($st -eq 'Power') {
+          if ($sv -le 0 -or $sv -gt 1000) { continue }
+          if ($ht -eq 'Cpu' -and $sn -match '(?i)package|cpu total|cpu\s*power') { $cpuPowers[$sn] = $sv }
+          elseif ($ht -like 'Gpu*' -and $sn -match '(?i)gpu total|gpu power|package|board') { $gpuPowers[$sn] = $sv }
+        } elseif ($st -eq 'Voltage') {
+          if ($ht -eq 'Cpu' -and $sn -match '(?i)vcore|core\s*#?0|cpu\s*core') {
+            if ($sv -gt 0.3 -and $sv -lt 2.0) { $vcores[$sn] = $sv }
+          }
+        }
       }
     }
     $script:LHM_LAST = ($found -join ', ')
@@ -249,6 +266,36 @@ function Get-LhmTemps {
     foreach ($k in @('GPU Core', 'GPU Hot Spot', 'GPU')) { if ($gpuTemps.ContainsKey($k)) { $gpuVal = $gpuTemps[$k]; break } }
     if ($null -eq $gpuVal -and $gpuTemps.Count -gt 0) { $gpuVal = ($gpuTemps.Values | Measure-Object -Maximum).Maximum }
     if ($null -ne $gpuVal -and $gpuVal -gt 0) { $r.gpu_temp = [int][math]::Round($gpuVal) }
+    # v0.7.7: VRM temp — cerca sensori MB con nomi vrm/vr mos/mos/vcore
+    foreach ($k in $mbTemps.Keys) {
+      if ($k -match '(?i)vrm|vr mos|^mos\s|vcore|vsoc') {
+        $r.vrm_temp = [int][math]::Round($mbTemps[$k]); break
+      }
+    }
+    # v0.7.7: fan RPM max — prendi il valore massimo tra tutti i fan sensor
+    if ($fanRpms.Count -gt 0) {
+      $r.fan_rpm_max = [int][math]::Round(($fanRpms.Values | Measure-Object -Maximum).Maximum)
+      $r.fan_count = $fanRpms.Count
+    }
+    # v0.7.7: CPU package power (W) — priorità a nome "Package" > "CPU Total" > qualunque
+    $cpVal = $null
+    foreach ($k in @('CPU Package', 'Package', 'CPU Total', 'CPU Power')) {
+      if ($cpuPowers.ContainsKey($k)) { $cpVal = $cpuPowers[$k]; break }
+    }
+    if ($null -eq $cpVal -and $cpuPowers.Count -gt 0) { $cpVal = ($cpuPowers.Values | Measure-Object -Maximum).Maximum }
+    if ($null -ne $cpVal -and $cpVal -gt 0) { $r.cpu_power = [int][math]::Round($cpVal) }
+    # v0.7.7: GPU power (W) da LHM — usato come fallback quando nvidia-smi non c'è (es. AMD/Intel dGPU)
+    $gpVal = $null
+    foreach ($k in @('GPU Total', 'GPU Power', 'Board Power', 'Package')) {
+      if ($gpuPowers.ContainsKey($k)) { $gpVal = $gpuPowers[$k]; break }
+    }
+    if ($null -eq $gpVal -and $gpuPowers.Count -gt 0) { $gpVal = ($gpuPowers.Values | Measure-Object -Maximum).Maximum }
+    if ($null -ne $gpVal -and $gpVal -gt 0) { $r.gpu_power_lhm = [int][math]::Round($gpVal) }
+    # v0.7.7: CPU Vcore (V) — utile per monitorare overclock/undervolt
+    if ($vcores.Count -gt 0) {
+      $vv = ($vcores.Values | Measure-Object -Average).Average
+      $r.cpu_vcore = [math]::Round($vv, 3)
+    }
     # Diagnostica: LHM caricato ma nessun sensore CPU trovato
     if (-not $r.ContainsKey('cpu_temp')) {
       if ($cpuTemps.Count -eq 0) { $r._lhm_state = 'no_cpu_sensors' }
@@ -369,6 +416,71 @@ function Get-AvgRamPct {
 
 
 # ---------------- Hardware / health detection ----------------
+
+# v0.7.7: Multi-source cross-validation helpers.
+# Ogni componente viene rilevato da >=2 fonti indipendenti (WMI + Registry / nvidia-smi)
+# per aumentare l'accuratezza e ridurre falsi positivi su laptop ibridi / OEM custom.
+function Get-CpuFromRegistry {
+  try {
+    $p = Get-ItemProperty 'HKLM:\HARDWARE\DESCRIPTION\System\CentralProcessor\0' -ErrorAction SilentlyContinue
+    if ($p -and $p.ProcessorNameString) { return "$($p.ProcessorNameString)".Trim() }
+  } catch {}
+  return $null
+}
+
+function Get-GpuAdaptersFromRegistry {
+  # Enumera i display adapter dal registry di Windows (Class GUID {4d36e968...}).
+  # Restituisce lista di hashtable {name, driver_version, driver_date, provider}.
+  $out = New-Object 'System.Collections.Generic.List[object]'
+  try {
+    $keys = Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue |
+            Where-Object { $_.PSChildName -match '^\d{4}$' }
+    foreach ($k in $keys) {
+      $p = Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue
+      if (-not $p) { continue }
+      $n = "$($p.DriverDesc)"
+      if (-not $n -or $n -match '(?i)Basic|Virtual|Remote|Meta|Parsec|Citrix|DameWare|Idd') { continue }
+      $it = @{
+        name           = $n
+        driver_version = "$($p.DriverVersion)"
+        driver_date    = "$($p.DriverDate)"
+        provider       = "$($p.ProviderName)"
+      }
+      [void]$out.Add($it)
+    }
+  } catch {}
+  return $out
+}
+
+function Get-PrimaryStorage {
+  # Combina Get-Partition + Get-PhysicalDisk per identificare il disco di sistema (C:).
+  # Ritorna {type, bus_type, health, wear_pct, model, size_gb}.
+  $r = @{}
+  try {
+    $part = Get-Partition -DriveLetter 'C' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $part) { return $r }
+    $pd = Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.DeviceId -eq $part.DiskNumber } | Select-Object -First 1
+    if (-not $pd) { return $r }
+    $r.storage_model = "$($pd.FriendlyName)".Trim()
+    $r.storage_bus = "$($pd.BusType)"
+    $mt = "$($pd.MediaType)"
+    # BusType NVMe indica NVMe anche se MediaType dice SSD generico
+    if ($r.storage_bus -eq 'NVMe') { $r.storage_type = 'NVMe' }
+    elseif ($mt -eq 'SSD') { $r.storage_type = 'SSD' }
+    elseif ($mt -eq 'HDD') { $r.storage_type = 'HDD' }
+    else { $r.storage_type = $mt }
+    $r.storage_health = "$($pd.HealthStatus)"
+    if ($pd.Size -gt 0) { $r.storage_size_gb = [int]([math]::Round($pd.Size / 1GB)) }
+    # Wearout percent (solo su SSD/NVMe che espongono lo storage reliability counter)
+    try {
+      $rc = Get-StorageReliabilityCounter -PhysicalDisk $pd -ErrorAction SilentlyContinue
+      if ($rc -and $null -ne $rc.Wear) { $r.storage_wear_pct = [int]$rc.Wear }
+      if ($rc -and $null -ne $rc.Temperature -and $rc.Temperature -gt 0) { $r.storage_temp = [int]$rc.Temperature }
+    } catch {}
+  } catch {}
+  return $r
+}
+
 function Get-Specs {
   $s = @{}
   $os = Get-CimInstance Win32_OperatingSystem
@@ -379,18 +491,61 @@ function Get-Specs {
   $s.cpu = $cpu.Name; $s.cpu_cores = "$($cpu.NumberOfCores)"; $s.cpu_threads = "$($cpu.NumberOfLogicalProcessors)"
   $s.cpu_clock_ghz = "$([math]::Round($cpu.MaxClockSpeed/1000,2))"
   $s.cpu_socket = "$($cpu.SocketDesignation)"
+  # v0.7.7: cross-check CPU name da Registry (fallback + validation).
+  $cpuReg = Get-CpuFromRegistry
+  $cpuSources = 1
+  if ($cpuReg) {
+    $cpuSources = 2
+    # WMI a volte tronca / restituisce nomi generici — se Registry ha una stringa piu' lunga, preferiscila.
+    if ((-not $s.cpu) -or ($cpuReg.Length -gt "$($s.cpu)".Length)) { $s.cpu = $cpuReg }
+  }
+  # Rilevamento GPU: nvidia-smi > WMI (multi-adapter aware) > Registry.
+  # v0.7.7: su laptop ibridi preferiamo sempre la GPU discreta e riportiamo anche la secondaria.
+  $gpuSources = 0
   $nv = & nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader,nounits 2>$null
   if ($nv) {
     $p = ($nv | Select-Object -First 1).Split(',')
     $s.gpu = $p[0].Trim(); $s.gpu_vram_gb = "$([math]::Round([double]$p[1].Trim()/1024))"; $s.gpu_driver_version = $p[2].Trim()
-  } else {
-    $g = Get-CimInstance Win32_VideoController | Where-Object { $_.Name -notmatch 'Basic|Virtual|Remote|Meta|Parsec|Citrix' } | Select-Object -First 1
-    if (-not $g) { $g = Get-CimInstance Win32_VideoController | Select-Object -First 1 }
-    $s.gpu = $g.Name; $s.gpu_driver_version = $g.DriverVersion
-    $vram = Get-GpuVramGb
-    if ($vram) { $s.gpu_vram_gb = "$vram" }
-    elseif ($g.AdapterRAM -gt 0) { $s.gpu_vram_gb = "$([math]::Round($g.AdapterRAM/1GB))" }
+    $s.gpu_provider = 'NVIDIA'
+    $gpuSources++
   }
+  # WMI: prendi tutti i video controller reali (non virtuali).
+  $vcAll = Get-CimInstance Win32_VideoController | Where-Object { $_.Name -and $_.Name -notmatch 'Basic|Virtual|Remote|Meta|Parsec|Citrix|DameWare|Idd' }
+  if (-not $vcAll) { $vcAll = Get-CimInstance Win32_VideoController }
+  # Ordina preferendo discrete (NVIDIA/AMD Radeon RX/Intel Arc) su integrated (UHD/Iris/Vega iGPU).
+  $vcSorted = @($vcAll | Sort-Object -Property @{Expression={
+    $n = "$($_.Name)"
+    if ($n -match '(?i)^NVIDIA|GeForce|Quadro|Tesla|RTX|GTX') { 0 }
+    elseif ($n -match '(?i)Radeon\s+(RX|Pro)') { 0 }
+    elseif ($n -match '(?i)Intel\s+Arc') { 0 }
+    elseif ($n -match '(?i)UHD|Iris|HD Graphics|Vega\s+(3|8|10|11)|Radeon\s+Graphics') { 2 }
+    else { 1 }
+  }})
+  $vcPrimary = $vcSorted | Select-Object -First 1
+  if ($vcPrimary) {
+    $gpuSources++
+    if (-not $s.gpu) {
+      $s.gpu = $vcPrimary.Name; $s.gpu_driver_version = $vcPrimary.DriverVersion
+      $vram = Get-GpuVramGb
+      if ($vram) { $s.gpu_vram_gb = "$vram" }
+      elseif ($vcPrimary.AdapterRAM -gt 0) { $s.gpu_vram_gb = "$([math]::Round($vcPrimary.AdapterRAM/1GB))" }
+      # Determina provider
+      $gn = "$($vcPrimary.Name)"
+      if ($gn -match '(?i)nvidia|geforce|quadro|rtx|gtx') { $s.gpu_provider = 'NVIDIA' }
+      elseif ($gn -match '(?i)radeon|amd\s') { $s.gpu_provider = 'AMD' }
+      elseif ($gn -match '(?i)intel') { $s.gpu_provider = 'Intel' }
+    }
+  }
+  # GPU secondaria (iGPU su laptop / dual-GPU desktop)
+  if ($vcSorted.Count -gt 1) {
+    $vc2 = $vcSorted[1]
+    if ($vc2.Name -and "$($vc2.Name)".Trim() -ne "$($s.gpu)".Trim()) {
+      $s.gpu_secondary = "$($vc2.Name)"
+    }
+  }
+  # Registry cross-check
+  $regGpus = Get-GpuAdaptersFromRegistry
+  if ($regGpus.Count -gt 0) { $gpuSources++ }
   $s.refresh_hz = "$((Get-CimInstance Win32_VideoController | Where-Object {$_.CurrentRefreshRate -gt 0} | Sort-Object CurrentRefreshRate -Descending | Select-Object -First 1).CurrentRefreshRate)"
   $ram = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB)
   $s.ram = "$ram GB"
@@ -399,6 +554,12 @@ function Get-Specs {
   $s.ram_speed_mhz = "$(if ($pm1.ConfiguredClockSpeed -and $pm1.ConfiguredClockSpeed -gt 0) { $pm1.ConfiguredClockSpeed } else { $pm1.Speed })"
   $s.ram_modules = "$(($pm | Measure-Object).Count)"
   $s.ram_type = @{ '20'='DDR'; '21'='DDR2'; '24'='DDR3'; '26'='DDR4'; '34'='DDR5' }["$($pm1.SMBIOSMemoryType)"]
+  # v0.7.7: RAM manufacturer (utile per identificare Corsair/G.Skill/Kingston etc)
+  $ramMfg = "$($pm1.Manufacturer)".Trim()
+  if ($ramMfg -and $ramMfg -notmatch '(?i)^(unknown|to be filled|manufacturer)$' -and $ramMfg.Length -gt 1) {
+    $s.ram_manufacturer = $ramMfg
+  }
+  $ramSources = 2  # Win32_ComputerSystem + Win32_PhysicalMemory concordano
   $b = Get-CimInstance Win32_BaseBoard | Where-Object { $_.Product -and $_.Product -notmatch 'Base Board|Default string|To be filled|None' } | Select-Object -First 1
   if (-not $b) { $b = Get-CimInstance Win32_BaseBoard | Select-Object -First 1 }
   $mfg = "$($b.Manufacturer)"
@@ -420,6 +581,101 @@ function Get-Specs {
   }
   $v = Get-CimInstance Win32_VideoController | Select-Object -First 1
   if ($v.CurrentHorizontalResolution) { $s.resolution = "$($v.CurrentHorizontalResolution)x$($v.CurrentVerticalResolution)" }
+
+  # ----- v0.7.7 Hardware Insights: dati extra per consigli mirati -----
+  # (a) velocita' nominale RAM (per check XMP: nominale vs configurata)
+  if ($pm1.Speed -and $pm1.Speed -gt 0) { $s.ram_speed_nominal_mhz = "$($pm1.Speed)" }
+  # (c) refresh massimo supportato dal monitor (EDID)
+  try {
+    $maxHz = 0
+    Get-CimInstance -Namespace root\wmi -ClassName WmiMonitorListedSupportedSourceModes -ErrorAction SilentlyContinue | ForEach-Object {
+      foreach ($m in $_.MonitorSourceModes) {
+        if ($m.VerticalRefreshRateNumerator -and $m.VerticalRefreshRateDenominator -gt 0) {
+          $hz = [math]::Round($m.VerticalRefreshRateNumerator / $m.VerticalRefreshRateDenominator)
+          if ($hz -gt $maxHz -and $hz -le 600) { $maxHz = $hz }
+        }
+      }
+    }
+    if ($maxHz -gt 0) { $s.max_refresh_hz = "$maxHz" }
+  } catch {}
+  # (d) dischi fissi: tipo (NVMe/SATA SSD/HDD), dimensione e spazio libero
+  try {
+    $disks = @()
+    foreach ($vol in (Get-Volume -ErrorAction SilentlyContinue | Where-Object { $_.DriveLetter -and $_.DriveType -eq 'Fixed' })) {
+      $dtype = 'Unknown'
+      try {
+        $part = Get-Partition -DriveLetter $vol.DriveLetter -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($part) {
+          $pd = Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { "$($_.DeviceId)" -eq "$($part.DiskNumber)" } | Select-Object -First 1
+          if ($pd) {
+            if ("$($pd.BusType)" -eq 'NVMe') { $dtype = 'NVMe SSD' }
+            elseif ("$($pd.MediaType)" -eq 'SSD') { $dtype = 'SATA SSD' }
+            elseif ("$($pd.MediaType)" -eq 'HDD') { $dtype = 'HDD' }
+            elseif ("$($pd.MediaType)") { $dtype = "$($pd.MediaType)" }
+          }
+        }
+      } catch {}
+      $disks += @{ letter = "$($vol.DriveLetter)"; type = $dtype
+                   size_gb = [math]::Round($vol.Size/1GB); free_gb = [math]::Round($vol.SizeRemaining/1GB) }
+    }
+    if ($disks.Count -gt 0) { $s.disks = $disks }
+  } catch {}
+  # (d) su quali dischi vivono le librerie Steam
+  try {
+    $steamP = (Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction SilentlyContinue).SteamPath
+    if ($steamP) {
+      $vdf = Join-Path $steamP 'steamapps\libraryfolders.vdf'
+      if (Test-Path $vdf) {
+        $gl = @()
+        foreach ($mt in ([regex]::Matches((Get-Content $vdf -Raw), '"path"\s+"([^"]+)"'))) {
+          $L = $mt.Groups[1].Value.Substring(0,1).ToUpper()
+          if ($L -match '[A-Z]' -and $gl -notcontains $L) { $gl += $L }
+        }
+        if ($gl.Count -gt 0) { $s.game_drives = $gl }
+      }
+    }
+  } catch {}
+  # (e) Core Isolation / Memory Integrity (HVCI): costa ~5-10% FPS
+  try {
+    $dg = Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction SilentlyContinue
+    if ($dg) { $s.hvci_on = (@($dg.SecurityServicesRunning) -contains 2) }
+    else {
+      $he = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity' -Name Enabled -ErrorAction SilentlyContinue).Enabled
+      if ($null -ne $he) { $s.hvci_on = ($he -eq 1) }
+    }
+  } catch {}
+  # (f) eta' driver GPU e BIOS
+  try {
+    $vdd = (Get-CimInstance Win32_VideoController | Where-Object { $_.Name -eq $s.gpu } | Select-Object -First 1).DriverDate
+    if (-not $vdd) { $vdd = $v.DriverDate }
+    if ($vdd) { $s.gpu_driver_date = $vdd.ToString('yyyy-MM-dd') }
+  } catch {}
+  try { if ($bi.ReleaseDate) { $s.bios_date = $bi.ReleaseDate.ToString('yyyy-MM-dd') } } catch {}
+
+  # v0.7.7: storage primario dettagliato (tipo/salute/wear/temp) — cross-check WMI + Storage cmdlets.
+  try {
+    $ps = Get-PrimaryStorage
+    if ($ps -and $ps.Count -gt 0) {
+      foreach ($k in $ps.Keys) { $s[$k] = $ps[$k] }
+    }
+  } catch {}
+  $storageSources = 0
+  if ($s.storage_type) { $storageSources++ }
+  # WMI Win32_DiskDrive come secondo canale
+  try {
+    $dd = Get-CimInstance Win32_DiskDrive | Where-Object { $_.MediaType -match '(?i)Fixed|SSD|Solid' } | Select-Object -First 1
+    if ($dd) { $storageSources++ }
+  } catch {}
+
+  # v0.7.7: hw_confidence — quante fonti indipendenti hanno confermato ogni componente.
+  # Il frontend usa questi valori per mostrare un badge "2/2 fonti" o "1/2 fonti" (giallo).
+  $s.hw_confidence = @{
+    cpu     = $cpuSources
+    gpu     = $gpuSources
+    ram     = $ramSources
+    storage = $storageSources
+  }
+
   return $s
 }
 
@@ -444,6 +700,13 @@ function Get-Health {
   $gt = & nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>$null
   if ($gt) { $h.gpu_temp = [int]($gt | Select-Object -First 1).Trim() }
   elseif ($lhm.ContainsKey('gpu_temp')) { $h.gpu_temp = $lhm.gpu_temp }
+  # v0.7.7: precision sensors — fan RPM, VRM temp, CPU power, GPU power (LHM fallback), Vcore
+  if ($lhm.ContainsKey('fan_rpm_max')) { $h.fan_rpm_max = $lhm.fan_rpm_max }
+  if ($lhm.ContainsKey('fan_count')) { $h.fan_count = $lhm.fan_count }
+  if ($lhm.ContainsKey('vrm_temp')) { $h.vrm_temp = $lhm.vrm_temp }
+  if ($lhm.ContainsKey('cpu_power')) { $h.cpu_power = $lhm.cpu_power }
+  if ($lhm.ContainsKey('gpu_power_lhm') -and -not $h.ContainsKey('gpu_power')) { $h.gpu_power = $lhm.gpu_power_lhm }
+  if ($lhm.ContainsKey('cpu_vcore')) { $h.cpu_vcore = $lhm.cpu_vcore }
   if ($lhm.ContainsKey('cpu_temp')) {
     $h.cpu_temp = $lhm.cpu_temp
   } else {
@@ -863,6 +1126,195 @@ function Send-Running($apps) {
 }
 
 # ---------------- Live telemetry ----------------
+
+# v0.7.7: Universal Game Detector. Combina 4 sorgenti:
+#  a) Steam RunningAppID (registry)  — 100% affidabile per Steam
+#  b) Foreground window + process match contro mappa launcher installati
+#  c) Fullscreen exclusive detection (foreground fills primary monitor)
+#  d) PresentMon (Get-Fps) — riconosce qualsiasi DX/Vulkan process
+# La mappa dei giochi installati (exe -> {name, appid, launcher}) e' costruita una
+# sola volta per sessione e cachata in $script:INSTALLED_GAMES.
+$script:INSTALLED_GAMES = $null
+
+function Get-InstalledGamesMap {
+  if ($null -ne $script:INSTALLED_GAMES) { return $script:INSTALLED_GAMES }
+  $map = @{}
+  # Steam: legge appmanifest_*.acf per ogni library folder e scansiona common\<installdir>
+  try {
+    $steam = (Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction SilentlyContinue).SteamPath
+    if (-not $steam) { $steam = 'C:\Program Files (x86)\Steam' }
+    $libs = @(Join-Path $steam 'steamapps')
+    $vdf = Join-Path $steam 'steamapps\libraryfolders.vdf'
+    if (Test-Path $vdf) {
+      foreach ($m in [regex]::Matches((Get-Content $vdf -Raw), '"path"\s+"([^"]+)"')) {
+        $libs += (Join-Path ($m.Groups[1].Value -replace '\\\\', '\') 'steamapps')
+      }
+    }
+    foreach ($lib in ($libs | Select-Object -Unique)) {
+      if (-not (Test-Path $lib)) { continue }
+      foreach ($acf in (Get-ChildItem $lib -Filter 'appmanifest_*.acf' -ErrorAction SilentlyContinue)) {
+        try {
+          $c = Get-Content $acf.FullName -Raw
+          $name = ([regex]::Match($c, '"name"\s+"([^"]+)"')).Groups[1].Value
+          $appid = ([regex]::Match($c, '"appid"\s+"(\d+)"')).Groups[1].Value
+          $dir = ([regex]::Match($c, '"installdir"\s+"([^"]+)"')).Groups[1].Value
+          if (-not $name -or -not $dir) { continue }
+          $installPath = Join-Path $lib "common\$dir"
+          if (Test-Path $installPath) {
+            foreach ($exe in (Get-ChildItem $installPath -Filter '*.exe' -Recurse -Depth 3 -ErrorAction SilentlyContinue)) {
+              $k = $exe.Name.ToLower()
+              # Skip installer/redist/crash-handler/launcher che non sono il gioco vero
+              if ($k -match '(?i)^(unins|redist|vcredist|dxsetup|crash|handler|setup|installer|launcher_help|touchup|updater|eac|be-service|battleye)') { continue }
+              if (-not $map.ContainsKey($k)) { $map[$k] = @{ name = $name; appid = $appid; launcher = 'steam' } }
+            }
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+  # Epic Games Store: parsing .item JSON manifests
+  try {
+    $ep = Join-Path $env:ProgramData 'Epic\EpicGamesLauncher\Data\Manifests'
+    if (Test-Path $ep) {
+      foreach ($it in (Get-ChildItem $ep -Filter '*.item' -ErrorAction SilentlyContinue)) {
+        try {
+          $j = Get-Content $it.FullName -Raw | ConvertFrom-Json
+          if ($j.LaunchExecutable -and $j.DisplayName) {
+            $k = (Split-Path $j.LaunchExecutable -Leaf).ToLower()
+            if (-not $map.ContainsKey($k)) { $map[$k] = @{ name = "$($j.DisplayName)"; launcher = 'epic' } }
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+  # GOG Galaxy: HKLM registry
+  try {
+    foreach ($k in (Get-ChildItem 'HKLM:\SOFTWARE\WOW6432Node\GOG.com\Games' -ErrorAction SilentlyContinue)) {
+      $p = Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue
+      if ($p.exe -and $p.gameName) {
+        $key = (Split-Path $p.exe -Leaf).ToLower()
+        if (-not $map.ContainsKey($key)) { $map[$key] = @{ name = "$($p.gameName)"; launcher = 'gog' } }
+      }
+    }
+  } catch {}
+  # Xbox Game Pass: cartelle in <drive>:\XboxGames\<GameName>\Content\*.exe
+  try {
+    foreach ($d in @('C:', 'D:', 'E:', 'F:', 'G:')) {
+      $xg = "$d\XboxGames"
+      if (-not (Test-Path $xg)) { continue }
+      foreach ($g in (Get-ChildItem $xg -Directory -ErrorAction SilentlyContinue)) {
+        $content = Join-Path $g.FullName 'Content'
+        if (-not (Test-Path $content)) { continue }
+        foreach ($exe in (Get-ChildItem $content -Filter '*.exe' -Recurse -Depth 3 -ErrorAction SilentlyContinue)) {
+          $k = $exe.Name.ToLower()
+          if ($k -match '(?i)^(unins|redist|crash|handler|setup|installer)') { continue }
+          if (-not $map.ContainsKey($k)) { $map[$k] = @{ name = $g.Name; launcher = 'xbox' } }
+        }
+      }
+    }
+  } catch {}
+  $script:INSTALLED_GAMES = $map
+  return $map
+}
+
+function Get-SteamRunningGame {
+  # Legge HKCU:\Software\Valve\Steam\RunningAppID + nome da Apps\<id>\Name
+  try {
+    $rid = (Get-ItemProperty 'HKCU:\Software\Valve\Steam' -Name RunningAppID -ErrorAction SilentlyContinue).RunningAppID
+    if (-not $rid -or [int]$rid -le 0) { return $null }
+    $rid = [int]$rid
+    $name = ''
+    $ap = Get-ItemProperty "HKCU:\Software\Valve\Steam\Apps\$rid" -Name Name -ErrorAction SilentlyContinue
+    if ($ap -and $ap.Name) { $name = "$($ap.Name)" }
+    # Fallback nome via mappa installata
+    if (-not $name) {
+      $map = Get-InstalledGamesMap
+      foreach ($v in $map.Values) { if ($v.appid -eq "$rid") { $name = $v.name; break } }
+    }
+    if (-not $name) { $name = "Steam App $rid" }
+    return @{ name = $name; appid = "$rid"; source = 'steam_registry' }
+  } catch { return $null }
+}
+
+function Get-ForegroundGame {
+  # Foreground window + fullscreen detection + risoluzione via launcher map.
+  try {
+    if (-not ('FFGDWin' -as [type])) {
+      Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class FFGDWin {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L; public int T; public int R; public int B; }
+}
+"@ 2>$null
+    }
+    Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+    $h = [FFGDWin]::GetForegroundWindow()
+    if ($h -eq [IntPtr]::Zero) { return $null }
+    $rc = New-Object FFGDWin+RECT
+    [void][FFGDWin]::GetWindowRect($h, [ref]$rc)
+    $mw = [System.Windows.Forms.SystemInformation]::PrimaryMonitorSize.Width
+    $mh = [System.Windows.Forms.SystemInformation]::PrimaryMonitorSize.Height
+    $isFull = (($rc.R - $rc.L) -ge ($mw - 2)) -and (($rc.B - $rc.T) -ge ($mh - 2))
+    $gp = [uint32]0; [void][FFGDWin]::GetWindowThreadProcessId($h, [ref]$gp)
+    $p = Get-Process -Id $gp -ErrorAction SilentlyContinue
+    if (-not $p) { return $null }
+    $skipRe = '(?i)^(explorer|dwm|powershell|pwsh|WindowsTerminal|cmd|chrome|msedge|firefox|opera|brave|Code|devenv|obs64|obs32|Taskmgr|SearchHost|ShellExperienceHost|ApplicationFrameHost|LockApp|vlc|Photos|Netflix|Spotify|Discord|Teams|Slack|WhatsApp|Skype|OneDrive|GoogleDriveFS|Dropbox|WINWORD|EXCEL|POWERPNT|Acrobat|SnippingTool|Notepad|Notepad\+\+|steam|steamwebhelper|EpicGamesLauncher|GalaxyClient|Battle\.net|EADesktop|UbisoftConnect)$'
+    if ($p.Name -match $skipRe) { return $null }
+    $exeName = "$($p.Name).exe".ToLower()
+    $map = Get-InstalledGamesMap
+    if ($map.ContainsKey($exeName)) {
+      $hit = $map[$exeName]
+      return @{
+        name = $hit.name
+        appid = $hit.appid
+        source = ('fg_' + $hit.launcher)
+        exe = $p.Name
+        is_fullscreen = $isFull
+      }
+    }
+    # Non nella mappa: se fullscreen, e' comunque probabilmente un gioco (indie/portable/emulatore).
+    if ($isFull) {
+      return @{
+        name = ($p.Name -replace '[_\-]+', ' ')
+        source = 'fg_fullscreen'
+        exe = $p.Name
+        is_fullscreen = $true
+      }
+    }
+    return $null
+  } catch { return $null }
+}
+
+function Get-CurrentGame {
+  # Orchestratore: Steam registry > Foreground fullscreen > PresentMon (Get-Fps).
+  # Ritorna @{name, appid?, source, exe?, is_fullscreen?} o $null.
+  $g = Get-SteamRunningGame
+  if ($g) { return $g }
+  $g = Get-ForegroundGame
+  if ($g) { return $g }
+  # PresentMon fallback: se sta gia' catturando FPS, quel processo E' un gioco.
+  try {
+    $f = Get-Fps
+    if ($f -and $f.game -and $f.fps -ge 10) {
+      $exeName = "$($f.game).exe".ToLower()
+      $map = Get-InstalledGamesMap
+      if ($map.ContainsKey($exeName)) {
+        $hit = $map[$exeName]
+        return @{
+          name = $hit.name; appid = $hit.appid
+          source = ('pm_' + $hit.launcher); exe = $f.game
+        }
+      }
+      return @{ name = ($f.game -replace '[_\-]+', ' '); source = 'presentmon'; exe = $f.game }
+    }
+  } catch {}
+  return $null
+}
+
 function Get-TelemetrySample {
   $s = @{ ts = (Get-Date).ToString('o') }
   $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
@@ -878,6 +1330,11 @@ function Get-TelemetrySample {
       if ($ct -gt 0) { $s.cpu_temp = $ct }
     }
   }
+  # v0.7.7: precision sensors nel sample live (per il grafico + bento "Precision Sensors")
+  if ($lhm.ContainsKey('fan_rpm_max')) { $s.fan_rpm_max = $lhm.fan_rpm_max }
+  if ($lhm.ContainsKey('vrm_temp')) { $s.vrm_temp = $lhm.vrm_temp }
+  if ($lhm.ContainsKey('cpu_power')) { $s.cpu_power = $lhm.cpu_power }
+  if ($lhm.ContainsKey('cpu_vcore')) { $s.cpu_vcore = $lhm.cpu_vcore }
   $nv = & nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,clocks.gr,memory.used,memory.total,power.draw --format=csv,noheader,nounits 2>$null
   if ($nv) {
     $p = ($nv | Select-Object -First 1).Split(',')
@@ -888,7 +1345,22 @@ function Get-TelemetrySample {
     if ($mt -gt 0) { $s.vram_used_pct = [int]([math]::Round($mu / $mt * 100)) }
     $s.gpu_power = [int]([math]::Round([double]$p[5].Trim()))
   }
-  elseif ($lhm.ContainsKey('gpu_temp')) { $s.gpu_temp = $lhm.gpu_temp }
+  elseif ($lhm.ContainsKey('gpu_temp')) {
+    $s.gpu_temp = $lhm.gpu_temp
+    # v0.7.7: se nvidia-smi non c'è (AMD/Intel), usa LHM anche per gpu_power
+    if ($lhm.ContainsKey('gpu_power_lhm')) { $s.gpu_power = $lhm.gpu_power_lhm }
+  }
+  # v0.7.7: Universal Game Detector — Steam registry / foreground fullscreen / PresentMon
+  try {
+    $cg = Get-CurrentGame
+    if ($cg) {
+      $s.game_name = $cg.name
+      if ($cg.appid) { $s.steam_appid = $cg.appid }
+      if ($cg.source) { $s.game_source = $cg.source }
+      if ($cg.exe) { $s.game_exe = $cg.exe }
+      if ($null -ne $cg.is_fullscreen) { $s.game_fullscreen = [bool]$cg.is_fullscreen }
+    }
+  } catch {}
   return $s
 }
 function Send-Telemetry($sample) {
@@ -1582,13 +2054,34 @@ function Invoke-Restore {
 
 # ---------------- Modern Web GUI (Edge --app + local HTTP server) ----------------
 function Show-WebGui {
-  # Trova msedge
-  $edgePaths = @(
+  # v0.7.7: trova un browser Chromium (Edge/Chrome/Brave, anche installazioni per-utente
+  # o via registry App Paths). Se non c'e', fallback al browser predefinito.
+  $script:GUI_BROWSER_FALLBACK = $false
+  $candidates = @(
     "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
-    "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+    "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+    "$env:LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe",
+    "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+    "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+    "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe",
+    "$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe",
+    "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\Application\brave.exe"
   )
-  $edgeExe = $edgePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-  if (-not $edgeExe) { return $false }
+  $edgeExe = $null
+  foreach ($c in $candidates) { if ($c -and (Test-Path $c)) { $edgeExe = $c; break } }
+  if (-not $edgeExe) {
+    foreach ($reg in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe',
+                       'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe')) {
+      try {
+        $p = (Get-ItemProperty -Path $reg -ErrorAction SilentlyContinue).'(default)'
+        if ($p -and (Test-Path $p)) { $edgeExe = $p; break }
+      } catch {}
+    }
+  }
+  if (-not $edgeExe) {
+    Say '[INFO] Nessun browser Edge/Chrome trovato: apro la GUI nel browser predefinito.' 'DarkGray'
+    $script:GUI_BROWSER_FALLBACK = $true
+  }
 
   $isAdmin = Test-Admin
 
@@ -1613,7 +2106,7 @@ function Show-WebGui {
   # Avvia listener SOLO su 127.0.0.1
   $listener = New-Object System.Net.HttpListener
   $listener.Prefixes.Add("http://127.0.0.1:$port/")
-  try { $listener.Start() } catch { return $false }
+  try { $listener.Start() } catch { Say ("[WARN] Server GUI locale non avviabile: {0}" -f $_.Exception.Message) 'Yellow'; return $false }
 
   function WebLog($m) { [void]$script:WEBLOG.Add(@{ ts=(Get-Date).ToString("HH:mm:ss"); msg=$m }) }
   function Send-Json { param($ctx, $obj, [int]$status=200)
@@ -3420,7 +3913,7 @@ function Show-WebGui {
     const installed = (ag.installed && ag.installed.indexOf("__") < 0) ? ag.installed : "";
     const show = latest && verLt(installed, latest) && !sessionStorage.getItem("ff_upd_dismiss");
     if (!show) { el.setAttribute("hidden", ""); return; }
-    const cur = installed ? `hai la v${esc(installed)}` : "la tua versione e precedente alla 0.7.6";
+    const cur = installed ? `hai la v${esc(installed)}` : "la tua versione e precedente alla 0.7.7";
     el.innerHTML = `
       <span class="upd-icon">&#8593;</span>
       <span class="upd-text"><b>FrameForge Agent v${esc(latest)}</b> disponibile (${cur}): auto-update, zero-flash console e nuovi tweak.</span>
@@ -3672,22 +4165,34 @@ function Show-WebGui {
     "--disable-features=Translate,BackForwardCache"
   )
   try {
-    $edge = Start-Process -FilePath $edgeExe -ArgumentList $edgeArgs -PassThru
-  } catch { try { $listener.Stop() } catch {}; return $false }
+    if ($script:GUI_BROWSER_FALLBACK) {
+      $edge = $null
+      Start-Process $localUrl | Out-Null
+    } else {
+      $edge = Start-Process -FilePath $edgeExe -ArgumentList $edgeArgs -PassThru
+    }
+  } catch {
+    # Ultimo tentativo: browser predefinito
+    try { $edge = $null; Start-Process $localUrl | Out-Null }
+    catch { Say ("[WARN] Impossibile aprire il browser: {0}" -f $_.Exception.Message) 'Yellow'; try { $listener.Stop() } catch {}; return $false }
+  }
 
   # Il launcher msedge.exe fa "hop and exit" se c'e' gia' un'istanza Edge attiva.
   # Cerco il process reale (quello con il nostro user-data-dir) dopo un breve wait.
   Start-Sleep -Milliseconds 1800
   $realEdge = $null
-  try {
-    $procs = Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" -ErrorAction SilentlyContinue
-    foreach ($p in $procs) {
-      if ($p.CommandLine -and $p.CommandLine -like "*$profileDir*") {
-        $realEdge = Get-Process -Id $p.ProcessId -ErrorAction SilentlyContinue
-        break
+  if (-not $script:GUI_BROWSER_FALLBACK) {
+    $browserName = [System.IO.Path]::GetFileName($edgeExe)
+    try {
+      $procs = Get-CimInstance Win32_Process -Filter "Name='$browserName'" -ErrorAction SilentlyContinue
+      foreach ($p in $procs) {
+        if ($p.CommandLine -and $p.CommandLine -like "*$profileDir*") {
+          $realEdge = Get-Process -Id $p.ProcessId -ErrorAction SilentlyContinue
+          break
+        }
       }
-    }
-  } catch {}
+    } catch {}
+  }
   if (-not $realEdge -and $edge -and -not $edge.HasExited) { $realEdge = $edge }
   # Se ancora non c'e' un process vivo, uso un inactivity timeout come safety net.
 
@@ -4308,7 +4813,7 @@ if ($MODE -eq 'optimize') {
 
   Say "`n[STEP] Apro il pannello ottimizzazioni..." 'Cyan'
   $ok = $false
-  try { $ok = Show-WebGui } catch { $ok = $false }
+  try { $ok = Show-WebGui } catch { Say ("[WARN] Errore Web GUI: {0} (riga {1})" -f $_.Exception.Message, $_.InvocationInfo.ScriptLineNumber) 'Yellow'; $ok = $false }
   if (-not $ok) {
     Say '[WARN] Interfaccia web non disponibile, uso la GUI classica...' 'Yellow'
     $ok = Show-Gui

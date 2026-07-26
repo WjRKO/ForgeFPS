@@ -5,7 +5,7 @@
  * - Mostra URL da copiare, bottone Copia, Rigenera token, preview iframe live
  * - Setting: posizione (4 opzioni), tema (3 opzioni), toggle per singola metric
  */
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Copy, RefreshCw, ExternalLink, Loader2, Check, Radio, Monitor, Zap, Layout } from "lucide-react";
 import { toast } from "sonner";
@@ -30,6 +30,15 @@ const METRIC_TOGGLES = [
   { key: "show_ping", label: "Ping" },
   { key: "show_health", label: "Health Score" },
 ];
+const LAYOUTS = [
+  { id: "card", label: "Card verticale" },
+  { id: "bar", label: "Barra orizzontale" },
+];
+const SIZES = [
+  { id: "small", label: "S" },
+  { id: "medium", label: "M" },
+  { id: "large", label: "L" },
+];
 
 export default function ObsOverlayPanel() {
   const { t } = useTranslation();
@@ -40,6 +49,11 @@ export default function ObsOverlayPanel() {
   const [copied, setCopied] = useState(false);
   const [rotating, setRotating] = useState(false);
   const [previewKey, setPreviewKey] = useState(0); // per forzare reload iframe
+  const accentTimer = useRef(null);
+  const setAccentDebounced = (v) => {
+    clearTimeout(accentTimer.current);
+    accentTimer.current = setTimeout(() => updateCfg({ accent: v }), 400);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -204,6 +218,63 @@ export default function ObsOverlayPanel() {
                 {th.label}
               </button>
             ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Layout / Size / Accent */}
+      <div className="grid md:grid-cols-3 gap-4">
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">Layout</div>
+          <div className="grid grid-cols-2 gap-1">
+            {LAYOUTS.map((l) => (
+              <button
+                key={l.id}
+                onClick={() => updateCfg({ layout: l.id })}
+                data-testid={`overlay-layout-${l.id}`}
+                className={`text-xs px-3 py-2 border transition-colors ${cfg?.layout === l.id ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/5" : "border-[#2A2A35] text-zinc-400 hover:border-zinc-600"}`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">Dimensione</div>
+          <div className="grid grid-cols-3 gap-1">
+            {SIZES.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => updateCfg({ size: s.id })}
+                data-testid={`overlay-size-${s.id}`}
+                className={`text-xs px-3 py-2 border transition-colors ${(cfg?.size || "medium") === s.id ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/5" : "border-[#2A2A35] text-zinc-400 hover:border-zinc-600"}`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">Colore brand</div>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={cfg?.accent || THEMES.find((th) => th.id === cfg?.theme)?.swatch || "#E5FF00"}
+              onChange={(e) => setAccentDebounced(e.target.value)}
+              data-testid="overlay-accent-picker"
+              className="w-10 h-9 bg-[#0A0A0F] border border-[#2A2A35] cursor-pointer p-0.5"
+              title="Colore accent personalizzato"
+            />
+            <span className="font-mono text-xs text-zinc-400">{cfg?.accent || "tema"}</span>
+            {cfg?.accent && (
+              <button
+                onClick={() => updateCfg({ accent: "" })}
+                data-testid="overlay-accent-reset"
+                className="text-[10px] uppercase tracking-widest text-zinc-500 border border-[#2A2A35] px-2 py-1.5 hover:border-zinc-500 transition-colors"
+              >
+                Reset
+              </button>
+            )}
           </div>
         </div>
       </div>

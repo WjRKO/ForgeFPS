@@ -72,6 +72,12 @@ class FpsInput(BaseModel):
     resolution: str = "1080p"
 
 
+class FpsUpgradeInput(BaseModel):
+    game: str
+    resolution: str = "1080p"
+    upgrades: list[str] = []
+
+
 class RoleInput(BaseModel):
     role: str
 

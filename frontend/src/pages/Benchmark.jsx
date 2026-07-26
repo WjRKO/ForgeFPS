@@ -278,13 +278,14 @@ export default function Benchmark() {
       </div>
 
       {tab === "full" ? (
-        <FullBenchmarkReport />
+        <>
+          <div className="mb-4">
+            <GpuReferenceCard />
+          </div>
+          <FullBenchmarkReport />
+        </>
       ) : (
       <>
-      <div className="mb-4">
-        <GpuReferenceCard />
-      </div>
-
       {bench && bench.latest ? (
         <>
           <NextActionBanner kind="post-benchmark" dismissKey={`post-bench-${bench.latest.ts || "any"}`} />

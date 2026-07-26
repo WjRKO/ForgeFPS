@@ -7,6 +7,7 @@ import i18n from "@/i18n";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import SpecsForm from "@/components/SpecsForm";
 import HealthHistoryCard from "@/components/HealthHistoryCard";
+import { HwInsightsPanel } from "@/components/HwInsightsPanel";
 import SyncTimeline from "@/components/SyncTimeline";
 import { PageHeader } from "@/components/hud";
 import { useSilentLaunch } from "@/hooks/useSilentLaunch";
@@ -29,13 +30,22 @@ function composeSpec(key, d) {
     const x = [];
     if (d.gpu_vram_gb) x.push(`${d.gpu_vram_gb}GB VRAM`);
     if (d.gpu_driver_version) x.push(`driver ${d.gpu_driver_version}`);
-    return x.length ? `${v} · ${x.join(" · ")}` : v;
+    const base = x.length ? `${v} · ${x.join(" · ")}` : v;
+    return d.gpu_secondary ? `${base} + ${d.gpu_secondary}` : base;
   }
   if (key === "ram") {
     const x = [];
     if (d.ram_type) x.push(d.ram_type);
     if (d.ram_speed_mhz) x.push(`${d.ram_speed_mhz}MHz`);
     if (d.ram_modules) x.push(`${d.ram_modules}×`);
+    if (d.ram_manufacturer) x.push(d.ram_manufacturer);
+    return x.length ? `${v} · ${x.join(" · ")}` : v;
+  }
+  if (key === "disk") {
+    const x = [];
+    if (d.storage_type) x.push(d.storage_type);
+    if (d.storage_health && d.storage_health !== "Healthy") x.push(`health: ${d.storage_health}`);
+    if (d.storage_wear_pct != null) x.push(`wear ${d.storage_wear_pct}%`);
     return x.length ? `${v} · ${x.join(" · ")}` : v;
   }
   if (key === "os") return d.form_factor ? `${v} · ${d.form_factor}` : v;
@@ -340,6 +350,8 @@ export default function MyPc() {
         </div>
       )}
 
+      <HwInsightsPanel />
+
       <HealthHistoryCard />
 
       <SyncTimeline days={7} />
@@ -347,12 +359,29 @@ export default function MyPc() {
       <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick mb-4">
         <div className="p-5 border-b border-[#2A2A35] text-xs uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2"><Cpu size={14} className="text-[#E5FF00]" /> {t("mypcpage.hardware")}</div>
         <div className="grid sm:grid-cols-2 gap-px bg-[#1A1A24]">
-          {shownSpecKeys.map((k) => (
-            <div key={k} className="bg-[#0F0F12] p-4" data-testid={`spec-${k}`}>
-              <div className="text-xs uppercase tracking-widest text-zinc-500">{specLabel(t, k)}</div>
-              <div className="text-sm text-zinc-100 mt-1">{composeSpec(k, specs.data)}</div>
-            </div>
-          ))}
+          {shownSpecKeys.map((k) => {
+            const conf = specs.data?.hw_confidence || {};
+            const cKey = k === "disk" ? "storage" : k;
+            const cVal = conf[cKey];
+            const badgeCls = cVal >= 2 ? "text-[#00FF66] border-[#00FF66]/30" : cVal === 1 ? "text-[#E5FF00] border-[#E5FF00]/30" : "text-zinc-600 border-zinc-800";
+            return (
+              <div key={k} className="bg-[#0F0F12] p-4" data-testid={`spec-${k}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs uppercase tracking-widest text-zinc-500">{specLabel(t, k)}</div>
+                  {cVal != null && (
+                    <span
+                      className={`text-[9px] font-mono font-bold px-1.5 py-0.5 border ${badgeCls}`}
+                      title={t("mypcpage.hw_sources_tooltip", "Numero di fonti indipendenti (WMI + Registry + nvidia-smi) che hanno confermato questo componente")}
+                      data-testid={`hw-conf-${k}`}
+                    >
+                      {cVal}/2
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-zinc-100 mt-1">{composeSpec(k, specs.data)}</div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

@@ -1331,3 +1331,75 @@ Tutto lato server (`backend/ps_agent.py`, script scaricato fresco a ogni avvio �
 - **Changelog app**: nuova release "GUI 3.0" in `backend/data/changelog.json` (visibile in /app/changelog).
 - **Test**: sintassi PS validata con pwsh 7.4 parser (OK), JS validato con node --check (OK), 12/12 pytest `tests/test_secure_ps.py` (fixato test stale che non gestiva il BOM UTF-8 preesistente), harness mock locale + screenshot: fullscreen 1920px, ridotta 720px, tab Monitor/Bloatware/banner/revert tutti verificati visivamente.
 - NOTA: il banner update si attiverà davvero quando `AGENT_ZIP_UPSTREAM` punterà alla release ≥0.7.6 (oggi punta a v0.7.5 su GitHub).
+
+### 2026-07-25 (46) — Release v0.7.6 pubblicata: bump URL + SHA (FATTO)
+- SHA256 fornito dall'utente `fd294dd4504877d714064fc92aed0270aba77c64d36bd4799685b4187eddba18` VERIFICATO scaricando lo ZIP da GitHub (match esatto).
+- `frontend/src/config/agent.js`: AGENT_EXE_URL → v0.7.6, AGENT_EXE_SHA256 aggiornato, AGENT_EXE_VERSION v0.7.6, AGENT_EXE_DATE 2026-07-25.
+- `backend/routers/pc.py`: AGENT_ZIP_UPSTREAM default → v0.7.6 (LATEST_AGENT_VERSION auto-estratta = 0.7.6).
+- Effetti attivati e verificati e2e: `/api/agent/latest-version` = 0.7.6; script PS embedda LATEST_VER/DL_URL 0.7.6; banner web "0.7.5 → v0.7.6" visibile su /app/desktop; SHA in pagina = fd294dd4...; `/api/agent/download-zip` serve il nuovo ZIP col launcher personalizzato (SHA diverso dall'upstream by design, il token utente è iniettato nel .bat).
+- Da qui: gli exe v0.7.6 si auto-aggiorneranno alle prossime release; gli utenti 0.7.5 vedono i banner (web + in-GUI).
+
+### 2026-07-25 (47) — Debug "non vedo la nuova GUI": fallback GUI classica + hardening browser (FATTO, richiede redeploy)
+- Sintomo utente (produzione): "[WARN] Interfaccia web non disponibile, uso la GUI classica..." → l'utente vede la vecchia GUI WinForms, NON la Web GUI v3.0. Nel suo screenshot manca la riga "[STEP] GUI locale su..." → il fallimento avviene PRIMA (rilevamento Edge o HttpListener.Start), non nel nuovo codice.
+- Verifiche fatte: prod serve il nuovo codice (latest-version 0.7.6, changelog GUI 3.0 live); sintassi 5.1 OK (PSScriptAnalyzer PSUseCompatibleSyntax target 5.1: zero issue); harness pwsh su Linux con browser fake: Show-WebGui parte, endpoint /api/state, /api/telemetry-local, /api/bloatware, /api/restore-one rispondono (unici errori = cmdlet Windows assenti su Linux).
+- Fix in `ps_agent.py::Show-WebGui`:
+  1. Rilevamento browser esteso: Edge/Chrome/Brave in Program Files, Program Files (x86), LOCALAPPDATA (installazioni per-utente) + registry App Paths (msedge.exe/chrome.exe).
+  2. Se nessun Chromium: fallback `Start-Process $localUrl` nel browser predefinito (GUI in tab normale, loop tenuto vivo dall'inactivity timeout 30s + polling 400ms).
+  3. Diagnostica: listener.Start fallito → stampa il motivo; catch esterno di Show-WebGui stampa messaggio+riga invece di inghiottire l'eccezione.
+  4. Match del processo reale usa il nome del browser scelto (non piu' hardcoded msedge.exe).
+- IMPORTANTE: fix lato server → serve UN ALTRO REDEPLOY per portarlo su forgefps.dev. Al prossimo avvio dell'agent, se fallisce ancora, la console stampera' il motivo esatto (chiedere screenshot).
+- Nota deploy precedente: primo tentativo fallito per errore infra (docker-push "manifest invalid"), secondo tentativo riuscito.
+
+### 2026-07-25 (48) — Redesign pagina "Live Monitoring" (Command Center) (FATTO, testato)
+- Blueprint dal design_agent (salvato in /app/design_guidelines.json → page_specific_guidelines.live_monitoring). Approvato dall'utente prima dell'implementazione; richiesta esplicita: mantenere l'OBS overlay.
+- `Live.jsx` riscritta: header + pill "Telemetria attiva"; top bar = MonitorLiveControl (live) o hero offline centrato con CTA Volt (monitor-launch-btn); 4 bento card (PERFORMANCE con FPS gigante giallo >144 + latenza, CPU con temp color-coded ≥75/≥85, GPU con temp+watt, MEMORIA RAM+VRAM), valori "--" ghosted offline; griglia lg:3 col → grafici 2/3 con TAB (Performance FPS scala libera FIX CLIPPING + latenza asse dx / Temperature 0-110 / Utilizzo 0-100) + riga min/media/max; sidebar: BottleneckDetector, alert termici compatti, Reflex collassabile; SessionSummary full-width; ObsOverlayPanel mantenuto in fondo. Container max-w-7xl.
+- i18n: nuove chiavi live.link_active, tab_*, card_*, min/avg/max, launch_btn, manual_cmd, launching, launch_failed (IT+EN).
+- Testing agent iteration_37: 100% frontend checklist (tabs, alert save, reflex, summary reset, OBS, offline hero+preflight, IT/EN, mobile 390px no overflow). Fixati i 2 minor: traduzioni EN launch_btn & co., scala therm 0→110.
+- NOTA DB dev: admin@boostpc.io settato a plan 'streamer' per testare contenuto sbloccato; 60+ sample telemetria seedati (Counter-Strike 2).
+- Richiede redeploy per essere visibile su forgefps.dev.
+
+### 2026-07-25 (49) — GpuReferenceCard spostata nel tab "Full Benchmark v2" (FATTO)
+- `Benchmark.jsx`: la card "// GPU VS REFERENCE" (PassMark G3D, Time Spy, VRAM, TDP + bottone Avvia Full Benchmark) rimossa dal tab Quick e renderizzata sopra `FullBenchmarkReport` nel tab Full. Verificato con screenshot (0 occorrenze in Quick, 1 in Full).
+
+### 2026-07-25 (50) — Miglioramenti "Consiglia Build" + "Upgrade & FPS" (FATTO, testato)
+Scelte utente: Build a+b, Upgrade d+e+g.
+- BuildGenerator.jsx: (b) 3 preset one-click (Competitive 1080p €1200 / Streaming 1440p €1800 / 4K Ultra €3000) che compilano e generano subito; (a) build salvate espandibili (click header → BuildCard completa con componenti/prezzi/tips; delete/track con stopPropagation).
+- Upgrade.jsx riscritta: (g) header hardware rilevato (CPU/GPU/RAM da /pc-specs); (e) chips giochi installati (da /api/games, riempiono il campo gioco); (d) blocco "Prima vs dopo l'upgrade" nel risultato analisi → POST /api/fps/upgrade-compare con upgrades=recommendations → badge guadagno % + 4 righe preset con barre doppie (grigia=ora, verde=dopo) + note AI.
+- Backend: models.FpsUpgradeInput, ai_engine.estimate_fps_upgrade() (prompt before/after con bottleneck residui), route POST /fps/upgrade-compare in pc.py (richiede specs, gestione 402 budget LLM).
+- i18n IT+EN: build.presets_title/preset_defs, upgrade.hw_title/games_quick/ba_*.
+- Testing agent iteration_38: 100% backend (6/6 pytest) e 100% frontend. Note non bloccanti: route è /app/builds (plurale); stato `game` condiviso tra pannello FPS e blocco ba (voluto).
+- Seed dev: admin ha pc_specs (i7-12700K, RTX 3070 Ti, 32GB) + 5 giochi.
+- Richiede redeploy per produzione.
+
+### 2026-07-25 (51) — Bottone "Traccia" nel confronto Prima/Dopo (FATTO, testato e2e)
+- Upgrade.jsx: aggiunto `ba-track-btn` (Volt, full width) in fondo a ba-result → riusa trackParts() (POST /upgrade/track con le recommendations). i18n it/en `upgrade.ba_track`.
+- Test e2e screenshot: analyze → compare Fortnite (+35%, 4 barre) → click traccia → toast "1 components added to the Price Tracker" ✓.
+
+### 2026-07-25 (52) — Hardware Insights (a,b,c,d,e,f,h — scelte utente, no ReBAR) (FATTO, testato)
+- Agent (ps_agent.py Get-Specs, arriva via script server → no rebuild exe): ram_speed_nominal_mhz (XMP check), max_refresh_hz (EDID via WmiMonitorListedSupportedSourceModes), disks[{letter,type NVMe/SATA SSD/HDD,size_gb,free_gb}] (Get-Volume+Get-Partition+Get-PhysicalDisk), game_drives (parse libraryfolders.vdf Steam), hvci_on (Win32_DeviceGuard/registry), gpu_driver_date, bios_date. Sintassi PS validata (pwsh 7.4 parser).
+- Backend helpers.py: compute_hw_insights(d) rule engine → [{id,severity,params}] (xmp≥400MHz gap, single_channel, refresh gap≥30Hz, game_on_hdd, disk_full<10%, hvci, gpu_driver_old>180gg, bios_old>2anni); _insight_text_it per prompt AI; specs_to_text ora include riga Dischi + blocco "Problemi hardware rilevati" → AI Advisor/Upgrade/FPS li ricevono automaticamente.
+- Route GET /api/hw-insights (pc.py). Testato curl: 6 insight con dati seedati admin.
+- Frontend: components/HwInsightsPanel.jsx (severità high/med/low con bordi/badge colorati, titolo+desc+fix localizzati con interpolazione params) renderizzato in MyPc.jsx sotto Health Score. i18n `hwins.*` IT+EN completo. Screenshot ✓ (6 righe).
+- Seed dev admin: specs estese con problemi simulati (XMP off 2133/3600, 60/165Hz, Steam su HDD D:, HVCI on, driver 8 mesi, BIOS 2023).
+- Richiede redeploy per produzione (sia backend che script agent).
+
+### 2026-07-25 (53) — Overlay OBS: layout bar + accent custom + size (a,d,f scelte utente) (FATTO, testato)
+- overlay.py: config estesa con `layout` (card|bar), `size` (small 0.85|medium 1|large 1.35 via CSS zoom), `accent` (#RRGGBB validato regex, ""=reset al tema; glow/border calcolati in rgba). PUT /overlay/config valida i 3 campi; _config_response li espone. Pagina overlay: CSS condizionale per layout bar (ticker orizzontale width max-content, border-top accent, icone/barre nascoste, metriche inline).
+- ObsOverlayPanel.jsx: nuova riga controlli md:grid-cols-3 → Layout (Card/Barra), Dimensione (S/M/L), Colore brand (input color con debounce 400ms + Reset). testids: overlay-layout-*, overlay-size-*, overlay-accent-picker/reset.
+- Test: curl PUT (bar/large/#ff2d95 OK, "rosso" → 400), HTML overlay contiene zoom 1.35 + accent + bar CSS (9 match), screenshot pannello+preview bar rosa ✓.
+- Richiede redeploy; in OBS basta refresh della Browser Source.
+
+### 2026-07-26 (54) — Sincronizzazione PC ad alta precisione (opzioni a+c, scelte utente) (FATTO)
+Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati LibreHardwareMonitor.
+- ps_agent.py (arriva via script server, no rebuild exe):
+  - Helpers nuovi: `Get-CpuFromRegistry` (ProcessorNameString), `Get-GpuAdaptersFromRegistry` (enumera Class {4d36e968}), `Get-PrimaryStorage` (Get-Partition+Get-PhysicalDisk+Get-StorageReliabilityCounter → storage_type NVMe/SSD/HDD, storage_bus, storage_health, storage_wear_pct, storage_temp, storage_size_gb, storage_model).
+  - `Get-Specs` esteso: cross-check CPU nome WMI vs Registry (preferisce Registry se più lungo/preciso), rilevamento GPU multi-adapter con ordinamento discrete-first (NVIDIA/GeForce/Radeon RX/Arc > Intel UHD/Iris/Vega iGPU), gpu_secondary (iGPU su laptop ibridi), gpu_provider (NVIDIA/AMD/Intel), ram_manufacturer (SMBIOS filtro Unknown/To be filled), hw_confidence={cpu,gpu,ram,storage} = numero fonti confermate 0-3.
+  - `Get-LhmTemps` esteso: oltre a cpu_temp/gpu_temp ora estrae fan_rpm_max + fan_count (Fan sensors), vrm_temp (MB sensori vrm/mos/vsoc), cpu_power (CPU Package power W), gpu_power_lhm (fallback per AMD/Intel senza nvidia-smi), cpu_vcore (Voltage sensor CPU). Fascia validazione: fan 0-10000rpm, power 0-1000W, vcore 0.3-2.0V.
+  - `Get-Health` e `Get-TelemetrySample` propagano tutti i nuovi campi nel payload (backend model è già free-form dict, no changes richiesti).
+- Frontend:
+  - Live.jsx: nuovo componente `PrecisionCell` + strip condizionale `grid-cols-2 sm:grid-cols-4` sotto le 4 bento card mostra Fan RPM / VRM Temp / CPU Power / Vcore (visibile solo se almeno un valore è presente). testids: precision-sensors, stat-fan-rpm, stat-vrm-temp, stat-cpu-power, stat-cpu-vcore.
+  - MyPc.jsx: composeSpec include gpu_secondary ("GPU + iGPU"), storage_type/health/wear nel campo disco, ram_manufacturer. Badge `hw-conf-{key}` accanto a ogni spec mostra `2/2` (verde), `1/2` (giallo) o `0/2` (grigio) fonti confermate. Tooltip localizzato.
+  - i18n IT+EN: live.st_fan_rpm/st_vrm_temp/st_cpu_power/st_cpu_vcore, mypcpage.hw_sources_tooltip.
+- Backend model: nessuna modifica (SpecsInput.data e TelemetryInput.sample sono già dict[str,Any] free-form).
+- Test: python import + brace-balance PS ok (73 funzioni), curl telemetry con nuovi campi accettato (HTTP 401 auth, non 422 validation), frontend compilato senza errori.
+- Richiede redeploy per produzione (backend serve il nuovo script PS).

@@ -15,6 +15,7 @@
       { "type": "feature", "text": "Revert granulare: ogni tweak applicato mostra il bottone 'Ripristina' sulla card. L'agent traccia quali chiavi di backup ha creato ciascun tweak e ripristina solo quelle" },
       { "type": "feature", "text": "Banner in-GUI quando e' disponibile una nuova versione dell'agent, con link diretto al download e dismiss per sessione" },
       { "type": "fix", "text": "Il bottone 'Riavvia ora' dopo i tweak con riavvio ora funziona (l'endpoint locale /api/reboot non esisteva)" },
+      { "type": "fix", "text": "GUI web piu' robusta: rileva anche Edge/Chrome/Brave installati per-utente o via registry e, se nessun browser Chromium e' presente, apre la GUI nel browser predefinito invece di ripiegare sulla GUI classica" },
       { "type": "improvement", "text": "GUI responsive: layout ottimizzato per finestra ridotta (tab scrollabili, card a colonna singola, footer compatto) e per fullscreen (griglia piu' larga, tipografia scalata)" },
       { "type": "improvement", "text": "Il pannello 'Backup' ora elenca i nomi dei tweak reversibili invece delle chiavi di registro grezze" }
     ]

@@ -12,11 +12,11 @@ from fastapi.responses import PlainTextResponse
 import ai_engine
 import push
 from database import db, now_iso
-from helpers import specs_to_text, compute_health, get_or_create_agent_token, grade_bufferbloat
+from helpers import specs_to_text, compute_health, compute_hw_insights, get_or_create_agent_token, grade_bufferbloat
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
 from services.gpu_catalog_service import find_gpu_reference, compute_health_vs_reference
-from models import SpecsInput, GoalInput, FpsInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput
+from models import SpecsInput, GoalInput, FpsInput, FpsUpgradeInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput
 from routers.profiles import resolve_tweak_ids, TWEAK_CATALOG, TEMPLATES
 from routers.advisor import _check_ai_rate_limit
 from plan_gate import require_pro, require_streamer
@@ -42,7 +42,7 @@ def _iso_age(ts):
 # GitHub Release del ZIP generico dell'agent. Aggiornare a ogni bump di versione.
 AGENT_ZIP_UPSTREAM = os.environ.get(
     "AGENT_ZIP_UPSTREAM",
-    "https://github.com/WjRKO/ForgeFPS/releases/download/v0.7.5/forgefps-agent.zip",
+    "https://github.com/WjRKO/ForgeFPS/releases/download/v0.7.6/forgefps-agent.zip",
 )
 _AGENT_ZIP_CACHE_PATH = f"/tmp/forgefps-agent-cache-{hashlib.sha256(AGENT_ZIP_UPSTREAM.encode()).hexdigest()[:10]}.zip"
 
@@ -328,6 +328,17 @@ def build(get_current_user):
         if data.boost_session is not None:
             await db.boost_sessions.insert_one({**data.boost_session, "user_id": uid, "created_at": now_iso()})
         await db.pc_specs.update_one({"user_id": uid}, {"$set": fields}, upsert=True)
+        # v0.7.7 Milestones: track scan + health + daily active
+        try:
+            from milestones import bump_counter, track_health_score, track_daily_active
+            await bump_counter(db, uid, "pc_scans", 1)
+            await track_daily_active(db, uid)
+            if data.health is not None:
+                _score = compute_health(data.health).get("score")
+                if _score is not None:
+                    await track_health_score(db, uid, int(_score))
+        except Exception:
+            pass
         return {"ok": True}
 
     @r.post("/agent/netresult")
@@ -730,6 +741,14 @@ def build(get_current_user):
              "$push": {"samples": {"$each": [sample], "$slice": -300}}},
             upsert=True)
         await _check_temp_alerts(rec["user_id"], sample)
+        # v0.7.7 Milestones: track distinct games (Universal Game Detector)
+        try:
+            _game_key = sample.get("steam_appid") or sample.get("game_name")
+            if _game_key:
+                from milestones import add_unique
+                await add_unique(db, rec["user_id"], "games_detected", str(_game_key))
+        except Exception:
+            pass
         # Return stop signal: the agent's monitor loop reads this and exits cleanly
         # when the user clicks "Stop" on the web dashboard.
         ctrl = await db.monitor_control.find_one({"user_id": rec["user_id"]}, {"_id": 0}) or {}
@@ -897,6 +916,64 @@ def build(get_current_user):
         doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0, "games": 1, "updated_at": 1})
         return {"games": (doc or {}).get("games", []), "updated_at": (doc or {}).get("updated_at")}
 
+    @r.get("/hw-insights")
+    async def hw_insights(user: dict = Depends(get_current_user)):
+        doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0, "data": 1})
+        d = (doc or {}).get("data") or {}
+        if not d:
+            return {"available": False, "insights": []}
+        return {"available": True, "insights": compute_hw_insights(d)}
+
+    @r.get("/game/details/{appid}")
+    async def game_details(appid: str, user: dict = Depends(get_current_user)):
+        """v0.7.7 Universal Game Detector — recupera info Steam Store (cover, genere, dev)
+        con cache MongoDB 7 giorni. Riduce chiamate esterne e latenza sul dashboard live."""
+        if not appid or not appid.isdigit() or len(appid) > 12:
+            raise HTTPException(400, "invalid appid")
+        cached = await db.game_cache.find_one({"appid": appid}, {"_id": 0})
+        if cached and cached.get("cached_at"):
+            try:
+                age = (datetime.now(timezone.utc) - datetime.fromisoformat(cached["cached_at"])).days
+                if age < 7:
+                    return cached
+            except Exception:
+                pass
+        import httpx as _httpx
+        try:
+            async with _httpx.AsyncClient(timeout=8.0, follow_redirects=True) as c:
+                resp = await c.get(
+                    f"https://store.steampowered.com/api/appdetails",
+                    params={"appids": appid, "l": "english", "cc": "us"},
+                    headers={"User-Agent": "FrameForge/1.0"},
+                )
+            j = resp.json() if resp.status_code == 200 else {}
+            node = (j or {}).get(appid) or {}
+            if not node.get("success"):
+                info = {"appid": appid, "found": False, "cached_at": now_iso()}
+            else:
+                d = node.get("data") or {}
+                info = {
+                    "appid": appid,
+                    "found": True,
+                    "name": d.get("name"),
+                    "header_image": d.get("header_image"),
+                    "capsule_image": d.get("capsule_image"),
+                    "developers": (d.get("developers") or [])[:3],
+                    "publishers": (d.get("publishers") or [])[:3],
+                    "genres": [g.get("description") for g in (d.get("genres") or []) if g.get("description")][:5],
+                    "release_date": (d.get("release_date") or {}).get("date"),
+                    "cached_at": now_iso(),
+                }
+        except Exception as e:
+            info = {"appid": appid, "found": False, "error": str(e)[:200], "cached_at": now_iso()}
+        try:
+            await db.game_cache.update_one({"appid": appid}, {"$set": info}, upsert=True)
+        except Exception:
+            pass
+        # strip mongo _id from returned dict
+        info.pop("_id", None)
+        return info
+
     @r.get("/pc-health")
     async def pc_health(user: dict = Depends(get_current_user)):
         doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
@@ -928,6 +1005,21 @@ def build(get_current_user):
         specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
         try:
             return await ai_engine.estimate_fps(specs_to_text(specs) if specs else "", data.game, data.resolution)
+        except Exception as e:
+            msg = str(e)
+            if "Budget" in msg and "exceeded" in msg:
+                raise HTTPException(status_code=402,
+                    detail="Credito LLM esaurito. Ricarica da Profilo -> Universal Key -> Add Balance.")
+            raise HTTPException(status_code=502, detail=msg)
+
+    @r.post("/fps/upgrade-compare")
+    async def fps_upgrade_compare(data: FpsUpgradeInput, user: dict = Depends(get_current_user)):
+        specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        if not specs or not specs.get("data"):
+            raise HTTPException(status_code=400,
+                                detail="Nessun hardware rilevato. Usa il FrameForge Agent per inviare le specifiche.")
+        try:
+            return await ai_engine.estimate_fps_upgrade(specs_to_text(specs), data.game, data.resolution, data.upgrades)
         except Exception as e:
             msg = str(e)
             if "Budget" in msg and "exceeded" in msg:
