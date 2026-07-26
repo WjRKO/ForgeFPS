@@ -1,5 +1,19 @@
 [
   {
+    "version": "0.7.9",
+    "date": "2026-07-27",
+    "highlights": [
+      "Fix definitivo auto-updater: niente piu' popup UAC dopo un aggiornamento",
+      "I bottoni della dashboard restano silenziosi anche durante l'auto-update",
+      "Update completo della cartella (exe + librerie): fine dei crash post-update"
+    ],
+    "changes": [
+      { "type": "fix", "text": "L'auto-update non riavvia piu' l'exe in modalita' GUI optimize (che chiedeva UAC): se il lancio arriva da un bottone della dashboard, l'azione parte subito e l'update viene applicato in background senza riavvio" },
+      { "type": "fix", "text": "updater ora copia l'intera cartella onedir (exe + _internal) con xcopy /E: prima copiava solo l'exe, causando crash se le versioni PyInstaller differivano" },
+      { "type": "fix", "text": "Il relaunch post-update nei lanci interattivi inoltra gli argomenti originali (es. --token) invece di aprire la GUI di default" }
+    ]
+  },
+  {
     "version": "0.7.8",
     "date": "2026-07-26",
     "highlights": [

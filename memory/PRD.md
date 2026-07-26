@@ -1403,3 +1403,15 @@ Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati Li
 - Backend model: nessuna modifica (SpecsInput.data e TelemetryInput.sample sono già dict[str,Any] free-form).
 - Test: python import + brace-balance PS ok (73 funzioni), curl telemetry con nuovi campi accettato (HTTP 401 auth, non 422 validation), frontend compilato senza errori.
 - Richiede redeploy per produzione (backend serve il nuovo script PS).
+
+### 2026-07-27 (55) — Fix UAC persistente + auto-updater v0.7.9 (FATTO, in attesa release GitHub utente)
+- Diagnosi UAC su bottoni dashboard (Sincronizza/Monitor/Benchmark/Fullbench): UAC mostra "forgefps-agent.exe" → il protocollo frameforge:// sul PC utente punta ancora a un VECCHIO exe ≤0.7.6 con --uac-admin. Verificato che il binario v0.7.8 su GitHub (tag v.0.7.8) è asInvoker pulito (strings sull'exe scaricato). Produzione forgefps.dev già serve 0.7.8 correttamente.
+- Riparazione utente fornita: eliminare vecchie cartelle forgefps-agent, doppio click sul nuovo exe (rigenera %APPDATA%\FrameForge\launcher.vbs), test bottone.
+- forgefps_agent.py → v0.7.9, 3 fix auto-updater:
+  1. `_check_and_apply_update(relaunch=False)`: lanci via URI non vengono più bloccati dall'update; azione parte subito, update in background senza riavvio exe (prima il relaunch senza args apriva GUI optimize → runas → UAC inatteso).
+  2. update.bat ora copia TUTTA la cartella onedir con `xcopy /E /Y` (prima solo l'exe → crash con _internal mismatched).
+  3. Relaunch interattivo post-update inoltra sys.argv originali.
+- version_info.txt + forgefps-agent.manifest → 0.7.9.0. github-workflow-build-nosign.yml allineato: aggiunto `--manifest forgefps-agent.manifest` + step safety check anti-requireAdministrator (prima mancavano nel file locale, presenti solo in build.ps1).
+- changelog.json: entry 0.7.9. REBUILD_v0.7.9.md creato con checklist release (tag ESATTO v0.7.9, no v.0.7.9).
+- PENDING: utente deve pushare tag v0.7.9 su GitHub → poi aggiornare AGENT_ZIP_UPSTREAM in /app/backend/routers/pc.py a .../v0.7.9/... e redeploy.
+- Test: py_compile agent OK, curl /api/changelog 200 (0.7.9 primo), /api/agent/latest-version 0.7.8 invariato (release non ancora esistente). Comportamento Windows non testabile in questo ambiente.
