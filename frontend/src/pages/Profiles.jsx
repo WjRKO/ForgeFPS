@@ -19,9 +19,8 @@ function ProfileCard({ p, catalog, token, onDelete }) {
           <button data-testid={`delete-profile-${p.id}`} onClick={() => onDelete(p.id)} className="text-zinc-600 hover:text-[#FF3B30] transition-colors"><Trash2 size={16} /></button>
         )}
       </div>
-      <div className="flex flex-wrap gap-1.5 mb-4">
-        {names.slice(0, 8).map((n) => <span key={n} className="text-[11px] bg-black border border-[#1A1A24] px-2 py-0.5 text-zinc-400">{n}</span>)}
-        {names.length > 8 && <span className="text-[11px] text-zinc-600 px-1 py-0.5">+{names.length - 8}</span>}
+      <div className="flex flex-wrap gap-1.5 mb-4" data-testid={`profile-tweaks-${p.id}`}>
+        {names.map((n) => <span key={n} className="text-[11px] bg-black border border-[#1A1A24] px-2 py-0.5 text-zinc-400">{n}</span>)}
       </div>
       <SecureRunBlock token={token} mode="optimize" profile={p.id} testid={`profile-run-${p.id}`} />
     </div>
