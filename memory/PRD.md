@@ -1428,3 +1428,8 @@ Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati Li
 - Diagnosi via utente: registry HKCU frameforge OK (wscript+launcher.vbs), MA launcher.vbs puntava a `C:\Users\tocci\Downloads\forgefps-agent\forgefps-agent\forgefps-agent.exe` = exe VECCHIO con manifest requireAdministrator. Il vbs viene riscritto da OGNI agent eseguito (punta a sé stesso): l'utente aveva rieseguito manualmente un exe vecchio da Downloads.
 - Fix: utente ha riscaricato zip v0.7.9 dalla dashboard, estratto in cartella stabile, eseguito una volta (vbs riscritto), eliminato copie vecchie. CONFERMATO RISOLTO dall'utente.
 - LEZIONE (recidiva possibile): se l'utente esegue un QUALSIASI exe vecchio, il vbs torna a puntare lì → UAC ritorna. Hardening futuro possibile (v0.8.0): far verificare all'agent, alla registrazione, la versione e rifiutare downgrade del launcher; oppure updater che riesegue --register-protocol.
+
+### 2026-07-28 (58) — Fix modal Pre-Flight sotto la piega (FATTO, testato)
+- Bug: il modal MonitorPreflight (position:fixed) era ancorato al contenitore `.fade-up` (transform residuo da animation-fill-mode:both crea containing block) → appariva sotto la piega, serviva scrollare.
+- Fix: MonitorPreflight.jsx renderizzato via createPortal(document.body) + overflow-y-auto sul backdrop. Verificato con screenshot: modal centrato nel viewport (bounding box 0,0,1920,1080).
+- NOTA per futuri modal: qualsiasi `fixed inset-0` dentro pagine con `.fade-up`/`.stagger` DEVE usare createPortal.
