@@ -1422,3 +1422,9 @@ Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati Li
 - frontend/src/config/agent.js: AGENT_EXE_URL/SHA256/VERSION/DATE → v0.7.9.
 - Test e2e: login admin → GET /api/agent/download-zip 200 (9.1MB), zip contiene Avvia-FrameForge.bat personalizzato + exe v0.7.9 asInvoker. GET /api/agent/latest-version → 0.7.9.
 - PENDING UTENTE: redeploy produzione (forgefps.dev serve ancora 0.7.8) + installazione pulita v0.7.9 sul PC (scaricare zip fresco dalla dashboard invece di affidarsi all'auto-update della 0.7.8, il cui vecchio update.bat riavvia in GUI optimize → un UAC one-time).
+
+### 2026-07-28 (57) — UAC recidivo: risolto lato utente (nessuna modifica codice)
+- Sintomo: UAC "forgefps-agent.exe" su OGNI bottone dashboard nonostante v0.7.9 deployata.
+- Diagnosi via utente: registry HKCU frameforge OK (wscript+launcher.vbs), MA launcher.vbs puntava a `C:\Users\tocci\Downloads\forgefps-agent\forgefps-agent\forgefps-agent.exe` = exe VECCHIO con manifest requireAdministrator. Il vbs viene riscritto da OGNI agent eseguito (punta a sé stesso): l'utente aveva rieseguito manualmente un exe vecchio da Downloads.
+- Fix: utente ha riscaricato zip v0.7.9 dalla dashboard, estratto in cartella stabile, eseguito una volta (vbs riscritto), eliminato copie vecchie. CONFERMATO RISOLTO dall'utente.
+- LEZIONE (recidiva possibile): se l'utente esegue un QUALSIASI exe vecchio, il vbs torna a puntare lì → UAC ritorna. Hardening futuro possibile (v0.8.0): far verificare all'agent, alla registrazione, la versione e rifiutare downgrade del launcher; oppure updater che riesegue --register-protocol.
