@@ -1415,3 +1415,10 @@ Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati Li
 - changelog.json: entry 0.7.9. REBUILD_v0.7.9.md creato con checklist release (tag ESATTO v0.7.9, no v.0.7.9).
 - PENDING: utente deve pushare tag v0.7.9 su GitHub → poi aggiornare AGENT_ZIP_UPSTREAM in /app/backend/routers/pc.py a .../v0.7.9/... e redeploy.
 - Test: py_compile agent OK, curl /api/changelog 200 (0.7.9 primo), /api/agent/latest-version 0.7.8 invariato (release non ancora esistente). Comportamento Windows non testabile in questo ambiente.
+
+### 2026-07-27 (56) — Release v0.7.9 verificata e backend/frontend aggiornati (FATTO, testato)
+- Verifica release GitHub v0.7.9: SHA256 zip a791349662...9de000 IDENTICO a quello fornito dall'utente; exe dentro lo zip: asInvoker presente, 0 occorrenze requireAdministrator, version resource 0.7.9.0.
+- backend/routers/pc.py: AGENT_ZIP_UPSTREAM → .../download/v0.7.9/forgefps-agent.zip (tag corretto senza punto). LATEST_AGENT_VERSION auto-derivata = 0.7.9.
+- frontend/src/config/agent.js: AGENT_EXE_URL/SHA256/VERSION/DATE → v0.7.9.
+- Test e2e: login admin → GET /api/agent/download-zip 200 (9.1MB), zip contiene Avvia-FrameForge.bat personalizzato + exe v0.7.9 asInvoker. GET /api/agent/latest-version → 0.7.9.
+- PENDING UTENTE: redeploy produzione (forgefps.dev serve ancora 0.7.8) + installazione pulita v0.7.9 sul PC (scaricare zip fresco dalla dashboard invece di affidarsi all'auto-update della 0.7.8, il cui vecchio update.bat riavvia in GUI optimize → un UAC one-time).
