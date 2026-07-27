@@ -16,7 +16,7 @@ API = f"{BASE_URL}/api"
 ADMIN_EMAIL = "admin@boostpc.io"
 ADMIN_PASSWORD = "4zWK4o_xSw5prU-2b7w9dQ"
 OLD_PASSWORD = "admin123"
-ALLOWED_ORIGIN = "https://stream-gear-monitor.preview.emergentagent.com"
+ALLOWED_ORIGIN = "https://gaming-nexus-199.preview.emergentagent.com"
 EVIL_ORIGIN = "https://evil.example.com"
 
 
