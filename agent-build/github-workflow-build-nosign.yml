@@ -36,7 +36,23 @@ jobs:
         working-directory: agent-build
         run: >
           pyinstaller --onedir --name forgefps-agent --console --noupx --clean
-          --version-file version_info.txt forgefps_agent.py
+          --version-file version_info.txt --manifest forgefps-agent.manifest
+          forgefps_agent.py
+
+      - name: Safety check manifest (no requireAdministrator)
+        shell: pwsh
+        working-directory: agent-build
+        run: |
+          $exeText = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes('dist/forgefps-agent/forgefps-agent.exe'))
+          if ($exeText -match 'requireAdministrator') {
+            Write-Error "FAIL: l'exe contiene 'requireAdministrator' - build annullata (UAC popup garantito)"
+            exit 1
+          }
+          if ($exeText -notmatch 'asInvoker') {
+            Write-Error "FAIL: manifest asInvoker non trovato nell'exe"
+            exit 1
+          }
+          Write-Host "OK: manifest asInvoker verificato, nessun requireAdministrator"
 
       - name: Zip forgefps-agent folder
         shell: pwsh

@@ -78,7 +78,7 @@ _hide_console_if_silent(_args.uri)
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.7.8"
+AGENT_VERSION = "0.7.9"
 # v0.7.3+: rinominato da boostpc_backup.json → forgefps_backup.json.
 # Fallback lettura del vecchio nome per una release per non perdere il backup
 # degli utenti che aggiornano dalla v0.7.2 o precedenti.
@@ -157,9 +157,14 @@ def _current_agent_version_tuple() -> tuple:
         return (0, 0, 0)
 
 
-def _check_and_apply_update() -> bool:
+def _check_and_apply_update(relaunch: bool = True) -> bool:
     """Ritorna True se ha avviato l'updater (chi chiama deve fare sys.exit).
-    False se non serve aggiornare o se qualcosa e' fallito (continua normale)."""
+    False se non serve aggiornare o se qualcosa e' fallito (continua normale).
+
+    v0.7.9: relaunch=False -> il bat copia i file SENZA riavviare l'exe.
+    Usato per gli update in background dopo un'azione via URI (i bottoni della
+    dashboard): il vecchio comportamento riavviava l'exe senza argomenti, che
+    apriva la GUI optimize -> ShellExecute runas -> popup UAC inatteso."""
     if _args.from_updater or _args.skip_update_check or not getattr(sys, "frozen", False):
         return False  # dev mode / updater loop protection
     try:
@@ -202,14 +207,23 @@ def _check_and_apply_update() -> bool:
         if not new_exe or not os.path.exists(new_exe):
             return False
         current_exe = _agent_exe_path()
+        current_dir = os.path.dirname(current_exe)
+        new_dir = os.path.dirname(new_exe)
         # Genera l'updater .bat (sopravvive alla morte del nostro processo)
+        # v0.7.9: copia TUTTA la cartella onedir (exe + _internal), non solo
+        # l'exe: mescolare exe nuovo con _internal vecchio crashava il boot
+        # PyInstaller se le versioni di Python/PyInstaller differivano.
         bat_path = os.path.join(upd_dir, "update.bat")
+        relaunch_line = ""
+        if relaunch:
+            orig_args = " ".join('"%s"' % a.replace('"', "") for a in sys.argv[1:])
+            relaunch_line = f'start "" "{current_exe}" --from-updater --skip-update-check {orig_args}\r\n'
         bat_content = (
             "@echo off\r\n"
             "REM FrameForge Agent updater - auto-generated\r\n"
             "timeout /t 2 /nobreak >nul\r\n"
-            f'copy /Y "{new_exe}" "{current_exe}" >nul\r\n'
-            f'start "" "{current_exe}" --from-updater --skip-update-check\r\n'
+            f'xcopy /E /Y /Q "{new_dir}\\*" "{current_dir}\\" >nul\r\n'
+            + relaunch_line +
             "REM cleanup temp update dir best-effort\r\n"
             f'rd /S /Q "{upd_dir}" >nul 2>&1\r\n'
         )
@@ -1253,12 +1267,19 @@ if __name__ == "__main__":
     # v0.7.6: auto-update in-place. Se una nuova versione e' disponibile,
     # scarica ed esegue l'updater .bat, poi esce. In dev-mode (non frozen)
     # o dopo un self-update (--from-updater) skippa per non fare loop.
-    if _check_and_apply_update():
+    # v0.7.9: se il lancio arriva da un URI frameforge:// (bottoni dashboard),
+    # NON bloccare l'azione richiesta: l'update viene applicato in background
+    # DOPO aver avviato l'azione, senza riavviare l'exe (niente GUI/UAC inattesi).
+    if not _args.uri and _check_and_apply_update():
         sys.exit(0)
     # v0.7.1+: se URI includeva silent=1 -> esegui in background e esci subito.
     # Nessuna finestra visibile all'utente. Per sync/benchmark ambientali dal web.
     if _SILENT_FROM_URI:
         ok = launch_silent_mode(_args.mode if _args.mode not in ("securegui", "gui") else "sync")
+        try:
+            _check_and_apply_update(relaunch=False)
+        except Exception:
+            pass
         # Nessun input('Premi INVIO'): l'utente non sta guardando la console.
         sys.exit(0 if ok else 1)
 
@@ -1351,6 +1372,11 @@ if __name__ == "__main__":
     _PS_UI_MODES = ("monitor", "fullbench", "prematch", "booster", "bufferbloat")
     if _args.mode in _PS_UI_MODES:
         launch_secure_gui(mode=_args.mode)
+        if _args.uri:
+            try:
+                _check_and_apply_update(relaunch=False)
+            except Exception:
+                pass
         sys.exit(0)
 
     # Default = securegui/optimize/gui = apre la GUI sicura
