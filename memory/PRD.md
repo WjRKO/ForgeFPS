@@ -1433,3 +1433,14 @@ Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati Li
 - Bug: il modal MonitorPreflight (position:fixed) era ancorato al contenitore `.fade-up` (transform residuo da animation-fill-mode:both crea containing block) → appariva sotto la piega, serviva scrollare.
 - Fix: MonitorPreflight.jsx renderizzato via createPortal(document.body) + overflow-y-auto sul backdrop. Verificato con screenshot: modal centrato nel viewport (bounding box 0,0,1920,1080).
 - NOTA per futuri modal: qualsiasi `fixed inset-0` dentro pagine con `.fade-up`/`.stagger` DEVE usare createPortal.
+
+### 2026-07-28 (59) — Fix "GUI vuota all'avvio" + GUI v3.1 sidebar categorie (FATTO, testato iteration_39: 7/7 PASS)
+- BUG: all'apertura della GUI agent i tweak non comparivano finché non si cliccava il filtro "Da applicare". ROOT CAUSE: un tweak con `fit` mancante/corrotto nel payload /api/state → TypeError su t.fit.skip in renderTabs/renderCards → catena render interrotta (ring restava "--%"). Il filtro pending escludeva la card rotta → render riusciva.
+- FIX in ps_agent.py (GUI servita dal backend, NO rebuild exe):
+  1. refreshState: normalizzazione payload (fit default, state→string, backup_ids/revertable scalari PS→array) + retry fetch (6x2.5s) + safeRender per ogni step.
+  2. renderCards: cardHtml estratta + try/catch per-card con card fallback → una card corrotta non svuota mai la griglia.
+  3. Error reporting: window error/unhandledrejection → POST /api/client-error (nuovo endpoint PS) → WebLog visibile nel log GUI.
+- REDESIGN (scelta utente d): GUI v3.1 con sidebar categorie verticale a sinistra (224px, label // CATEGORIE, count a destra, accent border-left) al posto dei tab orizzontali. Responsive ≤860px: sidebar torna barra orizzontale scrollabile. Media query 1080/1500 aggiornate.
+- Harness test permanente: /app/backend/tests/build_gui_harness.py genera /app/frontend/public/gui_test.html (GUI reale + fetch mockato con tweak corrotto g3-broken). Usato da testing agent.
+- LEZIONE CRITICA: MAI fare search_replace paralleli sullo STESSO file → race che perde/corrompe edit (successo qui: refreshState perso + coda file duplicata). Su ps_agent.py sempre edit sequenziali + `python3 -c "import ps_agent"` + node --check dopo.
+- NOTA: l'utente è in PRODUZIONE (forgefps.dev) → serve REDEPLOY perché il suo agent scarichi la GUI aggiornata.
