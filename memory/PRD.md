@@ -1481,3 +1481,13 @@ Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati Li
 - GameplayDoctor.jsx: bottone Share (gd-share-btn) accanto ad Analizza — esporta il referto come PNG (html-to-image, pattern identico a SessionSummary), navigator.share con fallback download. Footer branding nel PNG: "FRAMEFORGE · Gameplay Doctor · forgefps.dev". i18n live.gd_share/gd_share_text it+en.
 - BUG RIPETUTO E RISOLTO: di nuovo perso un edit per search_replace PARALLELI sullo stesso file (ref={cardRef} sparito → handler share usciva silenziosamente). REGOLA FERREA: mai edit paralleli sullo stesso file, verificare con grep dopo batch.
 - Test: click reale → download frameforge-gameplay-doctor.png 516KB + toast. PENDING: redeploy produzione.
+
+### 2026-07-28 (65) — FIX: monitor senza FPS dopo v0.8.0 (FATTO, testato iteration_42: 100% PASS)
+- BUG produzione: dopo redeploy il live monitoring non registrava gli FPS. ROOT CAUSE: PresentMon (ETW) richiede admin O gruppo "Performance Log Users" (SID S-1-5-32-559). Prima del fix UAC, il monitor girava ELEVATO per sbaglio (UAC del ghost exe) → FPS ok. Con v0.8.0 (niente elevazione via URI, comportamento corretto) Start-Fps aveva gate "Richiede Amministratore" → usciva → zero FPS. Il vecchio bug UAC mascherava questo requisito.
+- FIX in ps_agent.py (serve REDEPLOY, exe invariato):
+  1. Test-FpsCapable: 'ok' (admin o token con S-1-5-32-559) / 'relogon' (iscritto ma token vecchio) / 'no'.
+  2. Enable-FpsPermission: quando la GUI Ottimizza è elevata, iscrive l'utente al gruppo (Add-LocalGroupMember -SID, fallback net localgroup con nome localizzato). Chiamata all'avvio mode=optimize.
+  3. Start-Fps senza gate admin: procede se capability ok, messaggi guida per relogon/no. Booster: Start-Fps senza if(Test-Admin).
+- FLUSSO UTENTE: redeploy → aprire GUI Ottimizza una volta (UAC consensuale) → riavvio/logout Windows → monitor conta FPS senza admin per sempre.
+- Verifiche: pwsh 7.4.6 arm64 parser 0 errori su 5395 righe; runtime Get-Fps PASS (CSV sintetico: fps 104, 3 hitch — conferma anche che l'edit frametime di (63) è sano); script servito col fix; regressioni API ok. Harness persistito: /app/backend/tests/ps/.
+- LEZIONE: ogni cambio di modello di elevazione va incrociato con le feature che dipendono dai privilegi (ETW/PresentMon, LibreHardwareMonitor driver sensori?). NB: se l'utente segnala sensori mancanti nel monitor non-admin, valutare stesso pattern.
