@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Stethoscope, Loader2, AlertTriangle, CheckCircle2, Wrench } from "lucide-react";
+import { Stethoscope, Loader2, AlertTriangle, CheckCircle2, Wrench, Share2 } from "lucide-react";
 import api from "@/lib/api";
 
 const SEV = {
@@ -40,11 +40,36 @@ function Issue({ issue, t }) {
 export default function GameplayDoctor() {
   const { t, i18n } = useTranslation();
   const [busy, setBusy] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [doc, setDoc] = useState(null);
+  const cardRef = useRef(null);
 
   useEffect(() => {
     api.get("/advisor/gameplay-doctor/latest").then((r) => setDoc(r.data?.report || null)).catch(() => {});
   }, []);
+
+  const share = async () => {
+    if (!cardRef.current) return;
+    setSharing(true);
+    try {
+      const { toPng } = await import("html-to-image");
+      const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, backgroundColor: "#0A0A0C", cacheBust: true });
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], "frameforge-gameplay-doctor.png", { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "FrameForge — Gameplay Doctor", text: t("live.gd_share_text") });
+        toast.success(t("live.session_shared"));
+      } else {
+        const a = document.createElement("a");
+        a.href = dataUrl; a.download = "frameforge-gameplay-doctor.png"; a.click();
+        toast.success(t("live.session_shared"));
+      }
+    } catch {
+      toast.error(t("live.save_err"));
+    } finally {
+      setSharing(false);
+    }
+  };
 
   const analyze = async () => {
     setBusy(true);
@@ -72,21 +97,35 @@ export default function GameplayDoctor() {
             <Stethoscope size={15} className="text-[#E5FF00]" /> {t("live.gd_title")}
           </div>
         </div>
-        <button
-          onClick={analyze}
-          disabled={busy}
-          data-testid="gd-analyze-btn"
-          className="flex items-center gap-2 bg-[#E5FF00] text-black font-bold text-xs uppercase tracking-widest px-4 py-2.5 hover:bg-[#c9e000] transition-colors disabled:opacity-60"
-        >
-          {busy ? <Loader2 size={13} className="animate-spin" /> : <Stethoscope size={13} />}
-          {busy ? t("live.gd_loading") : t("live.gd_btn")}
-        </button>
+        <div className="flex items-center gap-2">
+          {rep && !busy && (
+            <button
+              onClick={share}
+              disabled={sharing}
+              data-testid="gd-share-btn"
+              title={t("live.gd_share")}
+              className="flex items-center gap-2 border border-[#2A2A35] text-zinc-300 font-bold text-xs uppercase tracking-widest px-3 py-2.5 hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors disabled:opacity-60"
+            >
+              {sharing ? <Loader2 size={13} className="animate-spin" /> : <Share2 size={13} />}
+              <span className="hidden sm:inline">{t("live.gd_share")}</span>
+            </button>
+          )}
+          <button
+            onClick={analyze}
+            disabled={busy}
+            data-testid="gd-analyze-btn"
+            className="flex items-center gap-2 bg-[#E5FF00] text-black font-bold text-xs uppercase tracking-widest px-4 py-2.5 hover:bg-[#c9e000] transition-colors disabled:opacity-60"
+          >
+            {busy ? <Loader2 size={13} className="animate-spin" /> : <Stethoscope size={13} />}
+            {busy ? t("live.gd_loading") : t("live.gd_btn")}
+          </button>
+        </div>
       </div>
       <div className="p-4">
         {!rep && !busy && <p className="text-xs text-zinc-500" data-testid="gd-empty">{t("live.gd_none")}</p>}
         {busy && <p className="text-xs text-zinc-500 animate-pulse">{t("live.gd_loading_hint")}</p>}
         {rep && !busy && (
-          <div className="space-y-3" data-testid="gd-report">
+          <div className="space-y-3 bg-[#0E0E12] p-2" data-testid="gd-report" ref={cardRef}>
             <div className="flex items-start justify-between gap-4">
               <p className="text-sm text-zinc-300 flex-1">{rep.verdict}</p>
               {typeof rep.score === "number" && (
@@ -112,6 +151,10 @@ export default function GameplayDoctor() {
               <div className="space-y-2">{rep.issues.map((it, i) => <Issue key={i} issue={it} t={t} />)}</div>
             )}
             {rep.positive && <p className="text-xs text-[#00FF87]/80">✓ {rep.positive}</p>}
+            <div className="flex items-center justify-between pt-1 border-t border-[#1A1A24]">
+              <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-zinc-600">FRAME<span className="text-[#E5FF00]">FORGE</span> · Gameplay Doctor</span>
+              <span className="text-[10px] font-mono text-zinc-700">forgefps.dev</span>
+            </div>
           </div>
         )}
       </div>

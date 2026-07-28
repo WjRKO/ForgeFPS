@@ -1476,3 +1476,8 @@ Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati Li
 - FIX COLLATERALI: helpers.py pc_context_text startup con dict (rompeva anche /diagnose!); cap telemetria -300 → -1800 sample (30 min).
 - Test: pytest 7/7 (/app/backend/tests/test_gameplay_doctor.py) + frontend flow reale. Qualità referto AI eccellente (correla hitch→CPU, throttling→temp+declock, cita app avvio reali).
 - NOTA: i campi frametime richiedono monitor con PresentMon attivo (admin); senza, il prompt degrada onestamente (has_frametime_data=false). Serve REDEPLOY produzione. Fase 2 possibile: alert live durante il monitoring + AI Performance Lab (idea #2, architettura già discussa).
+
+### 2026-07-28 (64) — Bottone Condividi referto Gameplay Doctor (FATTO, self-test download PNG OK)
+- GameplayDoctor.jsx: bottone Share (gd-share-btn) accanto ad Analizza — esporta il referto come PNG (html-to-image, pattern identico a SessionSummary), navigator.share con fallback download. Footer branding nel PNG: "FRAMEFORGE · Gameplay Doctor · forgefps.dev". i18n live.gd_share/gd_share_text it+en.
+- BUG RIPETUTO E RISOLTO: di nuovo perso un edit per search_replace PARALLELI sullo stesso file (ref={cardRef} sparito → handler share usciva silenziosamente). REGOLA FERREA: mai edit paralleli sullo stesso file, verificare con grep dopo batch.
+- Test: click reale → download frameforge-gameplay-doctor.png 516KB + toast. PENDING: redeploy produzione.
