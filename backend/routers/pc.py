@@ -42,9 +42,10 @@ def _iso_age(ts):
 # GitHub Release del ZIP generico dell'agent. Aggiornare a ogni bump di versione.
 AGENT_ZIP_UPSTREAM = os.environ.get(
     "AGENT_ZIP_UPSTREAM",
-    # v0.7.9: fix auto-updater (no UAC post-update, copia onedir completa).
-    # SHA256 zip: a79134966256d678d80db1d5b1ba5aedcf2d05742883ee947d76eb02789de000
-    "https://github.com/WjRKO/ForgeFPS/releases/download/v0.7.9/forgefps-agent.zip",
+    # v0.8.0: stop UAC dai bottoni dashboard (no runas via URI, anti-downgrade
+    # launcher, auto-rimozione flag RUNASADMIN). Tag GitHub con punto: v.0.8.0.
+    # SHA256 zip: 408259a31729f2b4033171b384dd3c196079cc2890015c9187d7aeaf65c7eedb
+    "https://github.com/WjRKO/ForgeFPS/releases/download/v.0.8.0/forgefps-agent.zip",
 )
 _AGENT_ZIP_CACHE_PATH = f"/tmp/forgefps-agent-cache-{hashlib.sha256(AGENT_ZIP_UPSTREAM.encode()).hexdigest()[:10]}.zip"
 

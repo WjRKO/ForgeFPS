@@ -1453,3 +1453,10 @@ Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati Li
   3. _clear_runasadmin_compat_flag(): rimuove RUNASADMIN da HKCU AppCompatFlags\Layers (path exe + target launcher) a ogni avvio e con --register-protocol.
 - version_info.txt/manifest → 0.8.0.0 (asInvoker). changelog.json entry 0.8.0. REBUILD_v0.8.0.md. Test suite permanente /app/agent-build/tests_v080_antiuac.py (7 test logici, ALL PASS).
 - PENDING UTENTE: (a) pulizia one-time PC (protocollo punta ancora a exe vecchio pre-0.7.6: eliminare copie vecchie + eseguire v0.7.9 una volta); (b) push tag v0.8.0 su GitHub → SHA256 → aggiornare pc.py AGENT_ZIP_UPSTREAM + frontend config/agent.js; (c) REDEPLOY produzione (porta anche GUI v3.1 + fix griglia vuota).
+
+### 2026-07-28 (61) — Release v0.8.0 verificata e link aggiornati (FATTO, testato e2e)
+- Tag GitHub pubblicato: **v.0.8.0** (col punto — il regex di pc.py lo gestisce). SHA256 zip 408259a3...eedb VERIFICATO (match esatto con quello utente).
+- Verifiche release: workflow builda da agent-build/ con manifest+version file; agent-build/forgefps_agent.py al tag = byte-identico al locale; exe: asInvoker 3 occorrenze, requireAdministrator 0, version resource 0.8.0.0. NOTA: alla radice del repo c'è un forgefps_agent.py STALE (vecchio) — ignorarlo, il build usa agent-build/.
+- backend/routers/pc.py: AGENT_ZIP_UPSTREAM → v.0.8.0 (LATEST_AGENT_VERSION auto = 0.8.0). frontend/config/agent.js → URL/SHA/VERSION v0.8.0/DATE 2026-07-28.
+- Test e2e preview: /api/agent/latest-version = 0.8.0; login admin → /api/agent/download-zip 200 (9.1MB, exe + Avvia-FrameForge.bat personalizzato); pagina /app/desktop mostra v0.8.0 + SHA + banner update 0.7.5→0.8.0.
+- PENDING UTENTE: REDEPLOY produzione forgefps.dev (porta: agent 0.8.0 + GUI v3.1 + fix griglia vuota). Poi sul PC: pulizia exe vecchi + prima esecuzione del nuovo exe.
