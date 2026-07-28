@@ -1415,3 +1415,41 @@ Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati Li
 - changelog.json: entry 0.7.9. REBUILD_v0.7.9.md creato con checklist release (tag ESATTO v0.7.9, no v.0.7.9).
 - PENDING: utente deve pushare tag v0.7.9 su GitHub → poi aggiornare AGENT_ZIP_UPSTREAM in /app/backend/routers/pc.py a .../v0.7.9/... e redeploy.
 - Test: py_compile agent OK, curl /api/changelog 200 (0.7.9 primo), /api/agent/latest-version 0.7.8 invariato (release non ancora esistente). Comportamento Windows non testabile in questo ambiente.
+
+### 2026-07-27 (56) — Release v0.7.9 verificata e backend/frontend aggiornati (FATTO, testato)
+- Verifica release GitHub v0.7.9: SHA256 zip a791349662...9de000 IDENTICO a quello fornito dall'utente; exe dentro lo zip: asInvoker presente, 0 occorrenze requireAdministrator, version resource 0.7.9.0.
+- backend/routers/pc.py: AGENT_ZIP_UPSTREAM → .../download/v0.7.9/forgefps-agent.zip (tag corretto senza punto). LATEST_AGENT_VERSION auto-derivata = 0.7.9.
+- frontend/src/config/agent.js: AGENT_EXE_URL/SHA256/VERSION/DATE → v0.7.9.
+- Test e2e: login admin → GET /api/agent/download-zip 200 (9.1MB), zip contiene Avvia-FrameForge.bat personalizzato + exe v0.7.9 asInvoker. GET /api/agent/latest-version → 0.7.9.
+- PENDING UTENTE: redeploy produzione (forgefps.dev serve ancora 0.7.8) + installazione pulita v0.7.9 sul PC (scaricare zip fresco dalla dashboard invece di affidarsi all'auto-update della 0.7.8, il cui vecchio update.bat riavvia in GUI optimize → un UAC one-time).
+
+### 2026-07-28 (57) — UAC recidivo: risolto lato utente (nessuna modifica codice)
+- Sintomo: UAC "forgefps-agent.exe" su OGNI bottone dashboard nonostante v0.7.9 deployata.
+- Diagnosi via utente: registry HKCU frameforge OK (wscript+launcher.vbs), MA launcher.vbs puntava a `C:\Users\tocci\Downloads\forgefps-agent\forgefps-agent\forgefps-agent.exe` = exe VECCHIO con manifest requireAdministrator. Il vbs viene riscritto da OGNI agent eseguito (punta a sé stesso): l'utente aveva rieseguito manualmente un exe vecchio da Downloads.
+- Fix: utente ha riscaricato zip v0.7.9 dalla dashboard, estratto in cartella stabile, eseguito una volta (vbs riscritto), eliminato copie vecchie. CONFERMATO RISOLTO dall'utente.
+- LEZIONE (recidiva possibile): se l'utente esegue un QUALSIASI exe vecchio, il vbs torna a puntare lì → UAC ritorna. Hardening futuro possibile (v0.8.0): far verificare all'agent, alla registrazione, la versione e rifiutare downgrade del launcher; oppure updater che riesegue --register-protocol.
+
+### 2026-07-28 (58) — Fix modal Pre-Flight sotto la piega (FATTO, testato)
+- Bug: il modal MonitorPreflight (position:fixed) era ancorato al contenitore `.fade-up` (transform residuo da animation-fill-mode:both crea containing block) → appariva sotto la piega, serviva scrollare.
+- Fix: MonitorPreflight.jsx renderizzato via createPortal(document.body) + overflow-y-auto sul backdrop. Verificato con screenshot: modal centrato nel viewport (bounding box 0,0,1920,1080).
+- NOTA per futuri modal: qualsiasi `fixed inset-0` dentro pagine con `.fade-up`/`.stagger` DEVE usare createPortal.
+
+### 2026-07-28 (59) — Fix "GUI vuota all'avvio" + GUI v3.1 sidebar categorie (FATTO, testato iteration_39: 7/7 PASS)
+- BUG: all'apertura della GUI agent i tweak non comparivano finché non si cliccava il filtro "Da applicare". ROOT CAUSE: un tweak con `fit` mancante/corrotto nel payload /api/state → TypeError su t.fit.skip in renderTabs/renderCards → catena render interrotta (ring restava "--%"). Il filtro pending escludeva la card rotta → render riusciva.
+- FIX in ps_agent.py (GUI servita dal backend, NO rebuild exe):
+  1. refreshState: normalizzazione payload (fit default, state→string, backup_ids/revertable scalari PS→array) + retry fetch (6x2.5s) + safeRender per ogni step.
+  2. renderCards: cardHtml estratta + try/catch per-card con card fallback → una card corrotta non svuota mai la griglia.
+  3. Error reporting: window error/unhandledrejection → POST /api/client-error (nuovo endpoint PS) → WebLog visibile nel log GUI.
+- REDESIGN (scelta utente d): GUI v3.1 con sidebar categorie verticale a sinistra (224px, label // CATEGORIE, count a destra, accent border-left) al posto dei tab orizzontali. Responsive ≤860px: sidebar torna barra orizzontale scrollabile. Media query 1080/1500 aggiornate.
+- Harness test permanente: /app/backend/tests/build_gui_harness.py genera /app/frontend/public/gui_test.html (GUI reale + fetch mockato con tweak corrotto g3-broken). Usato da testing agent.
+- LEZIONE CRITICA: MAI fare search_replace paralleli sullo STESSO file → race che perde/corrompe edit (successo qui: refreshState perso + coda file duplicata). Su ps_agent.py sempre edit sequenziali + `python3 -c "import ps_agent"` + node --check dopo.
+- NOTA: l'utente è in PRODUZIONE (forgefps.dev) → serve REDEPLOY perché il suo agent scarichi la GUI aggiornata.
+
+### 2026-07-28 (60) — Agent v0.8.0: stop definitivo UAC dai bottoni dashboard (FATTO, testato iteration_40: 6/6 PASS)
+- UAC ricorrente ("forgefps-agent.exe" nel popup, tutti i bottoni, produzione). Cause: exe vecchi che si ri-registrano sul protocollo + possibile flag RUNASADMIN in AppCompatFlags.
+- forgefps_agent.py → v0.8.0, 3 protezioni:
+  1. launch_secure_gui(mode, allow_elevation): lanci via URI (bottoni web) MAI elevati, nemmeno fallback firma invalida. runas unico e gated (test 7 verifica).
+  2. Anti-downgrade launcher: marker "' ## target=<path>|version=x.y.z" nel vbs; exe vecchio non sovrascrive registrazione se target attuale è più nuovo ed esiste. Self-heal se target fantasma.
+  3. _clear_runasadmin_compat_flag(): rimuove RUNASADMIN da HKCU AppCompatFlags\Layers (path exe + target launcher) a ogni avvio e con --register-protocol.
+- version_info.txt/manifest → 0.8.0.0 (asInvoker). changelog.json entry 0.8.0. REBUILD_v0.8.0.md. Test suite permanente /app/agent-build/tests_v080_antiuac.py (7 test logici, ALL PASS).
+- PENDING UTENTE: (a) pulizia one-time PC (protocollo punta ancora a exe vecchio pre-0.7.6: eliminare copie vecchie + eseguire v0.7.9 una volta); (b) push tag v0.8.0 su GitHub → SHA256 → aggiornare pc.py AGENT_ZIP_UPSTREAM + frontend config/agent.js; (c) REDEPLOY produzione (porta anche GUI v3.1 + fix griglia vuota).

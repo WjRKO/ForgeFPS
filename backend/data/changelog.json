@@ -1,5 +1,32 @@
 [
   {
+    "version": "0.8.0",
+    "date": "2026-07-28",
+    "highlights": [
+      "Stop definitivo ai popup UAC dai bottoni della dashboard",
+      "Anti-downgrade: un exe vecchio non puo' piu' rubarsi il protocollo frameforge://",
+      "Auto-riparazione del flag 'Esegui come amministratore' nelle proprieta' di compatibilita'"
+    ],
+    "changes": [
+      {
+        "type": "fix",
+        "text": "I lanci dai bottoni web (monitor, benchmark, bufferbloat, ottimizza) non richiedono MAI elevazione: rimosso ogni fallback ShellExecute 'runas' per gli URI frameforge://"
+      },
+      {
+        "type": "fix",
+        "text": "Anti-downgrade del launcher: se il protocollo punta gia' a una versione piu' recente dell'agent, un exe vecchio avviato per sbaglio non sovrascrive piu' la registrazione"
+      },
+      {
+        "type": "fix",
+        "text": "Rimozione automatica del flag di compatibilita' RUNASADMIN (HKCU AppCompatFlags): era la causa nascosta di UAC anche con exe asInvoker"
+      },
+      {
+        "type": "improvement",
+        "text": "Il launcher.vbs ora traccia path e versione dell'exe registrato per diagnosi piu' rapide"
+      }
+    ]
+  },
+  {
     "version": "0.7.9",
     "date": "2026-07-27",
     "highlights": [
@@ -8,9 +35,18 @@
       "Update completo della cartella (exe + librerie): fine dei crash post-update"
     ],
     "changes": [
-      { "type": "fix", "text": "L'auto-update non riavvia piu' l'exe in modalita' GUI optimize (che chiedeva UAC): se il lancio arriva da un bottone della dashboard, l'azione parte subito e l'update viene applicato in background senza riavvio" },
-      { "type": "fix", "text": "updater ora copia l'intera cartella onedir (exe + _internal) con xcopy /E: prima copiava solo l'exe, causando crash se le versioni PyInstaller differivano" },
-      { "type": "fix", "text": "Il relaunch post-update nei lanci interattivi inoltra gli argomenti originali (es. --token) invece di aprire la GUI di default" }
+      {
+        "type": "fix",
+        "text": "L'auto-update non riavvia piu' l'exe in modalita' GUI optimize (che chiedeva UAC): se il lancio arriva da un bottone della dashboard, l'azione parte subito e l'update viene applicato in background senza riavvio"
+      },
+      {
+        "type": "fix",
+        "text": "updater ora copia l'intera cartella onedir (exe + _internal) con xcopy /E: prima copiava solo l'exe, causando crash se le versioni PyInstaller differivano"
+      },
+      {
+        "type": "fix",
+        "text": "Il relaunch post-update nei lanci interattivi inoltra gli argomenti originali (es. --token) invece di aprire la GUI di default"
+      }
     ]
   },
   {
@@ -21,8 +57,14 @@
       "Manifest asInvoker esplicito + safety check automatico in CI"
     ],
     "changes": [
-      { "type": "fix", "text": "Aggiunto forgefps-agent.manifest esplicito con asInvoker: il default PyInstaller in alcune versioni includeva comunque requireAdministrator anche senza --uac-admin. Ora forzato manualmente" },
-      { "type": "fix", "text": "Safety check nel workflow GitHub Actions: se l'exe generato contiene requireAdministrator, la build fallisce automaticamente prima di creare la release" }
+      {
+        "type": "fix",
+        "text": "Aggiunto forgefps-agent.manifest esplicito con asInvoker: il default PyInstaller in alcune versioni includeva comunque requireAdministrator anche senza --uac-admin. Ora forzato manualmente"
+      },
+      {
+        "type": "fix",
+        "text": "Safety check nel workflow GitHub Actions: se l'exe generato contiene requireAdministrator, la build fallisce automaticamente prima di creare la release"
+      }
     ]
   },
   {
@@ -37,13 +79,34 @@
       "Milestone System: 14 traguardi, XP/tier, overlay OBS popup"
     ],
     "changes": [
-      { "type": "fix", "text": "Rimosso --uac-admin dal manifest PyInstaller: l'agent gira in user-space, nessun UAC all'avvio. Il mode 'optimize' (applicazione tweak) self-eleva on-demand quando serve davvero" },
-      { "type": "feature", "text": "Universal Game Detector: rileva qualsiasi gioco in esecuzione via Steam RunningAppID + foreground fullscreen + PresentMon fallback, con cover Steam Store e badge sorgente (STEAM/EPIC/GOG/XBOX)" },
-      { "type": "feature", "text": "Precision Sensors strip nella Live page: Fan RPM, VRM Temp, CPU Package Power, Vcore (via LibreHardwareMonitor DLL)" },
-      { "type": "feature", "text": "Multi-source hardware detection: cross-check WMI + Registry + Steam/Epic manifest, badge 2/2 fonti confermate per CPU/GPU/RAM/Storage" },
-      { "type": "feature", "text": "Storage insights: NVMe/SSD/HDD detection, wear percent, health status, driver bus type" },
-      { "type": "feature", "text": "Milestone System v1: 14 traguardi (onboarding, performance, gaming, community), XP tier bronze/silver/gold/platinum, reward reali (feature unlock), OBS overlay popup live per streamer" },
-      { "type": "improvement", "text": "Overlay OBS milestone: popup animato 6 secondi, quattro colori per tier, polling ogni 3s, fire-once garantito lato server" }
+      {
+        "type": "fix",
+        "text": "Rimosso --uac-admin dal manifest PyInstaller: l'agent gira in user-space, nessun UAC all'avvio. Il mode 'optimize' (applicazione tweak) self-eleva on-demand quando serve davvero"
+      },
+      {
+        "type": "feature",
+        "text": "Universal Game Detector: rileva qualsiasi gioco in esecuzione via Steam RunningAppID + foreground fullscreen + PresentMon fallback, con cover Steam Store e badge sorgente (STEAM/EPIC/GOG/XBOX)"
+      },
+      {
+        "type": "feature",
+        "text": "Precision Sensors strip nella Live page: Fan RPM, VRM Temp, CPU Package Power, Vcore (via LibreHardwareMonitor DLL)"
+      },
+      {
+        "type": "feature",
+        "text": "Multi-source hardware detection: cross-check WMI + Registry + Steam/Epic manifest, badge 2/2 fonti confermate per CPU/GPU/RAM/Storage"
+      },
+      {
+        "type": "feature",
+        "text": "Storage insights: NVMe/SSD/HDD detection, wear percent, health status, driver bus type"
+      },
+      {
+        "type": "feature",
+        "text": "Milestone System v1: 14 traguardi (onboarding, performance, gaming, community), XP tier bronze/silver/gold/platinum, reward reali (feature unlock), OBS overlay popup live per streamer"
+      },
+      {
+        "type": "improvement",
+        "text": "Overlay OBS milestone: popup animato 6 secondi, quattro colori per tier, polling ogni 3s, fire-once garantito lato server"
+      }
     ]
   },
   {
@@ -57,14 +120,38 @@
       "Layout responsive: finestra ridotta e fullscreen"
     ],
     "changes": [
-      { "type": "feature", "text": "Nuova tab 'Monitor Live' nella GUI dell'agent: 8 metriche (CPU %, CPU temp, GPU %, GPU temp, RAM, VRAM, GPU clock, GPU power) aggiornate ogni 3s con sparkline e color coding per soglie termiche" },
-      { "type": "feature", "text": "Nuova tab 'Bloatware': auto-discovery (lista curata + 18 pattern OEM/promo, whitelist di sicurezza per Store/Calculator/Photos/runtime), selezione multipla e rimozione con un click. Tutte le app restano reinstallabili dallo Store" },
-      { "type": "feature", "text": "Revert granulare: ogni tweak applicato mostra il bottone 'Ripristina' sulla card. L'agent traccia quali chiavi di backup ha creato ciascun tweak e ripristina solo quelle" },
-      { "type": "feature", "text": "Banner in-GUI quando e' disponibile una nuova versione dell'agent, con link diretto al download e dismiss per sessione" },
-      { "type": "fix", "text": "Il bottone 'Riavvia ora' dopo i tweak con riavvio ora funziona (l'endpoint locale /api/reboot non esisteva)" },
-      { "type": "fix", "text": "GUI web piu' robusta: rileva anche Edge/Chrome/Brave installati per-utente o via registry e, se nessun browser Chromium e' presente, apre la GUI nel browser predefinito invece di ripiegare sulla GUI classica" },
-      { "type": "improvement", "text": "GUI responsive: layout ottimizzato per finestra ridotta (tab scrollabili, card a colonna singola, footer compatto) e per fullscreen (griglia piu' larga, tipografia scalata)" },
-      { "type": "improvement", "text": "Il pannello 'Backup' ora elenca i nomi dei tweak reversibili invece delle chiavi di registro grezze" }
+      {
+        "type": "feature",
+        "text": "Nuova tab 'Monitor Live' nella GUI dell'agent: 8 metriche (CPU %, CPU temp, GPU %, GPU temp, RAM, VRAM, GPU clock, GPU power) aggiornate ogni 3s con sparkline e color coding per soglie termiche"
+      },
+      {
+        "type": "feature",
+        "text": "Nuova tab 'Bloatware': auto-discovery (lista curata + 18 pattern OEM/promo, whitelist di sicurezza per Store/Calculator/Photos/runtime), selezione multipla e rimozione con un click. Tutte le app restano reinstallabili dallo Store"
+      },
+      {
+        "type": "feature",
+        "text": "Revert granulare: ogni tweak applicato mostra il bottone 'Ripristina' sulla card. L'agent traccia quali chiavi di backup ha creato ciascun tweak e ripristina solo quelle"
+      },
+      {
+        "type": "feature",
+        "text": "Banner in-GUI quando e' disponibile una nuova versione dell'agent, con link diretto al download e dismiss per sessione"
+      },
+      {
+        "type": "fix",
+        "text": "Il bottone 'Riavvia ora' dopo i tweak con riavvio ora funziona (l'endpoint locale /api/reboot non esisteva)"
+      },
+      {
+        "type": "fix",
+        "text": "GUI web piu' robusta: rileva anche Edge/Chrome/Brave installati per-utente o via registry e, se nessun browser Chromium e' presente, apre la GUI nel browser predefinito invece di ripiegare sulla GUI classica"
+      },
+      {
+        "type": "improvement",
+        "text": "GUI responsive: layout ottimizzato per finestra ridotta (tab scrollabili, card a colonna singola, footer compatto) e per fullscreen (griglia piu' larga, tipografia scalata)"
+      },
+      {
+        "type": "improvement",
+        "text": "Il pannello 'Backup' ora elenca i nomi dei tweak reversibili invece delle chiavi di registro grezze"
+      }
     ]
   },
   {
@@ -79,18 +166,54 @@
       "Zero flash console: hidden anche per protocol GUI launches"
     ],
     "changes": [
-      { "type": "feature", "text": "Nuova pagina 'Windows Tweaks' in sidebar: elenco 16 tweak per categoria con checkbox individuali/gruppo, 'Recommended' auto-seleziona solo i safe, sticky Apply bar triggera protocol handler URI firmato" },
-      { "type": "feature", "text": "Bloatware auto-discovery: unione lista esplicita + 18 pattern wildcard (Bing*, Disney*, Netflix*, OEM Dell/HP/Lenovo, McAfee/Norton) + whitelist NEVER_REMOVE con 22 entry (protegge Store/Calculator/Photos/runtime WinUI/VCLibs)" },
-      { "type": "refactor", "text": "Recipe System declarativo: 16 tweak in 6 categorie (Latency/Gaming/Privacy/Bloatware/System/Visual). Ogni tweak ha id, why, impact, difficulty, hardware_gate, apply/verify/revert" },
-      { "type": "feature", "text": "Categorie selezionabili: --categories 'latency,gaming' applica solo quelle. --tweak-id 'tcp-nagle-off' applica un solo tweak" },
-      { "type": "feature", "text": "Verify step post-apply: dopo ogni tweak rilegge il registry per confermare che GPO/antivirus non lo abbiano revertato. Progress bar mostra icona ✔/⚠" },
-      { "type": "feature", "text": "Revert per singolo tweak: --mode restore-one --tweak-id X ripristina solo quel tweak (non tutto)" },
-      { "type": "feature", "text": "Agent auto-update: al boot verifica /api/agent/latest-version, scarica lo ZIP, updater.bat sostituisce l'exe e rilancia. Zero azione manuale." },
-      { "type": "feature", "text": "Progress bar UI: barra ANSI 24-char con % + icona check/fail + msg troncato, oppure log strutturato se stdout non-TTY. Sostituisce 15+ print sparsi in apply_all_tweaks" },
-      { "type": "fix", "text": "Zero flash console anche su GUI launch: launcher.vbs passa --no-console, l'exe nasconde subito la console (prima solo su URI silent=1)" },
-      { "type": "feature", "text": "Novita' & Feedback in sidebar: pagina changelog live + modal feedback (bug/idea/altro) con screenshot opzionale" },
-      { "type": "fix", "text": "OBS overlay tagliato in basso: padding e font ridotti, ora entra anche a 300x200. Nuovo default consigliato: 340x260" },
-      { "type": "fix", "text": "Menu utente: 'Profilo & Sicurezza' e 'Collega Discord' portavano alla landing (route /app/settings -> /app/account)" }
+      {
+        "type": "feature",
+        "text": "Nuova pagina 'Windows Tweaks' in sidebar: elenco 16 tweak per categoria con checkbox individuali/gruppo, 'Recommended' auto-seleziona solo i safe, sticky Apply bar triggera protocol handler URI firmato"
+      },
+      {
+        "type": "feature",
+        "text": "Bloatware auto-discovery: unione lista esplicita + 18 pattern wildcard (Bing*, Disney*, Netflix*, OEM Dell/HP/Lenovo, McAfee/Norton) + whitelist NEVER_REMOVE con 22 entry (protegge Store/Calculator/Photos/runtime WinUI/VCLibs)"
+      },
+      {
+        "type": "refactor",
+        "text": "Recipe System declarativo: 16 tweak in 6 categorie (Latency/Gaming/Privacy/Bloatware/System/Visual). Ogni tweak ha id, why, impact, difficulty, hardware_gate, apply/verify/revert"
+      },
+      {
+        "type": "feature",
+        "text": "Categorie selezionabili: --categories 'latency,gaming' applica solo quelle. --tweak-id 'tcp-nagle-off' applica un solo tweak"
+      },
+      {
+        "type": "feature",
+        "text": "Verify step post-apply: dopo ogni tweak rilegge il registry per confermare che GPO/antivirus non lo abbiano revertato. Progress bar mostra icona ✔/⚠"
+      },
+      {
+        "type": "feature",
+        "text": "Revert per singolo tweak: --mode restore-one --tweak-id X ripristina solo quel tweak (non tutto)"
+      },
+      {
+        "type": "feature",
+        "text": "Agent auto-update: al boot verifica /api/agent/latest-version, scarica lo ZIP, updater.bat sostituisce l'exe e rilancia. Zero azione manuale."
+      },
+      {
+        "type": "feature",
+        "text": "Progress bar UI: barra ANSI 24-char con % + icona check/fail + msg troncato, oppure log strutturato se stdout non-TTY. Sostituisce 15+ print sparsi in apply_all_tweaks"
+      },
+      {
+        "type": "fix",
+        "text": "Zero flash console anche su GUI launch: launcher.vbs passa --no-console, l'exe nasconde subito la console (prima solo su URI silent=1)"
+      },
+      {
+        "type": "feature",
+        "text": "Novita' & Feedback in sidebar: pagina changelog live + modal feedback (bug/idea/altro) con screenshot opzionale"
+      },
+      {
+        "type": "fix",
+        "text": "OBS overlay tagliato in basso: padding e font ridotti, ora entra anche a 300x200. Nuovo default consigliato: 340x260"
+      },
+      {
+        "type": "fix",
+        "text": "Menu utente: 'Profilo & Sicurezza' e 'Collega Discord' portavano alla landing (route /app/settings -> /app/account)"
+      }
     ]
   },
   {
@@ -101,10 +224,22 @@
       "AI Advisor: DiagnosePanel refactorato in moduli piu' piccoli"
     ],
     "changes": [
-      { "type": "feature", "text": "Nuovo componente PlanUpgradeBanner condiviso, con i18n EN/IT e feature descrittive piu' tecniche (numeri reali, API, soglie)" },
-      { "type": "feature", "text": "Advisor e Live Monitor mostrano il banner di upgrade se il piano non basta" },
-      { "type": "refactor", "text": "DiagnosePanel 297 -> 33 righe (hook + 4 sotto-viste)" },
-      { "type": "refactor", "text": "FirstScanBanner 228 -> 22 righe (polling in hook, step-card riutilizzabile)" }
+      {
+        "type": "feature",
+        "text": "Nuovo componente PlanUpgradeBanner condiviso, con i18n EN/IT e feature descrittive piu' tecniche (numeri reali, API, soglie)"
+      },
+      {
+        "type": "feature",
+        "text": "Advisor e Live Monitor mostrano il banner di upgrade se il piano non basta"
+      },
+      {
+        "type": "refactor",
+        "text": "DiagnosePanel 297 -> 33 righe (hook + 4 sotto-viste)"
+      },
+      {
+        "type": "refactor",
+        "text": "FirstScanBanner 228 -> 22 righe (polling in hook, step-card riutilizzabile)"
+      }
     ]
   },
   {
@@ -115,10 +250,22 @@
       "Full Benchmark v2 esclusivo Streamer"
     ],
     "changes": [
-      { "type": "feature", "text": "URL overlay per OBS Studio: FPS/CPU/GPU/temp/ping sopra lo stream, 3 temi + 4 posizioni" },
-      { "type": "feature", "text": "Full Benchmark Report con burst+sustained CPU, RAM L2/L3/DRAM, disk multi-QD, thermal trace live" },
-      { "type": "feature", "text": "Bufferbloat v2: sub-grade idle/loaded/consistency + p99 tail latency" },
-      { "type": "feature", "text": "PDF Export con tabella tweak applicati e timestamp" }
+      {
+        "type": "feature",
+        "text": "URL overlay per OBS Studio: FPS/CPU/GPU/temp/ping sopra lo stream, 3 temi + 4 posizioni"
+      },
+      {
+        "type": "feature",
+        "text": "Full Benchmark Report con burst+sustained CPU, RAM L2/L3/DRAM, disk multi-QD, thermal trace live"
+      },
+      {
+        "type": "feature",
+        "text": "Bufferbloat v2: sub-grade idle/loaded/consistency + p99 tail latency"
+      },
+      {
+        "type": "feature",
+        "text": "PDF Export con tabella tweak applicati e timestamp"
+      }
     ]
   },
   {
@@ -129,9 +276,18 @@
       "Stripe Checkout Sandbox integrato"
     ],
     "changes": [
-      { "type": "feature", "text": "5 template email transazionali (welcome, trial start, trial ending, payment success, payment failed)" },
-      { "type": "feature", "text": "Stripe Checkout con 3 tier: Free / Pro / Streamer" },
-      { "type": "feature", "text": "TrialUpgradeBanner dinamico nel menu utente" }
+      {
+        "type": "feature",
+        "text": "5 template email transazionali (welcome, trial start, trial ending, payment success, payment failed)"
+      },
+      {
+        "type": "feature",
+        "text": "Stripe Checkout con 3 tier: Free / Pro / Streamer"
+      },
+      {
+        "type": "feature",
+        "text": "TrialUpgradeBanner dinamico nel menu utente"
+      }
     ]
   }
 ]

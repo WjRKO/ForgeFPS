@@ -2469,23 +2469,35 @@ function Show-WebGui {
   }
   .search:focus { border-color: var(--accent); }
 
+  /* ===== GUI v3.1: layout con sidebar categorie a sinistra ===== */
+  .layout { flex: 1; display: flex; overflow: hidden; min-height: 0; }
   .tabs {
-    display: flex; gap: 4px; padding: 0 28px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg);
-    flex-shrink: 0;
+    display: flex; flex-direction: column; gap: 2px;
+    width: 224px; flex-shrink: 0;
+    padding: 14px 10px;
+    border-right: 1px solid var(--border);
+    background: var(--bg2);
+    overflow-y: auto;
+  }
+  .tabs::before {
+    content: "// CATEGORIE";
+    font-family: "Consolas", monospace; font-size: 10px;
+    letter-spacing: 0.25em; color: var(--dim);
+    padding: 0 12px 8px;
   }
   .tab {
     background: transparent; border: none; color: var(--muted);
-    padding: 12px 20px; font-size: 13px; font-weight: 600;
+    padding: 10px 12px; font-size: 13px; font-weight: 600;
     cursor: pointer; font-family: inherit; letter-spacing: 0.3px;
-    border-bottom: 2px solid transparent;
-    transition: color 120ms ease, border-color 120ms ease;
+    border-left: 2px solid transparent; text-align: left;
+    display: flex; align-items: center; gap: 8px;
+    transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
   }
-  .tab:hover { color: var(--text); }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .tab .count { color: var(--dim); font-size: 11px; margin-left: 6px; }
+  .tab:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+  .tab.active { color: var(--accent); border-left-color: var(--accent); background: rgba(229,255,0,0.06); }
+  .tab .count { color: var(--dim); font-size: 11px; margin-left: auto; }
   .tab.active .count { color: var(--accent); }
+  .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 
   main {
     flex: 1; overflow-y: auto;
@@ -2976,7 +2988,8 @@ function Show-WebGui {
   /* ===== v0.7.7 — Responsive: finestra ridotta ===== */
   @media (max-width: 1080px) {
     header { padding: 14px 18px 12px; }
-    .preset-bar, .filter-chips, .tabs { padding-left: 18px; padding-right: 18px; }
+    .preset-bar, .filter-chips { padding-left: 18px; padding-right: 18px; }
+    .tabs { width: 190px; }
     main { padding: 16px 18px 10px; }
     footer { padding: 10px 18px 12px; }
     .backup-panel { right: 18px; }
@@ -2990,8 +3003,19 @@ function Show-WebGui {
     .preset-bar { flex-wrap: wrap; gap: 8px; }
     .preset-btn { padding: 6px 14px; font-size: 12px; }
     .search-hero { flex-basis: 100%; margin-left: 0; max-width: none; order: 10; }
-    .tabs { overflow-x: auto; scrollbar-width: thin; }
-    .tab { padding: 10px 12px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
+    .layout { flex-direction: column; }
+    .tabs {
+      flex-direction: row; width: auto; border-right: none;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
+      padding: 4px 12px; gap: 4px;
+    }
+    .tabs::before { display: none; }
+    .tab {
+      padding: 10px 12px; font-size: 12px; white-space: nowrap; flex-shrink: 0;
+      border-left: none; border-bottom: 2px solid transparent;
+    }
+    .tab.active { border-bottom-color: var(--accent); background: transparent; }
     footer { grid-template-columns: 1fr; gap: 10px; }
     .log { height: 70px; }
     .btn-bar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -3013,7 +3037,8 @@ function Show-WebGui {
   @media (min-width: 1500px) {
     body { font-size: 15px; }
     header { padding: 24px 40px 18px; }
-    .preset-bar, .filter-chips, .tabs { padding-left: 40px; padding-right: 40px; }
+    .preset-bar, .filter-chips { padding-left: 40px; padding-right: 40px; }
+    .tabs { width: 252px; }
     main { padding: 24px 40px 16px; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; }
     footer { padding: 14px 40px 16px; }
     .backup-panel { right: 40px; }
@@ -3030,7 +3055,7 @@ function Show-WebGui {
     <div class="brand-row">
       <div class="brand">FRAMEFORGE AGENT</div>
       <div class="brand-sub">Trova i colli di bottiglia. Ottimizza in sicurezza.</div>
-      <div class="ver-pill">GUI v3.0</div>
+      <div class="ver-pill">GUI v3.1</div>
     </div>
     <div class="safety">
       <strong>SICUREZZA</strong> - Non tocchiamo mai Windows Defender, Firewall o servizi di sicurezza. Ogni modifica ha backup automatico ed e reversibile.
@@ -3101,24 +3126,27 @@ function Show-WebGui {
 
   <div class="preset-preview" id="presetPreview" data-testid="preset-preview"></div>
 
-  <div class="tabs" id="tabs"></div>
+  <div class="layout">
+    <nav class="tabs" id="tabs" data-testid="sidebar-tabs"></nav>
+    <div class="content">
+      <div class="filter-chips" id="filterChips" data-testid="filter-chips">
+        <span class="filter-chips-label">Filtri:</span>
+        <button class="chip" data-filter="recommended" data-testid="chip-recommended">&#9733; Consigliati</button>
+        <button class="chip" data-filter="no-reboot" data-testid="chip-no-reboot">&#9889; No riavvio</button>
+        <button class="chip" data-filter="reversible" data-testid="chip-reversible">&#128737; Reversibili</button>
+        <button class="chip" data-filter="caution" data-testid="chip-caution">&#9888; Cautela</button>
+        <button class="chip" data-filter="pending" data-testid="chip-pending">&#9679; Da applicare</button>
+        <select class="sort-select" id="sortSelect" data-testid="sort-select">
+          <option value="impact">Ordina: Impatto stimato</option>
+          <option value="category">Ordina: Categoria</option>
+          <option value="name">Ordina: Nome (A-Z)</option>
+          <option value="pending">Ordina: Da applicare per primi</option>
+        </select>
+      </div>
 
-  <div class="filter-chips" id="filterChips" data-testid="filter-chips">
-    <span class="filter-chips-label">Filtri:</span>
-    <button class="chip" data-filter="recommended" data-testid="chip-recommended">&#9733; Consigliati</button>
-    <button class="chip" data-filter="no-reboot" data-testid="chip-no-reboot">&#9889; No riavvio</button>
-    <button class="chip" data-filter="reversible" data-testid="chip-reversible">&#128737; Reversibili</button>
-    <button class="chip" data-filter="caution" data-testid="chip-caution">&#9888; Cautela</button>
-    <button class="chip" data-filter="pending" data-testid="chip-pending">&#9679; Da applicare</button>
-    <select class="sort-select" id="sortSelect" data-testid="sort-select">
-        <option value="impact">Ordina: Impatto stimato</option>
-        <option value="category">Ordina: Categoria</option>
-        <option value="name">Ordina: Nome (A-Z)</option>
-        <option value="pending">Ordina: Da applicare per primi</option>
-      </select>
+      <main id="cards"></main>
+    </div>
   </div>
-
-  <main id="cards"></main>
 
   <footer>
     <div class="log" id="log"></div>
@@ -3191,6 +3219,21 @@ function Show-WebGui {
     opts = opts || {};
     const url = path + (path.indexOf("?") >= 0 ? "&" : "?") + "tk=" + encodeURIComponent(TOKEN);
     return fetch(url, opts).then(r => r.json());
+  }
+  // GUI v3.1: errori JS -> log visibile in GUI + console (debug remoto senza rebuild)
+  function reportClientError(msg) {
+    try { console.error("[FF-GUI]", msg); } catch(_) {}
+    try {
+      fetch("/api/client-error?tk=" + encodeURIComponent(TOKEN), {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ msg: String(msg).slice(0, 600) })
+      }).catch(()=>{});
+    } catch(_) {}
+  }
+  window.addEventListener("error", e => reportClientError((e.message || "?") + " @riga " + (e.lineno || "?")));
+  window.addEventListener("unhandledrejection", e => reportClientError("promise: " + (e.reason && (e.reason.stack || e.reason.message) || e.reason)));
+  function safeRender(name, fn) {
+    try { fn(); } catch (err) { reportClientError(name + ": " + (err && err.stack || err)); }
   }
   function toast(msg, cls) {
     const t = document.getElementById("toast");
@@ -3430,7 +3473,7 @@ function Show-WebGui {
     items = items.filter(matchFilters);
     items = sortItems(items);
     if (!items.length) { el.innerHTML = `<div class="empty">Nessun tweak in questa categoria.</div>`; return; }
-    el.innerHTML = items.map(t => {
+    const cardHtml = (t) => {
       const applied = isApplied(t);
       t.applied = applied;
       const sel = selected.has(t.id);
@@ -3473,6 +3516,14 @@ function Show-WebGui {
               : `<button class="btn-apply-one" data-apply="${t.id}" ${t.fit.skip?"disabled":""} data-testid="apply-one-${t.id}">Applica</button>`}
           </div>
         </div>`;
+    };
+    // Una card corrotta non deve mai svuotare l'intera griglia: fallback per-card.
+    el.innerHTML = items.map(t => {
+      try { return cardHtml(t); }
+      catch (err) {
+        reportClientError("card '" + (t && t.id) + "': " + (err && err.stack || err));
+        return `<div class="card" data-id="${esc(t && t.id || "")}"><div class="card-head"><div class="name">${esc((t && (t.name || t.id)) || "Tweak")}</div></div><div class="hint">Card non visualizzabile (dettagli nel log in basso)</div></div>`;
+      }
     }).join("");
     el.querySelectorAll(".cb").forEach(cb => cb.onchange = e => {
       const id = e.target.dataset.id;
@@ -3649,17 +3700,39 @@ function Show-WebGui {
     document.getElementById("restoreBtn").disabled = v;
   }
 
+  let _stateRetries = 0;
   async function refreshState(showToast) {
-    const d = await api("/api/state");
-    state.tweaks = d.tweaks || [];
+    let d;
+    try {
+      d = await api("/api/state");
+      if (!d || !Array.isArray(d.tweaks)) throw new Error("payload /api/state non valido");
+    } catch (e) {
+      reportClientError("refreshState: " + (e && e.message || e));
+      if (_stateRetries++ < 6) setTimeout(() => refreshState(showToast), 2500);
+      return;
+    }
+    _stateRetries = 0;
+    // Normalizza il payload: ConvertTo-Json (PS 5.1) puo' produrre scalari al posto
+    // di array (1 elemento) o campi mancanti. Il render non deve MAI rompersi per
+    // un dato inatteso (bug storico: griglia vuota all'avvio finche' non si
+    // cliccava un filtro).
+    state.tweaks = d.tweaks.filter(t => t && typeof t === "object").map(t => {
+      if (!t.fit || typeof t.fit !== "object") t.fit = { ok: true, warn: false, note: false, skip: false, hint: "" };
+      if (typeof t.state !== "string") t.state = t.state == null ? "n/d" : String(t.state);
+      return t;
+    });
     state.hw = d.hw || {}; state.admin = !!d.admin;
-    state.backup = d.backup || 0; state.backup_ids = d.backup_ids || []; state.presets = d.presets || {};
-    state.revertable = d.revertable || [];
+    state.backup = d.backup || 0;
+    state.backup_ids = Array.isArray(d.backup_ids) ? d.backup_ids : (d.backup_ids ? [d.backup_ids] : []);
+    state.presets = d.presets || {};
+    state.revertable = Array.isArray(d.revertable) ? d.revertable : (d.revertable ? [d.revertable] : []);
     state.agent = d.agent || {};
-    renderHeader(); renderTabs(); renderCards();
-    renderProgressRing();
-    updateSummaryStrip();
-    renderUpdateBanner();
+    safeRender("renderHeader", renderHeader);
+    safeRender("renderTabs", renderTabs);
+    safeRender("renderCards", renderCards);
+    safeRender("renderProgressRing", renderProgressRing);
+    safeRender("updateSummaryStrip", updateSummaryStrip);
+    safeRender("renderUpdateBanner", renderUpdateBanner);
     if (showToast) toast("\u21bb Aggiornato", "ok");
   }
 
@@ -4315,6 +4388,11 @@ function Show-WebGui {
           }
           WebLog ("[ OK ] Bloatware: {0}/{1} app rimosse (reinstallabili dallo Store)." -f $removed, $names.Count)
           Send-Json $ctx @{ ok = $true; removed = $removed; apps = (Get-BloatCandidates) }
+        }
+        elseif ($path -eq '/api/client-error' -and $method -eq 'POST') {
+          # GUI v3.1: gli errori JS della GUI finiscono nel log visibile (debug remoto)
+          try { $cerr = Read-Body $ctx | ConvertFrom-Json; WebLog ("[GUI-ERROR] " + $cerr.msg) } catch {}
+          Send-Json $ctx @{ ok = $true }
         }
         elseif ($path -eq '/api/reboot' -and $method -eq 'POST') {
           # v0.7.7 fix: il bottone 'Riavvia ora' puntava a un endpoint inesistente (404)

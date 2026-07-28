@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <!--
-  FrameForge Agent — Manifest Windows esplicito v0.7.9+
+  FrameForge Agent — Manifest Windows esplicito v0.8.0+
   Forza asInvoker (nessuna richiesta di elevazione UAC all'avvio).
   L'agent si auto-eleva SOLO on-demand tramite ShellExecuteW("runas", ...)
   quando l'utente decide di applicare tweak reali (mode=optimize).
 -->
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <assemblyIdentity
-    version="0.7.9.0"
+    version="0.8.0.0"
     processorArchitecture="*"
     name="FrameForge.Agent"
     type="win32"

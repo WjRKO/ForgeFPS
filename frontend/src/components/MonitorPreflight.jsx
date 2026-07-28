@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { PlayCircle, CheckCircle2, AlertTriangle, XCircle, Loader2, Search } from "lucide-react";
 import api from "@/lib/api";
@@ -205,8 +206,11 @@ export default function MonitorPreflight({ open, onClose, onConfirm, launching }
       ? t("live.pf_go_anyway", { defaultValue: "Avvia comunque" })
       : t("live.pf_go", { defaultValue: "Ora avvia" });
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={onClose} data-testid="monitor-preflight">
+  // Portal su document.body: la pagina è dentro `.fade-up` che mantiene un
+  // transform residuo -> position:fixed si ancorerebbe al contenitore (modal
+  // sotto la piega, serviva scrollare per vederlo).
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 overflow-y-auto" onClick={onClose} data-testid="monitor-preflight">
       <div className="bg-[#0F0F12] border border-[#2A2A35] max-w-lg w-full p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between mb-4">
           <div>
@@ -285,6 +289,7 @@ export default function MonitorPreflight({ open, onClose, onConfirm, launching }
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
