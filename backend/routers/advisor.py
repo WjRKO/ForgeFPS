@@ -52,31 +52,67 @@ def _gd_pct(sorted_vals: list, p: float):
     return sorted_vals[min(len(sorted_vals) - 1, int(p * len(sorted_vals)))]
 
 
-def _gd_annotate(s: dict, med_gpu_clock) -> list:
-    causes = []
-    if isinstance(s.get("cpu_util"), (int, float)) and s["cpu_util"] >= 90:
-        causes.append("CPU satura (%d%%)" % s["cpu_util"])
-    if isinstance(s.get("ram_used_pct"), (int, float)) and s["ram_used_pct"] >= 90:
-        causes.append("RAM quasi piena (%d%%)" % s["ram_used_pct"])
-    if isinstance(s.get("vram_used_pct"), (int, float)) and s["vram_used_pct"] >= 92:
-        causes.append("VRAM satura (%d%%)" % s["vram_used_pct"])
-    gt, gc, gu = s.get("gpu_temp"), s.get("gpu_clock"), s.get("gpu_util")
-    if (isinstance(gt, (int, float)) and gt >= 83 and med_gpu_clock
-            and isinstance(gc, (int, float)) and gc < 0.92 * med_gpu_clock):
-        causes.append("GPU declock a %dC (%dMHz vs mediana %dMHz) = throttling termico" % (gt, gc, med_gpu_clock))
-    if isinstance(s.get("cpu_temp"), (int, float)) and s["cpu_temp"] >= 92:
-        causes.append("CPU a %dC (limite termico)" % s["cpu_temp"])
-    if isinstance(s.get("vrm_temp"), (int, float)) and s["vrm_temp"] >= 90:
-        causes.append("VRM a %dC" % s["vrm_temp"])
-    if isinstance(gu, (int, float)) and gu < 70 and isinstance(s.get("cpu_util"), (int, float)) and s["cpu_util"] < 70:
-        causes.append("ne' CPU ne' GPU sature: probabile causa esterna (disco/processo in background)")
-    return causes
+# --- Gameplay Doctor v2: correlatore causale con lag, pattern, dedup, baseline ---
+_GD_BUCKET_MS = [i + 0.5 for i in range(50)] + [55, 65, 75, 85, 95, 112.5, 137.5, 175, 250, 350]
+
+_GD_RULES = [
+    ("gpu_thermal_throttle", "Throttling termico GPU", 0.9,
+     lambda w: w.get("gpu_temp", 0) >= 83 and w.get("_gpu_declock")),
+    ("vram_overflow", "VRAM satura", 0.85, lambda w: w.get("vram_used_pct", 0) >= 95),
+    ("cpu_saturation", "CPU satura", 0.8, lambda w: w.get("cpu_util", 0) >= 90),
+    ("cpu_thermal", "Limite termico CPU", 0.75, lambda w: w.get("cpu_temp", 0) >= 92),
+    ("ram_pressure", "RAM quasi piena", 0.6, lambda w: w.get("ram_used_pct", 0) >= 90),
+    ("vrm_thermal", "VRM caldi", 0.55, lambda w: w.get("vrm_temp", 0) >= 90),
+    ("external_io", "Causa esterna (I/O disco o processo in background)", 0.35,
+     lambda w: w.get("cpu_util", 100) < 75 and w.get("gpu_util", 100) < 75),
+]
+
+
+def _gd_hist_pct(hist: list, p: float):
+    n = sum(hist)
+    if n < 500:
+        return None
+    target = n * p
+    c = 0
+    for i, cnt in enumerate(hist):
+        c += cnt
+        if c >= target:
+            return _GD_BUCKET_MS[i]
+    return _GD_BUCKET_MS[-1]
+
+
+def _gd_window(sess: list, i: int) -> dict:
+    """Finestra causale con lag [campione precedente, corrente]: la causa
+    (declock, saturazione) spesso PRECEDE il sintomo visibile."""
+    w = {}
+    for s in sess[max(0, i - 1):i + 1]:
+        for k in ("cpu_util", "cpu_temp", "ram_used_pct", "vram_used_pct", "gpu_temp", "gpu_util", "vrm_temp"):
+            v = s.get(k)
+            if isinstance(v, (int, float)):
+                w[k] = max(w.get(k, 0), v)
+    return w
+
+
+def _gd_pattern(times: list) -> str:
+    if len(times) < 3:
+        return "isolated"
+    gaps = [t2 - t1 for t1, t2 in zip(times, times[1:])]
+    m = sum(gaps) / len(gaps)
+    if m > 0 and m < 120:
+        cvv = (sum((g - m) ** 2 for g in gaps) / len(gaps)) ** 0.5 / m
+        if cvv < 0.25:
+            return "periodic"
+    if sum(1 for g in gaps if g <= 10) >= max(1, int(len(gaps) * 0.6)):
+        return "burst"
+    return "sporadic"
 
 
 def _gameplay_stats(sess: list) -> dict:
-    """Strato deterministico: firme + eventi annotati con cause probabili."""
+    """Strato deterministico v2: firme, eventi con finestra causale, dedup per
+    causa comune, ordinamento per impatto reale (% sessione x peso causa)."""
     t0, t1 = _gd_parse_ts(sess[0].get("ts")), _gd_parse_ts(sess[-1].get("ts"))
-    duration_min = round(((t1 - t0).total_seconds() / 60.0), 1) if t0 and t1 else None
+    dur_s = (t1 - t0).total_seconds() if t0 and t1 else len(sess)
+    duration_min = round(dur_s / 60.0, 1)
     fps = [s["fps"] for s in sess if isinstance(s.get("fps"), (int, float))]
     fps_sorted = sorted(fps)
     games = {}
@@ -87,43 +123,95 @@ def _gameplay_stats(sess: list) -> dict:
     game = max(games, key=games.get) if games else None
     gpu_clocks = sorted(s["gpu_clock"] for s in sess
                         if isinstance(s.get("gpu_clock"), (int, float)) and isinstance(s.get("gpu_util"), (int, float)) and s["gpu_util"] >= 80)
-    med_gpu_clock = gpu_clocks[len(gpu_clocks) // 2] if gpu_clocks else None
+    med_clock = gpu_clocks[len(gpu_clocks) // 2] if gpu_clocks else None
 
-    hitch_total = sum(s.get("hitches") or 0 for s in sess)
-    pace = [s["pace_dev"] for s in sess if isinstance(s.get("pace_dev"), (int, float))]
-    ft_p99 = [s["ft_p99"] for s in sess if isinstance(s.get("ft_p99"), (int, float))]
-    lat = [s["latency_ms"] for s in sess if isinstance(s.get("latency_ms"), (int, float))]
+    # percentili ESATTI dall'istogramma cumulativo di sessione (se agent v2)
+    hist = next((s["ft_hist"] for s in reversed(sess) if isinstance(s.get("ft_hist"), list)), None)
+    ft_p99_s = _gd_hist_pct(hist, 0.99) if hist else None
+    ft_p999_s = _gd_hist_pct(hist, 0.999) if hist else None
+    fps_1low = round(1000 / ft_p99_s) if ft_p99_s else None
+    fps_01low = round(1000 / ft_p999_s) if ft_p999_s else None
 
-    events = []
+    # eventi (hitch adattivi agent-side + fps drop) con cause ranked su finestra lag
+    raw_events = []
     for i, s in enumerate(sess):
-        off = round((_gd_parse_ts(s["ts"]) - t0).total_seconds() / 60.0, 1) if t0 and s.get("ts") else None
-        if (s.get("hitches") or 0) >= 2 or (isinstance(s.get("ft_worst"), (int, float)) and s["ft_worst"] > 100):
-            events.append({"min": off, "type": "hitch", "hitches": s.get("hitches"),
-                           "ft_worst_ms": s.get("ft_worst"), "causes": _gd_annotate(s, med_gpu_clock)})
+        sec = round((_gd_parse_ts(s["ts"]) - t0).total_seconds()) if t0 and s.get("ts") else i
+        w = _gd_window(sess, i)
+        w["_gpu_declock"] = bool(med_clock and isinstance(s.get("gpu_clock"), (int, float)) and s["gpu_clock"] < 0.92 * med_clock)
+        if (s.get("hitches") or 0) >= 1 or (isinstance(s.get("ft_worst"), (int, float)) and s["ft_worst"] > 100):
+            causes = sorted(({"cause": c, "label": lb, "score": wt} for c, lb, wt, pr in _GD_RULES if pr(w)), key=lambda x: -x["score"])
+            raw_events.append({"sec": sec, "type": "hitch", "hitches": s.get("hitches") or 1,
+                               "ft_worst_ms": s.get("ft_worst"), "causes": causes, "snap": w})
         elif isinstance(s.get("fps"), (int, float)) and i >= 10:
             prev = [x["fps"] for x in sess[max(0, i - 30):i] if isinstance(x.get("fps"), (int, float))]
             if prev and s["fps"] < 0.65 * (sum(prev) / len(prev)):
-                events.append({"min": off, "type": "fps_drop", "fps": s["fps"],
-                               "fps_prev_avg": round(sum(prev) / len(prev)),
-                               "causes": _gd_annotate(s, med_gpu_clock)})
+                causes = sorted(({"cause": c, "label": lb, "score": wt} for c, lb, wt, pr in _GD_RULES if pr(w)), key=lambda x: -x["score"])
+                raw_events.append({"sec": sec, "type": "fps_drop", "fps": s["fps"], "causes": causes, "snap": w})
+
+    # dedup: raggruppa per causa dominante -> 1 problema, N occorrenze
+    groups = {}
+    for ev in raw_events:
+        top = ev["causes"][0] if ev["causes"] else {"cause": "unknown", "label": "Causa non determinata", "score": 0.2}
+        g = groups.setdefault(top["cause"], {"cause": top["cause"], "label": top["label"], "weight": top["score"],
+                                             "occurrences": 0, "secs": [], "types": {}, "worst_ms": 0,
+                                             "ambiguous_with": {}, "snap_max": {}})
+        g["occurrences"] += 1
+        g["secs"].append(ev["sec"])
+        g["types"][ev["type"]] = g["types"].get(ev["type"], 0) + 1
+        if isinstance(ev.get("ft_worst_ms"), (int, float)):
+            g["worst_ms"] = max(g["worst_ms"], ev["ft_worst_ms"])
+        for c in ev["causes"][1:]:
+            g["ambiguous_with"][c["label"]] = g["ambiguous_with"].get(c["label"], 0) + 1
+        for k, v in ev["snap"].items():
+            if not k.startswith("_") and isinstance(v, (int, float)):
+                g["snap_max"][k] = max(g["snap_max"].get(k, 0), v)
+    problems = []
+    for g in groups.values():
+        impact_pct = round(min(100.0, len(set(g["secs"])) / max(1.0, dur_s) * 100), 1)
+        amb = [k for k, v in g["ambiguous_with"].items() if v >= g["occurrences"] * 0.5]
+        problems.append({
+            "cause": g["cause"], "label": g["label"], "occurrences": g["occurrences"],
+            "pattern": _gd_pattern(sorted(set(g["secs"]))),
+            "impact_pct": impact_pct,
+            "impact_score": round(impact_pct * g["weight"], 2),
+            "first_min": round(min(g["secs"]) / 60, 1), "last_min": round(max(g["secs"]) / 60, 1),
+            "worst_frame_ms": g["worst_ms"] or None,
+            "signals_max": g["snap_max"],
+            "confidence_hint": "high" if g["weight"] >= 0.8 and not amb else ("low" if amb else "medium"),
+            "concurrent_signals": amb,
+        })
+    problems.sort(key=lambda p: -p["impact_score"])
+
+    pace = [s["pace_dev"] for s in sess if isinstance(s.get("pace_dev"), (int, float))]
+    cv = [s["ft_cv"] for s in sess if isinstance(s.get("ft_cv"), (int, float))]
+    lat = [s["latency_ms"] for s in sess if isinstance(s.get("latency_ms"), (int, float))]
     fps_avg = round(sum(fps) / len(fps)) if fps else None
-    fps_p1 = _gd_pct(fps_sorted, 0.01)
+    fps_p1_approx = _gd_pct(fps_sorted, 0.01)
     return {
         "duration_min": duration_min, "samples": len(sess), "game": game,
         "fps_avg": fps_avg, "fps_min": fps_sorted[0] if fps_sorted else None,
-        "fps_max": fps_sorted[-1] if fps_sorted else None, "fps_1pct_low": fps_p1,
-        "stutter_index": round(fps_p1 / fps_avg, 2) if fps_p1 and fps_avg else None,
-        "hitch_total": hitch_total,
+        "fps_max": fps_sorted[-1] if fps_sorted else None,
+        "fps_1pct_low": fps_1low or fps_p1_approx,
+        "fps_01pct_low": fps_01low,
+        "exact_percentiles": bool(hist),
+        "stutter_index": round((fps_1low or fps_p1_approx) / fps_avg, 2) if fps_avg and (fps_1low or fps_p1_approx) else None,
+        "hitch_total": sum(s.get("hitches") or 0 for s in sess),
+        "hitch_threshold_ms": next((s["hitch_thr"] for s in reversed(sess) if isinstance(s.get("hitch_thr"), (int, float))), None),
+        "pace_cv_avg": round(sum(cv) / len(cv), 3) if cv else None,
         "pace_dev_avg_ms": round(sum(pace) / len(pace), 2) if pace else None,
-        "ft_p99_worst_ms": max(ft_p99) if ft_p99 else None,
         "latency_avg_ms": round(sum(lat) / len(lat)) if lat else None,
-        "latency_max_ms": max(lat) if lat else None,
         "gpu_temp_max": max((s.get("gpu_temp") or 0) for s in sess) or None,
         "cpu_temp_max": max((s.get("cpu_temp") or 0) for s in sess) or None,
-        "gpu_clock_median_mhz": med_gpu_clock,
-        "events": events[:20],
-        "has_frametime_data": bool(ft_p99),
+        "gpu_clock_median_mhz": med_clock,
+        "problems": problems[:6],
+        "has_frametime_data": bool(cv or any(isinstance(s.get("ft_p99"), (int, float)) for s in sess)),
+        "_timeline_fps": [{"m": round(i * (dur_s / max(1, len(sess))) / 60, 2), "fps": s.get("fps")}
+                          for i, s in enumerate(sess) if isinstance(s.get("fps"), (int, float))][::max(1, len(sess) // 120)],
+        "_events": [{"m": round(e["sec"] / 60, 2), "type": e["type"],
+                     "cause": (e["causes"][0]["cause"] if e["causes"] else "unknown")} for e in raw_events][:60],
     }
+
+
 
 
 async def _enrich_specs_for_ai(uid: str, specs: dict | None) -> dict:
@@ -543,29 +631,71 @@ def build(get_current_user):
             "\nNOTA: nessun dato frametime per-frame (PresentMon non attivo o agent datato): "
             "basa l'analisi su FPS/telemetria e suggerisci di aggiornare l'agent per l'analisi completa."
         )
+        timeline = {"fps": stats.pop("_timeline_fps", []), "events": stats.pop("_events", [])}
+        # baseline storica personale (stessa macchina/gioco, ultime 5 sessioni)
+        baseline = None
+        prev_reports = []
+        if stats.get("game"):
+            prev_reports = await db.gameplay_reports.find(
+                {"user_id": uid, "stats.game": stats["game"]}, {"_id": 0, "stats": 1, "report": 1}
+            ).sort("created_at", -1).to_list(5)
+        if prev_reports:
+            def _avg(key):
+                vals = [p["stats"].get(key) for p in prev_reports if isinstance(p.get("stats", {}).get(key), (int, float))]
+                return round(sum(vals) / len(vals), 1) if vals else None
+            def _delta(cur, base):
+                return round((cur - base) / base * 100, 1) if isinstance(cur, (int, float)) and base else None
+            b_fps, b_low, b_hitch = _avg("fps_avg"), _avg("fps_1pct_low"), _avg("hitch_total")
+            baseline = {
+                "sessions": len(prev_reports), "game": stats["game"],
+                "fps_avg_base": b_fps, "fps_avg_delta_pct": _delta(stats.get("fps_avg"), b_fps),
+                "fps_1low_base": b_low, "fps_1low_delta_pct": _delta(stats.get("fps_1pct_low"), b_low),
+                "hitch_base": b_hitch, "hitch_delta_pct": _delta(stats.get("hitch_total"), b_hitch),
+            }
+        # badge "risolto": problemi del referto precedente che non si ripresentano
+        resolved = []
+        if prev_reports:
+            prev_ids = {i.get("id") or i.get("type") for i in (prev_reports[0].get("report", {}).get("issues") or [])}
+            cur_ids = {p["cause"] for p in stats.get("problems", [])}
+            resolved = sorted(x for x in prev_ids if x and x not in cur_ids and x != "unknown")
         prompt = (
-            "Sei il Gameplay Doctor di FrameForge. Analizza il referto tecnico della sessione di gioco "
-            "qui sotto (firme frametime + eventi gia' correlati alla telemetria) e produci una diagnosi.\n\n"
+            "Sei il Gameplay Doctor di FrameForge: genera un REPORT TECNICO (non una chat) "
+            "dalla sessione di gioco analizzata. Il referto sotto contiene problemi GIA' deduplicati, "
+            "correlati (finestra causale con lag) e ORDINATI PER IMPATTO REALE (% sessione x peso causa): "
+            "MANTIENI quell'ordine.\n\n"
             "[REFERTO SESSIONE]\n" + json.dumps(stats, ensure_ascii=False) + no_ft_note + "\n\n"
-            "[TWEAK DISPONIBILI NELLA GUI FRAMEFORGE (id=nome)]\n" + _GD_GUI_TWEAKS + "\n\n"
-            "Rispondi ESCLUSIVAMENTE con un JSON valido (senza testo prima/dopo, senza fence) in questo schema:\n"
+            + ("[BASELINE STORICA STESSO GIOCO]\n" + json.dumps(baseline, ensure_ascii=False) + "\n\n" if baseline else "")
+            + "[TWEAK APPLICABILI NELLA GUI FRAMEFORGE (id=nome)]\n" + _GD_GUI_TWEAKS + "\n\n"
+            "REGOLE FERREE:\n"
+            "1. TONO da report tecnico: niente frasi da chat ('ho analizzato i tuoi dati', 'ottima domanda').\n"
+            "2. NON puoi affermare una causa senza citare i numeri esatti a supporto (clock, temperature, minuti, durate) nel campo evidence.\n"
+            "3. Separa SEMPRE fatto e ipotesi: evidence = solo numeri dal referto; diagnosis = inferenza.\n"
+            "4. confidence: usa il confidence_hint del referto; se concurrent_signals non vuoto, esplicita l'incertezza in diagnosis ('probabile X, ma anche Y era vicino al limite').\n"
+            "5. Un solo fix primario per problema (con gui_tweak dal catalogo se pertinente), alternative come opzioni secondarie.\n"
+            "6. fix_impact_estimate: SOLO se deducibile dai dati del referto (es. '7% di clock perso per throttling => recupero stimato ~7%'), altrimenti null. MAI inventare statistiche di altri utenti.\n"
+            "7. Massimo 4 issues; sessione pulita => issues=[] e health=good.\n"
+            "Rispondi ESCLUSIVAMENTE con JSON valido (niente testo fuori, niente fence):\n"
             "{\n"
-            "  \"verdict\": \"1-2 frasi di sintesi della sessione\",\n"
-            "  \"health\": \"good|minor|bad\",\n"
-            "  \"score\": 0-100,\n"
+            "  \"executive_summary\": {\"main_problem\": \"1 riga\", \"main_fix\": \"1 riga\"},\n"
+            "  \"verdict\": \"2-3 frasi tecniche di sintesi\",\n"
+            "  \"health\": \"good|minor|bad\", \"score\": 0-100,\n"
             "  \"issues\": [\n"
-            "    {\"type\": \"microstuttering|hitching|fps_drop|throttling|frame_pacing|input_lag|other\",\n"
-            "     \"severity\": \"low|medium|high\",\n"
+            "    {\"id\": \"usa il campo cause del problema (es. gpu_thermal_throttle)\",\n"
+            "     \"type\": \"microstuttering|hitching|fps_drop|throttling|frame_pacing|input_lag|other\",\n"
+            "     \"severity\": \"low|medium|high\", \"confidence\": \"high|medium|low\",\n"
+            "     \"impact_pct\": numero, \"occurrences\": numero, \"pattern\": \"isolated|sporadic|periodic|burst\",\n"
             "     \"title\": \"titolo breve\",\n"
-            "     \"evidence\": \"dati concreti dal referto (numeri, minuti)\",\n"
-            "     \"cause\": \"causa probabile collegata al PC dell'utente\",\n"
-            "     \"fix\": \"soluzione concreta in 1-3 frasi\",\n"
-            "     \"gui_tweak\": \"id del tweak FrameForge pertinente oppure null\"}\n"
+            "     \"simple_text\": \"1 frase semplice per utente casual\",\n"
+            "     \"evidence\": \"SOLO numeri esatti dal referto\",\n"
+            "     \"diagnosis\": \"inferenza, con incertezza esplicita se serve\",\n"
+            "     \"tech_detail\": \"2-4 frasi tecniche con i numeri\",\n"
+            "     \"fix\": {\"primary\": {\"text\": \"azione\", \"gui_tweak\": \"id o null\"},\n"
+            "               \"alternatives\": [{\"text\": \"...\", \"gui_tweak\": \"id o null\"}],\n"
+            "               \"impact_estimate\": \"stima o null\"}},\n"
             "  ],\n"
+            "  \"comparison\": \"1-2 frasi vs baseline storica (null se assente)\",\n"
             "  \"positive\": \"1 frase su cosa funziona bene\"\n"
-            "}\n"
-            "Massimo 4 issues, ordinate per severita'. Se la sessione e' pulita, issues=[] e health=good. "
-            "Usa SOLO cause supportate dai dati del referto (non inventare). " + lang_instruction
+            "}\n" + lang_instruction
         )
         try:
             raw = await ai_engine.one_shot_advisor(prompt, specs_text=specs_text, lang=lang)
@@ -590,8 +720,9 @@ def build(get_current_user):
                 raise HTTPException(status_code=500, detail="AI non ha restituito JSON valido")
         doc = {
             "id": str(uuid.uuid4()), "user_id": uid,
-            "stats": {k: v for k, v in stats.items() if k != "events"},
-            "report": report, "created_at": now_iso(),
+            "stats": stats, "report": report,
+            "timeline": timeline, "baseline": baseline, "resolved": resolved,
+            "created_at": now_iso(),
         }
         await db.gameplay_reports.insert_one({**doc})
         doc.pop("_id", None)

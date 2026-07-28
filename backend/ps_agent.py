@@ -1533,17 +1533,41 @@ function Get-Fps {
   $avg = $top.Value.sum / $top.Value.n
   if ($avg -le 0) { return $null }
   $lat = if ($top.Value.ln -gt 0) { [int]([math]::Round($top.Value.lsum / $top.Value.ln)) } else { $null }
-  # Gameplay Doctor: firme frametime per-tick (microstutter, hitching, pacing).
+  # Gameplay Doctor v2: firme frametime per-tick con soglia hitch ADATTIVA
+  # (3x mediana di sessione, min 25ms) + CV pacing + istogramma cumulativo di
+  # sessione (60 bucket) per 1% / 0.1% low ESATTI lato backend.
   $gd = $null
   $fr = $top.Value.fr
   if ($fr -and $fr.Count -ge 10) {
+    if (-not $script:GD_HIST) { $script:GD_HIST = New-Object 'int[]' 60; $script:GD_N = 0; $script:GD_TICK = 0 }
+    foreach ($v in $fr) {
+      $bi = [int][math]::Floor([double]$v)
+      if ($bi -lt 0) { $bi = 0 }
+      if ($bi -ge 50) {
+        if ($v -lt 60) { $bi = 50 } elseif ($v -lt 70) { $bi = 51 } elseif ($v -lt 80) { $bi = 52 }
+        elseif ($v -lt 90) { $bi = 53 } elseif ($v -lt 100) { $bi = 54 } elseif ($v -lt 125) { $bi = 55 }
+        elseif ($v -lt 150) { $bi = 56 } elseif ($v -lt 200) { $bi = 57 } elseif ($v -lt 300) { $bi = 58 } else { $bi = 59 }
+      }
+      $script:GD_HIST[$bi]++
+    }
+    $script:GD_N += $fr.Count
+    $script:GD_TICK++
+    # mediana di sessione dall'istogramma (bucket <50 ~= ms)
+    $half = $script:GD_N / 2; $cum = 0; $med = 8
+    for ($b = 0; $b -lt 60; $b++) { $cum += $script:GD_HIST[$b]; if ($cum -ge $half) { $med = $b + 0.5; break } }
+    $thr = [math]::Max(25.0, 3.0 * $med)
     $sorted = [double[]]$fr.ToArray(); [Array]::Sort($sorted)
     $p99 = $sorted[[math]::Min($sorted.Length - 1, [int][math]::Ceiling(0.99 * $sorted.Length) - 1)]
-    $hit = 0; foreach ($v in $sorted) { if ($v -gt 50) { $hit++ } }
+    $hit = 0; foreach ($v in $sorted) { if ($v -gt $thr) { $hit++ } }
+    $mean = 0.0; foreach ($v in $fr) { $mean += $v }; $mean = $mean / $fr.Count
+    $sd = 0.0; foreach ($v in $fr) { $sd += ([double]$v - $mean) * ([double]$v - $mean) }
+    $cv = if ($mean -gt 0) { [math]::Round([math]::Sqrt($sd / $fr.Count) / $mean, 3) } else { 0 }
     $pd = 0.0
     for ($q = 1; $q -lt $fr.Count; $q++) { $pd += [math]::Abs([double]$fr[$q] - [double]$fr[$q - 1]) }
     $pd = $pd / ($fr.Count - 1)
-    $gd = @{ ft_p99 = [math]::Round($p99, 1); ft_worst = [math]::Round($sorted[$sorted.Length - 1], 1); hitches = $hit; pace_dev = [math]::Round($pd, 2) }
+    $gd = @{ ft_p99 = [math]::Round($p99, 1); ft_worst = [math]::Round($sorted[$sorted.Length - 1], 1); hitches = $hit; pace_dev = [math]::Round($pd, 2); ft_cv = $cv; hitch_thr = [math]::Round($thr, 1) }
+    # ogni 30 tick allega l'istogramma cumulativo (compatto: 60 int)
+    if (($script:GD_TICK % 30) -eq 0) { $gd.hist = $script:GD_HIST; $gd.hist_n = $script:GD_N }
   }
   return @{ fps = [int]([math]::Round(1000 / $avg)); game = ($top.Key -replace '\.exe$', ''); latency_ms = $lat; gd = $gd }
 }
@@ -5198,7 +5222,11 @@ if ($MODE -eq 'monitor') {
       if ($f) {
         $s.fps = $f.fps; $s.game = $f.game
         if ($null -ne $f.latency_ms) { $s.latency_ms = $f.latency_ms }
-        if ($f.gd) { $s.ft_p99 = $f.gd.ft_p99; $s.ft_worst = $f.gd.ft_worst; $s.hitches = $f.gd.hitches; $s.pace_dev = $f.gd.pace_dev }
+        if ($f.gd) {
+          $s.ft_p99 = $f.gd.ft_p99; $s.ft_worst = $f.gd.ft_worst; $s.hitches = $f.gd.hitches; $s.pace_dev = $f.gd.pace_dev
+          $s.ft_cv = $f.gd.ft_cv; $s.hitch_thr = $f.gd.hitch_thr
+          if ($f.gd.hist) { $s.ft_hist = $f.gd.hist; $s.ft_n = $f.gd.hist_n }
+        }
         $noFpsCount = 0
       }
       elseif ($script:PM_ON) { $noFpsCount++; if ($noFpsCount -eq 10) { Show-FpsDiag } }
