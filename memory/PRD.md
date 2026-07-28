@@ -1460,3 +1460,9 @@ Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati Li
 - backend/routers/pc.py: AGENT_ZIP_UPSTREAM → v.0.8.0 (LATEST_AGENT_VERSION auto = 0.8.0). frontend/config/agent.js → URL/SHA/VERSION v0.8.0/DATE 2026-07-28.
 - Test e2e preview: /api/agent/latest-version = 0.8.0; login admin → /api/agent/download-zip 200 (9.1MB, exe + Avvia-FrameForge.bat personalizzato); pagina /app/desktop mostra v0.8.0 + SHA + banner update 0.7.5→0.8.0.
 - PENDING UTENTE: REDEPLOY produzione forgefps.dev (porta: agent 0.8.0 + GUI v3.1 + fix griglia vuota). Poi sul PC: pulizia exe vecchi + prima esecuzione del nuovo exe.
+
+### 2026-07-28 (62) — GUI v3.2: skeleton + progresso analisi iniziale (FATTO, self-test screenshot 2 fasi OK)
+- Feature (scelta utente #4): via il "buco nero" all'apertura della GUI agent. Durante il primo /api/state (scan sincrono lato PS, single-thread → progresso reale impossibile) la griglia mostra: strip "// ANALISI SISTEMA IN CORSO" con barra di progresso STIMATA (calibrata su localStorage ff_scan_ms = durata scan precedente, clamp 3-60s, cap 92%) + label step ciclica (Gaming & FPS → Latenza → Rete → Sistema → Servizi → GPU) + 6 skeleton card con shimmer CSS.
+- ps_agent.py: CSS .scan-strip/.skel-card/@keyframes skelShimmer; JS renderScanSkeleton()/finishScanSkeleton() hooked in boot e refreshState (successo → salva durata reale; errore → messaggio "riprovo" nella strip, skeleton resta). Ver-pill → GUI v3.2.
+- Harness aggiornato: build_gui_harness.py ora ritarda /api/state di 4s per testare la fase skeleton. Test: fase scan (6 skel, 19%, step ok) + fase dati (10 card, ring 50%, ff_scan_ms=4000, 0 errori).
+- PENDING UTENTE: redeploy produzione per vedere GUI v3.2.
