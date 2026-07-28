@@ -405,7 +405,9 @@ export default function Live() {
       {/* ===== SESSION SUMMARY (full width, shareable) ===== */}
       {summary && <SessionSummary summary={summary} onReset={resetSession} />}
 
-      <GameplayDoctor />
+      <div className="pb-24">
+        <GameplayDoctor />
+      </div>
 
       {/* ===== OBS Browser Overlay (Streamer only) ===== */}
       <div className="mb-6">

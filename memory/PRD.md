@@ -1466,3 +1466,13 @@ Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati Li
 - ps_agent.py: CSS .scan-strip/.skel-card/@keyframes skelShimmer; JS renderScanSkeleton()/finishScanSkeleton() hooked in boot e refreshState (successo → salva durata reale; errore → messaggio "riprovo" nella strip, skeleton resta). Ver-pill → GUI v3.2.
 - Harness aggiornato: build_gui_harness.py ora ritarda /api/state di 4s per testare la fase skeleton. Test: fase scan (6 skel, 19%, step ok) + fase dati (10 card, ring 50%, ff_scan_ms=4000, 0 errori).
 - PENDING UTENTE: redeploy produzione per vedere GUI v3.2.
+
+### 2026-07-28 (63) — GAMEPLAY DOCTOR (idea utente #1) — FATTO, testato iteration_41: 100% PASS
+- AI che "vede" il gameplay via firme frametime (non video). 3 strati:
+  1. AGENT (ps_agent.py): Get-Fps ora raccoglie frametime per-frame PresentMon e calcola per-tick ft_p99, ft_worst, hitches(>50ms), pace_dev → attaccati ai sample telemetria nel monitor loop.
+  2. BACKEND deterministico (advisor.py): _gd_last_session (gap<=30s), _gameplay_stats (fps avg/min/1%low, stutter_index, hitch_total, pacing, eventi hitch/fps_drop annotati con cause: CPU satura, RAM/VRAM, GPU declock termico vs mediana clock, VRM, "nessuno saturo→causa esterna").
+  3. AI (Claude): POST /api/advisor/gameplay-doctor (Pro-gated, rate-limited) → JSON {verdict, health, score, issues[{type,severity,title,evidence,cause,fix,gui_tweak}], positive}. Persistito in db.gameplay_reports. GET /gameplay-doctor/latest.
+- FRONTEND: components/GameplayDoctor.jsx in /app/live sotto SessionSummary (data-testid gameplay-doctor, gd-analyze-btn, gd-report, gd-issue-*, gd-tweak-badge). i18n live.gd_* it+en. Fix overlay cookie banner: pb-24.
+- FIX COLLATERALI: helpers.py pc_context_text startup con dict (rompeva anche /diagnose!); cap telemetria -300 → -1800 sample (30 min).
+- Test: pytest 7/7 (/app/backend/tests/test_gameplay_doctor.py) + frontend flow reale. Qualità referto AI eccellente (correla hitch→CPU, throttling→temp+declock, cita app avvio reali).
+- NOTA: i campi frametime richiedono monitor con PresentMon attivo (admin); senza, il prompt degrada onestamente (has_frametime_data=false). Serve REDEPLOY produzione. Fase 2 possibile: alert live durante il monitoring + AI Performance Lab (idea #2, architettura già discussa).
