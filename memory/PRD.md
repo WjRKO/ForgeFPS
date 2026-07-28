@@ -1444,3 +1444,12 @@ Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati Li
 - Harness test permanente: /app/backend/tests/build_gui_harness.py genera /app/frontend/public/gui_test.html (GUI reale + fetch mockato con tweak corrotto g3-broken). Usato da testing agent.
 - LEZIONE CRITICA: MAI fare search_replace paralleli sullo STESSO file → race che perde/corrompe edit (successo qui: refreshState perso + coda file duplicata). Su ps_agent.py sempre edit sequenziali + `python3 -c "import ps_agent"` + node --check dopo.
 - NOTA: l'utente è in PRODUZIONE (forgefps.dev) → serve REDEPLOY perché il suo agent scarichi la GUI aggiornata.
+
+### 2026-07-28 (60) — Agent v0.8.0: stop definitivo UAC dai bottoni dashboard (FATTO, testato iteration_40: 6/6 PASS)
+- UAC ricorrente ("forgefps-agent.exe" nel popup, tutti i bottoni, produzione). Cause: exe vecchi che si ri-registrano sul protocollo + possibile flag RUNASADMIN in AppCompatFlags.
+- forgefps_agent.py → v0.8.0, 3 protezioni:
+  1. launch_secure_gui(mode, allow_elevation): lanci via URI (bottoni web) MAI elevati, nemmeno fallback firma invalida. runas unico e gated (test 7 verifica).
+  2. Anti-downgrade launcher: marker "' ## target=<path>|version=x.y.z" nel vbs; exe vecchio non sovrascrive registrazione se target attuale è più nuovo ed esiste. Self-heal se target fantasma.
+  3. _clear_runasadmin_compat_flag(): rimuove RUNASADMIN da HKCU AppCompatFlags\Layers (path exe + target launcher) a ogni avvio e con --register-protocol.
+- version_info.txt/manifest → 0.8.0.0 (asInvoker). changelog.json entry 0.8.0. REBUILD_v0.8.0.md. Test suite permanente /app/agent-build/tests_v080_antiuac.py (7 test logici, ALL PASS).
+- PENDING UTENTE: (a) pulizia one-time PC (protocollo punta ancora a exe vecchio pre-0.7.6: eliminare copie vecchie + eseguire v0.7.9 una volta); (b) push tag v0.8.0 su GitHub → SHA256 → aggiornare pc.py AGENT_ZIP_UPSTREAM + frontend config/agent.js; (c) REDEPLOY produzione (porta anche GUI v3.1 + fix griglia vuota).
