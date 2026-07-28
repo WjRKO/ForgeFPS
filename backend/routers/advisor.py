@@ -14,6 +14,117 @@ from plan_gate import require_pro
 
 AI_RATE_LIMIT_PER_HOUR = 100
 
+# ---------------- Gameplay Doctor (strati 1-2: firme frametime + correlatore) ----------------
+
+_GD_GUI_TWEAKS = (
+    "power=Piano energetico prestazioni massime; gaming=Boost gaming (Game Mode, HAGS, Game DVR off); "
+    "priority=Priorita GPU/CPU ai giochi (MMCSS); timer=Timer resolution stabile; fse=Fullscreen optimizations off; "
+    "mpo=MPO off; mouse=Precisione puntatore off; network=Ottimizzazione rete gaming; dns=DNS veloce; "
+    "qos=QoS/throttling rete off; sysmain=SysMain off; bgapps=App in background off; debloat=Debloat servizi; "
+    "clean=Pulizia file temporanei; visual=Effetti visivi minimi"
+)
+
+
+def _gd_parse_ts(v):
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _gd_last_session(samples: list, gap_s: int = 30) -> list:
+    """Estrae l'ultima sessione contigua (gap tra campioni <= gap_s)."""
+    if not samples:
+        return []
+    out = [samples[-1]]
+    for i in range(len(samples) - 2, -1, -1):
+        t1 = _gd_parse_ts(samples[i].get("ts"))
+        t2 = _gd_parse_ts(out[0].get("ts"))
+        if not t1 or not t2 or (t2 - t1).total_seconds() > gap_s:
+            break
+        out.insert(0, samples[i])
+    return out
+
+
+def _gd_pct(sorted_vals: list, p: float):
+    if not sorted_vals:
+        return None
+    return sorted_vals[min(len(sorted_vals) - 1, int(p * len(sorted_vals)))]
+
+
+def _gd_annotate(s: dict, med_gpu_clock) -> list:
+    causes = []
+    if isinstance(s.get("cpu_util"), (int, float)) and s["cpu_util"] >= 90:
+        causes.append("CPU satura (%d%%)" % s["cpu_util"])
+    if isinstance(s.get("ram_used_pct"), (int, float)) and s["ram_used_pct"] >= 90:
+        causes.append("RAM quasi piena (%d%%)" % s["ram_used_pct"])
+    if isinstance(s.get("vram_used_pct"), (int, float)) and s["vram_used_pct"] >= 92:
+        causes.append("VRAM satura (%d%%)" % s["vram_used_pct"])
+    gt, gc, gu = s.get("gpu_temp"), s.get("gpu_clock"), s.get("gpu_util")
+    if (isinstance(gt, (int, float)) and gt >= 83 and med_gpu_clock
+            and isinstance(gc, (int, float)) and gc < 0.92 * med_gpu_clock):
+        causes.append("GPU declock a %dC (%dMHz vs mediana %dMHz) = throttling termico" % (gt, gc, med_gpu_clock))
+    if isinstance(s.get("cpu_temp"), (int, float)) and s["cpu_temp"] >= 92:
+        causes.append("CPU a %dC (limite termico)" % s["cpu_temp"])
+    if isinstance(s.get("vrm_temp"), (int, float)) and s["vrm_temp"] >= 90:
+        causes.append("VRM a %dC" % s["vrm_temp"])
+    if isinstance(gu, (int, float)) and gu < 70 and isinstance(s.get("cpu_util"), (int, float)) and s["cpu_util"] < 70:
+        causes.append("ne' CPU ne' GPU sature: probabile causa esterna (disco/processo in background)")
+    return causes
+
+
+def _gameplay_stats(sess: list) -> dict:
+    """Strato deterministico: firme + eventi annotati con cause probabili."""
+    t0, t1 = _gd_parse_ts(sess[0].get("ts")), _gd_parse_ts(sess[-1].get("ts"))
+    duration_min = round(((t1 - t0).total_seconds() / 60.0), 1) if t0 and t1 else None
+    fps = [s["fps"] for s in sess if isinstance(s.get("fps"), (int, float))]
+    fps_sorted = sorted(fps)
+    games = {}
+    for s in sess:
+        g = s.get("game") or s.get("game_name")
+        if g:
+            games[g] = games.get(g, 0) + 1
+    game = max(games, key=games.get) if games else None
+    gpu_clocks = sorted(s["gpu_clock"] for s in sess
+                        if isinstance(s.get("gpu_clock"), (int, float)) and isinstance(s.get("gpu_util"), (int, float)) and s["gpu_util"] >= 80)
+    med_gpu_clock = gpu_clocks[len(gpu_clocks) // 2] if gpu_clocks else None
+
+    hitch_total = sum(s.get("hitches") or 0 for s in sess)
+    pace = [s["pace_dev"] for s in sess if isinstance(s.get("pace_dev"), (int, float))]
+    ft_p99 = [s["ft_p99"] for s in sess if isinstance(s.get("ft_p99"), (int, float))]
+    lat = [s["latency_ms"] for s in sess if isinstance(s.get("latency_ms"), (int, float))]
+
+    events = []
+    for i, s in enumerate(sess):
+        off = round((_gd_parse_ts(s["ts"]) - t0).total_seconds() / 60.0, 1) if t0 and s.get("ts") else None
+        if (s.get("hitches") or 0) >= 2 or (isinstance(s.get("ft_worst"), (int, float)) and s["ft_worst"] > 100):
+            events.append({"min": off, "type": "hitch", "hitches": s.get("hitches"),
+                           "ft_worst_ms": s.get("ft_worst"), "causes": _gd_annotate(s, med_gpu_clock)})
+        elif isinstance(s.get("fps"), (int, float)) and i >= 10:
+            prev = [x["fps"] for x in sess[max(0, i - 30):i] if isinstance(x.get("fps"), (int, float))]
+            if prev and s["fps"] < 0.65 * (sum(prev) / len(prev)):
+                events.append({"min": off, "type": "fps_drop", "fps": s["fps"],
+                               "fps_prev_avg": round(sum(prev) / len(prev)),
+                               "causes": _gd_annotate(s, med_gpu_clock)})
+    fps_avg = round(sum(fps) / len(fps)) if fps else None
+    fps_p1 = _gd_pct(fps_sorted, 0.01)
+    return {
+        "duration_min": duration_min, "samples": len(sess), "game": game,
+        "fps_avg": fps_avg, "fps_min": fps_sorted[0] if fps_sorted else None,
+        "fps_max": fps_sorted[-1] if fps_sorted else None, "fps_1pct_low": fps_p1,
+        "stutter_index": round(fps_p1 / fps_avg, 2) if fps_p1 and fps_avg else None,
+        "hitch_total": hitch_total,
+        "pace_dev_avg_ms": round(sum(pace) / len(pace), 2) if pace else None,
+        "ft_p99_worst_ms": max(ft_p99) if ft_p99 else None,
+        "latency_avg_ms": round(sum(lat) / len(lat)) if lat else None,
+        "latency_max_ms": max(lat) if lat else None,
+        "gpu_temp_max": max((s.get("gpu_temp") or 0) for s in sess) or None,
+        "cpu_temp_max": max((s.get("cpu_temp") or 0) for s in sess) or None,
+        "gpu_clock_median_mhz": med_gpu_clock,
+        "events": events[:20],
+        "has_frametime_data": bool(ft_p99),
+    }
+
 
 async def _enrich_specs_for_ai(uid: str, specs: dict | None) -> dict:
     """Aggiunge benchmark history (ultimi 5) + tracker summary a specs per il context AI."""
@@ -403,6 +514,93 @@ def build(get_current_user):
         })
         return {"id": diagnose_id, **data}
 
+
+    @r.post("/gameplay-doctor")
+    async def gameplay_doctor(data: DiagnoseInput | None = None, user: dict = Depends(require_pro_dep)):
+        """Gameplay Doctor: analizza le firme frametime dell'ultima sessione di
+        monitoring, le correla con la telemetria (strato deterministico) e genera
+        il referto AI con soluzioni collegate al PC reale."""
+        uid = str(user["_id"])
+        await _check_ai_rate_limit(uid)
+        tel = await db.pc_telemetry.find_one({"user_id": uid}, {"_id": 0, "samples": 1})
+        samples = (tel or {}).get("samples") or []
+        sess = _gd_last_session(samples)
+        if len(sess) < 60:
+            raise HTTPException(status_code=400, detail="Sessione troppo corta: servono almeno 60 secondi di monitoraggio live (avvia il monitor e gioca qualche minuto).")
+        stats = _gameplay_stats(sess)
+        specs = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0})
+        specs_text = ""
+        if specs and (specs.get("data") or {}).get("cpu"):
+            specs = await _enrich_specs_for_ai(uid, specs)
+            specs_text = pc_context_text(specs)
+        lang = (data.lang if data else "it") or "it"
+        is_en = lang.startswith("en")
+        lang_instruction = (
+            "Respond in English only: all JSON strings MUST be in English."
+            if is_en else "Rispondi in italiano: tutte le stringhe del JSON DEVONO essere in italiano."
+        )
+        no_ft_note = "" if stats["has_frametime_data"] else (
+            "\nNOTA: nessun dato frametime per-frame (PresentMon non attivo o agent datato): "
+            "basa l'analisi su FPS/telemetria e suggerisci di aggiornare l'agent per l'analisi completa."
+        )
+        prompt = (
+            "Sei il Gameplay Doctor di FrameForge. Analizza il referto tecnico della sessione di gioco "
+            "qui sotto (firme frametime + eventi gia' correlati alla telemetria) e produci una diagnosi.\n\n"
+            "[REFERTO SESSIONE]\n" + json.dumps(stats, ensure_ascii=False) + no_ft_note + "\n\n"
+            "[TWEAK DISPONIBILI NELLA GUI FRAMEFORGE (id=nome)]\n" + _GD_GUI_TWEAKS + "\n\n"
+            "Rispondi ESCLUSIVAMENTE con un JSON valido (senza testo prima/dopo, senza fence) in questo schema:\n"
+            "{\n"
+            "  \"verdict\": \"1-2 frasi di sintesi della sessione\",\n"
+            "  \"health\": \"good|minor|bad\",\n"
+            "  \"score\": 0-100,\n"
+            "  \"issues\": [\n"
+            "    {\"type\": \"microstuttering|hitching|fps_drop|throttling|frame_pacing|input_lag|other\",\n"
+            "     \"severity\": \"low|medium|high\",\n"
+            "     \"title\": \"titolo breve\",\n"
+            "     \"evidence\": \"dati concreti dal referto (numeri, minuti)\",\n"
+            "     \"cause\": \"causa probabile collegata al PC dell'utente\",\n"
+            "     \"fix\": \"soluzione concreta in 1-3 frasi\",\n"
+            "     \"gui_tweak\": \"id del tweak FrameForge pertinente oppure null\"}\n"
+            "  ],\n"
+            "  \"positive\": \"1 frase su cosa funziona bene\"\n"
+            "}\n"
+            "Massimo 4 issues, ordinate per severita'. Se la sessione e' pulita, issues=[] e health=good. "
+            "Usa SOLO cause supportate dai dati del referto (non inventare). " + lang_instruction
+        )
+        try:
+            raw = await ai_engine.one_shot_advisor(prompt, specs_text=specs_text, lang=lang)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Errore AI: {str(e)[:200]}")
+        raw = (raw or "").strip()
+        if raw.startswith("```"):
+            raw = raw.strip("`")
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+        try:
+            report = json.loads(raw)
+        except Exception:
+            start, end = raw.find("{"), raw.rfind("}")
+            if start >= 0 and end > start:
+                try:
+                    report = json.loads(raw[start:end + 1])
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"AI non ha restituito JSON valido: {str(e)[:200]}")
+            else:
+                raise HTTPException(status_code=500, detail="AI non ha restituito JSON valido")
+        doc = {
+            "id": str(uuid.uuid4()), "user_id": uid,
+            "stats": {k: v for k, v in stats.items() if k != "events"},
+            "report": report, "created_at": now_iso(),
+        }
+        await db.gameplay_reports.insert_one({**doc})
+        doc.pop("_id", None)
+        return doc
+
+    @r.get("/gameplay-doctor/latest")
+    async def gameplay_doctor_latest(user: dict = Depends(get_current_user)):
+        row = await db.gameplay_reports.find_one({"user_id": str(user["_id"])}, {"_id": 0}, sort=[("created_at", -1)])
+        return {"report": row}
 
     @r.get("/planned-actions")
     async def list_planned_actions(user: dict = Depends(get_current_user)):

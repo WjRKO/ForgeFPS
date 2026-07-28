@@ -742,7 +742,7 @@ def build(get_current_user):
         await db.pc_telemetry.update_one(
             {"user_id": rec["user_id"]},
             {"$set": {"user_id": rec["user_id"], "updated_at": now_iso()},
-             "$push": {"samples": {"$each": [sample], "$slice": -300}}},
+             "$push": {"samples": {"$each": [sample], "$slice": -1800}}},
             upsert=True)
         await _check_temp_alerts(rec["user_id"], sample)
         # v0.7.7 Milestones: track distinct games (Universal Game Detector)

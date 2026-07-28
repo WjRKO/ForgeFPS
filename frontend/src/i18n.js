@@ -167,6 +167,11 @@ const resources = {
       },
       live: {
         eyebrow: "// Monitoraggio Live", title: "Telemetria in tempo reale", live: "LIVE", agent_off: "Agent non attivo",
+        gd_title: "Diagnosi AI dell'ultima sessione", gd_btn: "Analizza sessione", gd_loading: "Analizzo...",
+        gd_loading_hint: "L'AI sta incrociando firme frametime e telemetria della sessione...",
+        gd_none: "Avvia il monitor, gioca qualche minuto e poi lancia l'analisi: l'AI rileva microstuttering, hitching, drop e throttling collegandoli al tuo hardware.",
+        gd_done: "Diagnosi completata", gd_err: "Analisi non riuscita", gd_evidence: "Evidenza", gd_cause: "Causa",
+        gd_tweak_available: "Tweak disponibile nella GUI", gd_score: "Voto sessione", gd_clean: "Sessione pulita: nessun problema rilevato.",
         link_active: "Telemetria attiva",
         tab_perf: "Performance", tab_therm: "Temperature", tab_util: "Utilizzo",
         card_perf: "Performance", card_cpu: "CPU", card_gpu: "GPU", card_mem: "Memoria",
@@ -867,6 +872,11 @@ const resources = {
       },
       live: {
         eyebrow: "// Live Monitoring", title: "Real-time telemetry", live: "LIVE", agent_off: "Agent not running",
+        gd_title: "AI diagnosis of your last session", gd_btn: "Analyze session", gd_loading: "Analyzing...",
+        gd_loading_hint: "The AI is cross-referencing frametime signatures with session telemetry...",
+        gd_none: "Start the monitor, play for a few minutes, then run the analysis: the AI detects microstuttering, hitching, drops and throttling and links them to your hardware.",
+        gd_done: "Diagnosis complete", gd_err: "Analysis failed", gd_evidence: "Evidence", gd_cause: "Cause",
+        gd_tweak_available: "Tweak available in the GUI", gd_score: "Session score", gd_clean: "Clean session: no issues detected.",
         link_active: "Telemetry link active",
         tab_perf: "Performance", tab_therm: "Thermals", tab_util: "Utilization",
         card_perf: "Performance", card_cpu: "CPU", card_gpu: "GPU", card_mem: "Memory",

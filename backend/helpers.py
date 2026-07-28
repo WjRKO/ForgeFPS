@@ -426,7 +426,8 @@ def pc_context_text(specs: dict) -> str:
                          f"Ping {a.get('ping_ms')} ms, punteggio totale {a.get('overall')}")
     startup = specs.get("startup")
     if startup:
-        parts.append(f"\n[AVVIO] {len(startup)} programmi all'avvio: " + ", ".join(startup[:15]))
+        names = [(s.get("name") or s.get("Name") or "?") if isinstance(s, dict) else str(s) for s in startup[:15]]
+        parts.append(f"\n[AVVIO] {len(startup)} programmi all'avvio: " + ", ".join(names))
     # Benchmark trend history (ultimi 5)
     hist = specs.get("benchmark_history") or []
     if hist and len(hist) >= 2:

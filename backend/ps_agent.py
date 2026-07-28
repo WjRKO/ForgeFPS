@@ -1476,8 +1476,9 @@ function Get-Fps {
     $app = if ($iApp -ge 0 -and $c.Count -gt $iApp) { $c[$iApp] } else { 'game' }
     try { $ms = [double]::Parse($c[$iMs], $inv) } catch { continue }
     if ($ms -le 0) { continue }
-    if (-not $byApp.ContainsKey($app)) { $byApp[$app] = @{ sum = 0.0; n = 0; lsum = 0.0; ln = 0 } }
+    if (-not $byApp.ContainsKey($app)) { $byApp[$app] = @{ sum = 0.0; n = 0; lsum = 0.0; ln = 0; fr = (New-Object System.Collections.ArrayList) } }
     $byApp[$app].sum += $ms; $byApp[$app].n++
+    [void]$byApp[$app].fr.Add($ms)
     if ($iLat -ge 0 -and $c.Count -gt $iLat) {
       try { $lat = [double]::Parse($c[$iLat], $inv); if ($lat -gt 0 -and $lat -lt 1000) { $byApp[$app].lsum += $lat; $byApp[$app].ln++ } } catch {}
     }
@@ -1487,7 +1488,19 @@ function Get-Fps {
   $avg = $top.Value.sum / $top.Value.n
   if ($avg -le 0) { return $null }
   $lat = if ($top.Value.ln -gt 0) { [int]([math]::Round($top.Value.lsum / $top.Value.ln)) } else { $null }
-  return @{ fps = [int]([math]::Round(1000 / $avg)); game = ($top.Key -replace '\.exe$', ''); latency_ms = $lat }
+  # Gameplay Doctor: firme frametime per-tick (microstutter, hitching, pacing).
+  $gd = $null
+  $fr = $top.Value.fr
+  if ($fr -and $fr.Count -ge 10) {
+    $sorted = [double[]]$fr.ToArray(); [Array]::Sort($sorted)
+    $p99 = $sorted[[math]::Min($sorted.Length - 1, [int][math]::Ceiling(0.99 * $sorted.Length) - 1)]
+    $hit = 0; foreach ($v in $sorted) { if ($v -gt 50) { $hit++ } }
+    $pd = 0.0
+    for ($q = 1; $q -lt $fr.Count; $q++) { $pd += [math]::Abs([double]$fr[$q] - [double]$fr[$q - 1]) }
+    $pd = $pd / ($fr.Count - 1)
+    $gd = @{ ft_p99 = [math]::Round($p99, 1); ft_worst = [math]::Round($sorted[$sorted.Length - 1], 1); hitches = $hit; pace_dev = [math]::Round($pd, 2) }
+  }
+  return @{ fps = [int]([math]::Round(1000 / $avg)); game = ($top.Key -replace '\.exe$', ''); latency_ms = $lat; gd = $gd }
 }
 
 # ---------------- Tweak actions ----------------
@@ -5134,7 +5147,12 @@ if ($MODE -eq 'monitor') {
     while ($true) {
       $s = Get-TelemetrySample
       $f = Get-Fps
-      if ($f) { $s.fps = $f.fps; $s.game = $f.game; if ($null -ne $f.latency_ms) { $s.latency_ms = $f.latency_ms }; $noFpsCount = 0 }
+      if ($f) {
+        $s.fps = $f.fps; $s.game = $f.game
+        if ($null -ne $f.latency_ms) { $s.latency_ms = $f.latency_ms }
+        if ($f.gd) { $s.ft_p99 = $f.gd.ft_p99; $s.ft_worst = $f.gd.ft_worst; $s.hitches = $f.gd.hitches; $s.pace_dev = $f.gd.pace_dev }
+        $noFpsCount = 0
+      }
       elseif ($script:PM_ON) { $noFpsCount++; if ($noFpsCount -eq 10) { Show-FpsDiag } }
       $stopFromWeb = Send-Telemetry $s
       $g = if ($s.ContainsKey('gpu_util')) { ("GPU {0}% {1}C {2}MHz" -f $s.gpu_util, $s.gpu_temp, $s.gpu_clock) } else { 'GPU n/d' }
