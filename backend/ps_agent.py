@@ -1399,8 +1399,53 @@ function Read-Shared($path) {
     $t = $sr.ReadToEnd(); $sr.Close(); $fs.Close(); return $t
   } catch { return '' }
 }
+function Test-FpsCapable {
+  # 'ok' = ETW consentito (admin, o token con gruppo Performance Log Users S-1-5-32-559)
+  # 'relogon' = utente iscritto al gruppo ma token vecchio: serve logout/riavvio
+  # 'no' = permessi assenti
+  if (Test-Admin) { return 'ok' }
+  try { $tok = (whoami /groups) 2>$null; if ($tok -match 'S-1-5-32-559') { return 'ok' } } catch {}
+  try {
+    $me = $env:USERNAME
+    $mem = Get-LocalGroupMember -SID 'S-1-5-32-559' -ErrorAction Stop | Where-Object { $_.Name -like ("*\" + $me) }
+    if ($mem) { return 'relogon' }
+  } catch {}
+  return 'no'
+}
+
+function Enable-FpsPermission {
+  # Eseguito quando siamo ELEVATI (GUI Ottimizza): iscrive l'utente al gruppo
+  # 'Performance Log Users' (SID S-1-5-32-559) cosi PresentMon cattura gli FPS
+  # anche SENZA admin. Windows richiede logout/riavvio per aggiornare il token.
+  # Necessario da v0.8.0: il monitor non gira piu elevato (fix UAC), quindi la
+  # cattura ETW va autorizzata una tantum qui.
+  if (-not (Test-Admin)) { return $false }
+  $me = $env:USERNAME
+  try {
+    $already = $null
+    try { $already = Get-LocalGroupMember -SID 'S-1-5-32-559' -ErrorAction Stop | Where-Object { $_.Name -like ("*\" + $me) } } catch {}
+    if ($already) { return $true }
+    try { Add-LocalGroupMember -SID 'S-1-5-32-559' -Member $me -ErrorAction Stop }
+    catch {
+      $gname = ((New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-559')).Translate([System.Security.Principal.NTAccount]).Value -split '\\')[-1]
+      net localgroup "$gname" "$me" /add 2>$null | Out-Null
+    }
+    Say '   [FPS] Permessi cattura FPS attivati (gruppo Performance Log Users): dopo un riavvio o logout il monitor contera gli FPS senza admin.' 'Green'
+    try { WebLog '[FPS] Permessi cattura FPS attivati: riavvia il PC (o fai logout) per renderli effettivi.' } catch {}
+    return $true
+  } catch { return $false }
+}
+
 function Start-Fps {
-  if (-not (Test-Admin)) { Say '   [FPS] Richiede Amministratore: avvia PowerShell come Admin per gli FPS.' 'DarkYellow'; return }
+  $cap = Test-FpsCapable
+  if ($cap -eq 'relogon') {
+    Say '   [FPS] Permessi FPS gia attivati ma serve un riavvio (o logout) di Windows per renderli effettivi. Dopo, gli FPS verranno contati senza admin.' 'DarkYellow'
+    return
+  }
+  if ($cap -eq 'no') {
+    Say '   [FPS] Cattura FPS non disponibile: apri una volta la GUI FrameForge (doppio click su forgefps-agent.exe -> Ottimizza, con conferma amministratore) per attivare i permessi in automatico, poi riavvia il PC.' 'DarkYellow'
+    return
+  }
   if (-not (Test-Path $script:PM_EXE)) {
     Say '   [FPS] Scarico PresentMon (una volta sola)...' 'DarkGray'
     try {
@@ -4905,6 +4950,9 @@ if ($MODE -eq 'fullbench') {
 }
 
 if ($MODE -eq 'optimize') {
+  # v0.8.0-fps: se elevati, autorizza una tantum la cattura FPS non-admin
+  # (gruppo Performance Log Users) per il monitor senza UAC.
+  try { Enable-FpsPermission | Out-Null } catch {}
   # v0.7.4c: first-scan CONDIZIONALE. Il primo scan e' utile SOLO se i dati cloud
   # sono stantii o assenti (utente nuovo, o non ha aperto la GUI da giorni).
   # Se pc-specs.updated_at e' recente (< 15 min) saltiamo: risparmiamo 3-5s
@@ -5210,7 +5258,7 @@ if ($MODE -eq 'booster') {
   $doPurge = __BOOSTER_PURGE__
   $apps = @(__BOOSTER_APPS__)
   Say ("   Azioni configurate (FrameForge -> Games): priorita={0} energia={1} purgeRAM={2} appDaChiudere={3}" -f $doPriority, $doPower, $doPurge, $apps.Count) 'DarkGray'
-  if (-not (Test-Admin)) { Say '   [INFO] Senza Amministratore rilevo il gioco dalla finestra a schermo intero (niente conteggio FPS).' 'DarkYellow' }
+  if (-not (Test-Admin) -and (Test-FpsCapable) -ne 'ok') { Say '   [INFO] Cattura FPS non ancora autorizzata: apri una volta la GUI (Ottimizza) e riavvia il PC. Intanto rilevo il gioco dalla finestra a schermo intero.' 'DarkYellow' }
   if (-not ('FFWin' -as [type])) {
     Add-Type -TypeDefinition @"
 using System;
@@ -5241,7 +5289,7 @@ public static class FFWin {
       return $p
     } catch { return $null }
   }
-  if (Test-Admin) { Start-Fps }
+  Start-Fps
   $boosted = $false; $skipUntilExit = $false; $bGame = ''; $bStart = $null; $prevPlan = ''
   $curName = ''; $detCount = 0; $lostCount = 0; $script:BACTS = @()
   Say "`n[SORVEGLIANZA ATTIVA] Avvia pure il tuo gioco quando vuoi." 'Green'
