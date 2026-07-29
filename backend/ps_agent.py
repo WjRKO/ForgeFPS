@@ -5202,6 +5202,243 @@ function Run-Bufferbloat {
   Say "`n[ OK ] Test rete completato. Apri FrameForge -> Rete per il voto (A-F) e i consigli." 'Green'
 }
 
+# ---------------- LAB: Laboratorio Automatico delle Prestazioni (Fase 1) ----------------
+function LabApi($method, $path, $body) {
+  try {
+    $h = @{ 'X-Agent-Token' = $TOKEN }
+    if ($body) { return Invoke-RestMethod -Uri "$BACKEND$path" -Method $method -ContentType 'application/json' -Headers $h -Body ($body | ConvertTo-Json -Depth 8 -Compress) -TimeoutSec 30 }
+    return Invoke-RestMethod -Uri "$BACKEND$path" -Method $method -Headers $h -TimeoutSec 30
+  } catch { return $null }
+}
+function LabEvent($type, $data) {
+  $b = @{ type = $type }
+  if ($data) { $b.data = $data }
+  LabApi 'Post' '/api/agent/lab/event' $b | Out-Null
+}
+function Get-LabTick {
+  # Frametime (ms) NUOVI dal flusso PresentMon, per l'app con piu frame nel tick
+  if (-not $script:PM_ON) { return $null }
+  $raw = Read-Shared $script:PM_OUT
+  if (-not $raw) { return $null }
+  $lines = $raw -split "`r?`n" | Where-Object { $_ -ne '' }
+  if (-not $lines -or $lines.Count -le $script:PM_ROWS) { return $null }
+  $hdr = $lines[0] -split ','
+  $iApp = -1; $iMs = -1
+  for ($k = 0; $k -lt $hdr.Count; $k++) {
+    $h = $hdr[$k].Trim().ToLower()
+    if ($h -eq 'application') { $iApp = $k }
+    if ($h -like '*betweenpresents*') { $iMs = $k }
+  }
+  if ($iMs -lt 0) { $script:PM_ROWS = $lines.Count; return $null }
+  $new = $lines[$script:PM_ROWS..($lines.Count - 1)]
+  $script:PM_ROWS = $lines.Count
+  $byApp = @{}
+  $inv = [Globalization.CultureInfo]::InvariantCulture
+  foreach ($ln in $new) {
+    $c = $ln -split ','
+    if ($c.Count -le $iMs) { continue }
+    $app = if ($iApp -ge 0 -and $c.Count -gt $iApp) { $c[$iApp] } else { 'game' }
+    try { $ms = [double]::Parse($c[$iMs], $inv) } catch { continue }
+    if ($ms -le 0) { continue }
+    if (-not $byApp.ContainsKey($app)) { $byApp[$app] = New-Object System.Collections.ArrayList }
+    [void]$byApp[$app].Add($ms)
+  }
+  if ($byApp.Count -eq 0) { return $null }
+  $top = $byApp.GetEnumerator() | Sort-Object { $_.Value.Count } -Descending | Select-Object -First 1
+  return @{ app = $top.Key; ms = $top.Value }
+}
+function Wait-LabGame {
+  $shown = $false
+  $lastPoll = Get-Date
+  while ($true) {
+    $t = Get-LabTick
+    if ($t -and $t.ms.Count -ge 15) {
+      if ($shown) { Say ("   [LAB] Gioco rilevato: {0}" -f $t.app) 'Green'; LabEvent 'game_detected' @{ game = $t.app } }
+      return $t.app
+    }
+    if (-not $shown) {
+      $shown = $true
+      Say '   [LAB] In attesa del gioco... avvia il gioco e resta in partita (scena il piu possibile ripetibile).' 'Yellow'
+      LabEvent 'waiting_game' $null
+    }
+    if (((Get-Date) - $lastPoll).TotalSeconds -ge 12) {
+      $lastPoll = Get-Date
+      $nx = LabApi 'Get' '/api/agent/lab/next' $null
+      if ($nx -and ($nx.action -eq 'abort' -or $nx.action -eq 'complete')) { return '__STOP__' }
+    }
+    Start-Sleep -Milliseconds 1500
+  }
+}
+function Invoke-LabRun($seconds, $label) {
+  $fr = New-Object System.Collections.ArrayList
+  $app = ''
+  $t0 = Get-Date
+  $lastSay = -100
+  while (((Get-Date) - $t0).TotalSeconds -lt $seconds) {
+    $t = Get-LabTick
+    if ($t) { $app = $t.app; foreach ($v in $t.ms) { [void]$fr.Add($v) } }
+    $el = [int]((Get-Date) - $t0).TotalSeconds
+    if (($el - $lastSay) -ge 15) { $lastSay = $el; Say ("      [{0}] {1}/{2}s - frame raccolti: {3}" -f $label, $el, $seconds, $fr.Count) 'DarkGray' }
+    Start-Sleep -Milliseconds 900
+  }
+  if ($fr.Count -lt 100) { return $null }
+  $arr = [double[]]$fr.ToArray()
+  $sorted = [double[]]$arr.Clone(); [Array]::Sort($sorted)
+  $sum = 0.0; foreach ($v in $arr) { $sum += $v }
+  $avg = $sum / $arr.Length
+  $var = 0.0; foreach ($v in $arr) { $var += ($v - $avg) * ($v - $avg) }
+  $var = $var / $arr.Length
+  $p99 = $sorted[[math]::Min($sorted.Length - 1, [math]::Max(0, [int][math]::Ceiling(0.99 * $sorted.Length) - 1))]
+  $p999 = $sorted[[math]::Min($sorted.Length - 1, [math]::Max(0, [int][math]::Ceiling(0.999 * $sorted.Length) - 1))]
+  $run = @{
+    fps_avg = [math]::Round(1000.0 / $avg, 2)
+    fps_p1 = [math]::Round(1000.0 / $p99, 2)
+    fps_p01 = [math]::Round(1000.0 / $p999, 2)
+    ft_avg_ms = [math]::Round($avg, 3)
+    ft_var = [math]::Round($var, 3)
+    frames = $arr.Length
+    duration_s = [int]$seconds
+    game = $app
+  }
+  try {
+    $tel = Get-TelemetrySample
+    if ($tel.ContainsKey('cpu_util')) { $run.cpu_pct = $tel.cpu_util }
+    if ($tel.ContainsKey('gpu_util')) { $run.gpu_pct = $tel.gpu_util }
+    if ($tel.ContainsKey('gpu_temp')) { $run.temp_gpu = $tel.gpu_temp }
+    if ($tel.ContainsKey('cpu_temp')) { $run.temp_cpu = $tel.cpu_temp }
+  } catch {}
+  return $run
+}
+
+if ($MODE -eq 'lab') {
+  Say "`n== FrameForge LAB - Laboratorio Automatico delle Prestazioni ==" 'Cyan'
+  Say '   Testo i tweak UNO ALLA VOLTA sul tuo gioco: baseline x3, misura, statistica, rollback se inutile.' 'Gray'
+  if (-not (Test-Admin)) {
+    if ($PSCommandPath) {
+      Say '   [LAB] Servono i permessi amministratore (tweak di sistema + punto di ripristino): riavvio elevato...' 'Yellow'
+      try {
+        Start-Process powershell -Verb RunAs -ArgumentList ('-ExecutionPolicy Bypass -File "' + $PSCommandPath + '" -Token ' + $TOKEN + ' -Mode lab')
+        return
+      } catch {}
+    }
+    Say '[ERR ] Il Laboratorio richiede PowerShell come AMMINISTRATORE.' 'Red'
+    Say '       Apri PowerShell con tasto destro -> Esegui come amministratore e rilancia il comando.' 'Yellow'
+    return
+  }
+  $script:TWMAP = @{}
+  foreach ($t in $script:TWEAKS) { $script:TWMAP[$t.id] = $t }
+  $script:LAB_APPLIED = New-Object System.Collections.ArrayList
+  Start-Fps
+  if (-not $script:PM_ON) { Say '[ERR ] Cattura FPS non disponibile: il Lab non puo misurare i benchmark.' 'Red'; return }
+  Say '   Collegato. Controllo la sessione Lab (avviala da FrameForge -> Laboratorio se non lo hai gia fatto)...' 'DarkGray'
+  $idleWaits = 0
+  $labDone = $false
+  try {
+    while (-not $labDone) {
+      $nx = LabApi 'Get' '/api/agent/lab/next' $null
+      if (-not $nx) { Start-Sleep -Seconds 5; continue }
+      $act = "$($nx.action)"
+      if ($act -eq 'wait') {
+        $idleWaits++
+        if ($idleWaits -eq 1) { Say '   [LAB] Nessuna sessione attiva. Avviane una da FrameForge -> Laboratorio (resto in ascolto).' 'Yellow' }
+        if ($idleWaits -gt 75) { Say '   [LAB] Nessuna sessione avviata in 5 minuti: esco.' 'DarkYellow'; $labDone = $true; continue }
+        Start-Sleep -Seconds 4
+      }
+      elseif ($act -eq 'snapshot') {
+        $idleWaits = 0
+        Say "`n[FASE 1/4] SNAPSHOT - punto di ripristino Windows + stato iniziale" 'Cyan'
+        $rp = $false
+        try {
+          Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction SilentlyContinue
+          Checkpoint-Computer -Description 'FrameForge Lab' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop
+          $rp = $true
+          Say '   [ OK ] Punto di ripristino Windows creato.' 'Green'
+        } catch {
+          Say ('   [WARN] Punto di ripristino non creato: ' + $_.Exception.Message) 'DarkYellow'
+          Say '          (Windows ne consente 1 ogni 24h; il backup mirato per-tweak resta comunque attivo.)' 'DarkGray'
+        }
+        $states = @{}
+        foreach ($cid in @($nx.candidate_ids)) {
+          $tw = $script:TWMAP[$cid]
+          if ($tw) { try { $states[$cid] = "$(& $tw.state)" } catch { $states[$cid] = 'n/d' } }
+        }
+        LabEvent 'snapshot_done' @{ restore_point = $rp; states = $states }
+        Say '   [ OK ] Snapshot inviato. Si passa alla BASELINE.' 'Green'
+      }
+      elseif ($act -eq 'run_baseline') {
+        Say ("`n[FASE 2/4] BASELINE - run {0}/{1} ({2}s)" -f ([int]$nx.runs_done + 1), $nx.runs_target, $nx.run_seconds) 'Cyan'
+        $g = Wait-LabGame
+        if ($g -eq '__STOP__') { continue }
+        $run = Invoke-LabRun $nx.run_seconds 'baseline'
+        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti (gioco chiuso o in pausa?). Riprovo.' 'DarkYellow'; continue }
+        Say ("   run: {0} FPS avg | 1% low {1} | frame {2}" -f $run.fps_avg, $run.fps_p1, $run.frames) 'Gray'
+        $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'baseline'; run = $run }
+        if ($resp -and $resp.baseline_ok) { Say ("   [ OK ] BASELINE stabile: {0} FPS avg (CV {1}%)" -f $resp.stats.fps_avg, $resp.stats.cv_pct) 'Green' }
+        elseif ($resp -and $resp.extra_run) { Say '   [INFO] Variabilita alta tra i run (CV > 5%): 4o run e scarto l outlier.' 'DarkYellow' }
+      }
+      elseif ($act -eq 'apply_tweak') {
+        $tw = $script:TWMAP[$nx.tweak_id]
+        if (-not $tw) {
+          LabEvent 'tweak_skip' @{ tweak_id = $nx.tweak_id; reason = 'tweak non presente nel catalogo agent' }
+          Say ("   [WARN] Tweak {0} non trovato nel catalogo: salto." -f $nx.tweak_id) 'DarkYellow'
+        } else {
+          Say ("`n[FASE 3/4] TEST {0}/{1}: {2}" -f $nx.step, $nx.total, $tw.name) 'Cyan'
+          Invoke-ApplyTracked $tw
+          Save-Backup
+          [void]$script:LAB_APPLIED.Add("$($nx.tweak_id)")
+          LabEvent 'tweak_applied' @{ tweak_id = $nx.tweak_id }
+          Say '   [ OK ] Tweak applicato (backup automatico). Attendo 3s che si assesti...' 'Green'
+          Start-Sleep -Seconds 3
+        }
+      }
+      elseif ($act -eq 'run_test') {
+        Say ("   [TEST {0}] run {1}/{2} ({3}s)" -f $nx.tweak_id, ([int]$nx.runs_done + 1), $nx.runs_target, $nx.run_seconds) 'Cyan'
+        $g = Wait-LabGame
+        if ($g -eq '__STOP__') { continue }
+        $run = Invoke-LabRun $nx.run_seconds ("test " + $nx.tweak_id)
+        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        Say ("   run: {0} FPS avg | 1% low {1}" -f $run.fps_avg, $run.fps_p1) 'Gray'
+        $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'test'; tweak_id = $nx.tweak_id; run = $run }
+        if ($resp -and $resp.decision) {
+          if ($resp.decision -eq 'kept') {
+            Say ("   [ OK ] MANTENUTO: {0}" -f $resp.reason) 'Green'
+          } else {
+            Say ("   [ROLLBACK] {0}" -f $resp.reason) 'Yellow'
+            $msg = Invoke-RestoreTweak "$($nx.tweak_id)"
+            $script:LAB_APPLIED.Remove("$($nx.tweak_id)")
+            LabEvent 'rolled_back' @{ tweak_id = $nx.tweak_id }
+            Say ("   [ OK ] {0}" -f $msg) 'DarkGray'
+          }
+          if ($resp.completed) { Say '   [LAB] Sequenza completata: genero il report...' 'Cyan' }
+        }
+      }
+      elseif ($act -eq 'abort') {
+        Say "`n[LAB] Interruzione richiesta dal web: annullo tutti i tweak applicati dal Lab..." 'Yellow'
+        $ids = @($nx.rollback_ids)
+        if ($ids.Count -eq 0) { $ids = @($script:LAB_APPLIED) }
+        foreach ($rid in $ids) { $msg = Invoke-RestoreTweak "$rid"; Say ("   {0}: {1}" -f $rid, $msg) 'DarkGray' }
+        $script:LAB_APPLIED.Clear()
+        LabEvent 'aborted' $null
+        Say '[ OK ] Tutto annullato. Sessione interrotta.' 'Green'
+        $labDone = $true
+      }
+      elseif ($act -eq 'complete') {
+        Say "`n[FASE 4/4] REPORT" 'Cyan'
+        if ($nx.report) {
+          $rep = $nx.report
+          Say ("   Gioco: {0}" -f $rep.game) 'Gray'
+          Say ("   Baseline: {0} FPS -> Finale: {1} FPS ({2}%)" -f $rep.baseline.fps_avg, $rep.final.fps_avg, $rep.total_gain_pct) 'Yellow'
+          Say ("   Tweak mantenuti: {0} su {1} testati" -f @($rep.kept).Count, $rep.tweaks_tested) 'Gray'
+        }
+        Say "`n[ OK ] Laboratorio completato! Apri FrameForge -> Laboratorio per il report dettagliato." 'Green'
+        $labDone = $true
+      }
+      else { Start-Sleep -Seconds 4 }
+    }
+  } finally { Stop-Fps }
+  return
+}
+
 if ($MODE -eq 'bufferbloat') {
   Say "`n== FrameForge Agent - Test rete / Bufferbloat ==" 'Cyan'
   Say '   Non usare internet durante il test (~15s). Misuro latenza a riposo e sotto carico.' 'DarkGray'

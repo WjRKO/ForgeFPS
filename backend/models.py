@@ -119,3 +119,19 @@ class BenchExplainInput(BaseModel):
 
 class ReportPhaseInput(BaseModel):
     phase: str = Field(pattern="^(before|after)$")
+
+
+class LabStartInput(BaseModel):
+    risk_level: str = Field(default="medium", pattern="^(safe|medium)$")
+    run_seconds: int = Field(default=90, ge=30, le=180)
+
+
+class LabRunInput(BaseModel):
+    phase: str = Field(pattern="^(baseline|test)$")
+    tweak_id: Optional[str] = Field(default=None, max_length=50)
+    run: dict[str, Any]
+
+
+class LabEventInput(BaseModel):
+    type: str = Field(max_length=40)
+    data: Optional[dict[str, Any]] = None

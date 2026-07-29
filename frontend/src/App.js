@@ -38,6 +38,7 @@ const Admin = lazy(() => import("@/pages/Admin"));
 const Account = lazy(() => import("@/pages/Account"));
 const Billing = lazy(() => import("@/pages/Billing"));
 const Report = lazy(() => import("@/pages/Report"));
+const Lab = lazy(() => import("@/pages/Lab"));
 
 const Fallback = () => (
   <div className="min-h-screen bg-[#050505] flex items-center justify-center">
@@ -108,6 +109,7 @@ function App() {
                 <Route path="games" element={<Gaming initialTab="games" />} />
                 <Route path="bios" element={<BiosRestore />} />
                 <Route path="report" element={<Report />} />
+                <Route path="lab" element={<Lab />} />
                 <Route path="commands" element={<Commands />} />
                 <Route path="desktop" element={<DesktopAgent />} />
                 <Route path="account" element={<Account />} />
