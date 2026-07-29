@@ -1476,7 +1476,8 @@ i18n
     supportedLngs: ["it", "en"],
     load: "languageOnly",
     detection: {
-      order: ["localStorage", "navigator", "htmlTag"],
+      order: ["querystring", "localStorage", "navigator", "htmlTag"],
+      lookupQuerystring: "lang",
       lookupLocalStorage: "boostpc_lang",
       caches: ["localStorage"],
     },

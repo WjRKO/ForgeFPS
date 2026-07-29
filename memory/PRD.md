@@ -1523,3 +1523,10 @@ Audit completo del frontend: individuate e tradotte tutte le stringhe hardcoded 
 - i18n.js: aggiunte sezioni mancanti it+en: freshness (badge sync header con plurali _one/_other), mobile (handoff), milestones (widget XP sidebar).
 - Fix: rimosso frammento duplicato in MobileHandoffModal introdotto da un edit. Parse Babel di tutti gli 88 file jsx OK.
 - Verifica: screenshot EN (dashboard/admin/billing: "Sync suggested", "Phone", "to next tier", "Administrator panel", "Billing & plan") e IT via toggle lang-it (tutto in italiano, nessuna regressione). Nota: la lingua dell'account salvata sul profilo sovrascrive localStorage al login (comportamento esistente, corretto).
+
+## Aggiornamento 2026-07-29 (3) — Auto-detect lingua browser + hreflang/SEO internazionale
+- i18n.js: aggiunto "querystring" (?lang=it|en) come prima fonte di rilevamento (poi localStorage -> navigator). Il rilevamento navigator al primo accesso era gia' attivo (fallback smart IT/EN); la preferenza account continua a prevalere dopo il login.
+- hooks/usePageMeta.js: riscritto — oltre a title/description ora sincronizza og:title/og:description/og:url, twitter:title/description, og:locale + og:locale:alternate (it_IT/en_US), canonical su https://forgefps.dev{path} e link hreflang it/en/x-default dinamici per rotta (usa useLocation).
+- public/index.html: aggiunti canonical statico, hreflang it/en/x-default e og:locale per i crawler senza JS.
+- public/sitemap.xml: esteso da 3 a 10 URL pubblici (/, /pricing, /guida, /demo, /changelog, /security, /privacy-telemetry, /terms, /login, /register) con xhtml:link hreflang alternates per ognuno. XML validato.
+- Verifica Playwright: ?lang=en su storage pulito -> UI EN, html lang=en, og:locale=en_US, boostpc_lang=en; ?lang=it -> IT; canonical/hreflang dinamici corretti su /pricing.
