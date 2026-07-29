@@ -4,7 +4,7 @@
  * l'agent locale (mode=lab) applica/misura/annulla i tweak uno alla volta.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FlaskConical, Play, ShieldAlert, StopCircle, CheckCircle2, XCircle, RotateCcw, Timer, Activity, FileBarChart, Share2, Users, Wrench } from "lucide-react";
+import { FlaskConical, Play, ShieldAlert, StopCircle, CheckCircle2, XCircle, RotateCcw, Timer, Activity, FileBarChart, Share2, Users, Wrench, Zap, RefreshCw, History } from "lucide-react";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import api from "@/lib/api";
@@ -314,6 +314,123 @@ function BiosSuggestions({ items }) {
   );
 }
 
+const CHECK_LABELS = {
+  bios_xmp: ["Verifica XMP", "XMP verification"],
+  bios_rebar: ["Verifica Resizable BAR", "Resizable BAR verification"],
+  bios_dual: ["Verifica dual channel", "Dual channel verification"],
+  driver_update: ["Re-test dopo aggiornamento driver", "Re-test after driver update"],
+  manual: ["Verifica rapida", "Quick check"],
+};
+const checkLabel = (r) => { const l = CHECK_LABELS[r] || CHECK_LABELS.manual; return T(l[0], l[1]); };
+
+function InsightsCard({ onCheck, busy }) {
+  const [data, setData] = useState(null);
+  useEffect(() => { api.get("/lab/insights").then(({ data }) => setData(data)).catch(() => {}); }, []);
+  if (!data || !data.items?.length) return null;
+  const META = {
+    bios_xmp: { icon: Zap, it: "XMP attivo rilevato", en: "XMP now active", descIt: "La tua RAM ora gira più veloce: misura il guadagno reale con un mini-lab (2 run).", descEn: "Your RAM now runs faster: measure the real gain with a mini-lab (2 runs).", btnIt: "Verifica il guadagno", btnEn: "Verify the gain" },
+    bios_dual: { icon: Zap, it: "Dual channel rilevato", en: "Dual channel detected", descIt: "Secondo modulo RAM rilevato: misura il guadagno reale (2 run).", descEn: "Second RAM stick detected: measure the real gain (2 runs).", btnIt: "Verifica il guadagno", btnEn: "Verify the gain" },
+    bios_rebar: { icon: Wrench, it: "Hai attivato Resizable BAR?", en: "Did you enable Resizable BAR?", descIt: "Se hai seguito la guida BIOS, conferma e misura il guadagno reale (2 run).", descEn: "If you followed the BIOS guide, confirm and measure the real gain (2 runs).", btnIt: "L'ho attivato — verifica", btnEn: "I enabled it — verify" },
+    driver_update: { icon: RefreshCw, it: "Driver GPU cambiato", en: "GPU driver changed", descIt: "Un re-test rapido (2 run) verifica che gli FPS non siano peggiorati.", descEn: "A quick re-test (2 runs) checks FPS didn't regress.", btnIt: "Re-test rapido", btnEn: "Quick re-test" },
+  };
+  return (
+    <HUDCard testid="lab-insights-card">
+      <div className="p-4 space-y-2.5">
+        <div className="text-[10px] uppercase tracking-widest text-zinc-500">{T("Verifiche consigliate", "Suggested checks")}</div>
+        {data.items.map((it) => {
+          const m = META[it.id];
+          if (!m) return null;
+          const Icon = m.icon;
+          return (
+            <div key={it.id} className="flex items-center justify-between gap-3 border border-[#2A2A35] bg-black/30 px-3 py-2.5" data-testid={`lab-insight-${it.id}`}>
+              <div className="min-w-0">
+                <div className="text-xs text-white flex items-center gap-1.5"><Icon size={13} className="text-[#00E0FF]" /> {T(m.it, m.en)} {it.detail && <span className="text-zinc-500">· {it.detail}</span>}</div>
+                <div className="text-[11px] text-zinc-500 mt-0.5">{T(m.descIt, m.descEn)}</div>
+              </div>
+              <button onClick={() => onCheck(it.id)} disabled={busy} data-testid={`lab-check-start-${it.id}`}
+                className="shrink-0 border border-[#00E0FF]/40 text-[#00E0FF] uppercase tracking-widest text-[10px] px-3 py-1.5 hover:bg-[#00E0FF]/10 transition-colors disabled:opacity-50">
+                {T(m.btnIt, m.btnEn)}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </HUDCard>
+  );
+}
+
+function HistoryCard() {
+  const [rows, setRows] = useState(null);
+  useEffect(() => { api.get("/lab/history").then(({ data }) => setRows(data.sessions)).catch(() => {}); }, []);
+  if (!rows || rows.length === 0) return null;
+  return (
+    <HUDCard testid="lab-history-card">
+      <div className="p-4 space-y-2">
+        <div className="text-[10px] uppercase tracking-widest text-zinc-500 flex items-center gap-1.5"><History size={11} /> {T("Storico sessioni", "Session history")}</div>
+        {rows.map((s) => (
+          <div key={s.session_id} className="flex items-center justify-between gap-3 border border-[#1F1F28] bg-black/30 px-3 py-2" data-testid={`lab-history-row-${s.session_id}`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`text-[9px] uppercase tracking-widest font-bold px-1.5 py-0.5 shrink-0 ${s.kind === "check" ? "bg-[#00E0FF]/15 text-[#00E0FF]" : "bg-[#E5FF00]/15 text-[#E5FF00]"}`}>{s.kind === "check" ? "CHECK" : "LAB"}</span>
+              <span className="text-[11px] text-zinc-400 shrink-0">{(s.started_at || "").slice(0, 10)}</span>
+              <span className="text-xs text-white truncate">{s.game || "—"}</span>
+              {s.kind === "check" && s.check_reason && <span className="text-[10px] text-zinc-500 truncate">{checkLabel(s.check_reason)}</span>}
+            </div>
+            <div className="flex items-center gap-3 shrink-0 text-[11px] tabular-nums">
+              {s.baseline_fps != null && <span className="text-zinc-500">{s.baseline_fps} → {s.final_fps} FPS</span>}
+              <span className={`font-bold ${(s.total_gain_pct || 0) > 0 ? "text-[#00FF66]" : s.regression ? "text-red-400" : "text-zinc-400"}`}>{(s.total_gain_pct || 0) > 0 ? "+" : ""}{s.total_gain_pct}%</span>
+              {s.regression && <span className="text-[9px] uppercase font-bold text-red-400">{T("Regressione", "Regression")}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </HUDCard>
+  );
+}
+
+function CheckProgress({ session }) {
+  const done = session.baseline?.runs?.length || 0;
+  const ref = session.check_ref || {};
+  return (
+    <HUDCard testid="lab-check-progress">
+      <div className="p-5 space-y-3">
+        <div className="text-sm font-bold text-white flex items-center gap-2"><Timer size={15} className="text-[#00E0FF]" /> {checkLabel(session.check_reason)}</div>
+        <div className="text-xs text-zinc-400">{T(`Run ${done}/2 · riferimento: ${ref.fps_avg} FPS (${ref.game || "n/d"})`, `Run ${done}/2 · reference: ${ref.fps_avg} FPS (${ref.game || "n/a"})`)}</div>
+        <div className="flex gap-1.5">{[0, 1].map((i) => <div key={i} className={`h-1.5 flex-1 ${i < done ? "bg-[#00E0FF]" : "bg-[#2A2A35]"}`} />)}</div>
+      </div>
+    </HUDCard>
+  );
+}
+
+function CheckResultCard({ report, onNew }) {
+  const gain = report.total_gain_pct;
+  return (
+    <HUDCard featured testid="lab-check-result">
+      <div className="p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-bold text-white flex items-center gap-2"><FileBarChart size={16} className="text-[#00E0FF]" /> {checkLabel(report.check_reason)}</div>
+          {report.game && <span className="text-[11px] text-zinc-500">{report.game}</span>}
+        </div>
+        <div className="flex items-end gap-6 flex-wrap">
+          <div><div className="text-3xl font-black text-white tabular-nums">{report.baseline?.fps_avg} → {report.final?.fps_avg}</div><div className="text-[10px] text-zinc-500 uppercase">FPS avg</div></div>
+          <div><div className={`text-3xl font-black tabular-nums ${(gain || 0) > 0 ? "text-[#00FF66]" : report.regression ? "text-red-400" : "text-zinc-400"}`} data-testid="lab-check-gain">{(gain || 0) > 0 ? "+" : ""}{gain}%</div><div className="text-[10px] text-zinc-500 uppercase">{T("vs riferimento", "vs reference")}</div></div>
+        </div>
+        {report.regression ? (
+          <div className="border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-xs text-red-300" data-testid="lab-check-regression">
+            {T("Regressione rilevata: gli FPS sono calati rispetto all'ultimo Lab. Consigliato un nuovo Lab completo per ritrovare la configurazione ottimale.", "Regression detected: FPS dropped vs your last Lab. A new full Lab is recommended to re-optimize.")}
+          </div>
+        ) : (
+          <div className="border border-[#00FF66]/30 bg-[#00FF66]/10 px-3 py-2.5 text-xs text-[#00FF66]" data-testid="lab-check-ok">
+            {(gain || 0) > 0 ? T(`Guadagno confermato: +${gain}% rispetto al riferimento.`, `Gain confirmed: +${gain}% vs reference.`) : T("Nessuna regressione: le prestazioni sono in linea con il riferimento.", "No regression: performance in line with reference.")}
+          </div>
+        )}
+        <button onClick={onNew} data-testid="lab-new-session-btn" className="inline-flex items-center gap-2 border border-[#2A2A35] text-zinc-300 uppercase tracking-widest text-xs px-5 py-2.5 hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors">
+          <Play size={13} /> {T("Nuovo Lab completo", "New full Lab")}
+        </button>
+      </div>
+    </HUDCard>
+  );
+}
+
 function ShareCard({ report, innerRef }) {
   const keptSteps = (report.steps || []).filter((s) => s.decision === "kept");
   return (
@@ -398,6 +515,7 @@ function ReportCard({ report, onNew }) {
           <div><div className="text-3xl font-black text-white tabular-nums">{report.baseline?.fps_avg} → {report.final?.fps_avg}</div><div className="text-[10px] text-zinc-500 uppercase">FPS avg</div></div>
           <div><div className={`text-3xl font-black tabular-nums ${(gain || 0) > 0 ? "text-[#00FF66]" : "text-zinc-400"}`} data-testid="lab-report-gain">{(gain || 0) > 0 ? "+" : ""}{gain}%</div><div className="text-[10px] text-zinc-500 uppercase">{T("Guadagno totale", "Total gain")}</div></div>
           <div><div className="text-xl font-bold text-zinc-300 tabular-nums">{report.baseline?.fps_p1} → {report.final?.fps_p1}</div><div className="text-[10px] text-zinc-500 uppercase">1% low</div></div>
+          {report.total_latency_delta_ms != null && <div><div className={`text-xl font-bold tabular-nums ${report.total_latency_delta_ms < 0 ? "text-[#00E0FF]" : "text-zinc-300"}`} data-testid="lab-report-latency">{report.total_latency_delta_ms > 0 ? "+" : ""}{report.total_latency_delta_ms} ms</div><div className="text-[10px] text-zinc-500 uppercase">Input lag</div></div>}
           {report.total_duration_min != null && <div><div className="text-xl font-bold text-zinc-300 tabular-nums">{report.total_duration_min} min</div><div className="text-[10px] text-zinc-500 uppercase">{T("Durata", "Duration")}</div></div>}
         </div>
         {report.performance_index && (
@@ -417,6 +535,8 @@ function ReportCard({ report, onNew }) {
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <span className="text-[11px] text-zinc-400 tabular-nums">{s.before} → {s.after}</span>
+                {s.p1_delta_pct != null && <span className="text-[10px] text-zinc-500 tabular-nums">1% low {s.p1_delta_pct > 0 ? "+" : ""}{s.p1_delta_pct}%</span>}
+                {s.latency_delta_ms != null && <span className={`text-[10px] tabular-nums ${s.latency_delta_ms < 0 ? "text-[#00E0FF]" : "text-zinc-500"}`}>{s.latency_delta_ms > 0 ? "+" : ""}{s.latency_delta_ms}ms lat</span>}
                 <span className={`text-sm font-bold tabular-nums ${(s.delta_pct || 0) > 0 ? "text-[#00FF66]" : "text-zinc-400"}`}>{(s.delta_pct || 0) > 0 ? "+" : ""}{s.delta_pct}%</span>
                 <DecisionBadge decision={s.decision} />
               </div>
@@ -499,6 +619,21 @@ export default function Lab() {
     } catch {}
   };
 
+  const startCheck = async (reason) => {
+    setStarting(true);
+    try {
+      const { data } = await api.post("/lab/check", { reason });
+      setSession(data.session);
+      setShowSetup(false);
+      toast.success(T("Mini-lab creato! Ora avvia l'agent (comando Lab).", "Mini-lab created! Now start the agent (Lab command)."));
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || T("Avvio fallito", "Start failed"));
+    }
+    setStarting(false);
+  };
+
+  const isCheck = session?.kind === "check";
+
   const showReport = session && session.status === "completed" && !showSetup;
   const showAborted = session && session.status === "aborted" && !showSetup;
   const needSetup = loaded && (!session || showSetup || (!active && !showReport && !showAborted));
@@ -518,9 +653,35 @@ export default function Lab() {
 
       {!loaded && <div className="text-zinc-500 text-sm">{T("Caricamento...", "Loading...")}</div>}
 
-      {needSetup && <SetupCard onStart={start} starting={starting} />}
+      {needSetup && (
+        <>
+          <SetupCard onStart={start} starting={starting} />
+          <InsightsCard onCheck={startCheck} busy={starting} />
+          <HistoryCard />
+        </>
+      )}
 
-      {session && active && (
+      {session && active && isCheck && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="text-xs uppercase tracking-widest text-[#00E0FF]">{T("Mini-lab di verifica", "Verification mini-lab")}</div>
+            <StatusPill status={session.status} />
+          </div>
+          {session.status === "waiting_agent" ? (
+            <ConnectCard token={token} onDetect={async () => {
+              const { data } = await api.get("/lab/session");
+              return data.session && data.session.status !== "waiting_agent";
+            }} />
+          ) : (
+            <div className="grid lg:grid-cols-2 gap-4">
+              <CheckProgress session={session} />
+              <LogFeed logs={session.logs} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {session && active && !isCheck && (
         <div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <Stepper status={session.status} />
@@ -546,7 +707,13 @@ export default function Lab() {
 
       {showReport && (
         <div className="space-y-4">
-          <ReportCard report={session.report} onNew={() => setShowSetup(true)} />
+          {session.report?.kind === "check" ? (
+            <CheckResultCard report={session.report} onNew={() => setShowSetup(true)} />
+          ) : (
+            <ReportCard report={session.report} onNew={() => setShowSetup(true)} />
+          )}
+          <InsightsCard onCheck={startCheck} busy={starting} />
+          <HistoryCard />
           <LogFeed logs={session.logs} />
         </div>
       )}

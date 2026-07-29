@@ -5223,16 +5223,18 @@ function Get-LabTick {
   $lines = $raw -split "`r?`n" | Where-Object { $_ -ne '' }
   if (-not $lines -or $lines.Count -le $script:PM_ROWS) { return $null }
   $hdr = $lines[0] -split ','
-  $iApp = -1; $iMs = -1
+  $iApp = -1; $iMs = -1; $iLat = -1
   for ($k = 0; $k -lt $hdr.Count; $k++) {
     $h = $hdr[$k].Trim().ToLower()
     if ($h -eq 'application') { $iApp = $k }
     if ($h -like '*betweenpresents*') { $iMs = $k }
+    if ($h -like '*untildisplayed*') { $iLat = $k }
   }
   if ($iMs -lt 0) { $script:PM_ROWS = $lines.Count; return $null }
   $new = $lines[$script:PM_ROWS..($lines.Count - 1)]
   $script:PM_ROWS = $lines.Count
   $byApp = @{}
+  $byLat = @{}
   $inv = [Globalization.CultureInfo]::InvariantCulture
   foreach ($ln in $new) {
     $c = $ln -split ','
@@ -5242,10 +5244,19 @@ function Get-LabTick {
     if ($ms -le 0) { continue }
     if (-not $byApp.ContainsKey($app)) { $byApp[$app] = New-Object System.Collections.ArrayList }
     [void]$byApp[$app].Add($ms)
+    if ($iLat -ge 0 -and $c.Count -gt $iLat) {
+      try {
+        $lv = [double]::Parse($c[$iLat], $inv)
+        if ($lv -gt 0 -and $lv -lt 1000) {
+          if (-not $byLat.ContainsKey($app)) { $byLat[$app] = New-Object System.Collections.ArrayList }
+          [void]$byLat[$app].Add($lv)
+        }
+      } catch {}
+    }
   }
   if ($byApp.Count -eq 0) { return $null }
   $top = $byApp.GetEnumerator() | Sort-Object { $_.Value.Count } -Descending | Select-Object -First 1
-  return @{ app = $top.Key; ms = $top.Value }
+  return @{ app = $top.Key; ms = $top.Value; lat = $byLat[$top.Key] }
 }
 function Wait-LabGame {
   $shown = $false
@@ -5271,19 +5282,23 @@ function Wait-LabGame {
 }
 function Invoke-LabRun($seconds, $label) {
   $fr = New-Object System.Collections.ArrayList
+  $lt = New-Object System.Collections.ArrayList
   $app = ''
   $t0 = Get-Date
   $lastSay = -100
   while (((Get-Date) - $t0).TotalSeconds -lt $seconds) {
     $t = Get-LabTick
-    if ($t) { $app = $t.app; foreach ($v in $t.ms) { [void]$fr.Add($v) } }
+    if ($t) {
+      $app = $t.app
+      foreach ($v in $t.ms) { [void]$fr.Add($v) }
+      if ($t.lat) { foreach ($v in $t.lat) { [void]$lt.Add($v) } }
+    }
     $el = [int]((Get-Date) - $t0).TotalSeconds
     if (($el - $lastSay) -ge 15) { $lastSay = $el; Say ("      [{0}] {1}/{2}s - frame raccolti: {3}" -f $label, $el, $seconds, $fr.Count) 'DarkGray' }
     Start-Sleep -Milliseconds 900
   }
   if ($fr.Count -lt 100) { return $null }
-  $arr = [double[]]$fr.ToArray()
-  $sorted = [double[]]$arr.Clone(); [Array]::Sort($sorted)
+  $arr = [double[]]$fr.ToArray()  $sorted = [double[]]$arr.Clone(); [Array]::Sort($sorted)
   $sum = 0.0; foreach ($v in $arr) { $sum += $v }
   $avg = $sum / $arr.Length
   $var = 0.0; foreach ($v in $arr) { $var += ($v - $avg) * ($v - $avg) }
@@ -5307,6 +5322,10 @@ function Invoke-LabRun($seconds, $label) {
     if ($tel.ContainsKey('gpu_temp')) { $run.temp_gpu = $tel.gpu_temp }
     if ($tel.ContainsKey('cpu_temp')) { $run.temp_cpu = $tel.cpu_temp }
   } catch {}
+  if ($lt.Count -ge 50) {
+    $ls = 0.0; foreach ($v in $lt) { $ls += $v }
+    $run.latency_ms = [math]::Round($ls / $lt.Count, 2)
+  }
   return $run
 }
 

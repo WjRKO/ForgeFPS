@@ -133,6 +133,10 @@ class LabRunInput(BaseModel):
     run: dict[str, Any]
 
 
+class LabCheckInput(BaseModel):
+    reason: str = Field(pattern="^(bios_xmp|bios_rebar|bios_dual|driver_update|manual)$")
+
+
 class LabEventInput(BaseModel):
     type: str = Field(max_length=40)
     data: Optional[dict[str, Any]] = None

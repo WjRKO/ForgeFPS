@@ -10,7 +10,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Header
 
 from database import db, now_iso
-from models import LabStartInput, LabRunInput, LabEventInput
+from models import LabStartInput, LabRunInput, LabEventInput, LabCheckInput
 from lab_registry import REGISTRY_VERSION, TWEAKS, select_candidates, bios_suggestions
 from lab_stats import mean, cv, significance
 
@@ -28,6 +28,11 @@ SYNERGY_FACTOR = 1.15
 VALIDATION_SECONDS = 300
 VALIDATION_MIN_RATIO = 0.5
 WARMUP_SECONDS = 45
+CHECK_RUNS = 2
+REGRESSION_PCT = -5.0
+STUTTER_KEEP_PCT = 3.0
+STUTTER_GUARD_PCT = -5.0
+FPS_NEUTRAL_PCT = -0.5
 
 ACTIVE_STATUSES = ("waiting_agent", "snapshot", "baseline", "testing", "awaiting_reboot", "synergy", "validation", "aborting")
 
@@ -72,9 +77,11 @@ def _fps_list(runs, key="fps_avg"):
 def _run_stats(runs):
     fps = _fps_list(runs)
     p1 = _fps_list(runs, "fps_p1")
+    lat = _fps_list(runs, "latency_ms")
     return {
         "fps_avg": round(mean(fps), 2) if fps else None,
         "fps_p1": round(mean(p1), 2) if p1 else None,
+        "latency_ms": round(mean(lat), 2) if lat else None,
         "cv_pct": round(cv(fps) * 100, 2) if fps else None,
         "runs": len(runs),
         "game": (runs[-1].get("game") if runs else None),
@@ -168,6 +175,9 @@ def _build_report(sess):
             "before": r.get("before_fps"),
             "after": r.get("after_fps"),
             "delta_pct": r["delta"].get("fps_avg_pct"),
+            "p1_delta_pct": r["delta"].get("fps_p1_pct"),
+            "latency_delta_ms": r["delta"].get("latency_ms"),
+            "basis": r.get("decision_basis"),
             "decision": r["decision"],
             "reason": r.get("reason"),
             "p_value": r["significance"].get("p_value"),
@@ -185,6 +195,8 @@ def _build_report(sess):
     perf = _clamp(5 + (gain or 0) / 2)
     fluid = _clamp(5 + (gain_p1 or 0) / 2)
     stab = _clamp(10 - (base0.get("cv_pct") or 0))
+    lat0, latf = base0.get("latency_ms"), final.get("latency_ms")
+    lat_delta = round(latf - lat0, 2) if (lat0 is not None and latf is not None) else None
     return {
         "lab_session_id": sess["session_id"],
         "game": final.get("game") or base0.get("game"),
@@ -192,6 +204,7 @@ def _build_report(sess):
         "final": {"fps_avg": final.get("fps_avg"), "fps_p1": final.get("fps_p1")},
         "total_gain_pct": gain,
         "total_p1_gain_pct": gain_p1,
+        "total_latency_delta_ms": lat_delta,
         "steps": steps,
         "kept": sess.get("kept", []),
         "synergies_found": (sess.get("synergy") or {}).get("results", []),
@@ -257,13 +270,17 @@ def build(get_current_user):
             raise HTTPException(status_code=400, detail="Nessun tweak candidato per questo livello di rischio/hardware.")
         hw = _hw_class(specs.get("data") or {})
         fleet_used = await _fleet_blend(candidates, hw)
+        sd = specs.get("data") or {}
         sess = {
             "session_id": str(uuid.uuid4()),
             "user_id": uid,
+            "kind": "full",
             "risk_level": payload.risk_level,
             "run_seconds": payload.run_seconds,
             "include_reboot": payload.include_reboot,
             "hw_class": hw,
+            "specs_at": {"ram_speed_mhz": sd.get("ram_speed_mhz"), "ram_modules": sd.get("ram_modules"),
+                         "gpu_driver": sd.get("gpu_driver_version") or sd.get("gpu_driver")},
             "bios_suggestions": bios_suggestions(specs.get("data") or {}),
             "registry_version": REGISTRY_VERSION,
             "status": "waiting_agent",
@@ -317,6 +334,86 @@ def build(get_current_user):
         return {"registry_version": REGISTRY_VERSION, "candidates": candidates, "skipped": skipped,
                 "hw_class": hw, "bios_suggestions": bios_suggestions(specs.get("data") or {})}
 
+    @r.post("/lab/check")
+    async def lab_check(payload: LabCheckInput, user: dict = Depends(get_current_user)):
+        uid = str(user["_id"])
+        if await _active(uid):
+            raise HTTPException(status_code=409, detail="Hai gia' una sessione Lab attiva.")
+        last = await db.lab_sessions.find_one(
+            {"user_id": uid, "status": "completed", "kind": {"$ne": "check"}, "report": {"$ne": None}},
+            sort=[("started_at", -1)])
+        if not last or not ((last.get("report") or {}).get("final") or {}).get("fps_avg"):
+            raise HTTPException(status_code=400, detail="Serve prima un Lab completo come riferimento.")
+        rep = last["report"]
+        ref = {"fps_avg": rep["final"]["fps_avg"], "fps_p1": rep["final"].get("fps_p1"),
+               "game": rep.get("game"), "session_id": last["session_id"], "at": last.get("finished_at")}
+        sess = {
+            "session_id": str(uuid.uuid4()), "user_id": uid, "kind": "check",
+            "check_reason": payload.reason, "check_ref": ref,
+            "run_seconds": last.get("run_seconds", 90), "status": "waiting_agent",
+            "candidates": [], "queue": [], "baseline": {"runs": [], "stats": None},
+            "results": [], "kept": [], "logs": [], "report": None,
+            "started_at": now_iso(), "finished_at": None,
+        }
+        _log(sess, f"Mini-lab di verifica ({payload.reason}): {CHECK_RUNS} run vs riferimento {ref['fps_avg']} FPS ({ref.get('game') or 'n/d'})")
+        _log(sess, "In attesa dell'agent: esegui il comando Lab in PowerShell come Amministratore")
+        await _save(sess)
+        return {"session": _public(sess)}
+
+    @r.get("/lab/history")
+    async def lab_history(user: dict = Depends(get_current_user)):
+        out = []
+        cur = db.lab_sessions.find({"user_id": str(user["_id"]), "status": "completed"},
+                                   sort=[("started_at", -1)]).limit(15)
+        async for s in cur:
+            rep = s.get("report") or {}
+            out.append({
+                "session_id": s["session_id"], "kind": s.get("kind", "full"),
+                "started_at": s.get("started_at"), "game": rep.get("game"),
+                "total_gain_pct": rep.get("total_gain_pct"),
+                "kept": len(rep.get("kept") or []), "tweaks_tested": rep.get("tweaks_tested"),
+                "baseline_fps": (rep.get("baseline") or {}).get("fps_avg"),
+                "final_fps": (rep.get("final") or {}).get("fps_avg"),
+                "check_reason": s.get("check_reason"), "regression": rep.get("regression"),
+            })
+        return {"sessions": out}
+
+    @r.get("/lab/insights")
+    async def lab_insights(user: dict = Depends(get_current_user)):
+        uid = str(user["_id"])
+        last = await db.lab_sessions.find_one(
+            {"user_id": uid, "status": "completed", "kind": {"$ne": "check"}, "report": {"$ne": None}},
+            sort=[("started_at", -1)])
+        if not last:
+            return {"items": [], "has_ref": False}
+
+        def _num(v):
+            try:
+                return float(str(v).strip())
+            except Exception:
+                return None
+
+        specs = await db.pc_specs.find_one({"user_id": uid}) or {}
+        data = specs.get("data") or {}
+        at = last.get("specs_at") or {}
+        bios_ids = {b["id"] for b in (last.get("bios_suggestions") or [])}
+        items = []
+        cur_speed, at_speed = _num(data.get("ram_speed_mhz")), _num(at.get("ram_speed_mhz"))
+        if "xmp" in bios_ids and cur_speed and at_speed and cur_speed > at_speed * 1.1:
+            items.append({"id": "bios_xmp", "kind": "confirm", "detail": f"RAM: {int(at_speed)} -> {int(cur_speed)} MHz"})
+        if "dual_channel" in bios_ids and (_num(data.get("ram_modules")) or 0) >= 2:
+            items.append({"id": "bios_dual", "kind": "confirm", "detail": "dual channel rilevato"})
+        if "rebar" in bios_ids:
+            items.append({"id": "bios_rebar", "kind": "manual", "detail": None})
+        cur_drv = data.get("gpu_driver_version") or data.get("gpu_driver")
+        at_drv = at.get("gpu_driver")
+        if cur_drv and at_drv and str(cur_drv) != str(at_drv):
+            items.append({"id": "driver_update", "kind": "check", "detail": f"{at_drv} -> {cur_drv}"})
+        rep = last.get("report") or {}
+        return {"items": items, "has_ref": bool((rep.get("final") or {}).get("fps_avg")),
+                "ref": {"fps_avg": (rep.get("final") or {}).get("fps_avg"), "game": rep.get("game"),
+                        "at": last.get("finished_at")}}
+
     # ---------- agent endpoints ----------
     @r.get("/agent/lab/next")
     async def lab_next(x_agent_token: str = Header(default="")):
@@ -332,16 +429,25 @@ def build(get_current_user):
         st = sess["status"]
         rs = sess["run_seconds"]
         if st == "waiting_agent":
-            sess["status"] = "snapshot"
-            _log(sess, "Agent collegato: avvio fase SNAPSHOT")
-            await _save(sess)
-            st = "snapshot"
+            if sess.get("kind") == "check":
+                sess["status"] = "baseline"
+                _log(sess, f"Agent collegato: mini-lab di verifica, {CHECK_RUNS} run")
+                await _save(sess)
+                st = "baseline"
+            else:
+                sess["status"] = "snapshot"
+                _log(sess, "Agent collegato: avvio fase SNAPSHOT")
+                await _save(sess)
+                st = "snapshot"
         if st == "snapshot":
             return {"action": "snapshot", "session_id": sess["session_id"],
                     "candidate_ids": [c["tweak_id"] for c in sess["candidates"]]}
         if st == "baseline":
             done = len(sess["baseline"]["runs"])
-            target = BASELINE_RUNS if done < BASELINE_RUNS else BASELINE_RUNS + 1
+            if sess.get("kind") == "check":
+                target = CHECK_RUNS
+            else:
+                target = BASELINE_RUNS if done < BASELINE_RUNS else BASELINE_RUNS + 1
             return {"action": "run_baseline", "run_seconds": rs, "runs_done": done, "runs_target": target}
         if st == "aborting":
             ids = list(sess.get("kept", []))
@@ -542,6 +648,38 @@ def build(get_current_user):
         if payload.phase == "baseline":
             if sess["status"] != "baseline":
                 return {"ok": False, "reason": f"stato {sess['status']}"}
+            if sess.get("kind") == "check":
+                sess["baseline"]["runs"].append(run)
+                runs = sess["baseline"]["runs"]
+                _log(sess, f"Verifica run {len(runs)}: {run.get('fps_avg')} FPS avg")
+                if len(runs) < CHECK_RUNS:
+                    await _save(sess)
+                    return {"ok": True, "need_more": True, "runs_done": len(runs)}
+                stats = _run_stats(runs)
+                ref = sess.get("check_ref") or {}
+                delta = _delta_pct(stats.get("fps_avg"), ref.get("fps_avg"))
+                d1 = _delta_pct(stats.get("fps_p1"), ref.get("fps_p1"))
+                regression = bool(delta is not None and delta <= REGRESSION_PCT)
+                if stats.get("game") and ref.get("game") and stats["game"] != ref["game"]:
+                    _log(sess, f"ATTENZIONE: gioco diverso dal riferimento ({stats['game']} vs {ref['game']}), confronto indicativo", "warn")
+                sess["report"] = {
+                    "kind": "check", "check_reason": sess.get("check_reason"),
+                    "game": stats.get("game") or ref.get("game"),
+                    "baseline": {"fps_avg": ref.get("fps_avg"), "fps_p1": ref.get("fps_p1")},
+                    "final": {"fps_avg": stats.get("fps_avg"), "fps_p1": stats.get("fps_p1")},
+                    "total_gain_pct": delta, "total_p1_gain_pct": d1,
+                    "regression": regression, "ref_at": ref.get("at"),
+                    "kept": [], "tweaks_tested": 0, "steps": [],
+                }
+                sess["baseline"]["stats"] = stats
+                sess["status"] = "completed"
+                sess["finished_at"] = now_iso()
+                if regression:
+                    _log(sess, f"REGRESSIONE: {delta}% vs riferimento ({ref.get('fps_avg')} FPS) — consigliato un nuovo Lab completo", "warn")
+                else:
+                    _log(sess, f"Verifica completata: {stats.get('fps_avg')} FPS ({'+' if (delta or 0) >= 0 else ''}{delta}% vs riferimento)", "ok")
+                await _save(sess)
+                return {"ok": True, "baseline_ok": True, "stats": stats, "completed": True, "check": sess["report"]}
             sess["baseline"]["runs"].append(run)
             runs = sess["baseline"]["runs"]
             _log(sess, f"Baseline run {len(runs)}: {run.get('fps_avg')} FPS avg | 1% low {run.get('fps_p1')}")
@@ -583,21 +721,38 @@ def build(get_current_user):
         test_fps = _fps_list(cur["runs"])
         test_stats = _run_stats(cur["runs"])
         sig = significance(test_fps, base_fps)
+        base_p1 = _fps_list(sess["baseline"]["runs"], "fps_p1")
+        test_p1 = _fps_list(cur["runs"], "fps_p1")
+        sig_p1 = significance(test_p1, base_p1) if len(base_p1) >= 2 and len(test_p1) >= 2 else None
         delta = {
             "fps_avg_pct": _delta_pct(test_stats["fps_avg"], base_runs["fps_avg"]),
             "fps_p1_pct": _delta_pct(test_stats["fps_p1"], base_runs["fps_p1"]),
         }
+        if test_stats.get("latency_ms") is not None and base_runs.get("latency_ms") is not None:
+            delta["latency_ms"] = round(test_stats["latency_ms"] - base_runs["latency_ms"], 2)
         d = delta["fps_avg_pct"] or 0
+        d1 = delta["fps_p1_pct"]
         improvement = d >= MIN_EFFECT_PCT
         kept = bool(sig["significant"] and improvement)
-        if kept:
+        basis = "fps"
+        if kept and d1 is not None and d1 <= STUTTER_GUARD_PCT:
+            kept = False
+            basis = "stutter_guard"
+            reason = f"FPS +{d}% ma fluidita' peggiorata (1% low {d1}%)"
+        elif kept:
             reason = f"significativo (p={sig['p_value']}), +{d}% FPS"
+        elif sig_p1 and sig_p1["significant"] and d1 is not None and d1 >= STUTTER_KEEP_PCT and d >= FPS_NEUTRAL_PCT:
+            kept = True
+            basis = "fluidity"
+            reason = f"fluidita': 1% low +{d1}% (p={sig_p1['p_value']}), FPS stabili ({d}%)"
         elif not sig["significant"]:
             reason = f"non significativo (p={sig['p_value']})"
         elif d < 0:
             reason = f"peggioramento ({d}%)"
         else:
             reason = f"delta trascurabile (+{d}% < {MIN_EFFECT_PCT}%)"
+        if kept and delta.get("latency_ms") is not None and delta["latency_ms"] <= -1:
+            reason += f", input lag {delta['latency_ms']}ms"
         tweak_meta = next((c for c in sess["candidates"] if c["tweak_id"] == cur["tweak_id"]), {})
         result = {
             "test_id": str(uuid.uuid4()),
@@ -609,7 +764,9 @@ def build(get_current_user):
             "delta": delta,
             "significance": {"method": sig["method"], "p_value": sig["p_value"],
                              "alpha": sig["alpha"], "significant": sig["significant"]},
+            "significance_p1": ({"p_value": sig_p1["p_value"], "significant": sig_p1["significant"]} if sig_p1 else None),
             "decision": "kept" if kept else "rolled_back",
+            "decision_basis": basis,
             "reason": reason,
             "at": now_iso(),
         }
