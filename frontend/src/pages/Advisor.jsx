@@ -413,15 +413,15 @@ function ChatBubble({ index, message, isLast, streaming, feedback, copied, onFee
       {showActions && (
         <div className="ml-9 mt-1 flex items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
           <button onClick={() => onFeedback(index, m, "up")} data-testid={`msg-thumb-up-${index}`}
-            className={`p-1 border transition-colors ${feedback === "up" ? "border-[#00FF66] bg-[#00FF66]/10 text-[#00FF66]" : "border-transparent text-zinc-500 hover:text-[#00FF66]"}`} aria-label="Utile">
+            className={`p-1 border transition-colors ${feedback === "up" ? "border-[#00FF66] bg-[#00FF66]/10 text-[#00FF66]" : "border-transparent text-zinc-500 hover:text-[#00FF66]"}`} aria-label={i18n.language?.startsWith("en") ? "Helpful" : "Utile"}>
             <ThumbsUp size={11} />
           </button>
           <button onClick={() => onFeedback(index, m, "down")} data-testid={`msg-thumb-down-${index}`}
-            className={`p-1 border transition-colors ${feedback === "down" ? "border-[#FF3B30] bg-[#FF3B30]/10 text-[#FF3B30]" : "border-transparent text-zinc-500 hover:text-[#FF3B30]"}`} aria-label="Non utile">
+            className={`p-1 border transition-colors ${feedback === "down" ? "border-[#FF3B30] bg-[#FF3B30]/10 text-[#FF3B30]" : "border-transparent text-zinc-500 hover:text-[#FF3B30]"}`} aria-label={i18n.language?.startsWith("en") ? "Not helpful" : "Non utile"}>
             <ThumbsDown size={11} />
           </button>
           <button onClick={() => onCopy(index, m.content)} data-testid={`msg-copy-${index}`}
-            className="p-1 border border-transparent text-zinc-500 hover:text-[#00E0FF]" aria-label="Copia">
+            className="p-1 border border-transparent text-zinc-500 hover:text-[#00E0FF]" aria-label={i18n.language?.startsWith("en") ? "Copy" : "Copia"}>
             {copied ? <Check size={11} className="text-[#00FF66]" /> : <Copy size={11} />}
           </button>
           {isLast && !streaming && (
@@ -442,7 +442,7 @@ function ChatInput({ input, setInput, imageDataUrl, setImageDataUrl, fileInputRe
       {imageDataUrl && (
         <div className="flex items-center gap-2 bg-black/40 border border-[#00E0FF]/40 p-2" data-testid="image-preview">
           <img src={imageDataUrl} alt="allegato" className="h-16 border border-[#2A2A35]" />
-          <span className="text-xs text-[#00E0FF] font-mono flex-1">Immagine allegata (verrà inviata con il prossimo messaggio)</span>
+          <span className="text-xs text-[#00E0FF] font-mono flex-1">{i18n.language?.startsWith("en") ? "Image attached (will be sent with the next message)" : "Immagine allegata (verrà inviata con il prossimo messaggio)"}</span>
           <button onClick={() => setImageDataUrl("")} className="text-zinc-500 hover:text-[#FF3B30]" data-testid="image-remove">
             <XIcon size={16} />
           </button>

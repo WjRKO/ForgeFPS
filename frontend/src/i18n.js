@@ -496,6 +496,16 @@ const resources = {
         gpu_footer: "Setup latenza ottimale: G-Sync/FreeSync On + V-Sync On (pannello) + cap FPS 3 sotto il refresh + Low Latency Ultra. Aggiorna sempre i driver (usa DDU per una pulizia completa).",
         copied: "Comando copiato!",
       },
+      freshness: {
+        just_now: "or ora",
+        min_ago_one: "{{count}} min fa", min_ago_other: "{{count}} min fa",
+        hour_ago_one: "{{count}}h fa", hour_ago_other: "{{count}}h fa",
+        days_ago_one: "{{count}}g fa", days_ago_other: "{{count}}gg fa",
+        fresh_label: "Dati aggiornati", warm_label: "Aggiornati", stale_label: "Sync suggerito",
+        click_hint: "Clicca per sincronizzare ora",
+      },
+      mobile: { handoff_title: "Continua sul telefono", handoff_short: "Telefono" },
+      milestones: { view: "Vedi", to_next: "al prossimo tier" },
       admin: {
         eyebrow: "Admin", title: "Pannello amministratore",
         stat_users: "Utenti", stat_admins: "Admin", stat_products: "Prodotti", stat_builds: "Build",
@@ -1207,6 +1217,16 @@ const resources = {
         gpu_footer: "Optimal latency setup: G-Sync/FreeSync On + V-Sync On (panel) + FPS cap 3 below the refresh + Low Latency Ultra. Always update drivers (use DDU for a full clean).",
         copied: "Command copied!",
       },
+      freshness: {
+        just_now: "just now",
+        min_ago_one: "{{count}} min ago", min_ago_other: "{{count}} min ago",
+        hour_ago_one: "{{count}}h ago", hour_ago_other: "{{count}}h ago",
+        days_ago_one: "{{count}}d ago", days_ago_other: "{{count}}d ago",
+        fresh_label: "Data up to date", warm_label: "Up to date", stale_label: "Sync suggested",
+        click_hint: "Click to sync now",
+      },
+      mobile: { handoff_title: "Continue on your phone", handoff_short: "Phone" },
+      milestones: { view: "View", to_next: "to next tier" },
       admin: {
         eyebrow: "Admin", title: "Administrator panel",
         stat_users: "Users", stat_admins: "Admins", stat_products: "Products", stat_builds: "Builds",

@@ -18,6 +18,9 @@ import { LineChart, Line, XAxis, YAxis, Tooltip as ReTooltip, ResponsiveContaine
 import api from "@/lib/api";
 import OneClickLaunchButton from "@/components/OneClickLaunchButton";
 import PlanUpgradeBanner from "@/components/PlanUpgradeBanner";
+import i18n from "@/i18n";
+
+const isEnFB = () => i18n.language?.startsWith("en");
 
 const fmtMops = (n) => n == null ? "--" : `${n.toLocaleString()} Mops/s`;
 const fmtMbps = (n) => n == null ? "--" : `${(n/1000).toFixed(1)} GB/s`;
@@ -127,14 +130,14 @@ export default function FullBenchmarkReport() {
     return (
       <div className="border border-dashed border-[#2A2A35] bg-[#0A0A0F] p-8 text-center" data-testid="fullbench-empty">
         <Zap size={36} className="mx-auto text-[#E5FF00] mb-3" />
-        <h3 className="font-display font-black text-xl mb-2">Nessun Full Benchmark ancora</h3>
+        <h3 className="font-display font-black text-xl mb-2">{isEnFB() ? "No Full Benchmark yet" : "Nessun Full Benchmark ancora"}</h3>
         <p className="text-sm text-zinc-400 mb-4 max-w-md mx-auto">
-          Il Full Benchmark misura CPU multi-thread burst+sustained, RAM L2/L3/DRAM bandwidth, disco multi-QD, rete estesa e traccia termica. Dura 2-4 minuti.
+          {isEnFB() ? "The Full Benchmark measures CPU multi-thread burst+sustained, RAM L2/L3/DRAM bandwidth, multi-QD disk, extended network and thermal trace. Takes 2-4 minutes." : "Il Full Benchmark misura CPU multi-thread burst+sustained, RAM L2/L3/DRAM bandwidth, disco multi-QD, rete estesa e traccia termica. Dura 2-4 minuti."}
         </p>
         <div className="flex justify-center">
           <OneClickLaunchButton
             mode="fullbench"
-            label="Avvia Full Benchmark"
+            label={isEnFB() ? "Run Full Benchmark" : "Avvia Full Benchmark"}
             timeoutMs={300000}
             onLaunch={() => {}}
             detectDone={async () => {
@@ -228,7 +231,7 @@ export default function FullBenchmarkReport() {
 
         {/* Network */}
         <Card title="Network extended (30 ping x 3 host)" icon={Globe} accent="text-[#E5FF00]" testid="fullbench-network">
-          {netHosts.length === 0 && <div className="text-xs text-zinc-500">Nessun dato rete disponibile.</div>}
+          {netHosts.length === 0 && <div className="text-xs text-zinc-500">{isEnFB() ? "No network data available." : "Nessun dato rete disponibile."}</div>}
           {netHosts.map(([host, m]) => (
             <StatRow
               key={host}

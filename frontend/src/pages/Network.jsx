@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import { Gauge, Wifi, Activity, ArrowDownToLine, ArrowUpToLine, Waves, AlertTriangle, ShieldCheck } from "lucide-react";
 import api from "@/lib/api";
 import { PageHeader, SkeletonCard } from "@/components/hud";
@@ -94,7 +95,7 @@ export default function Network() {
         <div className="mb-4">
           <OneClickLaunchButton
             mode="bufferbloat"
-            label="Avvia test bufferbloat"
+            label={i18n.language?.startsWith("en") ? "Run bufferbloat test" : "Avvia test bufferbloat"}
             timeoutMs={90000}
             onLaunch={(ts) => { launchTs.current = ts; }}
             detectDone={async () => {

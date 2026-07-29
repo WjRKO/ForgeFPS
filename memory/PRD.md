@@ -1515,3 +1515,11 @@ Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati Li
 - Sim E2E backend: /app/backend/tests/test_lab_phase1_sim.py (CV/outlier, welch, kept/rollback, auto-stop marginale, report, abort, 401). Endpoint pytest: tests/test_lab_phase1_endpoints.py (7/7). testing_agent iteration_44: backend 100%, frontend 100%, lab_sessions ripulite.
 ### FASE 2 (prossima, da spec /app/memory/laboratorio-automatico-spec.md)
 - Reboot-resume (tweak con riavvio: mpo/gpu_msi/timer/HAGS + requires_reboot_resume/pending_reboot_test_id), synergy pass greedy su coppie kept, validazione gioco reale 5-10 min. FASE 3: prior aggregati fleet + suggerimenti BIOS guidati.
+
+## Aggiornamento 2026-07-29 (2) — Traduzioni mancanti completate (i18n IT/EN al 100%)
+Audit completo del frontend: individuate e tradotte tutte le stringhe hardcoded in italiano che apparivano anche con lingua EN.
+- Componenti resi bilingue (pattern isEn() da @/i18n): OneClickLaunchButton (label/toast/fallback), MobileHandoffModal (QR telefono), AuthMobile (magic link), PasswordResetsPanel (pannello admin), TrialUpgradeBanner (countdown/CTA/prezzi), ObsOverlayPanel (tutta la UI overlay OBS + guida OBS), FullBenchmarkReport (empty state), FooterExtras (toast email).
+- Pagine: Billing (interamente tradotta), Admin (modali grant/broadcast, tabella utenti, dettagli, stat cards, paginazione), MyPc (nuovo dict EN CPU_TEMP_REASONS_EN per le 6 diagnosi temp CPU), Landing (usePageMeta title/description per lingua), Network (label bottone bufferbloat), Advisor (aria-label + preview immagine).
+- i18n.js: aggiunte sezioni mancanti it+en: freshness (badge sync header con plurali _one/_other), mobile (handoff), milestones (widget XP sidebar).
+- Fix: rimosso frammento duplicato in MobileHandoffModal introdotto da un edit. Parse Babel di tutti gli 88 file jsx OK.
+- Verifica: screenshot EN (dashboard/admin/billing: "Sync suggested", "Phone", "to next tier", "Administrator panel", "Billing & plan") e IT via toggle lang-it (tutto in italiano, nessuna regressione). Nota: la lingua dell'account salvata sul profilo sovrascrive localStorage al login (comportamento esistente, corretto).

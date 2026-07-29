@@ -57,8 +57,9 @@ export function FooterCommunity({ t }) {
             // anche per chi usa Gmail web.
             try {
               await navigator.clipboard.writeText(CONTACT_EMAIL);
-              toast.success(`Email copiata: ${CONTACT_EMAIL}`, {
-                description: "Se non si apre il tuo client di posta, incolla l'indirizzo nel tuo servizio email preferito.",
+              const en = (localStorage.getItem("i18nextLng") || "it").startsWith("en");
+              toast.success(en ? `Email copied: ${CONTACT_EMAIL}` : `Email copiata: ${CONTACT_EMAIL}`, {
+                description: en ? "If your mail client doesn't open, paste the address into your favorite email service." : "Se non si apre il tuo client di posta, incolla l'indirizzo nel tuo servizio email preferito.",
               });
             } catch {}
           };

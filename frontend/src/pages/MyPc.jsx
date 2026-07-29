@@ -129,11 +129,75 @@ const CPU_TEMP_REASONS = {
   },
 };
 
+const CPU_TEMP_REASONS_EN = {
+  not_admin: {
+    title: "CPU temperature unreadable — the agent isn't running as Administrator",
+    body: "The CPU sensor driver requires elevated privileges (UAC). Reopen FrameForge Agent and confirm the UAC prompt when it appears.",
+    fix_label: "How to fix",
+    steps: [
+      "Close the agent window",
+      "Double-click Avvia-FrameForge.bat (or forgefps-agent.exe)",
+      "When the Windows UAC prompt appears, click Yes",
+    ],
+  },
+  vbs_on: {
+    title: "CPU temperature blocked by Windows — Memory Integrity is on",
+    body: "Windows Security is blocking the low-level driver that reads the CPU temperature. It's a protection (VBS). You can turn it off if you need the temp.",
+    fix_label: "How to disable (optional)",
+    steps: [
+      "Settings → Privacy & security → Windows Security",
+      "Device security → Core isolation → Memory integrity → OFF",
+      "Restart your PC",
+    ],
+  },
+  blocklist_on: {
+    title: "CPU temperature blocked by Windows — Vulnerable driver blocklist",
+    body: "Windows 11 blocks WinRing0 (the driver used to read CPU sensors) via the Blocklist. It's on by default for security — GPU temp keeps working anyway.",
+    fix_label: "Alternative",
+    steps: [
+      "The blocklist protects against malicious drivers — we recommend keeping it on",
+      "As a workaround, keep HWMonitor/HWiNFO open in parallel to see the CPU temp",
+      "The GPU (which matters most for gaming) is detected normally",
+    ],
+  },
+  no_sensors: {
+    title: "CPU sensors not recognized — likely Ryzen Zen4 or outdated BIOS",
+    body: "LibreHardwareMonitor runs correctly but didn't find a CPU sensor among the standard names (Tctl, Tdie, CPU Package). On Ryzen 7000+ sensors can have non-standard names, or the BIOS doesn't expose them.",
+    fix_label: "How to fix",
+    steps: [
+      "Update the BIOS to the latest stable version from your motherboard vendor's site",
+      "Alternatively download standalone LibreHardwareMonitor (github.com/LibreHardwareMonitor) and check which CPU sensors it sees: if it finds any, send me a screenshot of the names and I'll add them to the whitelist",
+      "Restart FrameForge Agent after the BIOS update",
+    ],
+  },
+  no_lhm: {
+    title: "CPU sensor driver not loaded — WinRing0 blocked",
+    body: "LibreHardwareMonitor couldn't load the WinRing0 driver needed to read CPU sensors. Even without VBS/Blocklist enabled, Windows can block unsigned drivers on first launch.",
+    fix_label: "60-second fix (works on Ryzen)",
+    steps: [
+      "Download standalone LibreHardwareMonitor from github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases",
+      "Extract the ZIP and open LibreHardwareMonitor.exe as Administrator (right click → Run as Administrator)",
+      "If it shows the CPU temperature, close it — the WinRing0 driver is now trusted on your PC",
+      "Reopen FrameForge Agent: the CPU temp will be detected automatically",
+    ],
+  },
+  unknown: {
+    title: "CPU temperature unreadable",
+    body: "The agent couldn't determine the reason. If the problem persists, contact support with a screenshot of the agent console.",
+    fix_label: "Debug",
+    steps: [
+      "Run the agent as Administrator",
+      "Check the console for [WARN] or [INFO][diag] messages",
+    ],
+  },
+};
+
 function CpuTempReasonHint({ checks }) {
   if (!Array.isArray(checks)) return null;
   const cpuCheck = checks.find((c) => c.id === "cpu_temp");
   if (!cpuCheck || cpuCheck.status !== "unknown" || !cpuCheck.reason) return null;
-  const info = CPU_TEMP_REASONS[cpuCheck.reason] || CPU_TEMP_REASONS.unknown;
+  const dict = i18n.language?.startsWith("en") ? CPU_TEMP_REASONS_EN : CPU_TEMP_REASONS;
+  const info = dict[cpuCheck.reason] || dict.unknown;
   const isSecurity = cpuCheck.reason === "vbs_on" || cpuCheck.reason === "blocklist_on";
   const color = isSecurity ? "#E5FF00" : "#00E0FF"; // giallo = protezione security, azzurro = altro
 
