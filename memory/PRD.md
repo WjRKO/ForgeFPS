@@ -1530,3 +1530,10 @@ Audit completo del frontend: individuate e tradotte tutte le stringhe hardcoded 
 - public/index.html: aggiunti canonical statico, hreflang it/en/x-default e og:locale per i crawler senza JS.
 - public/sitemap.xml: esteso da 3 a 10 URL pubblici (/, /pricing, /guida, /demo, /changelog, /security, /privacy-telemetry, /terms, /login, /register) con xhtml:link hreflang alternates per ognuno. XML validato.
 - Verifica Playwright: ?lang=en su storage pulito -> UI EN, html lang=en, og:locale=en_US, boostpc_lang=en; ?lang=it -> IT; canonical/hreflang dinamici corretti su /pricing.
+
+## Aggiornamento 2026-07-29 (4) — Fix auto-logout ogni 15 minuti (refresh token ora usato)
+Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token 15 min, refresh token 7 giorni MA il frontend non chiamava mai /api/auth/refresh -> logout di fatto ogni ~15 min.
+- Fix (scelta utente: opzione a): interceptor axios in /app/frontend/src/lib/api.js — al primo 401 chiama POST /auth/refresh (promise condivisa tra richieste concorrenti, flag _retry anti-loop, esclusi /auth/refresh|login|register|logout) e riprova la richiesta originale.
+- Backend gia' corretto: /refresh ruota ENTRAMBI i cookie (sliding) -> sessione dura finche' l'utente usa l'app almeno 1 volta ogni 7 giorni.
+- Test: curl (refresh con solo refresh_token -> nuovi set-cookie + /me ok) e Playwright (rimosso access_token, tenuto solo refresh -> ricarico /app -> sessione sopravvive, access rigenerato). PASSATO.
+- Nuovo comportamento: logout automatico solo dopo 7 giorni di inattivita' totale (o logout manuale). Va rideployato in produzione per avere effetto su forgefps.dev.
