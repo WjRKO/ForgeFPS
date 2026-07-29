@@ -362,7 +362,7 @@ function ReportCard({ report, onNew }) {
     if (!shareRef.current || sharing) return;
     setSharing(true);
     try {
-      const dataUrl = await toPng(shareRef.current, { pixelRatio: 2, cacheBust: true, backgroundColor: "#0A0A0D" });
+      const dataUrl = await toPng(shareRef.current, { pixelRatio: 2, cacheBust: true, backgroundColor: "#0A0A0D", skipFonts: true });
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], "frameforge-lab-report.png", { type: "image/png" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {

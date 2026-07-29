@@ -1553,3 +1553,15 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
 - Test: test_lab_phase2_sim.py (E2E completo PASS), test_lab_phase2_endpoints.py (8/8, creato dal testing agent), test_lab_phase1_sim.py aggiornato al nuovo flusso (PASS). testing_agent iteration_45: backend 100%.
 ### FASE 3 (prossima, da spec)
 - Prior aggregati fleet (per hardware simile) + suggerimenti BIOS guidati (XMP/EXPO, Resizable BAR) con istruzioni manuali e verifica post-riavvio.
+
+## Aggiornamento 2026-07-29 (6) — Laboratorio Automatico FASE 3 + report condivisibile brandizzato (FATTO, iteration_46 = 100%)
+### Fleet aggregated priors
+- lab.py `_fleet_blend(candidates, hw)`: fonde il prior statico con lo storico anonimo `db.lab_fleet_stats` (per hw_class es. nvidia_amd), min 3 campioni, peso w=min(0.7, n/(n+10)), rate clampato 0.05-0.9; candidato arricchito con `fleet:{tested,kept,avg_delta_pct}`. Update fleet stats con $inc a ogni decisione kept/rollback. `_hw_class()` da gpu+cpu regex. Applicato sia a /lab/start (log "Prior arricchiti...") che a /lab/registry.
+### Suggerimenti BIOS guidati
+- lab_registry.bios_suggestions(specs): xmp (RAM sotto profilo: confronto ram_speed_mhz vs ram_speed_nominal_mhz da ps_agent + soglia base DDR4/DDR5), rebar (GPU RTX 3000+/RX 6000+/Arc, verifica NVIDIA CP/AMD Software), dual_channel (ram_modules==1). Ognuno con title/why/steps/expected_gain. Salvati in sessione + inclusi nel report finale.
+### Report condivisibile brandizzato
+- Lab.jsx ShareCard off-screen (620px, FRAMEFORGE LAB + gain gigante + FPS before→after + kept steps con p-value + validazione + footer forgefps.dev) esportata in PNG via html-to-image toPng (pixelRatio 2, skipFonts:true per evitare SecurityError cross-origin Google Fonts — fix verificato: 0 errori console). Web Share API con fallback download frameforge-lab-report.png + toast. UI: BiosSuggestions (details espandibili, lab-report-bios / lab-bios-{id}), fleet hint nel setup (lab-fleet-hint "N test su PC con hardware simile").
+### Verifica
+- Backend self-test curl: registry con fleet reali (26 test telemetry nvidia_amd), bios=['rebar'], report completo con bios_suggestions/synergies/validation. Sim Fase 1+2 ri-eseguiti PASS (NB: vanno lanciati come `python tests/test_lab_phaseN_sim.py`, NON via pytest — xdist li esegue in parallelo → 409 sessione attiva). PS PARSE OK (pwsh).
+- testing_agent iteration_46: frontend 100% (report card, gain +15.84%, BIOS expand, share download reale, fleet hint 69 test, toggle reboot 14<->11, persistenza dopo reload).
+- LABORATORIO AUTOMATICO COMPLETO (Fasi 1+2+3).
