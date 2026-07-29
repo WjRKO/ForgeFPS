@@ -124,10 +124,11 @@ class ReportPhaseInput(BaseModel):
 class LabStartInput(BaseModel):
     risk_level: str = Field(default="medium", pattern="^(safe|medium)$")
     run_seconds: int = Field(default=90, ge=30, le=180)
+    include_reboot: bool = True
 
 
 class LabRunInput(BaseModel):
-    phase: str = Field(pattern="^(baseline|test)$")
+    phase: str = Field(pattern="^(baseline|test|warmup|synergy_off|synergy_on|validation)$")
     tweak_id: Optional[str] = Field(default=None, max_length=50)
     run: dict[str, Any]
 

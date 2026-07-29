@@ -5310,6 +5310,43 @@ function Invoke-LabRun($seconds, $label) {
   return $run
 }
 
+function Register-LabResume {
+  # Riprende il Lab automaticamente dopo il riavvio (RunOnce al logon + bootstrap che riscarica lo script)
+  try {
+    $dir = Join-Path $env:LOCALAPPDATA 'FrameForge'
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $rs = Join-Path $dir 'lab_resume.ps1'
+    $lines = @(
+      "`$t = '$TOKEN'",
+      "`$u = '$BACKEND/api/agent/script?t=' + `$t",
+      "`$f = Join-Path `$env:TEMP 'ff_lab_resume.ps1'",
+      "try { Invoke-WebRequest -UseBasicParsing -Uri `$u -OutFile `$f -TimeoutSec 60 } catch { Start-Sleep 15; Invoke-WebRequest -UseBasicParsing -Uri `$u -OutFile `$f -TimeoutSec 60 }",
+      "powershell -NoProfile -ExecutionPolicy Bypass -File `$f -Token `$t -Mode lab"
+    )
+    Set-Content -Path $rs -Value ($lines -join "`r`n") -Encoding UTF8
+    $cmd = 'powershell -NoProfile -WindowStyle Normal -ExecutionPolicy Bypass -File "' + $rs + '"'
+    Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'FrameForgeLabResume' -Value $cmd -Force
+    return $true
+  } catch { return $false }
+}
+function Remove-LabResume {
+  try { Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'FrameForgeLabResume' -ErrorAction SilentlyContinue } catch {}
+  try { Remove-Item (Join-Path $env:LOCALAPPDATA 'FrameForge\lab_resume.ps1') -Force -ErrorAction SilentlyContinue } catch {}
+}
+function Invoke-LabRebootPrompt($tweakId) {
+  $reg = Register-LabResume
+  if ($reg) { Say '   [ OK ] Ripresa automatica registrata: dopo il riavvio e il login, il Lab continua da solo (conferma UAC richiesta).' 'Green' }
+  else { Say '   [WARN] Non sono riuscito a registrare la ripresa automatica: dopo il riavvio rilancia tu il comando Lab.' 'DarkYellow' }
+  Say ("`n   Il tweak '{0}' richiede un RIAVVIO per avere effetto." -f $tweakId) 'Yellow'
+  $ans = Read-Host '   Riavviare ADESSO? Digita S per riavviare subito, altro tasto per riavviare tu manualmente'
+  if ($ans -match '^[sS]') {
+    Say '   Riavvio in 8 secondi... salva tutto!' 'Yellow'
+    shutdown /r /t 8 | Out-Null
+  } else {
+    Say '   OK: riavvia quando vuoi. Il Lab riprendera automaticamente al prossimo login.' 'Gray'
+  }
+}
+
 if ($MODE -eq 'lab') {
   Say "`n== FrameForge LAB - Laboratorio Automatico delle Prestazioni ==" 'Cyan'
   Say '   Testo i tweak UNO ALLA VOLTA sul tuo gioco: baseline x3, misura, statistica, rollback se inutile.' 'Gray'
@@ -5386,9 +5423,82 @@ if ($MODE -eq 'lab') {
           Invoke-ApplyTracked $tw
           Save-Backup
           [void]$script:LAB_APPLIED.Add("$($nx.tweak_id)")
-          LabEvent 'tweak_applied' @{ tweak_id = $nx.tweak_id }
-          Say '   [ OK ] Tweak applicato (backup automatico). Attendo 3s che si assesti...' 'Green'
-          Start-Sleep -Seconds 3
+          LabEvent 'tweak_applied' @{ tweak_id = $nx.tweak_id; requires_reboot = [bool]$nx.requires_reboot }
+          if ($nx.requires_reboot) {
+            Invoke-LabRebootPrompt $nx.tweak_id
+            $labDone = $true
+          } else {
+            Say '   [ OK ] Tweak applicato (backup automatico). Attendo 3s che si assesti...' 'Green'
+            Start-Sleep -Seconds 3
+          }
+        }
+      }
+      elseif ($act -eq 'reboot_required') {
+        $rebooted = $false
+        try {
+          $bootUtc = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime()
+          $appliedUtc = ([DateTimeOffset]::Parse("$($nx.applied_at)")).UtcDateTime
+          if ($bootUtc -gt $appliedUtc) { $rebooted = $true }
+        } catch {}
+        if ($rebooted) {
+          Remove-LabResume
+          Say ("`n[LAB] Riavvio rilevato: riprendo il test di {0}." -f $nx.tweak_id) 'Green'
+          LabEvent 'reboot_done' @{ tweak_id = $nx.tweak_id }
+        } else {
+          Invoke-LabRebootPrompt $nx.tweak_id
+          $labDone = $true
+        }
+      }
+      elseif ($act -eq 'run_warmup') {
+        Say ("   [WARM-UP] run di assestamento post-riavvio ({0}s, scartato dalle statistiche)" -f $nx.run_seconds) 'Cyan'
+        $g = Wait-LabGame
+        if ($g -eq '__STOP__') { continue }
+        $run = Invoke-LabRun $nx.run_seconds 'warmup'
+        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        LabApi 'Post' '/api/agent/lab/run' @{ phase = 'warmup'; tweak_id = $nx.tweak_id; run = $run } | Out-Null
+        Say ("   warm-up: {0} FPS avg (ok, ora si misura sul serio)" -f $run.fps_avg) 'Gray'
+      }
+      elseif ($act -eq 'synergy_toggle') {
+        $p = @($nx.pair)
+        Say ("`n[SYNERGY {0}/{1}] {2} + {3} - preparo misura {4}" -f $nx.pair_num, $nx.pairs_total, $p[0], $p[1], "$($nx.stage)".ToUpper()) 'Cyan'
+        foreach ($tid in $p) {
+          if ($nx.stage -eq 'off') {
+            $msg = Invoke-RestoreTweak "$tid"
+            Say ("   OFF {0}: {1}" -f $tid, $msg) 'DarkGray'
+          } else {
+            $tw = $script:TWMAP[$tid]
+            if ($tw) { Invoke-ApplyTracked $tw }
+            Say ("   ON  {0}: riapplicato" -f $tid) 'DarkGray'
+          }
+        }
+        Save-Backup
+        Start-Sleep -Seconds 3
+        LabEvent 'synergy_toggled' @{ stage = "$($nx.stage)" }
+      }
+      elseif ($act -eq 'run_synergy') {
+        Say ("   [SYNERGY {0}] run {1}/{2} ({3}s)" -f "$($nx.stage)".ToUpper(), ([int]$nx.runs_done + 1), $nx.runs_target, $nx.run_seconds) 'Cyan'
+        $g = Wait-LabGame
+        if ($g -eq '__STOP__') { continue }
+        $run = Invoke-LabRun $nx.run_seconds ('synergy ' + $nx.stage)
+        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        Say ("   run: {0} FPS avg" -f $run.fps_avg) 'Gray'
+        $ph = 'synergy_' + $nx.stage
+        $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = $ph; run = $run }
+        if ($resp -and $resp.pair_done -and $resp.synergy) {
+          if ($resp.synergy.is_synergy) { Say ("   [ OK ] SINERGIA: insieme {0}% vs somma singoli {1}%" -f $resp.synergy.combined_delta_pct, $resp.synergy.individual_sum_pct) 'Green' }
+          else { Say ("   [INFO] Nessuna sinergia extra ({0}% vs {1}%)" -f $resp.synergy.combined_delta_pct, $resp.synergy.individual_sum_pct) 'Gray' }
+        }
+      }
+      elseif ($act -eq 'run_validation') {
+        Say ("`n[VALIDAZIONE] Sessione di gioco reale da {0} minuti con la configurazione finale. Gioca normalmente!" -f [int]($nx.run_seconds / 60)) 'Cyan'
+        $g = Wait-LabGame
+        if ($g -eq '__STOP__') { continue }
+        $run = Invoke-LabRun $nx.run_seconds 'validazione'
+        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'validation'; run = $run }
+        if ($resp -and $resp.validation) {
+          Say ("   Reale: {0}% vs previsto {1}%" -f $resp.validation.real_gain_pct, $resp.validation.predicted_gain_pct) 'Yellow'
+          if ($resp.validation.discrepancy) { Say '   [WARN] Guadagno reale sotto il 50% del previsto: segnalato nel report.' 'DarkYellow' }
         }
       }
       elseif ($act -eq 'run_test') {

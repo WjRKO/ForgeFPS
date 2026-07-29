@@ -19,9 +19,11 @@ const PHASES = [
   { id: "snapshot", it: "Snapshot", en: "Snapshot" },
   { id: "baseline", it: "Baseline", en: "Baseline" },
   { id: "testing", it: "Test tweak", en: "Tweak tests" },
+  { id: "synergy", it: "Synergy", en: "Synergy" },
+  { id: "validation", it: "Validazione", en: "Validation" },
   { id: "completed", it: "Report", en: "Report" },
 ];
-const PHASE_IDX = { waiting_agent: -1, snapshot: 0, baseline: 1, testing: 2, completed: 3, aborting: 2, aborted: -1 };
+const PHASE_IDX = { waiting_agent: -1, snapshot: 0, baseline: 1, testing: 2, awaiting_reboot: 2, synergy: 3, validation: 4, completed: 5, aborting: 2, aborted: -1 };
 
 const StatusPill = ({ status }) => {
   const map = {
@@ -29,6 +31,9 @@ const StatusPill = ({ status }) => {
     snapshot: ["bg-cyan-500/15 text-cyan-400", T("Snapshot in corso", "Snapshotting")],
     baseline: ["bg-cyan-500/15 text-cyan-400", T("Baseline in corso", "Baseline running")],
     testing: ["bg-[#E5FF00]/15 text-[#E5FF00]", T("Test in corso", "Testing")],
+    awaiting_reboot: ["bg-orange-500/15 text-orange-400", T("Riavvio richiesto", "Reboot required")],
+    synergy: ["bg-purple-500/15 text-purple-400", T("Synergy pass", "Synergy pass")],
+    validation: ["bg-[#00E0FF]/15 text-[#00E0FF]", T("Validazione in gioco", "In-game validation")],
     aborting: ["bg-orange-500/15 text-orange-400", T("Interruzione...", "Aborting...")],
     aborted: ["bg-zinc-500/15 text-zinc-400", T("Interrotta", "Aborted")],
     completed: ["bg-[#00FF66]/15 text-[#00FF66]", T("Completata", "Completed")],
@@ -63,12 +68,14 @@ const DecisionBadge = ({ decision }) =>
 function SetupCard({ registry, onStart, starting }) {
   const [risk, setRisk] = useState("medium");
   const [win, setWin] = useState(90);
+  const [reboot, setReboot] = useState(true);
   const [preview, setPreview] = useState(registry);
   useEffect(() => {
-    api.get(`/lab/registry?risk_level=${risk}`).then(({ data }) => setPreview(data)).catch(() => {});
-  }, [risk]);
+    api.get(`/lab/registry?risk_level=${risk}&include_reboot=${reboot}`).then(({ data }) => setPreview(data)).catch(() => {});
+  }, [risk, reboot]);
   const n = preview?.candidates?.length || 0;
-  const estMin = Math.round(((3 + n * 3) * (win + 8)) / 60);
+  const nReboot = (preview?.candidates || []).filter((c) => c.requires_reboot).length;
+  const estMin = Math.round(((3 + n * 3) * (win + 8)) / 60) + 5;
   return (
     <HUDCard testid="lab-setup-card">
       <div className="p-5 space-y-5">
@@ -98,12 +105,21 @@ function SetupCard({ registry, onStart, starting }) {
             ))}
           </div>
         </div>
+        <div>
+          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{T("3 · Tweak con riavvio", "3 · Reboot tweaks")}</div>
+          <button data-testid="lab-reboot-toggle" onClick={() => setReboot(!reboot)}
+            className={`px-4 py-2 text-xs uppercase tracking-widest border transition-colors ${reboot ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/10" : "border-[#2A2A35] text-zinc-400 hover:border-zinc-500"}`}>
+            {reboot ? T("Inclusi (consigliato)", "Included (recommended)") : T("Esclusi", "Excluded")}
+          </button>
+          <div className="text-[11px] text-zinc-500 mt-1.5">{T("MPO, GPU MSI mode, timer resolution: il Lab si mette in pausa, riavvii e riprende da solo.", "MPO, GPU MSI mode, timer resolution: the Lab pauses, you reboot, it resumes automatically.")}</div>
+        </div>
         <div className="border border-[#2A2A35] bg-black/40 p-3 text-xs text-zinc-400" data-testid="lab-candidates-preview">
           <span className="text-[#00E0FF] font-bold">{n}</span> {T("tweak candidati per il tuo hardware", "candidate tweaks for your hardware")}
+          {nReboot > 0 && <span className="text-orange-400"> ({nReboot} {T("con riavvio", "with reboot")})</span>}
           {n > 0 && <span className="text-zinc-600"> · {preview.candidates.map((c) => c.tweak_id).join(", ")}</span>}
-          <div className="text-zinc-600 mt-1 flex items-center gap-1"><Timer size={11} /> {T(`Durata stimata: ~${estMin} min (baseline ×3 + 3 run per tweak)`, `Estimated duration: ~${estMin} min (baseline ×3 + 3 runs per tweak)`)}</div>
+          <div className="text-zinc-600 mt-1 flex items-center gap-1"><Timer size={11} /> {T(`Durata stimata: ~${estMin} min (baseline ×3 + 3 run per tweak + synergy + validazione)`, `Estimated duration: ~${estMin} min (baseline ×3 + 3 runs per tweak + synergy + validation)`)}</div>
         </div>
-        <button onClick={() => onStart(risk, win)} disabled={starting || n === 0} data-testid="lab-start-btn"
+        <button onClick={() => onStart(risk, win, reboot)} disabled={starting || n === 0} data-testid="lab-start-btn"
           className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold uppercase tracking-widest text-xs px-6 py-3 hover:bg-[#D4EC00] transition-colors disabled:opacity-50">
           <FlaskConical size={15} /> {starting ? T("Avvio...", "Starting...") : T("Avvia sessione Lab", "Start Lab session")}
         </button>
@@ -252,6 +268,23 @@ function ReportCard({ report, onNew }) {
             </div>
           ))}
         </div>
+        <ValidationBlock validation={report.validation} />
+        {(report.synergies_found || []).length > 0 && (
+          <div className="space-y-1.5">
+            <div className="text-[10px] uppercase tracking-widest text-zinc-500">{T("Sinergie verificate", "Verified synergies")}</div>
+            {report.synergies_found.map((s, i) => (
+              <div key={i} className="flex items-center justify-between gap-2 border border-[#2A2A35] bg-black/30 px-3 py-2" data-testid={`lab-report-synergy-${i}`}>
+                <div className="text-xs text-white">{s.pair?.join(" + ")}</div>
+                <span className={`text-[11px] font-bold ${s.is_synergy ? "text-[#00FF66]" : "text-zinc-500"}`}>
+                  {s.is_synergy ? T("SINERGIA", "SYNERGY") : T("additivi", "additive")} · {s.combined_delta_pct}% vs {s.individual_sum_pct}%
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        {report.reboots_required > 0 && (
+          <div className="text-[11px] text-zinc-500">{T(`Riavvii eseguiti durante il lab: ${report.reboots_required}`, `Reboots performed during the lab: ${report.reboots_required}`)}</div>
+        )}
         {report.auto_stop_reason && <div className="text-[11px] text-amber-400">{report.auto_stop_reason}</div>}
         <button onClick={onNew} data-testid="lab-new-session-btn" className="inline-flex items-center gap-2 border border-[#2A2A35] text-zinc-300 uppercase tracking-widest text-xs px-5 py-2.5 hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors">
           <Play size={13} /> {T("Nuova sessione", "New session")}
@@ -281,17 +314,17 @@ export default function Lab() {
     api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
   }, [load]);
 
-  const active = session && ["waiting_agent", "snapshot", "baseline", "testing", "aborting"].includes(session.status);
+  const active = session && ["waiting_agent", "snapshot", "baseline", "testing", "awaiting_reboot", "synergy", "validation", "aborting"].includes(session.status);
   useEffect(() => {
     if (!active) return;
     const t = setInterval(load, 2500);
     return () => clearInterval(t);
   }, [active, load]);
 
-  const start = async (risk, win) => {
+  const start = async (risk, win, reboot) => {
     setStarting(true);
     try {
-      const { data } = await api.post("/lab/start", { risk_level: risk, run_seconds: win });
+      const { data } = await api.post("/lab/start", { risk_level: risk, run_seconds: win, include_reboot: reboot });
       setSession(data.session);
       setShowSetup(false);
       toast.success(T("Sessione Lab creata! Ora avvia l'agent.", "Lab session created! Now start the agent."));
@@ -340,11 +373,13 @@ export default function Lab() {
             const { data } = await api.get("/lab/session");
             return data.session && data.session.status !== "waiting_agent";
           }} />}
+          {session.status === "awaiting_reboot" && <RebootBanner session={session} />}
           {session.status !== "waiting_agent" && (
             <div className="grid lg:grid-cols-2 gap-4">
               <div className="space-y-4">
                 <BaselineCard session={session} />
                 <Timeline session={session} />
+                {(session.status === "synergy" || session.synergy) && <SynergyCard session={session} />}
               </div>
               <LogFeed logs={session.logs} />
             </div>

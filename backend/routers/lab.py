@@ -20,8 +20,14 @@ CV_MAX = 0.05
 MIN_EFFECT_PCT = 1.0
 AUTO_STOP_WINDOW = 3
 MARGINAL_GAIN_RATIO = 0.03
+SYNERGY_RUNS = 2
+SYNERGY_MAX_PAIRS = 2
+SYNERGY_FACTOR = 1.15
+VALIDATION_SECONDS = 300
+VALIDATION_MIN_RATIO = 0.5
+WARMUP_SECONDS = 45
 
-ACTIVE_STATUSES = ("waiting_agent", "snapshot", "baseline", "testing", "aborting")
+ACTIVE_STATUSES = ("waiting_agent", "snapshot", "baseline", "testing", "awaiting_reboot", "synergy", "validation", "aborting")
 
 
 def _log(sess, msg, level="info"):
@@ -76,6 +82,44 @@ def _auto_stop(sess):
     return None
 
 
+def _result_delta(sess, tweak_id):
+    for r in sess.get("results", []):
+        if r["tweak_id"] == tweak_id and r["decision"] == "kept":
+            return r["delta"].get("fps_avg_pct") or 0
+    return 0
+
+
+def _advance_after_testing(sess, stop_reason=None):
+    """Fine test loop -> synergy pass (coppie greedy tra i kept no-reboot) -> validazione -> report."""
+    if stop_reason:
+        sess["auto_stop_reason"] = stop_reason
+        _log(sess, stop_reason, "warn")
+    kept = sess.get("kept", [])
+    meta = {c["tweak_id"]: c for c in sess.get("candidates", [])}
+    eligible = [t for t in kept if not meta.get(t, {}).get("requires_reboot")]
+    pairs = []
+    from itertools import combinations
+    for a, b in combinations(eligible, 2):
+        ma, mb = meta.get(a, {}), meta.get(b, {})
+        if b in (ma.get("conflicts_with") or []) or a in (mb.get("conflicts_with") or []):
+            continue
+        if ma.get("family") and ma.get("family") == mb.get("family"):
+            continue  # coppie complementari: famiglie diverse
+        pairs.append({"a": a, "b": b, "sum_delta": round(_result_delta(sess, a) + _result_delta(sess, b), 2)})
+    pairs.sort(key=lambda p: -p["sum_delta"])
+    pairs = pairs[:SYNERGY_MAX_PAIRS]
+    if pairs:
+        sess["status"] = "synergy"
+        sess["synergy"] = {"pairs": pairs, "idx": 0, "stage": "off", "toggled": False,
+                           "off_runs": [], "on_runs": [], "results": []}
+        _log(sess, f"SYNERGY PASS: {len(pairs)} coppie di tweak mantenuti da verificare ({SYNERGY_RUNS} run off + {SYNERGY_RUNS} run on per coppia)")
+    elif kept:
+        sess["status"] = "validation"
+        _log(sess, f"VALIDAZIONE: sessione di gioco reale da {VALIDATION_SECONDS // 60} minuti con la configurazione finale")
+    else:
+        _complete(sess)
+
+
 def _clamp(v, lo=0.0, hi=10.0):
     return round(max(lo, min(hi, v)), 1)
 
@@ -99,6 +143,8 @@ def _build_report(sess):
             "p_value": r["significance"].get("p_value"),
         })
     n_rb = sum(1 for s in steps if s["decision"] == "rolled_back")
+    meta = {c["tweak_id"]: c for c in sess.get("candidates", [])}
+    reboots = sum(1 for r in sess.get("results", []) if meta.get(r["tweak_id"], {}).get("requires_reboot"))
     try:
         from datetime import datetime
         t0 = datetime.fromisoformat(sess["started_at"].replace("Z", "+00:00"))
@@ -118,8 +164,9 @@ def _build_report(sess):
         "total_p1_gain_pct": gain_p1,
         "steps": steps,
         "kept": sess.get("kept", []),
-        "synergies_found": [],
-        "reboots_required": 0,
+        "synergies_found": (sess.get("synergy") or {}).get("results", []),
+        "validation": sess.get("validation"),
+        "reboots_required": reboots,
         "manual_steps_required": [],
         "total_duration_min": dur,
         "performance_index": {
@@ -173,7 +220,7 @@ def build(get_current_user):
         if await _active(uid):
             raise HTTPException(status_code=409, detail="Hai gia' una sessione Lab attiva. Interrompila prima di avviarne una nuova.")
         specs = await db.pc_specs.find_one({"user_id": uid}) or {}
-        candidates, skipped = select_candidates(specs.get("data") or {}, payload.risk_level)
+        candidates, skipped = select_candidates(specs.get("data") or {}, payload.risk_level, payload.include_reboot)
         if not candidates:
             raise HTTPException(status_code=400, detail="Nessun tweak candidato per questo livello di rischio/hardware.")
         sess = {
@@ -181,6 +228,7 @@ def build(get_current_user):
             "user_id": uid,
             "risk_level": payload.risk_level,
             "run_seconds": payload.run_seconds,
+            "include_reboot": payload.include_reboot,
             "registry_version": REGISTRY_VERSION,
             "status": "waiting_agent",
             "candidates": candidates,
@@ -223,9 +271,9 @@ def build(get_current_user):
         return {"session": _public(sess)}
 
     @r.get("/lab/registry")
-    async def lab_registry(risk_level: str = "medium", user: dict = Depends(get_current_user)):
+    async def lab_registry(risk_level: str = "medium", include_reboot: bool = True, user: dict = Depends(get_current_user)):
         specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}) or {}
-        candidates, skipped = select_candidates(specs.get("data") or {}, risk_level)
+        candidates, skipped = select_candidates(specs.get("data") or {}, risk_level, include_reboot)
         return {"registry_version": REGISTRY_VERSION, "candidates": candidates, "skipped": skipped}
 
     # ---------- agent endpoints ----------
@@ -260,6 +308,30 @@ def build(get_current_user):
             if cur and cur.get("applied") and cur["tweak_id"] not in ids:
                 ids.append(cur["tweak_id"])
             return {"action": "abort", "rollback_ids": ids}
+        if st == "awaiting_reboot":
+            cur = sess.get("current") or {}
+            return {"action": "reboot_required", "tweak_id": cur.get("tweak_id"),
+                    "applied_at": cur.get("applied_at"), "session_id": sess["session_id"]}
+        if st == "synergy":
+            syn = sess.get("synergy") or {}
+            pairs = syn.get("pairs", [])
+            idx = syn.get("idx", 0)
+            if idx >= len(pairs):
+                sess["status"] = "validation"
+                _log(sess, f"VALIDAZIONE: sessione di gioco reale da {VALIDATION_SECONDS // 60} minuti")
+                await _save(sess)
+                return {"action": "run_validation", "run_seconds": VALIDATION_SECONDS}
+            pair = pairs[idx]
+            stage = syn.get("stage", "off")
+            if not syn.get("toggled"):
+                return {"action": "synergy_toggle", "stage": stage, "pair": [pair["a"], pair["b"]],
+                        "pair_num": idx + 1, "pairs_total": len(pairs)}
+            runs_done = len(syn.get("off_runs" if stage == "off" else "on_runs", []))
+            return {"action": "run_synergy", "stage": stage, "pair": [pair["a"], pair["b"]],
+                    "runs_done": runs_done, "runs_target": SYNERGY_RUNS, "run_seconds": rs,
+                    "pair_num": idx + 1, "pairs_total": len(pairs)}
+        if st == "validation":
+            return {"action": "run_validation", "run_seconds": VALIDATION_SECONDS}
         if st == "testing":
             cur = sess.get("current")
             total = len(sess["candidates"])
@@ -267,10 +339,13 @@ def build(get_current_user):
             if not cur:
                 queue = sess.get("queue", [])
                 if not queue:
-                    _complete(sess)
-                    sess["agent_ack"] = True
+                    _advance_after_testing(sess)
                     await _save(sess)
-                    return {"action": "complete", "report": sess["report"]}
+                    if sess["status"] == "completed":
+                        sess["agent_ack"] = True
+                        await _save(sess)
+                        return {"action": "complete", "report": sess["report"]}
+                    return {"action": "transition", "status": sess["status"]}
                 tid = queue.pop(0)
                 sess["queue"] = queue
                 sess["current"] = {"tweak_id": tid, "applied": False, "runs": []}
@@ -279,7 +354,10 @@ def build(get_current_user):
             tweak = next((c for c in sess["candidates"] if c["tweak_id"] == cur["tweak_id"]), {"tweak_id": cur["tweak_id"]})
             if not cur.get("applied"):
                 return {"action": "apply_tweak", "tweak_id": cur["tweak_id"], "tweak": tweak,
+                        "requires_reboot": bool(tweak.get("requires_reboot")),
                         "step": step, "total": total}
+            if cur.get("warmup_needed"):
+                return {"action": "run_warmup", "tweak_id": cur["tweak_id"], "run_seconds": WARMUP_SECONDS}
             return {"action": "run_test", "tweak_id": cur["tweak_id"], "run_seconds": rs,
                     "runs_done": len(cur["runs"]), "runs_target": TEST_RUNS, "step": step, "total": total}
         return {"action": "wait"}
@@ -303,7 +381,26 @@ def build(get_current_user):
             cur = sess.get("current")
             if cur and cur["tweak_id"] == data.get("tweak_id"):
                 cur["applied"] = True
-            _log(sess, f"Tweak applicato: {data.get('tweak_id')} (backup creato)")
+                cur["applied_at"] = now_iso()
+                if data.get("requires_reboot"):
+                    sess["status"] = "awaiting_reboot"
+                    _log(sess, f"Tweak applicato: {data.get('tweak_id')} — RIAVVIO RICHIESTO. Il Lab riprende automaticamente dopo il riavvio.", "warn")
+                else:
+                    _log(sess, f"Tweak applicato: {data.get('tweak_id')} (backup creato)")
+            else:
+                _log(sess, f"Tweak applicato: {data.get('tweak_id')} (backup creato)")
+        elif t == "reboot_done":
+            cur = sess.get("current")
+            if sess["status"] == "awaiting_reboot" and cur:
+                sess["status"] = "testing"
+                cur["warmup_needed"] = True
+                _log(sess, f"Riavvio completato: riprendo il test di {cur['tweak_id']} (1 run di warm-up + {TEST_RUNS} run misurati)", "ok")
+        elif t == "synergy_toggled":
+            syn = sess.get("synergy")
+            if syn:
+                syn["toggled"] = True
+                stage = data.get("stage", syn.get("stage"))
+                _log(sess, f"Synergy: coppia {'disattivata' if stage == 'off' else 'riattivata'} per la misura {stage.upper()}")
         elif t == "tweak_skip":
             sess.setdefault("skipped_runtime", []).append(
                 {"tweak_id": data.get("tweak_id"), "reason": data.get("reason", "n/d")})
@@ -332,6 +429,74 @@ def build(get_current_user):
             raise HTTPException(status_code=404, detail="nessuna sessione attiva")
         run = {k: v for k, v in payload.run.items() if isinstance(v, (int, float, str))}
         run["at"] = now_iso()
+
+        if payload.phase == "warmup":
+            cur = sess.get("current")
+            if cur:
+                cur["warmup_needed"] = False
+            _log(sess, f"Warm-up post-riavvio completato ({run.get('fps_avg')} FPS, scartato dalle statistiche)")
+            await _save(sess)
+            return {"ok": True, "warmup_done": True}
+
+        if payload.phase in ("synergy_off", "synergy_on"):
+            syn = sess.get("synergy")
+            if sess["status"] != "synergy" or not syn:
+                return {"ok": False, "reason": "nessun synergy pass attivo"}
+            stage = "off" if payload.phase == "synergy_off" else "on"
+            key = f"{stage}_runs"
+            syn[key].append(run)
+            pair = syn["pairs"][syn["idx"]]
+            _log(sess, f"Synergy {pair['a']}+{pair['b']} [{stage.upper()}] run {len(syn[key])}: {run.get('fps_avg')} FPS avg")
+            if len(syn[key]) < SYNERGY_RUNS:
+                await _save(sess)
+                return {"ok": True, "need_more": True, "runs_done": len(syn[key])}
+            if stage == "off":
+                syn["stage"] = "on"
+                syn["toggled"] = False
+                await _save(sess)
+                return {"ok": True, "stage_done": "off"}
+            # coppia completata: calcola la sinergia
+            off_fps = _fps_list(syn["off_runs"])
+            on_fps = _fps_list(syn["on_runs"])
+            combined = _delta_pct(mean(on_fps), mean(off_fps)) if off_fps and on_fps else None
+            is_syn = bool(combined is not None and pair["sum_delta"] > 0 and combined > pair["sum_delta"] * SYNERGY_FACTOR)
+            res = {"pair": [pair["a"], pair["b"]], "combined_delta_pct": combined,
+                   "individual_sum_pct": pair["sum_delta"], "is_synergy": is_syn,
+                   "off_fps_avg": round(mean(off_fps), 2) if off_fps else None,
+                   "on_fps_avg": round(mean(on_fps), 2) if on_fps else None}
+            syn["results"].append(res)
+            if is_syn:
+                _log(sess, f"SINERGIA trovata: {pair['a']}+{pair['b']} insieme valgono {combined}% (somma singoli {pair['sum_delta']}%)", "ok")
+            else:
+                _log(sess, f"Nessuna sinergia extra: {pair['a']}+{pair['b']} = {combined}% (somma singoli {pair['sum_delta']}%)")
+            syn["idx"] += 1
+            syn["stage"] = "off"
+            syn["toggled"] = False
+            syn["off_runs"], syn["on_runs"] = [], []
+            if syn["idx"] >= len(syn["pairs"]):
+                sess["status"] = "validation"
+                _log(sess, f"VALIDAZIONE: sessione di gioco reale da {VALIDATION_SECONDS // 60} minuti con la configurazione finale")
+            await _save(sess)
+            return {"ok": True, "pair_done": True, "synergy": res, "next_status": sess["status"]}
+
+        if payload.phase == "validation":
+            if sess["status"] != "validation":
+                return {"ok": False, "reason": f"stato {sess['status']}"}
+            base0 = sess.get("baseline0") or {}
+            predicted = _delta_pct(sess["baseline"]["stats"].get("fps_avg") if sess["baseline"].get("stats") else None,
+                                   base0.get("fps_avg")) or 0
+            real = _delta_pct(run.get("fps_avg"), base0.get("fps_avg"))
+            discrepancy = bool(predicted >= 2.0 and real is not None and real < predicted * VALIDATION_MIN_RATIO)
+            sess["validation"] = {"run": run, "real_gain_pct": real, "predicted_gain_pct": round(predicted, 2),
+                                  "duration_s": run.get("duration_s"), "discrepancy": discrepancy}
+            if discrepancy:
+                _log(sess, f"DISCREPANZA: guadagno reale {real}% < 50% del previsto ({round(predicted, 2)}%) — segnalato nel report", "warn")
+            else:
+                _log(sess, f"Validazione in gioco reale: {run.get('fps_avg')} FPS avg ({'+' if (real or 0) >= 0 else ''}{real}% vs baseline)", "ok")
+            _complete(sess)
+            sess["agent_ack"] = True
+            await _save(sess)
+            return {"ok": True, "validation": sess["validation"], "completed": True, "report": sess["report"]}
 
         if payload.phase == "baseline":
             if sess["status"] != "baseline":
@@ -419,11 +584,14 @@ def build(get_current_user):
         stop_reason = _auto_stop(sess)
         completed = False
         if stop_reason or not sess.get("queue"):
-            _complete(sess, stop_reason)
-            completed = True
+            _advance_after_testing(sess, stop_reason)
+            completed = sess["status"] == "completed"
+            if completed:
+                sess["agent_ack"] = True
         await _save(sess)
         return {"ok": True, "decision": result["decision"], "reason": reason,
                 "delta": delta, "significance": result["significance"],
-                "completed": completed, "remaining": len(sess.get("queue", []))}
+                "completed": completed, "next_status": sess["status"],
+                "remaining": len(sess.get("queue", []))}
 
     return r

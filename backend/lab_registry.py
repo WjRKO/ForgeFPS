@@ -6,7 +6,7 @@ corrispondono al catalogo $TWEAKS dell'agent PowerShell (apply/rollback reali).
 """
 import re
 
-REGISTRY_VERSION = "1.0.0"
+REGISTRY_VERSION = "1.1.0"
 PRIOR_THRESHOLD = 0.10
 
 _RISK_ORDER = {"safe": 0, "medium": 1, "expert": 2, "hardware": 3}
@@ -91,20 +91,39 @@ TWEAKS = [
         "base_prior": 0.08, "conflicts_with": [], "synergy_candidates": [],
         "why": "Impatto quasi nullo in fullscreen: prior basso, di solito filtrato.",
     },
+    # --- Fase 2: tweak che richiedono riavvio (reboot-resume) ---
+    {
+        "tweak_id": "mpo", "name": "Disabilita MPO (Multi-Plane Overlay)",
+        "family": "display", "risk_level": "medium", "requires_reboot": True, "reversible": "auto",
+        "base_prior": 0.18, "conflicts_with": [], "synergy_candidates": [],
+        "why": "MPO causa stutter/flickering su molte GPU, specie con OBS attivo.",
+    },
+    {
+        "tweak_id": "gpu_msi", "name": "GPU: MSI mode ON (latenza DPC)",
+        "family": "gpu_vendor", "risk_level": "medium", "requires_reboot": True, "reversible": "auto",
+        "base_prior": 0.16, "conflicts_with": [], "synergy_candidates": [],
+        "why": "Message Signaled Interrupts riducono la latenza DPC della GPU.",
+    },
+    {
+        "tweak_id": "timer", "name": "Timer resolution globale",
+        "family": "scheduling", "risk_level": "medium", "requires_reboot": True, "reversible": "auto",
+        "base_prior": 0.14, "conflicts_with": [], "synergy_candidates": [],
+        "why": "Timer a bassa risoluzione producono frametime piu' costanti.",
+    },
 ]
 
 
-def select_candidates(specs_data: dict, risk_level: str = "medium"):
-    """Motore di selezione (spec 2/Fase 3): filtra per rischio + applicabilita',
-    scarta prior <= soglia, ordina per prior decrescente.
+def select_candidates(specs_data: dict, risk_level: str = "medium", include_reboot: bool = True):
+    """Motore di selezione: filtra per rischio + applicabilita', scarta prior <= soglia,
+    ordina prima i no-reboot per prior, poi i reboot in coda (meno riavvii possibili).
     Ritorna (candidates, skipped)."""
     specs_data = specs_data or {}
     max_risk = _RISK_ORDER.get(risk_level, 1)
     candidates, skipped = [], []
     for t in TWEAKS:
         entry = {k: v for k, v in t.items() if k != "applicable"}
-        if t.get("requires_reboot"):
-            skipped.append({"tweak_id": t["tweak_id"], "reason": "richiede riavvio (Fase 2)"})
+        if t.get("requires_reboot") and not include_reboot:
+            skipped.append({"tweak_id": t["tweak_id"], "reason": "richiede riavvio (esclusi dall'utente)"})
             continue
         if _RISK_ORDER.get(t["risk_level"], 0) > max_risk:
             skipped.append({"tweak_id": t["tweak_id"], "reason": f"rischio {t['risk_level']} > livello scelto ({risk_level})"})
@@ -118,5 +137,5 @@ def select_candidates(specs_data: dict, risk_level: str = "medium"):
             continue
         entry["prior"] = t["base_prior"]
         candidates.append(entry)
-    candidates.sort(key=lambda c: -c["prior"])
+    candidates.sort(key=lambda c: (bool(c.get("requires_reboot")), -c["prior"]))
     return candidates, skipped
