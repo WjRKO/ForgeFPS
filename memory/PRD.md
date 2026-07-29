@@ -1565,3 +1565,8 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
 - Backend self-test curl: registry con fleet reali (26 test telemetry nvidia_amd), bios=['rebar'], report completo con bios_suggestions/synergies/validation. Sim Fase 1+2 ri-eseguiti PASS (NB: vanno lanciati come `python tests/test_lab_phaseN_sim.py`, NON via pytest — xdist li esegue in parallelo → 409 sessione attiva). PS PARSE OK (pwsh).
 - testing_agent iteration_46: frontend 100% (report card, gain +15.84%, BIOS expand, share download reale, fleet hint 69 test, toggle reboot 14<->11, persistenza dopo reload).
 - LABORATORIO AUTOMATICO COMPLETO (Fasi 1+2+3).
+
+## Aggiornamento 2026-07-29 (7) — JSON-LD structured data sulla landing (FATTO, verificato)
+- public/index.html: aggiunto script application/ld+json con @graph schema.org: Organization (#org), SoftwareApplication (#app: UtilitiesApplication, Windows 10/11, featureList, Offer price 0 EUR, softwareHelp=/security, releaseNotes=/changelog, inLanguage it+en), WebSite (#website). URL assoluti su forgefps.dev (coerenti con canonical/OG).
+- Verificato: restart frontend (index.html richiede restart), JSON servito e parse-valido, landing renderizza senza regressioni (h1 presente).
+- NON implementati (decisione utente): title keyword-rich (proposta 2), sezione FAQ + FAQPage schema (proposta 3), apertura robots.txt ai crawler AI search (proposta 4 — spiegata all'utente: consentire bot di ricerca tipo OAI-SearchBot/PerplexityBot tenendo bloccati quelli di training). Restano nel backlog visibilità.
