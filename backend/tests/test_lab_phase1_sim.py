@@ -29,7 +29,7 @@ r = s.post(f"{BASE}/api/lab/start", json={"risk_level": "hardware"}, timeout=15)
 assert r.status_code == 422, f"expected 422 got {r.status_code}"
 print("start rischio invalido -> 422 OK")
 
-r = s.post(f"{BASE}/api/lab/start", json={"risk_level": "medium", "run_seconds": 90}, timeout=15)
+r = s.post(f"{BASE}/api/lab/start", json={"risk_level": "medium", "run_seconds": 90, "include_reboot": False}, timeout=15)
 assert r.status_code == 200, r.text
 sess = r.json()["session"]
 print("sessione creata:", sess["session_id"][:8], "status", sess["status"], "| candidati:", len(sess["candidates"]))
@@ -78,12 +78,20 @@ random.seed(7)
 tested = []
 while True:
     n = nxt()
+    if n["action"] in ("wait", "transition"):
+        continue
+    if n["action"] == "run_validation":
+        resp = post_run("validation", None, 217, )
+        assert resp.get("completed"), resp
+        report = resp["report"]
+        print("COMPLETE via validazione. gain:", report["total_gain_pct"], "% | kept:", report["kept"])
+        break
     if n["action"] == "complete":
         print("COMPLETE. report gain:", n["report"]["total_gain_pct"], "% | kept:", n["report"]["kept"])
         report = n["report"]
         break
     if n["action"] == "apply_tweak":
-        event("tweak_applied", {"tweak_id": n["tweak_id"]})
+        event("tweak_applied", {"tweak_id": n["tweak_id"], "requires_reboot": n.get("requires_reboot", False)})
         tested.append(n["tweak_id"])
         continue
     if n["action"] == "run_test":

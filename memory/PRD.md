@@ -1537,3 +1537,19 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
 - Backend gia' corretto: /refresh ruota ENTRAMBI i cookie (sliding) -> sessione dura finche' l'utente usa l'app almeno 1 volta ogni 7 giorni.
 - Test: curl (refresh con solo refresh_token -> nuovi set-cookie + /me ok) e Playwright (rimosso access_token, tenuto solo refresh -> ricarico /app -> sessione sopravvive, access rigenerato). PASSATO.
 - Nuovo comportamento: logout automatico solo dopo 7 giorni di inattivita' totale (o logout manuale). Va rideployato in produzione per avere effetto su forgefps.dev.
+
+## Aggiornamento 2026-07-29 (5) — Laboratorio Automatico FASE 2 (FATTO, iteration_45 + fix verificato)
+### Reboot-resume (tweak con riavvio)
+- lab_registry v1.1.0: aggiunti mpo/gpu_msi/timer (requires_reboot=True, medium), ordinati IN CODA (meno riavvii). LabStartInput.include_reboot (default true) + toggle UI.
+- Flusso: apply_tweak(requires_reboot) -> event tweak_applied{requires_reboot} -> status awaiting_reboot -> agent registra RunOnce HKCU + %LOCALAPPDATA%\FrameForge\lab_resume.ps1 (bootstrap che riscarica lo script e rilancia -Mode lab), prompt S/N per shutdown /r -> dopo login: next=reboot_required, agent confronta LastBootUpTime vs applied_at -> event reboot_done -> 1 run WARM-UP da 45s (scartato) -> 3 run test normali.
+### Synergy pass
+- Dopo il test loop (queue vuota o auto-stop) con >=2 kept no-reboot di famiglie diverse senza conflitti: max 2 coppie greedy (ordinate per somma delta). Per coppia: synergy_toggle OFF (rollback entrambi) -> 2 run -> toggle ON (riapplica) -> 2 run -> combined vs somma singoli, sinergia se > x1.15. Stato in sess["synergy"], risultati in report.synergies_found.
+### Validazione gioco reale
+- Status validation: 1 run da 300s con config finale -> real_gain vs predicted (baseline finale vs baseline0), discrepancy=true se real < 50% predicted (con predicted>=2%). In report.validation. _complete dopo.
+### Altro
+- next() ritorna action='transition' durante i cambi di fase (l'agent ripolla senza messaggi fuorvianti). Report esteso: synergies_found, validation, reboots_required.
+- UI Lab.jsx: stepper 6 fasi (+ Synergy, Validazione), toggle lab-reboot-toggle nel setup (14<->11 candidati), RebootBanner (lab-reboot-banner), SynergyCard (lab-synergy-card), ValidationBlock (lab-validation-block), sinergie+riavvii nel report.
+- BUG RISOLTO: durante un fix di file corrotto erano andati persi i 3 componenti UI (ValidationBlock/RebootBanner/SynergyCard -> crash pagina con report). Ri-aggiunti, verificato con screenshot: report +15.84% con validazione e sinergia visibili.
+- Test: test_lab_phase2_sim.py (E2E completo PASS), test_lab_phase2_endpoints.py (8/8, creato dal testing agent), test_lab_phase1_sim.py aggiornato al nuovo flusso (PASS). testing_agent iteration_45: backend 100%.
+### FASE 3 (prossima, da spec)
+- Prior aggregati fleet (per hardware simile) + suggerimenti BIOS guidati (XMP/EXPO, Resizable BAR) con istruzioni manuali e verifica post-riavvio.

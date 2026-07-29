@@ -92,7 +92,7 @@ function SetupCard({ registry, onStart, starting }) {
               </button>
             ))}
           </div>
-          <div className="text-[11px] text-zinc-500 mt-1.5">{T("Fase 1: solo tweak senza riavvio, tutti con rollback automatico.", "Phase 1: no-reboot tweaks only, all auto-reversible.")}</div>
+          <div className="text-[11px] text-zinc-500 mt-1.5">{T("Tutti i tweak sono reversibili automaticamente (backup mirato + punto di ripristino).", "All tweaks are automatically reversible (targeted backup + restore point).")}</div>
         </div>
         <div>
           <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{T("2 · Finestra di misura per run", "2 · Measurement window per run")}</div>
@@ -142,6 +142,63 @@ function ConnectCard({ token, onDetect }) {
         <SecureRunBlock token={token} mode="lab" testid="lab-run-cmd" />
       </div>
     </HUDCard>
+  );
+}
+
+const RebootBanner = ({ session }) => (
+  <div className="flex items-start gap-3 border border-orange-500/40 bg-orange-500/5 p-4" data-testid="lab-reboot-banner">
+    <RotateCcw size={18} className="text-orange-400 shrink-0 mt-0.5" />
+    <div>
+      <div className="text-sm font-bold text-orange-300">{T("Riavvio richiesto", "Reboot required")}: {session.current?.tweak_id}</div>
+      <div className="text-xs text-zinc-400 mt-1">
+        {T("Il tweak applicato ha effetto solo dopo il riavvio. Riavvia il PC: il Lab riprenderà automaticamente al login (conferma UAC) con 1 run di warm-up prima delle misure.", "The applied tweak only takes effect after a reboot. Restart your PC: the Lab resumes automatically at login (UAC prompt) with 1 warm-up run before measuring.")}
+      </div>
+    </div>
+  </div>
+);
+
+function SynergyCard({ session }) {
+  const syn = session.synergy;
+  if (!syn) return null;
+  return (
+    <HUDCard testid="lab-synergy-card">
+      <div className="p-4 space-y-2">
+        <div className="text-xs uppercase tracking-widest text-zinc-500 mb-1">{T("Synergy pass", "Synergy pass")} · {Math.min(syn.idx + 1, syn.pairs.length)}/{syn.pairs.length}</div>
+        {syn.pairs.map((p, i) => {
+          const res = syn.results[i];
+          return (
+            <div key={i} className="flex items-center justify-between gap-2 border border-[#2A2A35] bg-black/30 px-3 py-2" data-testid={`lab-synergy-pair-${i}`}>
+              <div className="text-xs text-white">{p.a} + {p.b}</div>
+              {res ? (
+                <span className={`text-[11px] font-bold ${res.is_synergy ? "text-[#00FF66]" : "text-zinc-500"}`}>
+                  {res.is_synergy ? T("SINERGIA", "SYNERGY") : T("nessuna sinergia", "no synergy")} · {res.combined_delta_pct}% vs {res.individual_sum_pct}%
+                </span>
+              ) : i === syn.idx ? (
+                <span className="text-[11px] text-purple-400">{T(`misura ${syn.stage.toUpperCase()} in corso...`, `measuring ${syn.stage.toUpperCase()}...`)}</span>
+              ) : (
+                <span className="text-[11px] text-zinc-600">{T("in coda", "queued")}</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </HUDCard>
+  );
+}
+
+function ValidationBlock({ validation }) {
+  if (!validation) return null;
+  return (
+    <div className={`border p-3 text-xs ${validation.discrepancy ? "border-amber-500/40 bg-amber-500/5" : "border-[#00E0FF]/30 bg-[#00E0FF]/5"}`} data-testid="lab-validation-block">
+      <div className="uppercase tracking-widest text-[10px] text-zinc-500 mb-1">{T("Validazione in gioco reale", "Real-game validation")} · {Math.round((validation.duration_s || 0) / 60)} min</div>
+      <div className="text-zinc-300">
+        {T("Guadagno reale", "Real gain")}: <b className={validation.real_gain_pct > 0 ? "text-[#00FF66]" : "text-zinc-300"}>{validation.real_gain_pct}%</b>
+        <span className="text-zinc-500"> · {T("previsto dal benchmark", "predicted by benchmark")}: {validation.predicted_gain_pct}%</span>
+      </div>
+      {validation.discrepancy && (
+        <div className="text-amber-400 mt-1">{T("⚠ Discrepanza: il guadagno reale è sotto il 50% di quello previsto. I benchmark sintetici sopravvalutavano l'effetto sul tuo gioco.", "⚠ Discrepancy: real gain is below 50% of predicted. Synthetic benchmarks overestimated the effect on your game.")}</div>
+      )}
+    </div>
   );
 }
 
