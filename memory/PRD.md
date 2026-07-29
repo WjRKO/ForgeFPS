@@ -1570,3 +1570,9 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
 - public/index.html: aggiunto script application/ld+json con @graph schema.org: Organization (#org), SoftwareApplication (#app: UtilitiesApplication, Windows 10/11, featureList, Offer price 0 EUR, softwareHelp=/security, releaseNotes=/changelog, inLanguage it+en), WebSite (#website). URL assoluti su forgefps.dev (coerenti con canonical/OG).
 - Verificato: restart frontend (index.html richiede restart), JSON servito e parse-valido, landing renderizza senza regressioni (h1 presente).
 - NON implementati (decisione utente): title keyword-rich (proposta 2), sezione FAQ + FAQPage schema (proposta 3), apertura robots.txt ai crawler AI search (proposta 4 — spiegata all'utente: consentire bot di ricerca tipo OAI-SearchBot/PerplexityBot tenendo bloccati quelli di training). Restano nel backlog visibilità.
+
+## Aggiornamento 2026-07-29 (8) — robots.txt: bot AI search ammessi esplicitamente (FATTO, verificato)
+- CONTESTO: il robots.txt servito ha un blocco "Cloudflare Managed content" iniettato a monte (edge) che blocca i bot di TRAINING (GPTBot, ClaudeBot, CCBot, Bytespider, Google-Extended, meta-externalagent, Amazonbot, Applebot-Extended) — non modificabile dal codice e va bene così.
+- public/robots.txt riscritto: gruppi espliciti Allow:/ + Disallow:/app/ per i bot di AI SEARCH (OAI-SearchBot, ChatGPT-User, PerplexityBot, Perplexity-User, Claude-SearchBot, Claude-User, DuckAssistBot, MistralAI-User) così restano ammessi anche se la blocklist gestita cambia. Wildcard * e Sitemap invariati.
+- Verificato: restart frontend, robots.txt servito con i nuovi gruppi + blocco Cloudflare intatto, llms.txt HTTP 200, landing renderizza (h1 ok).
+- Backlog visibilità residuo: title/description keyword-rich (proposta 2), sezione FAQ + FAQPage schema (proposta 3).
