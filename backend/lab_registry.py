@@ -139,3 +139,70 @@ def select_candidates(specs_data: dict, risk_level: str = "medium", include_rebo
         candidates.append(entry)
     candidates.sort(key=lambda c: (bool(c.get("requires_reboot")), -c["prior"]))
     return candidates, skipped
+
+
+def bios_suggestions(specs_data: dict):
+    """Fase 3: suggerimenti BIOS guidati (manuali, non automatizzabili via software)."""
+    d = specs_data or {}
+    out = []
+
+    def _num(v):
+        try:
+            return float(str(v).strip())
+        except Exception:
+            return None
+
+    ram_t = (d.get("ram_type") or "").upper()
+    cfg = _num(d.get("ram_speed_mhz"))
+    nom = _num(d.get("ram_speed_nominal_mhz"))
+    base = 4800 if "DDR5" in ram_t else 2666
+    xmp_off = False
+    if cfg and nom and nom > cfg + 1:
+        xmp_off = True
+    elif cfg and cfg <= base:
+        xmp_off = True
+    if xmp_off:
+        out.append({
+            "id": "xmp",
+            "title": "Attiva XMP/EXPO (profilo RAM)",
+            "why": f"La tua RAM gira a {int(cfg)} MHz: quasi certamente sotto il profilo dichiarato. La banda RAM conta soprattutto nei titoli CPU-bound.",
+            "steps": [
+                "Riavvia ed entra nel BIOS (tasto CANC/F2 all'avvio)",
+                "Cerca 'XMP' (Intel) o 'EXPO/DOCP' (AMD) nella sezione memoria/overclock",
+                "Seleziona il Profilo 1 e salva (F10)",
+                "Se il PC non si avvia: il BIOS ripristina Auto da solo, nessun rischio permanente",
+            ],
+            "expected_gain": "+3-8% FPS nei giochi CPU-bound",
+            "reversible": "manual",
+        })
+    gpu = (d.get("gpu") or "").lower()
+    if re.search(r"rtx\s*[345]0\d{2}|rx\s*[679]\d{3}|arc\s", gpu):
+        is_nv = bool(re.search(r"rtx|nvidia|geforce", gpu))
+        verify = ("Verifica: NVIDIA Control Panel -> Informazioni di sistema -> 'BAR ridimensionabile: Si'"
+                  if is_nv else "Verifica: AMD Software -> Prestazioni -> Smart Access Memory attivo")
+        out.append({
+            "id": "rebar",
+            "title": "Verifica Resizable BAR",
+            "why": "La tua GPU supporta Resizable BAR: se disattivato nel BIOS perdi FPS gratis in molti titoli.",
+            "steps": [
+                "BIOS -> Advanced/PCI: attiva 'Above 4G Decoding' e 'Re-Size BAR Support'",
+                verify,
+                "Serve anche il boot in modalita' UEFI (non CSM/Legacy)",
+            ],
+            "expected_gain": "+1-5% FPS a seconda del gioco",
+            "reversible": "manual",
+        })
+    modules = _num(d.get("ram_modules"))
+    if modules == 1:
+        out.append({
+            "id": "dual_channel",
+            "title": "RAM in single channel: passa a dual channel",
+            "why": "Un solo modulo RAM dimezza la banda di memoria: uno dei colli di bottiglia peggiori per gli FPS.",
+            "steps": [
+                "Aggiungi un secondo modulo identico negli slot corretti (di solito 2 e 4)",
+                "Verifica 'Dual' in Task Manager -> Prestazioni -> Memoria",
+            ],
+            "expected_gain": "+5-15% FPS nei giochi CPU/RAM-bound",
+            "reversible": "manual",
+        })
+    return out

@@ -3,8 +3,9 @@
  * Il backend orchestre la pipeline SNAPSHOT -> BASELINE x3 -> TEST LOOP -> REPORT;
  * l'agent locale (mode=lab) applica/misura/annulla i tweak uno alla volta.
  */
-import { useCallback, useEffect, useState } from "react";
-import { FlaskConical, Play, ShieldAlert, StopCircle, CheckCircle2, XCircle, RotateCcw, Timer, Activity, FileBarChart } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FlaskConical, Play, ShieldAlert, StopCircle, CheckCircle2, XCircle, RotateCcw, Timer, Activity, FileBarChart, Share2, Users, Wrench } from "lucide-react";
+import { toPng } from "html-to-image";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import i18n from "@/i18n";
@@ -75,6 +76,7 @@ function SetupCard({ registry, onStart, starting }) {
   }, [risk, reboot]);
   const n = preview?.candidates?.length || 0;
   const nReboot = (preview?.candidates || []).filter((c) => c.requires_reboot).length;
+  const fleetN = (preview?.candidates || []).reduce((acc, c) => acc + (c.fleet?.tested || 0), 0);
   const estMin = Math.round(((3 + n * 3) * (win + 8)) / 60) + 5;
   return (
     <HUDCard testid="lab-setup-card">
@@ -118,6 +120,11 @@ function SetupCard({ registry, onStart, starting }) {
           {nReboot > 0 && <span className="text-orange-400"> ({nReboot} {T("con riavvio", "with reboot")})</span>}
           {n > 0 && <span className="text-zinc-600"> · {preview.candidates.map((c) => c.tweak_id).join(", ")}</span>}
           <div className="text-zinc-600 mt-1 flex items-center gap-1"><Timer size={11} /> {T(`Durata stimata: ~${estMin} min (baseline ×3 + 3 run per tweak + synergy + validazione)`, `Estimated duration: ~${estMin} min (baseline ×3 + 3 runs per tweak + synergy + validation)`)}</div>
+          {fleetN > 0 && (
+            <div className="text-[#00E0FF]/80 mt-1 flex items-center gap-1" data-testid="lab-fleet-hint">
+              <Users size={11} /> {T(`Priorità arricchite dai dati fleet: ${fleetN} test su PC con hardware simile al tuo`, `Priorities enriched with fleet data: ${fleetN} tests on PCs with hardware similar to yours`)}
+            </div>
+          )}
         </div>
         <button onClick={() => onStart(risk, win, reboot)} disabled={starting || n === 0} data-testid="lab-start-btn"
           className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold uppercase tracking-widest text-xs px-6 py-3 hover:bg-[#D4EC00] transition-colors disabled:opacity-50">
@@ -286,7 +293,92 @@ function LogFeed({ logs }) {
   );
 }
 
+function BiosSuggestions({ items }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="space-y-1.5" data-testid="lab-report-bios">
+      <div className="text-[10px] uppercase tracking-widest text-zinc-500 flex items-center gap-1.5"><Wrench size={11} /> {T("Prossimo livello: BIOS (manuale, guidato)", "Next level: BIOS (manual, guided)")}</div>
+      {items.map((b) => (
+        <details key={b.id} className="border border-[#2A2A35] bg-black/30 px-3 py-2" data-testid={`lab-bios-${b.id}`}>
+          <summary className="cursor-pointer text-xs text-white flex items-center justify-between gap-2">
+            <span>{b.title}</span>
+            <span className="text-[10px] text-[#00FF66] shrink-0">{b.expected_gain}</span>
+          </summary>
+          <div className="text-[11px] text-zinc-400 mt-2">{b.why}</div>
+          <ol className="text-[11px] text-zinc-300 mt-1.5 space-y-0.5 list-decimal list-inside">
+            {b.steps.map((s, i) => <li key={i}>{s}</li>)}
+          </ol>
+        </details>
+      ))}
+    </div>
+  );
+}
+
+function ShareCard({ report, innerRef }) {
+  const keptSteps = (report.steps || []).filter((s) => s.decision === "kept");
+  return (
+    <div className="fixed -left-[9999px] top-0">
+      <div ref={innerRef} style={{ width: 620 }} className="bg-[#0A0A0D] border border-[#2A2A35] p-8 font-sans">
+        <div className="flex items-center justify-between mb-5">
+          <div className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#E5FF00]">FRAMEFORGE LAB</div>
+          <div className="text-[10px] font-mono text-zinc-500">{T("REPORT VERIFICATO STATISTICAMENTE", "STATISTICALLY VERIFIED REPORT")}</div>
+        </div>
+        <div className="text-zinc-400 text-xs mb-1">{report.game || "PC Gaming"}</div>
+        <div className="flex items-end gap-5 mb-5">
+          <div style={{ fontSize: 56, lineHeight: 1 }} className={`font-black ${(report.total_gain_pct || 0) > 0 ? "text-[#00FF66]" : "text-zinc-300"}`}>
+            {(report.total_gain_pct || 0) > 0 ? "+" : ""}{report.total_gain_pct}%
+          </div>
+          <div className="pb-1">
+            <div className="text-white text-xl font-bold">{report.baseline?.fps_avg} → {report.final?.fps_avg} FPS</div>
+            <div className="text-zinc-500 text-xs">1% low: {report.baseline?.fps_p1} → {report.final?.fps_p1}</div>
+          </div>
+        </div>
+        <div className="space-y-1.5 mb-4">
+          {keptSteps.map((s, i) => (
+            <div key={i} className="flex items-center justify-between border border-[#1F1F28] bg-black/40 px-3 py-1.5">
+              <span className="text-zinc-200 text-xs">{s.tweak}</span>
+              <span className="text-[#00FF66] text-xs font-bold">+{s.delta_pct}% (p={s.p_value})</span>
+            </div>
+          ))}
+        </div>
+        {report.validation && (
+          <div className="text-[11px] text-zinc-400 mb-4">
+            {T("Validato in gioco reale", "Validated in real gameplay")}: <span className="text-[#00E0FF] font-bold">{report.validation.real_gain_pct}%</span> · {Math.round((report.validation.duration_s || 0) / 60)} min
+          </div>
+        )}
+        <div className="flex items-center justify-between border-t border-[#1F1F28] pt-3">
+          <div className="text-[10px] text-zinc-500">{T(`${report.tweaks_tested} tweak testati · baseline ×3 · Welch t-test · rollback automatico`, `${report.tweaks_tested} tweaks tested · baseline ×3 · Welch t-test · auto rollback`)}</div>
+          <div className="text-[11px] font-mono text-[#E5FF00]">forgefps.dev</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ReportCard({ report, onNew }) {
+  const shareRef = useRef(null);
+  const [sharing, setSharing] = useState(false);
+  const share = async () => {
+    if (!shareRef.current || sharing) return;
+    setSharing(true);
+    try {
+      const dataUrl = await toPng(shareRef.current, { pixelRatio: 2, cacheBust: true, backgroundColor: "#0A0A0D" });
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], "frameforge-lab-report.png", { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "FrameForge Lab" });
+      } else {
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = "frameforge-lab-report.png";
+        a.click();
+        toast.success(T("Immagine scaricata!", "Image downloaded!"));
+      }
+    } catch (e) {
+      if (e?.name !== "AbortError") toast.error(T("Export fallito, riprova", "Export failed, retry"));
+    }
+    setSharing(false);
+  };
   if (!report) return null;
   const gain = report.total_gain_pct;
   return (
@@ -294,7 +386,13 @@ function ReportCard({ report, onNew }) {
       <div className="p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div className="text-sm font-bold text-white flex items-center gap-2"><FileBarChart size={16} className="text-[#E5FF00]" /> {T("Report finale", "Final report")}</div>
-          {report.game && <span className="text-[11px] text-zinc-500">{report.game}</span>}
+          <div className="flex items-center gap-3">
+            {report.game && <span className="text-[11px] text-zinc-500">{report.game}</span>}
+            <button onClick={share} disabled={sharing} data-testid="lab-share-btn"
+              className="inline-flex items-center gap-1.5 border border-[#E5FF00]/40 text-[#E5FF00] uppercase tracking-widest text-[10px] px-3 py-1.5 hover:bg-[#E5FF00]/10 transition-colors disabled:opacity-50">
+              <Share2 size={12} /> {sharing ? T("Genero...", "Generating...") : T("Condividi", "Share")}
+            </button>
+          </div>
         </div>
         <div className="flex items-end gap-6 flex-wrap">
           <div><div className="text-3xl font-black text-white tabular-nums">{report.baseline?.fps_avg} → {report.final?.fps_avg}</div><div className="text-[10px] text-zinc-500 uppercase">FPS avg</div></div>
@@ -342,10 +440,12 @@ function ReportCard({ report, onNew }) {
         {report.reboots_required > 0 && (
           <div className="text-[11px] text-zinc-500">{T(`Riavvii eseguiti durante il lab: ${report.reboots_required}`, `Reboots performed during the lab: ${report.reboots_required}`)}</div>
         )}
+        <BiosSuggestions items={report.bios_suggestions} />
         {report.auto_stop_reason && <div className="text-[11px] text-amber-400">{report.auto_stop_reason}</div>}
         <button onClick={onNew} data-testid="lab-new-session-btn" className="inline-flex items-center gap-2 border border-[#2A2A35] text-zinc-300 uppercase tracking-widest text-xs px-5 py-2.5 hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors">
           <Play size={13} /> {T("Nuova sessione", "New session")}
         </button>
+        <ShareCard report={report} innerRef={shareRef} />
       </div>
     </HUDCard>
   );

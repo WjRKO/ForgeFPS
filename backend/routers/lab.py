@@ -11,8 +11,10 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 
 from database import db, now_iso
 from models import LabStartInput, LabRunInput, LabEventInput
-from lab_registry import REGISTRY_VERSION, TWEAKS, select_candidates
+from lab_registry import REGISTRY_VERSION, TWEAKS, select_candidates, bios_suggestions
 from lab_stats import mean, cv, significance
+
+FLEET_MIN_SAMPLES = 3
 
 BASELINE_RUNS = 3
 TEST_RUNS = 3
@@ -28,6 +30,34 @@ VALIDATION_MIN_RATIO = 0.5
 WARMUP_SECONDS = 45
 
 ACTIVE_STATUSES = ("waiting_agent", "snapshot", "baseline", "testing", "awaiting_reboot", "synergy", "validation", "aborting")
+
+
+def _hw_class(specs_data):
+    import re as _re
+    gpu = (specs_data or {}).get("gpu") or ""
+    cpu = (specs_data or {}).get("cpu") or ""
+    gv = "nvidia" if _re.search(r"nvidia|geforce|rtx|gtx", gpu, _re.I) else ("amd" if _re.search(r"amd|radeon|\brx\b", gpu, _re.I) else "other")
+    cv_ = "intel" if "intel" in cpu.lower() else ("amd" if _re.search(r"amd|ryzen", cpu, _re.I) else "other")
+    return f"{gv}_{cv_}"
+
+
+async def _fleet_blend(candidates, hw):
+    """Fase 3: fonde il prior statico con lo storico aggregato anonimo della fleet (hardware simile)."""
+    fleet = {}
+    async for d in db.lab_fleet_stats.find({"hw_class": hw}):
+        fleet[d["tweak_id"]] = d
+    used = 0
+    for c in candidates:
+        f = fleet.get(c["tweak_id"])
+        if f and f.get("tested", 0) >= FLEET_MIN_SAMPLES:
+            rate = max(0.05, min(0.9, f["kept"] / f["tested"]))
+            w = min(0.7, f["tested"] / (f["tested"] + 10))
+            c["prior"] = round((1 - w) * c["prior"] + w * rate, 3)
+            c["fleet"] = {"tested": f["tested"], "kept": f["kept"],
+                          "avg_delta_pct": round((f.get("delta_sum") or 0) / f["tested"], 2)}
+            used += 1
+    candidates.sort(key=lambda c: (bool(c.get("requires_reboot")), -c["prior"]))
+    return used
 
 
 def _log(sess, msg, level="info"):
@@ -166,6 +196,8 @@ def _build_report(sess):
         "kept": sess.get("kept", []),
         "synergies_found": (sess.get("synergy") or {}).get("results", []),
         "validation": sess.get("validation"),
+        "bios_suggestions": sess.get("bios_suggestions") or [],
+        "hw_class": sess.get("hw_class"),
         "reboots_required": reboots,
         "manual_steps_required": [],
         "total_duration_min": dur,
@@ -223,12 +255,16 @@ def build(get_current_user):
         candidates, skipped = select_candidates(specs.get("data") or {}, payload.risk_level, payload.include_reboot)
         if not candidates:
             raise HTTPException(status_code=400, detail="Nessun tweak candidato per questo livello di rischio/hardware.")
+        hw = _hw_class(specs.get("data") or {})
+        fleet_used = await _fleet_blend(candidates, hw)
         sess = {
             "session_id": str(uuid.uuid4()),
             "user_id": uid,
             "risk_level": payload.risk_level,
             "run_seconds": payload.run_seconds,
             "include_reboot": payload.include_reboot,
+            "hw_class": hw,
+            "bios_suggestions": bios_suggestions(specs.get("data") or {}),
             "registry_version": REGISTRY_VERSION,
             "status": "waiting_agent",
             "candidates": candidates,
@@ -246,6 +282,8 @@ def build(get_current_user):
             "finished_at": None,
         }
         _log(sess, f"Sessione creata: {len(candidates)} tweak candidati (rischio {payload.risk_level}, finestre {payload.run_seconds}s)")
+        if fleet_used:
+            _log(sess, f"Prior arricchiti con i dati fleet: {fleet_used} tweak hanno statistiche da PC simili ({hw.replace('_', ' GPU + ')} CPU)")
         _log(sess, "In attesa dell'agent: esegui il comando Lab in PowerShell come Amministratore")
         await _save(sess)
         return {"session": _public(sess)}
@@ -274,7 +312,10 @@ def build(get_current_user):
     async def lab_registry(risk_level: str = "medium", include_reboot: bool = True, user: dict = Depends(get_current_user)):
         specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}) or {}
         candidates, skipped = select_candidates(specs.get("data") or {}, risk_level, include_reboot)
-        return {"registry_version": REGISTRY_VERSION, "candidates": candidates, "skipped": skipped}
+        hw = _hw_class(specs.get("data") or {})
+        await _fleet_blend(candidates, hw)
+        return {"registry_version": REGISTRY_VERSION, "candidates": candidates, "skipped": skipped,
+                "hw_class": hw, "bios_suggestions": bios_suggestions(specs.get("data") or {})}
 
     # ---------- agent endpoints ----------
     @r.get("/agent/lab/next")
@@ -573,6 +614,10 @@ def build(get_current_user):
             "at": now_iso(),
         }
         sess["results"].append(result)
+        await db.lab_fleet_stats.update_one(
+            {"tweak_id": cur["tweak_id"], "hw_class": sess.get("hw_class", "other_other")},
+            {"$inc": {"tested": 1, "kept": 1 if kept else 0, "delta_sum": d}},
+            upsert=True)
         if kept:
             sess["kept"].append(cur["tweak_id"])
             sess["baseline"]["stats"] = test_stats
@@ -595,3 +640,4 @@ def build(get_current_user):
                 "remaining": len(sess.get("queue", []))}
 
     return r
+
