@@ -1622,3 +1622,13 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
 - Sim: test_lab_phase4_sim.py esteso (recheck stabile, IC95, Holm 2/2) PASS; NUOVO test_lab_drift_sim.py (drift -6% -> re-baseline + drift_events) PASS; phase1/2 sims aggiornati con handler run_recheck e PASS; PS PARSE OK; pc-health curl OK. testing_agent iteration_49: frontend 100% IT+EN.
 - Fix post-test: ResponsiveContainer minWidth/minHeight (warning Recharts), 'Priorita'->'Priorità' in lab_registry.
 - NOTA: fleet percentile appare solo con >=5 PC stesso vendor con health nella fleet (in preview assente = atteso).
+
+## Aggiornamento 2026-07-30 (3) — Fix ParserError agent + Startup Detection PRO (FATTO, verificato E2E)
+### Fix critico segnalato dall'utente
+- ParserError PS 5.1 riga ~5318: due statement fusi su una riga in Invoke-LabRun ('$arr = ...ToArray()  $sorted = ...') causato da un edit che aveva rimosso un newline. FIXATO.
+- ROOT CAUSE della mancata detection: /api/agent/script SENZA ?t=token ritorna 1 riga di errore -> il parse pwsh dava sempre OK (falso positivo). PROCEDURA CORRETTA (in /app/memory/learnings.md): login -> /api/agent/token -> /api/agent/script?t=$TK -> wc -l > 5000 -> pwsh ParseFile. Script reale 5955 righe ora PARSE OK 0 errori.
+### Startup Detection PRO (scelta utente: punto 1 + guida manuale, NO disattivazione via agent)
+- ps_agent Get-StartupList v2 multi-fonte: (1) registry Run HKLM/HKCU/Wow6432Node con STATO REALE enabled/disabled da StartupApproved (primo byte pari=attivo), (2) cartelle Startup utente+comune con risoluzione .lnk via WScript.Shell, (3) task pianificati Logon/Boot non-Microsoft, (4) servizi Auto con path fuori \Windows\. Per voce: publisher da firma digitale (Get-AuthenticodeSignature, cache), ram_mb dal working set se processo attivo, source, enabled. Cap 60, fallback legacy Win32_StartupCommand, dedup name+source. Runtime smoke su pwsh Linux: ArrayList count 0 senza errori.
+- ai_engine.analyze_startup: prompt arricchito (publisher/fonte/GIA' DISATTIVATO/RAM/cmd), regole pro: già disattivato->mantieni, non firmato->valuta+antivirus, mai antivirus/driver/critici, service->services.msc. VERIFICATO live: Steam disabled->mantieni, SospettoTool non firmato->valuta con sospetto, RAM citata nelle motivazioni.
+- MyPc.jsx card startup: lista rilevata pre-analisi (badge Attivo/Disattivato, publisher o 'Non firmato', fonte tradotta, RAM MB, testid startup-detected-N) + hint disattivazione manuale; post-analisi AI: RAM inline nel nome + riga come-disattivare per source (Task Manager/Utilità pianificazione/services.msc). i18n IT+EN (mypcpage.startup_hint/on/off/unsigned/src.*/how_*).
+- Backend invariato (startup dict pass-through già compatibile). Screenshot IT/EN OK entrambi gli stati.

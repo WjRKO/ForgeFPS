@@ -755,20 +755,120 @@ function Get-Health {
 }
 
 function Get-StartupList {
-  # v0.7.4: emetti list[dict] invece di list[str] per allineare al modello backend.
-  # ArrayList (invece di @()) sopravvive al quirk di PS5 con ConvertTo-Json su
-  # array a 1 elemento (che verrebbe unwrap-ato a oggetto).
+  # v0.8.1: rilevamento PRO multi-fonte: registry Run (con stato reale StartupApproved),
+  # cartelle Esecuzione automatica, task pianificati al logon, servizi auto di terze parti.
+  # Per ogni voce: publisher (firma digitale), path exe, RAM corrente se in esecuzione.
   $al = New-Object System.Collections.ArrayList
+  $approved = @{}
+  foreach ($k in @(
+    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
+    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder',
+    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
+    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32')) {
+    try {
+      $key = Get-Item $k -ErrorAction SilentlyContinue
+      if ($key) {
+        foreach ($n in $key.GetValueNames()) {
+          $v = $key.GetValue($n)
+          if ($v -is [byte[]] -and $v.Length -gt 0) { $approved[$n.ToLower()] = (($v[0] % 2) -eq 0) }
+        }
+      }
+    } catch {}
+  }
+  $procRam = @{}
   try {
-    Get-CimInstance Win32_StartupCommand -ErrorAction Stop | Select-Object -First 40 | ForEach-Object {
-      [void]$al.Add(@{
-        name     = "$($_.Name)"
-        command  = "$($_.Command)"
-        user     = "$($_.User)"
-        location = "$($_.Location)"
-      })
+    Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
+      $n = $_.ProcessName.ToLower()
+      if ($procRam.ContainsKey($n)) { $procRam[$n] += $_.WorkingSet64 } else { $procRam[$n] = $_.WorkingSet64 }
     }
   } catch {}
+  $sigCache = @{}
+  function _exeFromCmd([string]$cmd) {
+    if (-not $cmd) { return $null }
+    if ($cmd -match '^"([^"]+\.exe)"') { return $Matches[1] }
+    if ($cmd -match '^([^\s]+\.exe)') { return $Matches[1] }
+    if ($cmd.ToLower().Contains('.exe')) { $i = $cmd.ToLower().IndexOf('.exe'); return $cmd.Substring(0, $i + 4).Trim('"') }
+    return $null
+  }
+  function _publisher([string]$exe) {
+    if (-not $exe) { return $null }
+    if ($sigCache.ContainsKey($exe)) { return $sigCache[$exe] }
+    $pub = $null
+    try {
+      if (Test-Path $exe) {
+        $sig = Get-AuthenticodeSignature $exe -ErrorAction SilentlyContinue
+        if ($sig -and $sig.SignerCertificate -and $sig.SignerCertificate.Subject -match 'CN=("[^"]+"|[^,]+)') { $pub = $Matches[1].Trim('"') }
+      }
+    } catch {}
+    $sigCache[$exe] = $pub
+    return $pub
+  }
+  function _add($name, $cmd, $loc, $src, $usr) {
+    if (-not $name) { return }
+    foreach ($e in $al) { if ($e.name -eq "$name" -and $e.source -eq $src) { return } }
+    $exe = _exeFromCmd "$cmd"
+    $ram = $null
+    if ($exe) {
+      $bn = [System.IO.Path]::GetFileNameWithoutExtension($exe).ToLower()
+      if ($procRam.ContainsKey($bn)) { $ram = [math]::Round($procRam[$bn] / 1MB) }
+    }
+    $en = $null
+    if ($approved.ContainsKey("$name".ToLower())) { $en = $approved["$name".ToLower()] }
+    [void]$al.Add(@{
+      name = "$name"; command = "$cmd"; user = "$usr"; location = "$loc"
+      source = $src; enabled = $en; publisher = (_publisher $exe); ram_mb = $ram
+    })
+  }
+  foreach ($rk in @(
+    @{ p = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run'; u = 'SYSTEM' },
+    @{ p = 'HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Run'; u = 'SYSTEM' },
+    @{ p = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'; u = "$env:USERNAME" })) {
+    try {
+      $key = Get-Item $rk.p -ErrorAction SilentlyContinue
+      if ($key) { foreach ($n in $key.GetValueNames()) { _add $n ($key.GetValue($n)) $rk.p 'registry' $rk.u } }
+    } catch {}
+  }
+  $sh = $null
+  try { $sh = New-Object -ComObject WScript.Shell } catch {}
+  foreach ($fd in @([Environment]::GetFolderPath('Startup'), [Environment]::GetFolderPath('CommonStartup'))) {
+    if (-not $fd -or -not (Test-Path $fd)) { continue }
+    Get-ChildItem $fd -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'desktop.ini' } | Select-Object -First 15 | ForEach-Object {
+      $target = $_.FullName
+      if ($sh -and $_.Extension -eq '.lnk') { try { $t2 = $sh.CreateShortcut($_.FullName).TargetPath; if ($t2) { $target = $t2 } } catch {} }
+      _add $_.BaseName $target $fd 'folder' "$env:USERNAME"
+    }
+  }
+  try {
+    Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
+      $_.TaskPath -notlike '\Microsoft*' -and $_.State -ne 'Disabled' -and
+      ($_.Triggers | Where-Object { $_.CimClass.CimClassName -match 'Logon|Boot' })
+    } | Select-Object -First 15 | ForEach-Object {
+      $act = ''
+      try { $act = ($_.Actions | Select-Object -First 1).Execute } catch {}
+      _add $_.TaskName $act $_.TaskPath 'task' "$env:USERNAME"
+      if ($al.Count -gt 0) { $al[$al.Count - 1].enabled = $true }
+    }
+  } catch {}
+  try {
+    Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object {
+      $_.StartMode -eq 'Auto' -and $_.PathName -and $_.PathName -notmatch '(?i)\\Windows\\'
+    } | Select-Object -First 15 | ForEach-Object {
+      _add $_.DisplayName $_.PathName 'services' 'service' 'SYSTEM'
+      if ($al.Count -gt 0) { $al[$al.Count - 1].enabled = ($_.State -eq 'Running') }
+    }
+  } catch {}
+  if ($al.Count -eq 0) {
+    try {
+      Get-CimInstance Win32_StartupCommand -ErrorAction Stop | Select-Object -First 40 | ForEach-Object {
+        _add $_.Name $_.Command $_.Location 'registry' $_.User
+      }
+    } catch {}
+  }
+  if ($al.Count -gt 60) {
+    $trim = New-Object System.Collections.ArrayList
+    foreach ($e in ($al | Select-Object -First 60)) { [void]$trim.Add($e) }
+    $al = $trim
+  }
   return ,$al
 }
 

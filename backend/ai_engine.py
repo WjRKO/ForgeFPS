@@ -305,9 +305,25 @@ STARTUP_SYSTEM = ("Sei un esperto di ottimizzazione avvio Windows. Analizzi i pr
 
 
 async def analyze_startup(startup_list: list) -> dict:
-    items = "\n".join(f"- {s}" for s in startup_list[:40]) or "nessun dato"
+    def _fmt(s):
+        if isinstance(s, str):
+            return f"- {s}"
+        parts = [str(s.get("name") or "?")]
+        if s.get("publisher"):
+            parts.append(f"publisher firmato: {s['publisher']}")
+        if s.get("source"):
+            parts.append(f"fonte: {s['source']}")
+        if s.get("enabled") is False:
+            parts.append("GIA' DISATTIVATO")
+        if s.get("ram_mb"):
+            parts.append(f"RAM in uso ora: {s['ram_mb']} MB")
+        if s.get("command"):
+            parts.append(f"cmd: {str(s['command'])[:80]}")
+        return "- " + " | ".join(parts)
+
+    items = "\n".join(_fmt(s) for s in startup_list[:60]) or "nessun dato"
     prompt = (
-        f"Programmi in avvio automatico rilevati:\n{items}\n\n"
+        f"Programmi in avvio automatico rilevati (multi-fonte: registry, cartelle startup, task pianificati, servizi):\n{items}\n\n"
         "Restituisci un JSON con struttura ESATTA:\n"
         "{\n"
         '  "items": [\n'
@@ -315,7 +331,12 @@ async def analyze_startup(startup_list: list) -> dict:
         "  ],\n"
         '  "summary": "riassunto in italiano di cosa disabilitare per un boot più veloce"\n'
         "}\n"
-        "Non consigliare MAI di disabilitare antivirus, driver audio/grafici o servizi di sistema critici. Testi in italiano."
+        "Regole da professionista:\n"
+        "- Usa publisher firmato e RAM misurata per motivare (es. 'updater non necessario, 180 MB di RAM sprecati').\n"
+        "- Le voci GIA' DISATTIVATO: recommendation 'mantieni' con reason 'già disattivato'.\n"
+        "- Publisher assente (non firmato) su voce sconosciuta: 'valuta' e suggerisci una scansione antivirus.\n"
+        "- Non consigliare MAI di disabilitare antivirus, driver audio/grafici, utility di controllo ventole/RGB necessarie o servizi di sistema critici.\n"
+        "- Voci con fonte 'service': ricorda che si gestiscono da services.msc, non da Task Manager. Testi in italiano."
     )
     return await _run_json("startup", STARTUP_SYSTEM, prompt)
 

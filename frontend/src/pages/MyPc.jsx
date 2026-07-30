@@ -478,16 +478,45 @@ export default function MyPc() {
           </button>
         </div>
         {err && <div className="p-3 text-xs text-[#FF3B30]">{err}</div>}
-        {!startup && !err && <div className="p-6 text-sm text-zinc-500">{t("mypcpage.startup_count", { count: (specs.startup || []).length })}</div>}
+        {!startup && !err && (
+          <div>
+            <div className="p-3 text-xs text-zinc-500 border-b border-[#1A1A24]">
+              {t("mypcpage.startup_count", { count: (specs.startup || []).length })} · {t("mypcpage.startup_hint")}
+            </div>
+            {(specs.startup || []).slice(0, 30).map((s, i) => (
+              <div key={`${s.name}-${i}`} className="flex items-center gap-3 px-3 py-2 border-b border-[#1A1A24]" data-testid={`startup-detected-${i}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 shrink-0 ${s.enabled === false ? "bg-zinc-700/40 text-zinc-400" : "bg-[#00FF66]/15 text-[#00FF66]"}`}>
+                  {s.enabled === false ? t("mypcpage.startup_off") : t("mypcpage.startup_on")}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm truncate">{s.name}</div>
+                  <div className="text-[11px] text-zinc-500 truncate">
+                    {s.publisher || t("mypcpage.startup_unsigned")}
+                    {s.source && <span className="text-zinc-600"> · {t(`mypcpage.startup_src.${s.source}`, s.source)}</span>}
+                  </div>
+                </div>
+                {s.ram_mb ? <span className="text-[11px] text-zinc-400 tabular-nums shrink-0">{s.ram_mb} MB</span> : null}
+              </div>
+            ))}
+          </div>
+        )}
         {startup && (
           <div>
             <div className="p-4 text-sm text-zinc-300 border-b border-[#1A1A24] bg-black">{startup.summary}</div>
-            {startup.items.map((it, i) => (
-              <div key={it.name || i} className="flex items-center gap-3 p-3 border-b border-[#1A1A24]" data-testid={`startup-item-${i}`}>
-                <span className={`text-xs font-bold uppercase px-2 py-0.5 shrink-0 ${it.recommendation === "disabilita" ? "bg-[#FF3B30]/20 text-[#FF3B30]" : it.recommendation === "mantieni" ? "bg-[#00FF66]/20 text-[#00FF66]" : "bg-[#E5FF00]/20 text-[#E5FF00]"}`}>{it.recommendation}</span>
-                <div className="flex-1 min-w-0"><div className="text-sm truncate">{it.name}</div><div className="text-xs text-zinc-500">{it.reason}</div></div>
-              </div>
-            ))}
+            {startup.items.map((it, i) => {
+              const det = (specs.startup || []).find((s) => s.name && it.name && (s.name.toLowerCase().includes(it.name.toLowerCase()) || it.name.toLowerCase().includes(s.name.toLowerCase())));
+              const how = det?.source === "service" ? t("mypcpage.startup_how_service") : det?.source === "task" ? t("mypcpage.startup_how_task") : t("mypcpage.startup_how_taskmgr");
+              return (
+                <div key={it.name || i} className="flex items-center gap-3 p-3 border-b border-[#1A1A24]" data-testid={`startup-item-${i}`}>
+                  <span className={`text-xs font-bold uppercase px-2 py-0.5 shrink-0 ${it.recommendation === "disabilita" ? "bg-[#FF3B30]/20 text-[#FF3B30]" : it.recommendation === "mantieni" ? "bg-[#00FF66]/20 text-[#00FF66]" : "bg-[#E5FF00]/20 text-[#E5FF00]"}`}>{it.recommendation}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm truncate">{it.name}{det?.ram_mb ? <span className="text-[11px] text-zinc-500"> · {det.ram_mb} MB RAM</span> : null}</div>
+                    <div className="text-xs text-zinc-500">{it.reason}</div>
+                    {it.recommendation === "disabilita" && <div className="text-[11px] text-[#00E0FF] mt-0.5">→ {how}</div>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
