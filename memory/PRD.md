@@ -1640,3 +1640,11 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
 - Backend: SpecsInput.services_audit, report-specs salva (cap 220) + services_audit_at; GET /api/services/analyze (deterministico, no AI) -> {available, audited_at, items, summary}.
 - MyPc.jsx ServicesCard (services-card): summary (N disattivabili · M da valutare · tot · ~MB RAM), badge Disattiva/Valuta/Già ok/Mantieni, why nella lingua UI (campo bilingue dal backend, L(obj) picker), condizioni ambra, istruzioni services.msc con revert, stato Attivo/Disattivato·start_mode, show more/less oltre 10. i18n mypcpage.services_* IT+EN.
 - TEST: unit della logica (9 casi: dependents declassa RemoteRegistry, NVMe sblocca SysMain, updater sconosciuto->valuta, Fax->gia_ok), E2E curl (inject audit via report-specs + analyze), screenshot EN OK. Nessuna azione automatica (scelta utente: solo guida).
+
+## Aggiornamento 2026-07-30 (5) — Accuratezza startup: già-disattivati gestiti correttamente (FATTO, verificato E2E)
+- Segnalazione utente: 'mi rileva programmi che sono già disabilitati'. Fix su 3 livelli:
+  1. Agent: StartupApproved\StartupFolder usa il nome file CON estensione (.lnk) -> lookup enabled per voci folder ora prova nome+estensione e poi basename (prima falliva -> enabled null -> mostrate come attive).
+  2. Backend /startup/analyze: ESCLUDE enabled=false dall'analisi AI (se tutti disattivati -> summary 'nessuna azione necessaria' senza chiamata AI). Verificato: Steam/Epic disabled esclusi, AI riceve solo attivi.
+  3. UI MyPc: ordinamento attivi prima / disattivati in fondo con opacity-50, badge solo quando enabled è booleano certo (null = nessun badge, niente falso 'Attivo' sui dati vecchi), header 'N attivi all'avvio · M già disattivati (esclusi dall'analisi)' (i18n startup_counts IT+EN).
+- PARSE OK script reale 5996 righe. Screenshot verificato (attivi verdi sopra, DISABLED grigi sotto).
+- NOTA UTENTE (produzione): la card Servizi richiede il redeploy DOPO la feature servizi (il redeploy dell'utente la precedeva) + rilancio scan agent.

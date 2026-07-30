@@ -1127,8 +1127,11 @@ def build(get_current_user):
         startup = (doc or {}).get("startup") or []
         if not startup:
             raise HTTPException(status_code=400, detail="Nessun dato di avvio. Usa il FrameForge Agent.")
+        active = [s for s in startup if not (isinstance(s, dict) and s.get("enabled") is False)]
+        if not active:
+            return {"items": [], "summary": "Tutti i programmi in avvio risultano già disattivati: nessuna azione necessaria."}
         try:
-            return await ai_engine.analyze_startup(startup)
+            return await ai_engine.analyze_startup(active)
         except Exception as e:
             msg = str(e)
             if "Budget" in msg and "exceeded" in msg:

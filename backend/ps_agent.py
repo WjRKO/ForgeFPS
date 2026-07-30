@@ -836,6 +836,12 @@ function Get-StartupList {
       $target = $_.FullName
       if ($sh -and $_.Extension -eq '.lnk') { try { $t2 = $sh.CreateShortcut($_.FullName).TargetPath; if ($t2) { $target = $t2 } } catch {} }
       _add $_.BaseName $target $fd 'folder' "$env:USERNAME"
+      if ($al.Count -gt 0) {
+        # StartupApproved\StartupFolder usa il nome file CON estensione (es. app.lnk)
+        $k1 = $_.Name.ToLower(); $k2 = $_.BaseName.ToLower()
+        if ($approved.ContainsKey($k1)) { $al[$al.Count - 1].enabled = $approved[$k1] }
+        elseif ($approved.ContainsKey($k2)) { $al[$al.Count - 1].enabled = $approved[$k2] }
+      }
     }
   }
   try {

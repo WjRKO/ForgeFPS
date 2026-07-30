@@ -482,13 +482,21 @@ export default function MyPc() {
         {!startup && !err && (
           <div>
             <div className="p-3 text-xs text-zinc-500 border-b border-[#1A1A24]">
-              {t("mypcpage.startup_count", { count: (specs.startup || []).length })} · {t("mypcpage.startup_hint")}
+              {(() => {
+                const all = specs.startup || [];
+                const off = all.filter((s) => s.enabled === false).length;
+                return off > 0
+                  ? t("mypcpage.startup_counts", { active: all.length - off, off })
+                  : t("mypcpage.startup_count", { count: all.length });
+              })()} · {t("mypcpage.startup_hint")}
             </div>
-            {(specs.startup || []).slice(0, 30).map((s, i) => (
-              <div key={`${s.name}-${i}`} className="flex items-center gap-3 px-3 py-2 border-b border-[#1A1A24]" data-testid={`startup-detected-${i}`}>
-                <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 shrink-0 ${s.enabled === false ? "bg-zinc-700/40 text-zinc-400" : "bg-[#00FF66]/15 text-[#00FF66]"}`}>
-                  {s.enabled === false ? t("mypcpage.startup_off") : t("mypcpage.startup_on")}
-                </span>
+            {[...(specs.startup || [])].sort((a, b) => (a.enabled === false ? 1 : 0) - (b.enabled === false ? 1 : 0)).slice(0, 30).map((s, i) => (
+              <div key={`${s.name}-${i}`} className={`flex items-center gap-3 px-3 py-2 border-b border-[#1A1A24] ${s.enabled === false ? "opacity-50" : ""}`} data-testid={`startup-detected-${i}`}>
+                {s.enabled !== null && s.enabled !== undefined && (
+                  <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 shrink-0 ${s.enabled === false ? "bg-zinc-700/40 text-zinc-400" : "bg-[#00FF66]/15 text-[#00FF66]"}`}>
+                    {s.enabled === false ? t("mypcpage.startup_off") : t("mypcpage.startup_on")}
+                  </span>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="text-sm truncate">{s.name}</div>
                   <div className="text-[11px] text-zinc-500 truncate">
