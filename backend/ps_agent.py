@@ -828,13 +828,23 @@ function Get-StartupList {
       if ($key) { foreach ($n in $key.GetValueNames()) { _add $n ($key.GetValue($n)) $rk.p 'registry' $rk.u } }
     } catch {}
   }
-  $sh = $null
-  try { $sh = New-Object -ComObject WScript.Shell } catch {}
+  # Risoluzione .lnk senza oggetti COM shell (pattern che triggera l'euristica
+  # anti-persistenza di Defender): semplice lettura bytes + regex sul path.
+  function _lnkTarget([string]$lnk) {
+    try {
+      $bytes = [System.IO.File]::ReadAllBytes($lnk)
+      $uni = [System.Text.Encoding]::Unicode.GetString($bytes)
+      if ($uni -match '([A-Za-z]:\\[^\x00-\x1F"<>|?*]+?\.exe)') { return $Matches[1] }
+      $asc = [System.Text.Encoding]::ASCII.GetString($bytes)
+      if ($asc -match '([A-Za-z]:\\[^\x00-\x1F"<>|?*]+?\.exe)') { return $Matches[1] }
+    } catch {}
+    return $null
+  }
   foreach ($fd in @([Environment]::GetFolderPath('Startup'), [Environment]::GetFolderPath('CommonStartup'))) {
     if (-not $fd -or -not (Test-Path $fd)) { continue }
     Get-ChildItem $fd -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'desktop.ini' } | Select-Object -First 15 | ForEach-Object {
       $target = $_.FullName
-      if ($sh -and $_.Extension -eq '.lnk') { try { $t2 = $sh.CreateShortcut($_.FullName).TargetPath; if ($t2) { $target = $t2 } } catch {} }
+      if ($_.Extension -eq '.lnk') { $t2 = _lnkTarget $_.FullName; if ($t2) { $target = $t2 } }
       _add $_.BaseName $target $fd 'folder' "$env:USERNAME"
       if ($al.Count -gt 0) {
         # StartupApproved\StartupFolder usa il nome file CON estensione (es. app.lnk)
