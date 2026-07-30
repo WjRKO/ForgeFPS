@@ -251,7 +251,8 @@ function ScoreRing({ score, grade }) {
 }
 
 export default function MyPc() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const lang = (i18n.resolvedLanguage || i18n.language || "it").slice(0, 2) === "en" ? "en" : "it";
   const [specs, setSpecs] = useState(null);
   const [health, setHealth] = useState(null);
   const [startup, setStartup] = useState(null);
@@ -520,6 +521,57 @@ export default function MyPc() {
           </div>
         )}
       </div>
+
+      <ServicesCard t={t} lang={lang} />
+    </div>
+  );
+}
+
+function ServicesCard({ t, lang }) {
+  const [data, setData] = useState(null);
+  const [showAll, setShowAll] = useState(false);
+  useEffect(() => { api.get("/services/analyze").then(({ data }) => setData(data)).catch(() => {}); }, []);
+  if (!data || !data.available || !data.items?.length) return null;
+  const L = (obj) => (obj ? (lang === "en" ? obj.en : obj.it) : null);
+  const REC = {
+    disattiva: { cls: "bg-[#FF3B30]/20 text-[#FF3B30]", it: "Disattiva", en: "Disable" },
+    valuta: { cls: "bg-[#E5FF00]/20 text-[#E5FF00]", it: "Valuta", en: "Consider" },
+    gia_ok: { cls: "bg-zinc-700/40 text-zinc-400", it: "Già ok", en: "Already ok" },
+    mantieni: { cls: "bg-[#00FF66]/20 text-[#00FF66]", it: "Mantieni", en: "Keep" },
+  };
+  const rows = showAll ? data.items : data.items.slice(0, 10);
+  return (
+    <div className="bg-[#0F0F12] border border-[#2A2A35]" data-testid="services-card">
+      <div className="p-5 border-b border-[#2A2A35] flex items-center justify-between flex-wrap gap-2">
+        <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">{t("mypcpage.services_title")}</span>
+        <span className="text-[11px] text-zinc-500" data-testid="services-summary">
+          {t("mypcpage.services_summary", { n: data.summary.disattiva, m: data.summary.valuta, tot: data.summary.total_audited })}
+          {data.summary.ram_mb_saveable > 0 && ` · ~${data.summary.ram_mb_saveable} MB RAM`}
+        </span>
+      </div>
+      <div className="p-3 text-[11px] text-zinc-500 border-b border-[#1A1A24]">{t("mypcpage.services_hint")}</div>
+      {rows.map((it, i) => {
+        const r = REC[it.recommendation] || REC.valuta;
+        return (
+          <div key={it.name} className="flex items-start gap-3 p-3 border-b border-[#1A1A24]" data-testid={`service-item-${i}`}>
+            <span className={`text-xs font-bold uppercase px-2 py-0.5 shrink-0 ${r.cls}`}>{lang === "en" ? r.en : r.it}</span>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm truncate">{it.display} <span className="text-[11px] text-zinc-600">({it.name})</span>{it.ram_mb ? <span className="text-[11px] text-zinc-500"> · {it.ram_mb} MB</span> : null}</div>
+              {L(it.why) && <div className="text-xs text-zinc-500">{L(it.why)}</div>}
+              {L(it.condition) && <div className="text-[11px] text-amber-500/90 mt-0.5">⚠ {L(it.condition)}</div>}
+              {(it.recommendation === "disattiva" || it.recommendation === "valuta") && (
+                <div className="text-[11px] text-[#00E0FF] mt-0.5">→ {t("mypcpage.services_how", { name: it.display })}</div>
+              )}
+            </div>
+            <span className="text-[10px] text-zinc-600 shrink-0 uppercase">{it.state === "Running" ? t("mypcpage.startup_on") : t("mypcpage.startup_off")} · {it.start_mode}</span>
+          </div>
+        );
+      })}
+      {data.items.length > 10 && (
+        <button onClick={() => setShowAll(!showAll)} data-testid="services-show-all" className="w-full p-2.5 text-[11px] uppercase tracking-widest text-zinc-500 hover:text-[#E5FF00] transition-colors">
+          {showAll ? t("mypcpage.services_less") : t("mypcpage.services_more", { n: data.items.length - 10 })}
+        </button>
+      )}
     </div>
   );
 }

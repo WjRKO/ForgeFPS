@@ -321,6 +321,9 @@ def build(get_current_user):
                     _norm.append(item)
                 # else: skip elementi malformati (nessun errore, invio non blocca)
             fields["startup"] = _norm
+        if data.services_audit is not None:
+            fields["services_audit"] = [i for i in data.services_audit if isinstance(i, dict)][:220]
+            fields["services_audit_at"] = now_iso()
         if data.games is not None:
             fields["games"] = data.games
         if data.running_apps is not None:
@@ -1107,6 +1110,16 @@ def build(get_current_user):
                 raise HTTPException(status_code=402,
                     detail="Credito LLM esaurito. Ricarica da Profilo -> Universal Key -> Add Balance.")
             raise HTTPException(status_code=502, detail=msg)
+
+    @r.get("/services/analyze")
+    async def services_analyze(user: dict = Depends(get_current_user)):
+        doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        audit = (doc or {}).get("services_audit") or []
+        if not audit:
+            return {"available": False}
+        from services_kb import analyze_services
+        res = analyze_services(audit, (doc or {}).get("data"), (doc or {}).get("games"))
+        return {"available": True, "audited_at": (doc or {}).get("services_audit_at"), **res}
 
     @r.post("/startup/analyze")
     async def startup_analyze(user: dict = Depends(get_current_user)):

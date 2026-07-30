@@ -872,6 +872,37 @@ function Get-StartupList {
   return ,$al
 }
 
+function Get-ServicesAudit {
+  # Audit servizi per l'analisi 'quali disattivare': stato, tipo avvio, dipendenze
+  # reali (quanti servizi dipendono da questo), RAM (solo processi dedicati, non
+  # svchost condivisi) e flag Microsoft (path dentro \Windows\).
+  $al = New-Object System.Collections.ArrayList
+  try {
+    $procs = @{}
+    Get-Process -ErrorAction SilentlyContinue | ForEach-Object { $procs[[int]$_.Id] = [math]::Round($_.WorkingSet64 / 1MB) }
+    $deps = @{}
+    Get-Service -ErrorAction SilentlyContinue | ForEach-Object {
+      foreach ($d in $_.ServicesDependedOn) {
+        $dn = $d.Name.ToLower()
+        if ($deps.ContainsKey($dn)) { $deps[$dn]++ } else { $deps[$dn] = 1 }
+      }
+    }
+    Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object { $_.StartMode -in @('Auto', 'Manual') } | Select-Object -First 200 | ForEach-Object {
+      $shared = ($_.PathName -match '(?i)svchost\.exe\s+-k')
+      $ram = $null
+      if (-not $shared -and $_.ProcessId -gt 0 -and $procs.ContainsKey([int]$_.ProcessId)) { $ram = $procs[[int]$_.ProcessId] }
+      $dn = "$($_.Name)".ToLower()
+      [void]$al.Add(@{
+        name = "$($_.Name)"; display = "$($_.DisplayName)"; state = "$($_.State)"
+        start_mode = "$($_.StartMode)"; shared = $shared; ram_mb = $ram
+        dependents = $(if ($deps.ContainsKey($dn)) { [int]$deps[$dn] } else { 0 })
+        ms = ([bool]($_.PathName -match '(?i)\\Windows\\'))
+      })
+    }
+  } catch {}
+  return ,$al
+}
+
 # ---------------- Benchmark ----------------
 function Run-Benchmark {
   $r = @{}
@@ -1169,7 +1200,9 @@ function Run-FullBenchmark {
 
 # ---------------- Reporting ----------------
 function Send-Data($specs, $health, $startup) {
-  $body = @{ data = $specs; health = $health; startup = $startup } | ConvertTo-Json -Depth 6 -Compress
+  $body = @{ data = $specs; health = $health; startup = $startup }
+  try { $svc = Get-ServicesAudit; if ($svc -and $svc.Count -gt 0) { $body.services_audit = $svc } } catch {}
+  $body = $body | ConvertTo-Json -Depth 6 -Compress
   try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
 }
 function Send-Benchmark($rec) {
@@ -5161,16 +5194,18 @@ if ($MODE -eq 'optimize') {
     }
   }
 
-  $__scanSpecs = $null; $__scanHealth = $null; $__scanStartup = $null
+  $__scanSpecs = $null; $__scanHealth = $null; $__scanStartup = $null; $__scanSvc = $null
   try { $__scanSpecs = Get-Specs;         Say ("  specs: CPU={0}, GPU={1}, RAM={2}" -f $__scanSpecs.cpu, $__scanSpecs.gpu, $__scanSpecs.ram) 'DarkGray' } catch { Say ("  Get-Specs FAIL: {0}" -f $_.Exception.Message) 'Red' }
   try { $__scanHealth = Get-Health;       Say ("  health: {0} chiavi" -f $__scanHealth.Count) 'DarkGray' } catch { Say ("  Get-Health FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
   try { $__scanStartup = Get-StartupList; Say ("  startup: {0} app all'avvio" -f $__scanStartup.Count) 'DarkGray' } catch { Say ("  Get-StartupList FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
+  try { $__scanSvc = Get-ServicesAudit;   Say ("  servizi: {0} controllati" -f $__scanSvc.Count) 'DarkGray' } catch { Say ("  Get-ServicesAudit FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
 
   if ($__scanSpecs) {
     $__body = @{}
     if ($__scanSpecs)   { $__body.data    = $__scanSpecs }
     if ($__scanHealth)  { $__body.health  = $__scanHealth }
     if ($__scanStartup) { $__body.startup = $__scanStartup }
+    if ($__scanSvc -and $__scanSvc.Count -gt 0) { $__body.services_audit = $__scanSvc }
     $__ok = __FsPost $__body 'specs+health+startup'
     if ($__ok) {
       Say ("[ OK ] Primo scan completato: {0} | GPU {1} | RAM {2}. Dati inviati al cloud." -f $__scanSpecs.cpu, $__scanSpecs.gpu, $__scanSpecs.ram) 'Green'
