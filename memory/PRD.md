@@ -1601,3 +1601,24 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
   4. CSP bloccava static.cloudflareinsights.com su /app/live -> aggiunto a script-src (server.py).
   5. UX Advisor: chat input sepolto sotto DiagnosePanel espanso (y=2046) -> useDiagnose auto-collassa la diagnosi se piu' vecchia di 1h e l'utente non ha preferenza esplicita (localStorage diagnose_collapsed); chat ora a y=742.
 - Non-bug confermati: advisor chat esiste (era sotto il fold); scraping Amazon datacenter = fallback manuale atteso; 3x 401 pre-login cosmetici.
+
+## Aggiornamento 2026-07-30 (2) — "Precision Pass" professionale su tutte le feature (FATTO, sim PASS + iteration_49 = 100%)
+### A. Rigore statistico Lab
+- lab_stats.py: nuove funzioni t_ppf (quantile t via bisezione), welch_ci (IC95 Welch su diff medie), cohens_d, holm_adjust (correzione Holm-Bonferroni).
+- lab.py: delta.fps_ci_pct [lo,hi] + delta.effect_d per ogni tweak; report steps con ci_pct/effect_d/p_adj/holm_ok (per basis=fluidity il p e' quello su fps_p1); report.multiple_testing {method, alpha, kept_total, kept_confirmed} + report.drift_events.
+- Drift check A/B/A: dopo ogni 3 risultati (recheck_after) e a cur=None, azione run_recheck (1 run vs baseline corrente). Drift <=3% -> stabile; altrimenti 3 run -> RE-BASELINE (sostituisce baseline runs+stats). Fase 'recheck' aggiunta a LabRunInput.
+- Guardia termica agent (ps_agent): $script:LAB_TREF = media temp GPU baseline; Wait-ThermalStable attende (max 90s) che la GPU torni entro +3C prima di run_test/recheck/synergy/validation. Handler PS run_recheck aggiunto.
+### B. Evidenza fleet visibile
+- Lab.jsx SetupCard: lista 'Evidenza misurata dalla community' (lab-evidence-list, top 5 candidati con fleet.tested>=3): 'N PC · ±X% medio · tenuto Y%'. Nota rigore nel report (lab-report-rigor) con Holm + drift compensati. Step con IC95 e badge ambra 'non confermato dopo correzione Holm'.
+### C. Health Score pro
+- pc.py /pc-health esteso: fleet percentile (stesso vendor GPU, minimo 5 PC -> out.fleet {percentile,n,vendor}) + throttling GPU da pc_telemetry ultimi 300 sample (gpu_util>=90, clock < 92% del picco, temp>=80, >=5 eventi -> detected). MyPc.jsx: righe health-fleet-percentile e health-throttling (i18n fleetpct/throttle_yes/throttle_no). VERIFICATO live: admin ha throttling detected (17 eventi, picco 86C).
+### D. Stima FPS calibrata fleet
+- pc.py /fps/estimate: _fleet_fps cerca mediana FPS reali da pc_telemetry di utenti con stessa GPU (token regex rtx/gtx/rx/arc) e stesso gioco (>=2 utenti, >=30 sample) -> out.fleet + out.source ('fleet+ai'|'ai'). Games.jsx badge fps-source: 'Calibrata su dati reali: N PC...' vs 'Stima AI (nessun dato misurato...)' (i18n games.src_fleet/src_ai).
+### E. Benchmark ripetuto
+- ps_agent Run-Benchmark: CPU e RAM 3 ripetizioni -> mediana + cpu_cv_pct/ram_cv_pct/cv_pct/bench_runs/reliable (CV<=10). Benchmark.jsx footer bench-reliability (i18n mypcpage.bench_cv/bench_unreliable), mostrato solo se cv_pct presente.
+### F. ReBAR/PCIe reali
+- ps_agent Get-Specs (ramo NVIDIA): pcie_link/pcie_width/pcie_width_max da nvidia-smi query pcie.*; rebar_status on/off da BAR1 Memory Total (>=1024MiB = ON). lab_registry.bios_suggestions salta rebar se rebar_status=on; lab.py insights: bios_rebar diventa kind=confirm con detail 'ReBAR attivo rilevato' quando on.
+### Test
+- Sim: test_lab_phase4_sim.py esteso (recheck stabile, IC95, Holm 2/2) PASS; NUOVO test_lab_drift_sim.py (drift -6% -> re-baseline + drift_events) PASS; phase1/2 sims aggiornati con handler run_recheck e PASS; PS PARSE OK; pc-health curl OK. testing_agent iteration_49: frontend 100% IT+EN.
+- Fix post-test: ResponsiveContainer minWidth/minHeight (warning Recharts), 'Priorita'->'Priorità' in lab_registry.
+- NOTA: fleet percentile appare solo con >=5 PC stesso vendor con health nella fleet (in preview assente = atteso).

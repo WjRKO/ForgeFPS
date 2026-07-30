@@ -25,7 +25,7 @@ TWEAKS = [
         "why": "Core parking e throttling limitano la CPU nei momenti di picco.",
     },
     {
-        "tweak_id": "priority", "name": "Priorita GPU/CPU ai giochi (MMCSS)",
+        "tweak_id": "priority", "name": "Priorità GPU/CPU ai giochi (MMCSS)",
         "family": "scheduling", "risk_level": "safe", "requires_reboot": False, "reversible": "auto",
         "base_prior": 0.25, "conflicts_with": [], "synergy_candidates": ["gaming"],
         "why": "SystemResponsiveness=0 da priorita reale al gioco in primo piano.",

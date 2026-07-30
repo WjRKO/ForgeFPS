@@ -253,7 +253,7 @@ export default function FullBenchmarkReport() {
               <div><span className="text-zinc-500">GPU max:</span> <span className="font-bold text-white">{f.gpu_temp_max}°C</span> <span className="text-zinc-600">(avg {f.gpu_temp_avg}°C)</span></div>
             )}
           </div>
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={220} minWidth={200} minHeight={220}>
             <LineChart data={trace} margin={{ top: 5, right: 15, bottom: 5, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2A2A35" />
               <XAxis dataKey="ts" stroke="#71717A" fontSize={10} label={{ value: "secondi", position: "insideBottom", offset: -3, fill: "#71717A", fontSize: 10 }} />
