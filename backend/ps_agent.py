@@ -395,9 +395,12 @@ function Get-CleanableMb {
     }
   }
   try {
-    $sh = New-Object -ComObject Shell.Application
-    $rb = $sh.NameSpace(0xA)
-    if ($rb) { foreach ($it in $rb.Items()) { try { $total += [double]$it.Size } catch {} } }
+    # Cestino: lettura diretta dei file (niente oggetti COM shell, vedi nota Defender)
+    $rbRoot = Join-Path $env:SystemDrive '$Recycle.Bin'
+    if (Test-Path $rbRoot) {
+      $sum = (Get-ChildItem $rbRoot -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+      if ($sum) { $total += [double]$sum }
+    }
   } catch {}
   return [math]::Round($total / 1MB, 1)
 }
