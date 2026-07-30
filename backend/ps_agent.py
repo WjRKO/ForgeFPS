@@ -5328,7 +5328,8 @@ function Invoke-LabRun($seconds, $label) {
     Start-Sleep -Milliseconds 900
   }
   if ($fr.Count -lt 100) { return $null }
-  $arr = [double[]]$fr.ToArray()  $sorted = [double[]]$arr.Clone(); [Array]::Sort($sorted)
+  $arr = [double[]]$fr.ToArray()
+  $sorted = [double[]]$arr.Clone(); [Array]::Sort($sorted)
   $sum = 0.0; foreach ($v in $arr) { $sum += $v }
   $avg = $sum / $arr.Length
   $var = 0.0; foreach ($v in $arr) { $var += ($v - $avg) * ($v - $avg) }
