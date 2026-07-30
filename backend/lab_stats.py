@@ -140,11 +140,6 @@ def mann_whitney_exact(a, b):
 
 
 def significance(a, b, alpha=None):
-    """Test di significativita' condiviso: Welch primario + Mann-Whitney secondario.
-
-    Con n=3 run per lato (campione minimo del Lab) usiamo alpha adattivo 0.10;
-    da n>=5 si scende a 0.05.
-    """
     n = min(len(a), len(b))
     if alpha is None:
         alpha = 0.10 if n < 5 else 0.05
@@ -162,3 +157,60 @@ def significance(a, b, alpha=None):
     if mw:
         out["mann_whitney"] = mw
     return out
+
+
+def t_ppf(q, df):
+    """Quantile t di Student (q > 0.5) via bisezione su t_sf."""
+    lo, hi = 0.0, 200.0
+    target = 1.0 - q
+    for _ in range(80):
+        mid = (lo + hi) / 2
+        if t_sf(mid, df) > target:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2
+
+
+def welch_ci(a, b, conf=0.95):
+    """IC di Welch sulla differenza delle medie (a - b). Ritorna (diff, lo, hi) o None."""
+    n1, n2 = len(a), len(b)
+    if n1 < 2 or n2 < 2:
+        return None
+    m1, m2 = mean(a), mean(b)
+    v1, v2 = sample_var(a), sample_var(b)
+    se2 = v1 / n1 + v2 / n2
+    diff = m1 - m2
+    if se2 <= 0:
+        return (diff, diff, diff)
+    denom = (v1 / n1) ** 2 / (n1 - 1) + (v2 / n2) ** 2 / (n2 - 1)
+    df = se2 ** 2 / denom if denom > 0 else (n1 + n2 - 2)
+    tcrit = t_ppf(1 - (1 - conf) / 2, df)
+    half = tcrit * math.sqrt(se2)
+    return (diff, diff - half, diff + half)
+
+
+def cohens_d(a, b):
+    """Effect size (pooled). None se varianza nulla."""
+    n1, n2 = len(a), len(b)
+    if n1 < 2 or n2 < 2:
+        return None
+    sp2 = ((n1 - 1) * sample_var(a) + (n2 - 1) * sample_var(b)) / (n1 + n2 - 2)
+    if sp2 <= 0:
+        return None
+    return round((mean(a) - mean(b)) / math.sqrt(sp2), 2)
+
+
+def holm_adjust(p_values):
+    """Correzione Holm-Bonferroni: lista p -> lista p aggiustati (stesso ordine)."""
+    m = len(p_values)
+    if m == 0:
+        return []
+    order = sorted(range(m), key=lambda i: p_values[i])
+    adj = [0.0] * m
+    running = 0.0
+    for rank, i in enumerate(order):
+        val = (m - rank) * p_values[i]
+        running = max(running, val)
+        adj[i] = round(min(1.0, running), 4)
+    return adj

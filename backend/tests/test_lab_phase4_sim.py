@@ -70,6 +70,13 @@ for _ in range(400):
         resp = post_run("baseline", mk(base_fps + [-0.5, 0.0, 0.5][i % 3], base_p1 + [-0.4, 0.0, 0.4][i % 3], base_lat))
         if resp.get("baseline_ok"):
             print("baseline ok:", resp["stats"]["fps_avg"], "lat", resp["stats"].get("latency_ms"))
+    elif act == "run_recheck":
+        i = nx.get("runs_done", 0)
+        resp = post_run("recheck", mk(base_fps + [-0.2, 0.0, 0.2][i % 3], base_p1, base_lat))
+        if resp.get("stable"):
+            print("  recheck: baseline stabile (drift", resp.get("drift_pct"), "%)")
+        elif resp.get("rebaselined"):
+            print("  recheck: RE-BASELINE", resp["stats"]["fps_avg"])
     elif act == "apply_tweak":
         event("tweak_applied", {"tweak_id": nx["tweak_id"], "requires_reboot": False})
     elif act == "run_test":
@@ -136,6 +143,11 @@ assert any(st.get("p1_delta_pct") is not None for st in steps), steps[0]
 assert any(st.get("latency_delta_ms") is not None for st in steps), steps[0]
 assert any(st.get("basis") == "fluidity" for st in steps)
 assert any(st.get("basis") == "stutter_guard" for st in steps)
+assert any(st.get("ci_pct") for st in steps), "manca IC95 negli step"
+assert all("p_adj" in st for st in steps if st.get("p_value") is not None), "manca correzione Holm"
+mt = rep.get("multiple_testing") or {}
+assert mt.get("method") == "holm_bonferroni" and mt.get("kept_total", 0) >= 1, mt
+print(f"RIGORE OK: Holm {mt['kept_confirmed']}/{mt['kept_total']} confermati | IC95 presenti | drift_events={len(rep.get('drift_events', []))}")
 assert rep.get("total_latency_delta_ms") is not None and rep["total_latency_delta_ms"] < 0, rep.get("total_latency_delta_ms")
 print(f"REPORT OK: gain {rep['total_gain_pct']}% | latency {rep['total_latency_delta_ms']}ms | steps con p1/lat/basis")
 

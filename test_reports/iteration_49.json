@@ -1,0 +1,25 @@
+{
+  "summary": "Frontend-only verification of Precision Pass features (Lab evidence list, health-throttling, bench-reliability absence, fps-source, i18n IT/EN, lab regression). All targeted data-testids present with correct content. No raw i18n keys leaked. Only 1 AI call performed (Cyberpunk FPS estimate).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "MyPC Benchmark tab", "issues": ["Recharts warnings: chart container width(-1) height(-1) – Recharts complaining about missing minWidth/minHeight; not blocking, but should be fixed"]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Recharts ResponsiveContainer emits console warnings on Benchmark tab (container size -1). Add minWidth/minHeight or aspect ratio.",
+    "Text on evidence list correctly localized in EN as 'COMMUNITY-MEASURED EVIDENCE' + 'N PCs · +X% avg · kept Y%'. In IT variant strings 'Priorita' (should be 'Priorità' with accent) appear in tweak titles – minor typography (data-driven; may be from backend seed)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "test_credentials": "admin@boostpc.io / 4zWK4o_xSw5prU-2b7w9dQ (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Verified on Lab: current session is a completed 'Final report' (not aborted). lab-new-session-btn opens SetupCard where lab-evidence-list renders 5 evidence rows (Telemetry, Power plan, MMCSS, Game Booster, Power Throttling) with format 'N PCs · +/-X% avg · kept Y%'. lab-report-rigor is present on the current final report. lab-insight-bios_rebar and lab-history-card present. On /app/pc Overview, health-throttling shows red 'GPU thermal throttling detected under load (17 events, peak 86°C): check fans/thermal paste' (EN) / 'Thermal throttling GPU rilevato sotto carico (17 eventi, picco 86°C): controlla ventole/pasta termica' (IT). health-fleet-percentile absent (expected). Benchmark tab: bench-reliability absent (expected). Gaming Games tab: search 'Cyberpunk 2077' → fps-source shows 'AI estimate (no measured data for your GPU on this game — it will calibrate as the community plays)' — matches spec. Language toggle via data-testid=language-switcher / lang-it / lang-en works; no raw i18n keys visible.",
+  "rca of the issue": "N/A - no bugs found"
+}

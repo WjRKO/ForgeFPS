@@ -508,6 +508,20 @@ function Get-Specs {
     $s.gpu = $p[0].Trim(); $s.gpu_vram_gb = "$([math]::Round([double]$p[1].Trim()/1024))"; $s.gpu_driver_version = $p[2].Trim()
     $s.gpu_provider = 'NVIDIA'
     $gpuSources++
+    # PCIe link reale + stato Resizable BAR (BAR1 ~ VRAM => ReBAR ON, 256MB => OFF)
+    try {
+      $pcieQ = & nvidia-smi --query-gpu=pcie.link.width.current,pcie.link.width.max,pcie.link.gen.max --format=csv,noheader,nounits 2>$null
+      if ($pcieQ) {
+        $pl = ($pcieQ | Select-Object -First 1).Split(',')
+        $s.pcie_width = $pl[0].Trim(); $s.pcie_width_max = $pl[1].Trim()
+        $s.pcie_link = ('x{0} (max x{1} Gen{2})' -f $pl[0].Trim(), $pl[1].Trim(), $pl[2].Trim())
+      }
+      $qFull = (& nvidia-smi -q 2>$null) -join "`n"
+      if ($qFull -match 'BAR1 Memory Usage[\s\S]{0,120}?Total\s*:\s*(\d+)\s*MiB') {
+        $barMb = [int]$Matches[1]
+        $s.rebar_status = $(if ($barMb -ge 1024) { 'on' } else { 'off' })
+      }
+    } catch {}
   }
   # WMI: prendi tutti i video controller reali (non virtuali).
   $vcAll = Get-CimInstance Win32_VideoController | Where-Object { $_.Name -and $_.Name -notmatch 'Basic|Virtual|Remote|Meta|Parsec|Citrix|DameWare|Idd' }
@@ -762,14 +776,30 @@ function Get-StartupList {
 function Run-Benchmark {
   $r = @{}
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
-  $acc = 0.0
-  for ($i = 0; $i -lt 3000000; $i++) { $acc += [math]::Sqrt($i) }
-  $sw.Stop()
-  $r.cpu_score = [int]([math]::Round(3000000 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001) / 1000))
+  # CPU e RAM: 3 ripetizioni -> mediana + CV (affidabilita' della misura)
+  $cpuRuns = New-Object System.Collections.ArrayList
+  $ramRuns = New-Object System.Collections.ArrayList
   $size = 64MB
   $buf = New-Object byte[] $size; $dst = New-Object byte[] $size
-  $sw.Restart(); for ($i = 0; $i -lt 5; $i++) { [Array]::Copy($buf, $dst, $size) }; $sw.Stop()
-  $r.ram_mbps = [int]([math]::Round((5 * $size / 1MB) / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+  for ($rep = 0; $rep -lt 3; $rep++) {
+    $acc = 0.0
+    $sw.Restart(); for ($i = 0; $i -lt 3000000; $i++) { $acc += [math]::Sqrt($i) }; $sw.Stop()
+    [void]$cpuRuns.Add([double](3000000 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001) / 1000))
+    $sw.Restart(); for ($i = 0; $i -lt 5; $i++) { [Array]::Copy($buf, $dst, $size) }; $sw.Stop()
+    [void]$ramRuns.Add([double]((5 * $size / 1MB) / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+  }
+  $cpuS = @($cpuRuns | Sort-Object); $ramS = @($ramRuns | Sort-Object)
+  $r.cpu_score = [int][math]::Round($cpuS[1])
+  $r.ram_mbps = [int][math]::Round($ramS[1])
+  $cpuAvg = ($cpuRuns | Measure-Object -Average).Average
+  $ramAvg = ($ramRuns | Measure-Object -Average).Average
+  $cv1 = 0.0; foreach ($x in $cpuRuns) { $cv1 += [math]::Pow($x - $cpuAvg, 2) }
+  $cv2 = 0.0; foreach ($x in $ramRuns) { $cv2 += [math]::Pow($x - $ramAvg, 2) }
+  $r.cpu_cv_pct = [math]::Round([math]::Sqrt($cv1 / 3) / [math]::Max($cpuAvg, 1) * 100, 1)
+  $r.ram_cv_pct = [math]::Round([math]::Sqrt($cv2 / 3) / [math]::Max($ramAvg, 1) * 100, 1)
+  $r.bench_runs = 3
+  $r.cv_pct = [math]::Max($r.cpu_cv_pct, $r.ram_cv_pct)
+  $r.reliable = ($r.cv_pct -le 10)
   # Disco: scrittura sequenziale REALE (WriteThrough bypassa la cache, 256MB)
   $tmp = Join-Path $env:TEMP 'boostpc_bench.bin'
   try {
@@ -5384,6 +5414,20 @@ if ($MODE -eq 'lab') {
   $script:TWMAP = @{}
   foreach ($t in $script:TWEAKS) { $script:TWMAP[$t.id] = $t }
   $script:LAB_APPLIED = New-Object System.Collections.ArrayList
+  $script:LAB_BTEMPS = New-Object System.Collections.ArrayList
+  $script:LAB_TREF = $null
+  function Wait-ThermalStable {
+    if (-not $script:LAB_TREF) { return }
+    $t0 = Get-Date
+    while (((Get-Date) - $t0).TotalSeconds -lt 90) {
+      $tel = Get-TelemetrySample
+      $g = $null
+      if ($tel.ContainsKey('gpu_temp')) { $g = [double]$tel.gpu_temp }
+      if ((-not $g) -or ($g -le ($script:LAB_TREF + 3))) { return }
+      Say ("   [TERMICA] GPU {0}C oltre il riferimento baseline ({1}C): attendo il raffreddamento per una misura pulita..." -f $g, $script:LAB_TREF) 'DarkGray'
+      Start-Sleep -Seconds 8
+    }
+  }
   Start-Fps
   if (-not $script:PM_ON) { Say '[ERR ] Cattura FPS non disponibile: il Lab non puo misurare i benchmark.' 'Red'; return }
   Say '   Collegato. Controllo la sessione Lab (avviala da FrameForge -> Laboratorio se non lo hai gia fatto)...' 'DarkGray'
@@ -5429,7 +5473,11 @@ if ($MODE -eq 'lab') {
         if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti (gioco chiuso o in pausa?). Riprovo.' 'DarkYellow'; continue }
         Say ("   run: {0} FPS avg | 1% low {1} | frame {2}" -f $run.fps_avg, $run.fps_p1, $run.frames) 'Gray'
         $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'baseline'; run = $run }
-        if ($resp -and $resp.baseline_ok) { Say ("   [ OK ] BASELINE stabile: {0} FPS avg (CV {1}%)" -f $resp.stats.fps_avg, $resp.stats.cv_pct) 'Green' }
+        if ($run.temp_gpu) { [void]$script:LAB_BTEMPS.Add([double]$run.temp_gpu) }
+        if ($resp -and $resp.baseline_ok) {
+          Say ("   [ OK ] BASELINE stabile: {0} FPS avg (CV {1}%)" -f $resp.stats.fps_avg, $resp.stats.cv_pct) 'Green'
+          if ($script:LAB_BTEMPS.Count -gt 0) { $script:LAB_TREF = [int](($script:LAB_BTEMPS | Measure-Object -Average).Average) }
+        }
         elseif ($resp -and $resp.extra_run) { Say '   [INFO] Variabilita alta tra i run (CV > 5%): 4o run e scarto l outlier.' 'DarkYellow' }
       }
       elseif ($act -eq 'apply_tweak') {
@@ -5498,6 +5546,7 @@ if ($MODE -eq 'lab') {
         Say ("   [SYNERGY {0}] run {1}/{2} ({3}s)" -f "$($nx.stage)".ToUpper(), ([int]$nx.runs_done + 1), $nx.runs_target, $nx.run_seconds) 'Cyan'
         $g = Wait-LabGame
         if ($g -eq '__STOP__') { continue }
+        Wait-ThermalStable
         $run = Invoke-LabRun $nx.run_seconds ('synergy ' + $nx.stage)
         if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
         Say ("   run: {0} FPS avg" -f $run.fps_avg) 'Gray'
@@ -5512,6 +5561,7 @@ if ($MODE -eq 'lab') {
         Say ("`n[VALIDAZIONE] Sessione di gioco reale da {0} minuti con la configurazione finale. Gioca normalmente!" -f [int]($nx.run_seconds / 60)) 'Cyan'
         $g = Wait-LabGame
         if ($g -eq '__STOP__') { continue }
+        Wait-ThermalStable
         $run = Invoke-LabRun $nx.run_seconds 'validazione'
         if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
         $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'validation'; run = $run }
@@ -5520,10 +5570,25 @@ if ($MODE -eq 'lab') {
           if ($resp.validation.discrepancy) { Say '   [WARN] Guadagno reale sotto il 50% del previsto: segnalato nel report.' 'DarkYellow' }
         }
       }
+      elseif ($act -eq 'run_recheck') {
+        Say ("   [DRIFT CHECK] run di controllo baseline {0}/{1} ({2}s)" -f ([int]$nx.runs_done + 1), $nx.runs_target, $nx.run_seconds) 'Cyan'
+        $g = Wait-LabGame
+        if ($g -eq '__STOP__') { continue }
+        Wait-ThermalStable
+        $run = Invoke-LabRun $nx.run_seconds 'drift check'
+        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'recheck'; run = $run }
+        if ($resp) {
+          if ($resp.stable) { Say ("   [ OK ] Baseline stabile (drift {0}%)" -f $resp.drift_pct) 'Green' }
+          elseif ($resp.rebaselined) { Say ("   [ OK ] Nuova baseline: {0} FPS avg (drift compensato)" -f $resp.stats.fps_avg) 'Yellow' }
+          elseif ($null -ne $resp.drift_pct) { Say ("   [WARN] Drift {0}% rilevato: ri-misuro la baseline" -f $resp.drift_pct) 'DarkYellow' }
+        }
+      }
       elseif ($act -eq 'run_test') {
         Say ("   [TEST {0}] run {1}/{2} ({3}s)" -f $nx.tweak_id, ([int]$nx.runs_done + 1), $nx.runs_target, $nx.run_seconds) 'Cyan'
         $g = Wait-LabGame
         if ($g -eq '__STOP__') { continue }
+        Wait-ThermalStable
         $run = Invoke-LabRun $nx.run_seconds ("test " + $nx.tweak_id)
         if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
         Say ("   run: {0} FPS avg | 1% low {1}" -f $run.fps_avg, $run.fps_p1) 'Gray'

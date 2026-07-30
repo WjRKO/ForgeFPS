@@ -123,6 +123,9 @@ while True:
         report = resp["report"]
         print("VALIDAZIONE ok:", resp["validation"])
         break
+    if a == "run_recheck":
+        post_run("recheck", None, cur_fps + random.uniform(-0.5, 0.5))
+        continue
     print("azione inattesa:", n)
     sys.exit(1)
 

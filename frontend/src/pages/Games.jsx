@@ -298,6 +298,11 @@ export default function Games() {
           {fps && !loading && (
             <div className="fade-up" data-testid="fps-result">
               <div className="text-sm text-zinc-300 mb-3">{fps.game} · {fps.resolution} <span className="text-xs text-zinc-500">({t("common.reliability")} {fps.confidence})</span></div>
+              <div className={`text-[11px] mb-3 px-2.5 py-1.5 border ${fps.fleet ? "border-[#00E0FF]/30 bg-[#00E0FF]/5 text-[#00E0FF]" : "border-[#1F1F28] bg-black/30 text-zinc-500"}`} data-testid="fps-source">
+                {fps.fleet
+                  ? t("games.src_fleet", { n: fps.fleet.users, fps: fps.fleet.fps_median })
+                  : t("games.src_ai")}
+              </div>
               <div className="space-y-2">
                 {fps.estimates.map((e, i) => (
                   <div key={e.preset || i} data-testid={`fps-bar-${i}`}>

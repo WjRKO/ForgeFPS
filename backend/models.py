@@ -128,7 +128,7 @@ class LabStartInput(BaseModel):
 
 
 class LabRunInput(BaseModel):
-    phase: str = Field(pattern="^(baseline|test|warmup|synergy_off|synergy_on|validation)$")
+    phase: str = Field(pattern="^(baseline|test|warmup|synergy_off|synergy_on|validation|recheck)$")
     tweak_id: Optional[str] = Field(default=None, max_length=50)
     run: dict[str, Any]
 

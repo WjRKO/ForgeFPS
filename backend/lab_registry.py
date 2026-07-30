@@ -176,7 +176,8 @@ def bios_suggestions(specs_data: dict):
             "reversible": "manual",
         })
     gpu = (d.get("gpu") or "").lower()
-    if re.search(r"rtx\s*[345]0\d{2}|rx\s*[679]\d{3}|arc\s", gpu):
+    rebar_on = str(d.get("rebar_status") or "").lower() == "on"
+    if not rebar_on and re.search(r"rtx\s*[345]0\d{2}|rx\s*[679]\d{3}|arc\s", gpu):
         is_nv = bool(re.search(r"rtx|nvidia|geforce", gpu))
         verify = ("Verifica: NVIDIA Control Panel -> Informazioni di sistema -> 'BAR ridimensionabile: Si'"
                   if is_nv else "Verifica: AMD Software -> Prestazioni -> Smart Access Memory attivo")

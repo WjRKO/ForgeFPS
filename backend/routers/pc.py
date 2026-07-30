@@ -1,5 +1,6 @@
 import io
 import os
+import re
 import hmac
 import time
 import hashlib
@@ -983,7 +984,46 @@ def build(get_current_user):
         doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
         if not doc or not doc.get("health"):
             return {"available": False}
-        return {**compute_health(doc["health"]), "available": True}
+        out = {**compute_health(doc["health"]), "available": True}
+        try:
+            gpu = ((doc.get("data") or {}).get("gpu") or "").lower()
+            is_nv = any(k in gpu for k in ("nvidia", "rtx", "gtx", "geforce"))
+            is_amd = any(k in gpu for k in ("radeon", "rx ", "amd"))
+            vend = "nvidia" if is_nv else ("amd" if is_amd else None)
+            scores = []
+            async for d in db.pc_specs.find({"health": {"$ne": None}}, {"health": 1, "data.gpu": 1}):
+                if vend:
+                    g = ((d.get("data") or {}).get("gpu") or "").lower()
+                    match = any(k in g for k in ("nvidia", "rtx", "gtx", "geforce")) if vend == "nvidia" \
+                        else any(k in g for k in ("radeon", "rx ", "amd"))
+                    if not match:
+                        continue
+                h = compute_health(d["health"])
+                if h.get("score") is not None:
+                    scores.append(h["score"])
+            if len(scores) >= 5:
+                me = out.get("score") or 0
+                pct = round(sum(1 for s in scores if s <= me) / len(scores) * 100)
+                out["fleet"] = {"percentile": pct, "n": len(scores), "vendor": vend or "all"}
+        except Exception:
+            pass
+        try:
+            tel = await db.pc_telemetry.find_one({"user_id": str(user["_id"])}, {"samples": {"$slice": -300}})
+            samples = (tel or {}).get("samples") or []
+            clocks = [s.get("gpu_clock") for s in samples
+                      if isinstance(s.get("gpu_clock"), (int, float)) and s.get("gpu_clock") > 0]
+            if clocks:
+                peak = max(clocks)
+                ev = [s for s in samples
+                      if isinstance(s.get("gpu_clock"), (int, float)) and s.get("gpu_clock") > 0
+                      and (s.get("gpu_util") or 0) >= 90 and s["gpu_clock"] < peak * 0.92
+                      and (s.get("gpu_temp") or 0) >= 80]
+                out["throttling"] = {"checked": True, "detected": len(ev) >= 5, "events": len(ev),
+                                     "peak_clock": peak,
+                                     "max_temp": max(((s.get("gpu_temp") or 0) for s in samples), default=0)}
+        except Exception:
+            pass
+        return out
 
     @r.get("/health-history")
     async def health_history(user: dict = Depends(get_current_user)):
@@ -1004,11 +1044,48 @@ def build(get_current_user):
         except Exception as e:
             raise HTTPException(status_code=502, detail=str(e))
 
+    async def _fleet_fps(uid: str, game: str):
+        specs = await db.pc_specs.find_one({"user_id": uid}, {"data.gpu": 1})
+        gpu = (((specs or {}).get("data") or {}).get("gpu") or "")
+        m = re.search(r"(rtx\s*\d{4}\s*(?:ti|super)?|gtx\s*\d{3,4}\s*(?:ti|super)?|rx\s*\d{4}\s*(?:xtx|xt)?|arc\s*\w?\d{3})", gpu, re.I)
+        if not m or not game:
+            return None
+        token = re.sub(r"\s+", "", m.group(1)).lower()
+        gl = re.sub(r"[^a-z0-9]", "", game.lower())[:12]
+        if len(gl) < 3:
+            return None
+        vals, users = [], set()
+        async for t in db.pc_telemetry.find({}, {"user_id": 1, "samples": {"$slice": -300}}):
+            sp = await db.pc_specs.find_one({"user_id": t["user_id"]}, {"data.gpu": 1})
+            g2 = re.sub(r"\s+", "", (((sp or {}).get("data") or {}).get("gpu") or "")).lower()
+            if token not in g2:
+                continue
+            fs = [s["fps"] for s in (t.get("samples") or [])
+                  if isinstance(s.get("fps"), (int, float)) and s.get("fps") > 0
+                  and gl in re.sub(r"[^a-z0-9]", "", str(s.get("game", "")).lower())]
+            if len(fs) >= 30:
+                fs.sort()
+                vals.append(fs[len(fs) // 2])
+                users.add(t["user_id"])
+        if len(vals) >= 2 and len(users) >= 2:
+            vals.sort()
+            return {"fps_median": round(vals[len(vals) // 2]), "sessions": len(vals),
+                    "users": len(users), "gpu": token}
+        return None
+
     @r.post("/fps/estimate")
     async def fps_estimate(data: FpsInput, user: dict = Depends(get_current_user)):
         specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
         try:
-            return await ai_engine.estimate_fps(specs_to_text(specs) if specs else "", data.game, data.resolution)
+            fleet = await _fleet_fps(str(user["_id"]), data.game)
+        except Exception:
+            fleet = None
+        try:
+            out = await ai_engine.estimate_fps(specs_to_text(specs) if specs else "", data.game, data.resolution)
+            if isinstance(out, dict):
+                out["fleet"] = fleet
+                out["source"] = "fleet+ai" if fleet else "ai"
+            return out
         except Exception as e:
             msg = str(e)
             if "Budget" in msg and "exceeded" in msg:

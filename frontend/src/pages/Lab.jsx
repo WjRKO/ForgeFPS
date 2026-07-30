@@ -125,6 +125,20 @@ function SetupCard({ registry, onStart, starting }) {
               <Users size={11} /> {T(`Priorità arricchite dai dati fleet: ${fleetN} test su PC con hardware simile al tuo`, `Priorities enriched with fleet data: ${fleetN} tests on PCs with hardware similar to yours`)}
             </div>
           )}
+          {(preview?.candidates || []).some((c) => c.fleet?.tested >= 3) && (
+            <div className="mt-2 space-y-1" data-testid="lab-evidence-list">
+              <div className="text-[10px] uppercase tracking-widest text-zinc-500">{T("Evidenza misurata dalla community", "Community-measured evidence")}</div>
+              {(preview.candidates || []).filter((c) => c.fleet?.tested >= 3).slice(0, 5).map((c) => (
+                <div key={c.tweak_id} className="flex items-center justify-between gap-2 border border-[#1F1F28] bg-black/30 px-2.5 py-1.5" data-testid={`lab-evidence-${c.tweak_id}`}>
+                  <span className="text-zinc-300 truncate">{c.name || c.tweak_id}</span>
+                  <span className="text-[#00E0FF] shrink-0 tabular-nums">
+                    {T(`${c.fleet.tested} PC · ${c.fleet.avg_delta_pct > 0 ? "+" : ""}${c.fleet.avg_delta_pct}% medio · tenuto ${Math.round((c.fleet.kept / c.fleet.tested) * 100)}%`,
+                       `${c.fleet.tested} PCs · ${c.fleet.avg_delta_pct > 0 ? "+" : ""}${c.fleet.avg_delta_pct}% avg · kept ${Math.round((c.fleet.kept / c.fleet.tested) * 100)}%`)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <button onClick={() => onStart(risk, win, reboot)} disabled={starting || n === 0} data-testid="lab-start-btn"
           className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold uppercase tracking-widest text-xs px-6 py-3 hover:bg-[#D4EC00] transition-colors disabled:opacity-50">
@@ -531,7 +545,11 @@ function ReportCard({ report, onNew }) {
             <div key={i} className="flex items-center justify-between gap-2 border border-[#2A2A35] bg-black/30 px-3 py-2" data-testid={`lab-report-step-${s.tweak_id}`}>
               <div className="min-w-0">
                 <div className="text-xs text-white truncate">{s.tweak}</div>
-                <div className="text-[10px] text-zinc-500">{s.reason} · p={s.p_value}</div>
+                <div className="text-[10px] text-zinc-500">
+                  {s.reason} · p={s.p_value}
+                  {s.ci_pct && <span className="text-zinc-600"> · IC95 {s.ci_pct[0] > 0 ? "+" : ""}{s.ci_pct[0]}/{s.ci_pct[1] > 0 ? "+" : ""}{s.ci_pct[1]}%</span>}
+                  {s.decision === "kept" && s.holm_ok === false && <span className="text-amber-500/90"> · {T("non confermato dopo correzione Holm", "not confirmed after Holm correction")}</span>}
+                </div>
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <span className="text-[11px] text-zinc-400 tabular-nums">{s.before} → {s.after}</span>
@@ -544,6 +562,15 @@ function ReportCard({ report, onNew }) {
           ))}
         </div>
         <ValidationBlock validation={report.validation} />
+        {report.multiple_testing && report.multiple_testing.kept_total > 0 && (
+          <div className="text-[11px] text-zinc-500 border border-[#1F1F28] bg-black/30 px-3 py-2" data-testid="lab-report-rigor">
+            {T(`Rigore statistico: ${report.multiple_testing.kept_confirmed}/${report.multiple_testing.kept_total} tweak mantenuti restano significativi dopo correzione Holm-Bonferroni (test multipli, α=${report.multiple_testing.alpha}).`,
+               `Statistical rigor: ${report.multiple_testing.kept_confirmed}/${report.multiple_testing.kept_total} kept tweaks remain significant after Holm-Bonferroni correction (multiple testing, α=${report.multiple_testing.alpha}).`)}
+            {(report.drift_events || []).length > 0 && (
+              <span className="text-amber-500/90"> {T(`· ${report.drift_events.length} drift baseline rilevati e compensati (schema A/B/A).`, `· ${report.drift_events.length} baseline drifts detected and compensated (A/B/A scheme).`)}</span>
+            )}
+          </div>
+        )}
         {(report.synergies_found || []).length > 0 && (
           <div className="space-y-1.5">
             <div className="text-[10px] uppercase tracking-widest text-zinc-500">{T("Sinergie verificate", "Verified synergies")}</div>

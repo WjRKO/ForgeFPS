@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket, Pencil } from "lucide-react";
+import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket, Pencil, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
@@ -389,6 +389,26 @@ export default function MyPc() {
             </div>
           </div>
           <CpuTempReasonHint checks={health.checks} />
+          {(health.fleet || health.throttling?.checked) && (
+            <div className="mt-4 flex flex-wrap gap-3 border-t border-[#1A1A24] pt-3">
+              {health.fleet && (
+                <div className="flex items-center gap-2 text-xs" data-testid="health-fleet-percentile">
+                  <Users size={13} className="text-[#00E0FF]" />
+                  <span className="text-zinc-400">{t("mypcpage.health.fleetpct", { pct: health.fleet.percentile, n: health.fleet.n })}</span>
+                </div>
+              )}
+              {health.throttling?.checked && (
+                <div className="flex items-center gap-2 text-xs" data-testid="health-throttling">
+                  <Thermometer size={13} className={health.throttling.detected ? "text-[#FF3B30]" : "text-[#00FF66]"} />
+                  <span className={health.throttling.detected ? "text-red-400" : "text-zinc-400"}>
+                    {health.throttling.detected
+                      ? t("mypcpage.health.throttle_yes", { n: health.throttling.events, temp: health.throttling.max_temp })
+                      : t("mypcpage.health.throttle_no")}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
           {(health.gpu_temp != null || health.cpu_temp != null) && (
             <div className="mt-4 flex flex-wrap gap-3 border-t border-[#1A1A24] pt-3">
               {health.cpu_temp != null && (

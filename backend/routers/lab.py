@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from database import db, now_iso
 from models import LabStartInput, LabRunInput, LabEventInput, LabCheckInput
 from lab_registry import REGISTRY_VERSION, TWEAKS, select_candidates, bios_suggestions
-from lab_stats import mean, cv, significance
+from lab_stats import mean, cv, significance, welch_ci, cohens_d, holm_adjust
 
 FLEET_MIN_SAMPLES = 3
 
@@ -169,6 +169,9 @@ def _build_report(sess):
     steps = []
     names = {t["tweak_id"]: t["name"] for t in TWEAKS}
     for r in sess.get("results", []):
+        pv = r["significance"].get("p_value")
+        if r.get("decision_basis") == "fluidity" and r.get("significance_p1"):
+            pv = r["significance_p1"].get("p_value")
         steps.append({
             "tweak_id": r["tweak_id"],
             "tweak": names.get(r["tweak_id"], r["tweak_id"]),
@@ -177,11 +180,26 @@ def _build_report(sess):
             "delta_pct": r["delta"].get("fps_avg_pct"),
             "p1_delta_pct": r["delta"].get("fps_p1_pct"),
             "latency_delta_ms": r["delta"].get("latency_ms"),
+            "ci_pct": r["delta"].get("fps_ci_pct"),
+            "effect_d": r["delta"].get("effect_d"),
             "basis": r.get("decision_basis"),
             "decision": r["decision"],
             "reason": r.get("reason"),
-            "p_value": r["significance"].get("p_value"),
+            "p_value": pv,
         })
+    pvals = [s["p_value"] for s in steps if s.get("p_value") is not None]
+    if pvals:
+        adj = holm_adjust(pvals)
+        k = 0
+        for s in steps:
+            if s.get("p_value") is not None:
+                s["p_adj"] = adj[k]
+                s["holm_ok"] = bool(adj[k] < 0.10)
+                k += 1
+    kept_steps = [s for s in steps if s["decision"] == "kept"]
+    multiple_testing = {"method": "holm_bonferroni", "alpha": 0.10,
+                        "kept_total": len(kept_steps),
+                        "kept_confirmed": sum(1 for s in kept_steps if s.get("holm_ok"))}
     n_rb = sum(1 for s in steps if s["decision"] == "rolled_back")
     meta = {c["tweak_id"]: c for c in sess.get("candidates", [])}
     reboots = sum(1 for r in sess.get("results", []) if meta.get(r["tweak_id"], {}).get("requires_reboot"))
@@ -205,6 +223,8 @@ def _build_report(sess):
         "total_gain_pct": gain,
         "total_p1_gain_pct": gain_p1,
         "total_latency_delta_ms": lat_delta,
+        "multiple_testing": multiple_testing,
+        "drift_events": sess.get("drift_events") or [],
         "steps": steps,
         "kept": sess.get("kept", []),
         "synergies_found": (sess.get("synergy") or {}).get("results", []),
@@ -404,7 +424,10 @@ def build(get_current_user):
         if "dual_channel" in bios_ids and (_num(data.get("ram_modules")) or 0) >= 2:
             items.append({"id": "bios_dual", "kind": "confirm", "detail": "dual channel rilevato"})
         if "rebar" in bios_ids:
-            items.append({"id": "bios_rebar", "kind": "manual", "detail": None})
+            if str(data.get("rebar_status") or "").lower() == "on":
+                items.append({"id": "bios_rebar", "kind": "confirm", "detail": "ReBAR attivo rilevato"})
+            else:
+                items.append({"id": "bios_rebar", "kind": "manual", "detail": None})
         cur_drv = data.get("gpu_driver_version") or data.get("gpu_driver")
         at_drv = at.get("gpu_driver")
         if cur_drv and at_drv and str(cur_drv) != str(at_drv):
@@ -481,10 +504,20 @@ def build(get_current_user):
             return {"action": "run_validation", "run_seconds": VALIDATION_SECONDS}
         if st == "testing":
             cur = sess.get("current")
+            rc = sess.get("recheck")
+            if rc:
+                return {"action": "run_recheck", "run_seconds": rs,
+                        "runs_done": len(rc["runs"]), "runs_target": rc["target"]}
             total = len(sess["candidates"])
             step = len(sess.get("results", [])) + len(sess.get("skipped_runtime", [])) + 1
             if not cur:
                 queue = sess.get("queue", [])
+                if queue and len(sess.get("results", [])) >= sess.get("recheck_after", 0) + 3:
+                    sess["recheck"] = {"runs": [], "target": 1}
+                    sess["recheck_after"] = len(sess.get("results", []))
+                    _log(sess, "Controllo drift baseline (schema A/B/A): 1 run di verifica")
+                    await _save(sess)
+                    return {"action": "run_recheck", "run_seconds": rs, "runs_done": 0, "runs_target": 1}
                 if not queue:
                     _advance_after_testing(sess)
                     await _save(sess)
@@ -645,6 +678,35 @@ def build(get_current_user):
             await _save(sess)
             return {"ok": True, "validation": sess["validation"], "completed": True, "report": sess["report"]}
 
+        if payload.phase == "recheck":
+            rc = sess.get("recheck")
+            if sess["status"] != "testing" or not rc:
+                return {"ok": False, "reason": "nessun recheck attivo"}
+            rc["runs"].append(run)
+            base = sess["baseline"]["stats"] or {}
+            drift = _delta_pct(run.get("fps_avg"), base.get("fps_avg")) or 0
+            if rc["target"] == 1 and len(rc["runs"]) == 1:
+                if abs(drift) <= 3.0:
+                    sess["recheck"] = None
+                    _log(sess, f"Baseline stabile: drift {drift}% (entro +/-3%)", "ok")
+                    await _save(sess)
+                    return {"ok": True, "drift_pct": drift, "stable": True}
+                rc["target"] = 3
+                sess.setdefault("drift_events", []).append({"at": now_iso(), "drift_pct": drift})
+                _log(sess, f"DRIFT rilevato: {drift}% — ri-misuro la baseline (3 run)", "warn")
+                await _save(sess)
+                return {"ok": True, "drift_pct": drift, "stable": False, "need_more": True}
+            if len(rc["runs"]) < rc["target"]:
+                await _save(sess)
+                return {"ok": True, "need_more": True, "runs_done": len(rc["runs"])}
+            stats = _run_stats(rc["runs"])
+            sess["baseline"]["runs"] = rc["runs"]
+            sess["baseline"]["stats"] = stats
+            sess["recheck"] = None
+            _log(sess, f"RE-BASELINE: nuova baseline {stats['fps_avg']} FPS (drift compensato)", "warn")
+            await _save(sess)
+            return {"ok": True, "rebaselined": True, "stats": stats}
+
         if payload.phase == "baseline":
             if sess["status"] != "baseline":
                 return {"ok": False, "reason": f"stato {sess['status']}"}
@@ -728,6 +790,13 @@ def build(get_current_user):
             "fps_avg_pct": _delta_pct(test_stats["fps_avg"], base_runs["fps_avg"]),
             "fps_p1_pct": _delta_pct(test_stats["fps_p1"], base_runs["fps_p1"]),
         }
+        ci = welch_ci(test_fps, base_fps)
+        if ci and base_runs.get("fps_avg"):
+            bm = base_runs["fps_avg"]
+            delta["fps_ci_pct"] = [round(ci[1] / bm * 100, 2), round(ci[2] / bm * 100, 2)]
+        eff = cohens_d(test_fps, base_fps)
+        if eff is not None:
+            delta["effect_d"] = eff
         if test_stats.get("latency_ms") is not None and base_runs.get("latency_ms") is not None:
             delta["latency_ms"] = round(test_stats["latency_ms"] - base_runs["latency_ms"], 2)
         d = delta["fps_avg_pct"] or 0

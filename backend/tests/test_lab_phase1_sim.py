@@ -108,6 +108,10 @@ while True:
             if resp["decision"] == "rolled_back":
                 event("rolled_back", {"tweak_id": tid})
         continue
+    if n["action"] == "run_recheck":
+        f = 217 + random.uniform(-0.5, 0.5) if tested and tested[0] in ("power",) else 201 + random.uniform(-0.5, 0.5)
+        post_run("recheck", None, f)
+        continue
     print("azione inattesa:", n)
     sys.exit(1)
 
