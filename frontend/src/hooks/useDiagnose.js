@@ -43,6 +43,10 @@ export function useDiagnose({ hasSpecs }) {
         setResult({ summary: latest.data.summary, actions: latest.data.actions, id: latest.data.id });
         setCreatedAt(latest.data.created_at);
         setState("done");
+        try {
+          const ageMs = Date.now() - new Date(latest.data.created_at).getTime();
+          if (ageMs > 3600e3 && localStorage.getItem("diagnose_collapsed") === null) setCollapsed(true);
+        } catch {}
       }
       setAppliedSlugs(new Set((applied.data || []).map((a) => a.slug)));
       if (out.data?.available) setOutcome(out.data);

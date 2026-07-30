@@ -37,14 +37,16 @@ function fmtDate(iso) {
   catch { return "—"; }
 }
 function fmtRelative(iso) {
-  if (!iso) return "mai";
+  const en = (i18n.resolvedLanguage || i18n.language || "it").toLowerCase().startsWith("en");
+  if (!iso) return en ? "never" : "mai";
   try {
     const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-    if (s < 60) return "or ora";
-    if (s < 3600) return `${Math.floor(s / 60)} min fa`;
-    if (s < 86400) return `${Math.floor(s / 3600)}h fa`;
-    if (s < 86400 * 7) return `${Math.floor(s / 86400)}g fa`;
-    return `${Math.floor(s / (86400 * 30))} mesi fa`;
+    const rtf = new Intl.RelativeTimeFormat(en ? "en" : "it", { numeric: "auto", style: "narrow" });
+    if (s < 60) return rtf.format(0, "minute");
+    if (s < 3600) return rtf.format(-Math.floor(s / 60), "minute");
+    if (s < 86400) return rtf.format(-Math.floor(s / 3600), "hour");
+    if (s < 86400 * 30) return rtf.format(-Math.floor(s / 86400), "day");
+    return rtf.format(-Math.floor(s / (86400 * 30)), "month");
   } catch { return "—"; }
 }
 

@@ -103,7 +103,7 @@ function PcHeroCard({ specs, health, t, en }) {
       </div>
 
       <div className="flex items-center gap-6 flex-wrap">
-        {score != null && <HealthRing score={score} size={128} label={health?.grade} />}
+        {score != null && <HealthRing score={score} size={128} label={health?.grade_key ? t(`mypcpage.health.grade.${health.grade_key}`, health?.grade) : health?.grade} />}
 
         <div className="flex-1 min-w-0 space-y-2">
           <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">
@@ -159,8 +159,9 @@ function BenchmarkCard({ bench, discord, t, onShare }) {
   const latest = bench?.latest;
   const history = (bench?.history || []).slice(0, 8).reverse();
   const series = history.map((h) => h?.after?.overall || h?.after?.score || 0).filter(Boolean);
+  const current = latest?.after?.overall || latest?.after?.score || 0;
 
-  if (!latest) {
+  if (!latest || !current) {
     return (
       <HUDCard testid="bench-empty-card">
         <EmptyState
@@ -181,7 +182,6 @@ function BenchmarkCard({ bench, discord, t, onShare }) {
     );
   }
 
-  const current = latest.after?.overall || latest.after?.score || 0;
   const prev = history.length > 1 ? (history[history.length - 2]?.after?.overall || 0) : 0;
   const delta = prev ? Math.round(((current - prev) / prev) * 100) : 0;
   const positive = delta >= 0;

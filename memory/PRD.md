@@ -1591,3 +1591,13 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
 ### Test
 - Sim E2E /app/backend/tests/test_lab_phase4_sim.py: PASS (fluidity kept, stutter guard rollback, kept con input lag -4ms, report con p1/lat/basis, insights [bios_rebar], check +3% no regression, check -10% regression, history, 422 reason invalida). Regressione sim Fase 1/2: PASS. PS PARSE OK (pwsh reinstallato in /opt/pwsh, ambiente lo ripulisce). testing_agent iteration_47: frontend 100% IT+EN, nessun bug.
 - NOTE tech-debt dal testing agent (non bloccanti): Lab.jsx 734 righe da splittare in componenti; Insights/History fetch a ogni mount; 3x 401 cosmetici pre-login.
+
+## Aggiornamento 2026-07-30 — Health check completo app (iteration_48) + 5 fix minori (FATTO, verificati)
+- CHECK COMPLETO: backend 25/25 pass (auth, 401 protetti, 12 endpoint core, 422 advisor, security headers, 8 pagine pubbliche); frontend tutte le 8 pagine pubbliche + 15 /app/* renderizzano senza errori critici; AI verificata live (upgrade plan reale Claude, build job avviato, diagnosi personalizzata). Suite riusabile: /app/backend/tests/test_full_regression_iter48.py (idempotente).
+- FIX applicati e verificati via screenshot:
+  1. i18n leak "DA MIGLIORARE" nel Health ring Dashboard in EN -> ora t(`mypcpage.health.grade.${grade_key}`) (mostra "Needs work").
+  2. i18n leak "5g fa" in Admin users table in EN -> fmtRelative riscritta con Intl.RelativeTimeFormat(locale i18n).
+  3. Dashboard BenchmarkCard "0 / -100% vs previous" quando latest senza overall -> empty state "No benchmarks yet".
+  4. CSP bloccava static.cloudflareinsights.com su /app/live -> aggiunto a script-src (server.py).
+  5. UX Advisor: chat input sepolto sotto DiagnosePanel espanso (y=2046) -> useDiagnose auto-collassa la diagnosi se piu' vecchia di 1h e l'utente non ha preferenza esplicita (localStorage diagnose_collapsed); chat ora a y=742.
+- Non-bug confermati: advisor chat esiste (era sotto il fold); scraping Amazon datacenter = fallback manuale atteso; 3x 401 pre-login cosmetici.
