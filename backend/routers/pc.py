@@ -300,6 +300,11 @@ def build(get_current_user):
             raise HTTPException(status_code=401, detail="Token agent non valido")
         uid = rec["user_id"]
         fields = {"user_id": uid, "updated_at": now_iso()}
+        prev = None
+        if data.startup is not None or data.services_audit is not None:
+            prev = await db.pc_specs.find_one(
+                {"user_id": uid},
+                {"_id": 0, "startup": 1, "services_audit": 1, "startup_done": 1, "services_done": 1})
         if data.data:
             fields["data"] = data.data
         if data.health is not None:
@@ -321,9 +326,45 @@ def build(get_current_user):
                     _norm.append(item)
                 # else: skip elementi malformati (nessun errore, invio non blocca)
             fields["startup"] = _norm
+            # Tracking 'fatto': voci prima attive che ora risultano disattivate o rimosse
+            if prev and _norm:
+                from services_kb import is_startup_noise
+                _newby = {str(i.get("name") or "").lower(): i for i in _norm if isinstance(i, dict)}
+                _done = {str(d.get("name") or "").lower(): d for d in (prev.get("startup_done") or []) if isinstance(d, dict)}
+                for _it in (prev.get("startup") or []):
+                    if not isinstance(_it, dict) or _it.get("enabled") is False:
+                        continue
+                    if is_startup_noise(_it.get("name"), _it.get("publisher")):
+                        continue
+                    _k = str(_it.get("name") or "").lower()
+                    _cur = _newby.get(_k)
+                    if _k and (_cur is None or _cur.get("enabled") is False):
+                        _done.setdefault(_k, {"name": _it.get("name"), "ram_mb": _it.get("ram_mb"), "done_at": now_iso()})
+                for _k in list(_done):
+                    _cur = _newby.get(_k)
+                    if _cur is not None and _cur.get("enabled") is not False:
+                        _done.pop(_k)
+                fields["startup_done"] = list(_done.values())[:50]
         if data.services_audit is not None:
-            fields["services_audit"] = [i for i in data.services_audit if isinstance(i, dict)][:220]
+            _audit = [i for i in data.services_audit if isinstance(i, dict)][:220]
+            fields["services_audit"] = _audit
             fields["services_audit_at"] = now_iso()
+            # Tracking 'fatto': servizi consigliati (disattiva/valuta) spariti dall'audit
+            # = passati a Disabled o disinstallati (l'agent invia solo Auto+Manual).
+            # Guard len>=10: evita falsi positivi su scan parziali.
+            if prev and len(_audit) >= 10 and prev.get("services_audit"):
+                from services_kb import analyze_services
+                _prev_items = analyze_services(prev["services_audit"]).get("items", [])
+                _new_names = {str(i.get("name") or "").lower() for i in _audit}
+                _done = {str(d.get("name") or "").lower(): d for d in (prev.get("services_done") or []) if isinstance(d, dict)}
+                for _it in _prev_items:
+                    _k = str(_it.get("name") or "").lower()
+                    if _it.get("recommendation") in ("disattiva", "valuta") and _k and _k not in _new_names:
+                        _done.setdefault(_k, {"name": _it.get("name"), "display": _it.get("display"), "ram_mb": _it.get("ram_mb"), "done_at": now_iso()})
+                for _k in list(_done):
+                    if _k in _new_names:
+                        _done.pop(_k)
+                fields["services_done"] = list(_done.values())[:50]
         if data.games is not None:
             fields["games"] = data.games
         if data.running_apps is not None:
@@ -844,7 +885,14 @@ def build(get_current_user):
 
     @r.get("/pc-specs")
     async def get_specs(user: dict = Depends(get_current_user)):
-        return await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        # Flag 'noise' a read-time: voci di sistema/driver non azionabili (KB aggiornabile)
+        if doc and isinstance(doc.get("startup"), list):
+            from services_kb import is_startup_noise
+            for s in doc["startup"]:
+                if isinstance(s, dict) and is_startup_noise(s.get("name"), s.get("publisher")):
+                    s["noise"] = True
+        return doc
 
     @r.post("/pc-specs")
     async def save_specs(payload: PcSpecsInput, user: dict = Depends(get_current_user)):
@@ -1119,7 +1167,8 @@ def build(get_current_user):
             return {"available": False}
         from services_kb import analyze_services
         res = analyze_services(audit, (doc or {}).get("data"), (doc or {}).get("games"))
-        return {"available": True, "audited_at": (doc or {}).get("services_audit_at"), **res}
+        return {"available": True, "audited_at": (doc or {}).get("services_audit_at"),
+                "done": (doc or {}).get("services_done") or [], **res}
 
     @r.post("/startup/analyze")
     async def startup_analyze(user: dict = Depends(get_current_user)):
@@ -1127,7 +1176,9 @@ def build(get_current_user):
         startup = (doc or {}).get("startup") or []
         if not startup:
             raise HTTPException(status_code=400, detail="Nessun dato di avvio. Usa il FrameForge Agent.")
-        active = [s for s in startup if not (isinstance(s, dict) and s.get("enabled") is False)]
+        from services_kb import is_startup_noise
+        active = [s for s in startup if not (isinstance(s, dict) and (
+            s.get("enabled") is False or is_startup_noise(s.get("name"), s.get("publisher"))))]
         if not active:
             return {"items": [], "summary": "Tutti i programmi in avvio risultano già disattivati: nessuna azione necessaria."}
         try:

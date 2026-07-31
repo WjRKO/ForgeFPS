@@ -184,3 +184,21 @@ def analyze_services(audit, specs_data=None, games=None):
             "ram_mb_saveable": ram_saveable,
         },
     }
+
+_NOISE_RE = None
+
+
+def is_startup_noise(name, publisher=None):
+    """Voci di sistema/driver non azionabili: nascoste dalla UI e dall'analisi AI."""
+    global _NOISE_RE
+    import re
+    if _NOISE_RE is None:
+        _NOISE_RE = re.compile(
+            r"(?i)securityhealth|windows security|windows defender|msmpeng"
+            r"|rtkauduservice|ravcpl|ravbg|rtkngui|realtek hd audio|realtek audio console"
+            r"|waves(svc|audio|sys)|maxxaudio"
+            r"|syntp|synaptics pointing|etd(ctrl|tray)|elan.*(pointing|touchpad)"
+            r"|igfx(tray|pers|hk|em)|intel graphics command"
+            r"|windows input experience|textinputhost|ctfmon"
+            r"|delayedlauncher|ijplmsvc")
+    return bool(_NOISE_RE.search(f"{name or ''} {publisher or ''}"))

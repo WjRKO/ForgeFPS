@@ -258,6 +258,7 @@ export default function MyPc() {
   const [startup, setStartup] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [err, setErr] = useState("");
+  const [showOff, setShowOff] = useState(false);
   const [editing, setEditing] = useState(false);
 
   const load = async () => {
@@ -479,18 +480,30 @@ export default function MyPc() {
           </button>
         </div>
         {err && <div className="p-3 text-xs text-[#FF3B30]">{err}</div>}
-        {!startup && !err && (
+        {!startup && !err && (() => {
+          const all = specs.startup || [];
+          const noiseN = all.filter((s) => s.noise).length;
+          const vis = all.filter((s) => !s.noise);
+          const activeList = vis.filter((s) => s.enabled !== false);
+          const offList = vis.filter((s) => s.enabled === false);
+          const doneList = specs.startup_done || [];
+          const shown = [...activeList.slice(0, 30), ...(showOff ? offList : [])];
+          return (
           <div>
             <div className="p-3 text-xs text-zinc-500 border-b border-[#1A1A24]">
-              {(() => {
-                const all = specs.startup || [];
-                const off = all.filter((s) => s.enabled === false).length;
-                return off > 0
-                  ? t("mypcpage.startup_counts", { active: all.length - off, off })
-                  : t("mypcpage.startup_count", { count: all.length });
-              })()} · {t("mypcpage.startup_hint")}
+              {offList.length > 0
+                ? t("mypcpage.startup_counts", { active: activeList.length, off: offList.length })
+                : t("mypcpage.startup_count", { count: activeList.length })}
+              {noiseN > 0 && <span className="text-zinc-600"> · {t("mypcpage.startup_noise_hidden", { n: noiseN })}</span>}
+              {" · "}{t("mypcpage.startup_hint")}
             </div>
-            {[...(specs.startup || [])].sort((a, b) => (a.enabled === false ? 1 : 0) - (b.enabled === false ? 1 : 0)).slice(0, 30).map((s, i) => (
+            {doneList.length > 0 && (
+              <div className="px-3 py-2 border-b border-[#1A1A24] bg-[#00FF66]/5 text-[11px]" data-testid="startup-done-strip">
+                <span className="text-[#00FF66] font-bold">✓ {t("mypcpage.startup_done", { n: doneList.length })}</span>{" "}
+                <span className="text-zinc-500">{doneList.map((d) => d.name).join(", ")}</span>
+              </div>
+            )}
+            {shown.map((s, i) => (
               <div key={`${s.name}-${i}`} className={`flex items-center gap-3 px-3 py-2 border-b border-[#1A1A24] ${s.enabled === false ? "opacity-50" : ""}`} data-testid={`startup-detected-${i}`}>
                 {s.enabled !== null && s.enabled !== undefined && (
                   <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 shrink-0 ${s.enabled === false ? "bg-zinc-700/40 text-zinc-400" : "bg-[#00FF66]/15 text-[#00FF66]"}`}>
@@ -507,8 +520,14 @@ export default function MyPc() {
                 {s.ram_mb ? <span className="text-[11px] text-zinc-400 tabular-nums shrink-0">{s.ram_mb} MB</span> : null}
               </div>
             ))}
+            {offList.length > 0 && (
+              <button onClick={() => setShowOff(!showOff)} data-testid="startup-toggle-off" className="w-full p-2.5 text-[11px] uppercase tracking-widest text-zinc-600 hover:text-[#E5FF00] transition-colors">
+                {showOff ? t("mypcpage.startup_hide_off") : t("mypcpage.startup_show_off", { n: offList.length })}
+              </button>
+            )}
           </div>
-        )}
+          );
+        })()}
         {startup && (
           <div>
             <div className="p-4 text-sm text-zinc-300 border-b border-[#1A1A24] bg-black">{startup.summary}</div>
@@ -538,6 +557,7 @@ export default function MyPc() {
 function ServicesCard({ t, lang }) {
   const [data, setData] = useState(null);
   const [showAll, setShowAll] = useState(false);
+  const [showOk, setShowOk] = useState(false);
   useEffect(() => { api.get("/services/analyze").then(({ data }) => setData(data)).catch(() => {}); }, []);
   if (!data || !data.available || !data.items?.length) return null;
   const L = (obj) => (obj ? (lang === "en" ? obj.en : obj.it) : null);
@@ -547,7 +567,11 @@ function ServicesCard({ t, lang }) {
     gia_ok: { cls: "bg-zinc-700/40 text-zinc-400", it: "Già ok", en: "Already ok" },
     mantieni: { cls: "bg-[#00FF66]/20 text-[#00FF66]", it: "Mantieni", en: "Keep" },
   };
-  const rows = showAll ? data.items : data.items.slice(0, 10);
+  const actionable = data.items.filter((it) => it.recommendation !== "gia_ok");
+  const okItems = data.items.filter((it) => it.recommendation === "gia_ok");
+  const rows = [...(showAll ? actionable : actionable.slice(0, 10)), ...(showOk ? okItems : [])];
+  const done = data.done || [];
+  const doneMb = done.reduce((a, d) => a + (d.ram_mb || 0), 0);
   return (
     <div className="bg-[#0F0F12] border border-[#2A2A35]" data-testid="services-card">
       <div className="p-5 border-b border-[#2A2A35] flex items-center justify-between flex-wrap gap-2">
@@ -558,6 +582,12 @@ function ServicesCard({ t, lang }) {
         </span>
       </div>
       <div className="p-3 text-[11px] text-zinc-500 border-b border-[#1A1A24]">{t("mypcpage.services_hint")}</div>
+      {done.length > 0 && (
+        <div className="px-3 py-2 border-b border-[#1A1A24] bg-[#00FF66]/5 text-[11px]" data-testid="services-done-strip">
+          <span className="text-[#00FF66] font-bold">✓ {t("mypcpage.services_done", { n: done.length })}{doneMb > 0 ? ` · ~${doneMb} MB RAM` : ""}</span>{" "}
+          <span className="text-zinc-500">{done.map((d) => d.display || d.name).join(", ")}</span>
+        </div>
+      )}
       {rows.map((it, i) => {
         const r = REC[it.recommendation] || REC.valuta;
         return (
@@ -575,9 +605,14 @@ function ServicesCard({ t, lang }) {
           </div>
         );
       })}
-      {data.items.length > 10 && (
+      {actionable.length > 10 && (
         <button onClick={() => setShowAll(!showAll)} data-testid="services-show-all" className="w-full p-2.5 text-[11px] uppercase tracking-widest text-zinc-500 hover:text-[#E5FF00] transition-colors">
-          {showAll ? t("mypcpage.services_less") : t("mypcpage.services_more", { n: data.items.length - 10 })}
+          {showAll ? t("mypcpage.services_less") : t("mypcpage.services_more", { n: actionable.length - 10 })}
+        </button>
+      )}
+      {okItems.length > 0 && (
+        <button onClick={() => setShowOk(!showOk)} data-testid="services-toggle-ok" className="w-full p-2.5 text-[11px] uppercase tracking-widest text-zinc-600 hover:text-[#E5FF00] transition-colors border-t border-[#1A1A24]">
+          {showOk ? t("mypcpage.services_hide_ok") : t("mypcpage.services_show_ok", { n: okItems.length })}
         </button>
       )}
     </div>
