@@ -3,14 +3,15 @@ import { useTranslation } from "react-i18next";
 import {
   Trophy, Search, Sparkles, Zap, Radio, Wrench, Cpu, Activity,
   HeartPulse, Gamepad2, Library, Clock, Timer, Crown, Star,
-  CheckCircle2, Lock, Filter,
+  CheckCircle2, Lock, Filter, Swords, Gauge, ArrowRight, X, Target,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
 const ICONS = {
   Search, Sparkles, Zap, Radio, Wrench, Cpu, Activity,
-  HeartPulse, Gamepad2, Library, Clock, Timer, Crown, Star,
+  HeartPulse, Gamepad2, Library, Clock, Timer, Crown, Star, Gauge, Swords,
 };
 
 const TIER_META = {
@@ -29,12 +30,231 @@ const CATEGORY_LABELS = {
 
 export default function Milestones() {
   const { t, i18n } = useTranslation();
+  const [tab, setTab] = useState("missions");
+  const lang = (i18n.language || "it").startsWith("en") ? "en" : "it";
+
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto" data-testid="milestones-page">
+      <div className="mb-6">
+        <div className="text-xs uppercase tracking-[0.3em] text-zinc-500 mb-2">// {t("milestones.eyebrow", "Progressi")}</div>
+        <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter">
+          {t("missions.title", "Missioni")}
+        </h1>
+        <p className="text-zinc-400 mt-2 max-w-2xl">
+          {t("missions.subtitle", "Obiettivi verificati sui dati reali del tuo PC: completali per guadagnare XP. I trofei si sbloccano da soli nel tempo.")}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 mb-6 border-b border-[#2A2A35]">
+        <TabButton active={tab === "missions"} onClick={() => setTab("missions")} testid="tab-missions" icon={Swords}>
+          {t("missions.tab_missions", "Missioni")}
+        </TabButton>
+        <TabButton active={tab === "trophies"} onClick={() => setTab("trophies")} testid="tab-trophies" icon={Trophy}>
+          {t("missions.tab_trophies", "Trofei")}
+        </TabButton>
+      </div>
+
+      {tab === "missions" ? <MissionsTab t={t} lang={lang} /> : <TrophiesTab t={t} lang={lang} />}
+    </div>
+  );
+}
+
+function TabButton({ active, onClick, children, testid, icon: Icon }) {
+  return (
+    <button
+      onClick={onClick}
+      data-testid={testid}
+      className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors border-b-2 -mb-px ${
+        active ? "border-[#E5FF00] text-[#E5FF00]" : "border-transparent text-zinc-500 hover:text-white"
+      }`}
+    >
+      <Icon size={14} /> {children}
+    </button>
+  );
+}
+
+/* ================================ MISSIONI ================================ */
+
+function MissionsTab({ t, lang }) {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState("");
+  const en = lang === "en";
+
+  const load = () =>
+    api.get("/missions").then(({ data: d }) => {
+      setData(d);
+      (d.just_completed || []).forEach((m) => {
+        toast.success(
+          t("missions.completed_toast", {
+            name: en ? m.name_en : m.name_it,
+            xp: m.xp,
+            defaultValue: `Missione completata: ${en ? m.name_en : m.name_it} (+${m.xp} XP)`,
+          })
+        );
+      });
+    }).catch(() => {});
+
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const act = async (kind, code) => {
+    setBusy(code);
+    try {
+      await api.post(`/missions/${kind}/${code}`);
+      await load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Error");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  if (!data) {
+    return <div className="text-zinc-500 text-sm py-8" data-testid="missions-loading">{t("common.loading", "Caricamento...")}</div>;
+  }
+
+  return (
+    <div data-testid="missions-tab">
+      {/* Attive */}
+      <SectionLabel icon={Swords} text={`${t("missions.active", "Missioni attive")} · ${data.slots.used}/${data.slots.max}`} />
+      {data.active.length === 0 ? (
+        <div className="border border-dashed border-[#2A2A35] p-6 text-center text-sm text-zinc-500 mb-8" data-testid="missions-none-active">
+          <Target size={18} className="mx-auto mb-2 text-zinc-600" />
+          {t("missions.none_active", "Nessuna missione attiva. Attivane una qui sotto!")}
+        </div>
+      ) : (
+        <div className="space-y-3 mb-8">
+          {data.active.map((m) => (
+            <ActiveMissionRow key={m.code} m={m} en={en} t={t} busy={busy} onAbandon={() => act("abandon", m.code)} />
+          ))}
+        </div>
+      )}
+
+      {/* Disponibili */}
+      {data.available.length > 0 && (
+        <>
+          <SectionLabel icon={Target} text={t("missions.available", "Disponibili")} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
+            {data.available.map((m) => (
+              <AvailableMissionCard
+                key={m.code} m={m} en={en} t={t} busy={busy}
+                slotsFull={data.slots.used >= data.slots.max}
+                onActivate={() => act("activate", m.code)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Completate */}
+      {data.completed.length > 0 && (
+        <>
+          <SectionLabel icon={CheckCircle2} text={`${t("missions.completed", "Completate")} · ${data.completed.length}`} />
+          <div className="space-y-px" data-testid="missions-completed-list">
+            {data.completed.map((m) => (
+              <div key={m.code} className="flex items-center gap-3 bg-[#0F0F12] border border-[#1A1A24] px-4 py-2.5" data-testid={`mission-completed-${m.code}`}>
+                <CheckCircle2 size={14} className="text-[#00FF66] shrink-0" />
+                <span className="text-sm text-zinc-300 flex-1 truncate">{en ? m.name_en : m.name_it}</span>
+                <span className="text-[10px] font-mono text-[#00FF66]">+{m.xp} XP</span>
+                {m.completed_at && (
+                  <span className="text-[10px] font-mono text-zinc-600">{new Date(m.completed_at).toLocaleDateString(en ? "en-US" : "it-IT")}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SectionLabel({ icon: Icon, text }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <Icon size={13} className="text-[#E5FF00]" />
+      <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">{text}</span>
+    </div>
+  );
+}
+
+function ActiveMissionRow({ m, en, t, busy, onAbandon }) {
+  const Icon = ICONS[m.icon] || Swords;
+  const pct = Math.max(0, Math.min(100, Math.round((m.progress / m.target) * 100)));
+  return (
+    <div className="border border-[#E5FF00]/30 bg-[#E5FF00]/[0.03] p-4" data-testid={`mission-row-${m.code}`}>
+      <div className="flex items-start gap-4">
+        <div className="w-11 h-11 flex items-center justify-center border border-[#E5FF00]/40 text-[#E5FF00] shrink-0">
+          <Icon size={18} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-display font-black text-base">{en ? m.name_en : m.name_it}</span>
+            <span className="text-[10px] font-mono text-[#E5FF00]">+{m.xp} XP</span>
+            <button
+              onClick={onAbandon}
+              disabled={busy === m.code}
+              data-testid={`mission-abandon-${m.code}`}
+              title={t("missions.abandon", "Abbandona")}
+              className="ml-auto text-zinc-600 hover:text-[#FF3B30] transition-colors disabled:opacity-40"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <div className="text-xs text-zinc-400 mt-1">{en ? m.desc_en : m.desc_it}</div>
+          <div className="flex items-center gap-3 mt-3">
+            <div className="flex-1 h-1.5 bg-[#0A0A0C] border border-[#2A2A35] overflow-hidden">
+              <div className="h-full bg-[#E5FF00] transition-all duration-500" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-[10px] font-mono text-zinc-400 tabular-nums">{m.progress}/{m.target}</span>
+            <Link
+              to={m.link}
+              data-testid={`mission-go-${m.code}`}
+              className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-black bg-[#E5FF00] hover:bg-[#D4EC00] px-3 py-1.5 transition-colors"
+            >
+              {en ? m.cta_en : m.cta_it} <ArrowRight size={11} />
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AvailableMissionCard({ m, en, t, busy, slotsFull, onActivate }) {
+  const Icon = ICONS[m.icon] || Swords;
+  return (
+    <div className="border border-[#2A2A35] bg-[#0F0F12] p-4 hover:border-zinc-600 transition-colors" data-testid={`mission-avail-${m.code}`}>
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 flex items-center justify-center border border-[#2A2A35] text-zinc-500 shrink-0">
+          <Icon size={16} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-sm">{en ? m.name_en : m.name_it}</span>
+            <span className="text-[10px] font-mono text-[#E5FF00]">+{m.xp} XP</span>
+          </div>
+          <div className="text-xs text-zinc-500 mt-1 leading-snug">{en ? m.desc_en : m.desc_it}</div>
+          <button
+            onClick={onActivate}
+            disabled={busy === m.code || slotsFull}
+            data-testid={`mission-activate-${m.code}`}
+            className="mt-3 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 border border-[#E5FF00]/50 text-[#E5FF00] hover:bg-[#E5FF00] hover:text-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {slotsFull ? t("missions.slots_full", "Slot pieni") : t("missions.activate", "Attiva")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================= TROFEI ================================= */
+
+function TrophiesTab({ t, lang }) {
   const [state, setState] = useState(null);
-  const [filter, setFilter] = useState("all"); // all / unlocked / locked
+  const [filter, setFilter] = useState("all");
   const [category, setCategory] = useState("all");
   const [overlayToken, setOverlayToken] = useState(null);
   const [copied, setCopied] = useState(false);
-  const lang = (i18n.language || "it").startsWith("en") ? "en" : "it";
 
   useEffect(() => {
     api.get("/milestones").then(({ data }) => setState(data)).catch(() => {});
@@ -67,7 +287,7 @@ export default function Milestones() {
 
   if (!state) {
     return (
-      <div className="p-6" data-testid="milestones-loading">
+      <div data-testid="milestones-loading">
         <div className="text-zinc-500 text-sm">{t("common.loading", "Caricamento...")}</div>
       </div>
     );
@@ -80,18 +300,7 @@ export default function Milestones() {
   const tierProgress = isMax ? 100 : Math.max(0, Math.min(100, Math.round((state.xp / nextAt) * 100)));
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto" data-testid="milestones-page">
-      {/* Header hero */}
-      <div className="mb-8">
-        <div className="text-xs uppercase tracking-[0.3em] text-zinc-500 mb-2">// {t("milestones.eyebrow", "Progressi")}</div>
-        <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter">
-          {t("milestones.title", "Milestones")}
-        </h1>
-        <p className="text-zinc-400 mt-2 max-w-2xl">
-          {t("milestones.subtitle", "Sblocca traguardi, guadagna XP e sblocca feature reali. I badge sono anche condivisibili in overlay OBS per i tuoi spettatori.")}
-        </p>
-      </div>
-
+    <div data-testid="trophies-tab">
       {/* Stats banner */}
       <div className={`border-2 ${tierMeta.ring} ${tierMeta.bg} p-6 mb-6 flex flex-col md:flex-row md:items-center gap-6`} data-testid="milestones-stats">
         <div className={`w-20 h-20 flex items-center justify-center border-2 ${tierMeta.ring} ${tierMeta.color}`}>

@@ -13,6 +13,7 @@ import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import NextActionBanner from "@/components/NextActionBanner";
 import BottleneckDetector from "@/components/BottleneckDetector";
+import { ActiveMissionsCard } from "@/components/ActiveMissionsCard";
 import { PageHeader, EmptyState, HealthRing, Sparkline, HUDCard, Badge, SkeletonCard,
   stagger, item, BTN_CLASSES } from "@/components/hud";
 import { AGENT_EXE_URL, AGENT_EXE_VERSION, AGENT_RELEASES_URL } from "@/config/agent";
@@ -711,6 +712,10 @@ export default function Dashboard() {
           animate="show"
           className="min-w-0 space-y-4"
         >
+          <motion.div variants={item}>
+            <ActiveMissionsCard />
+          </motion.div>
+
           <motion.div variants={item} className="grid md:grid-cols-3 gap-4">
             <PcHeroCard specs={specs} health={health} t={t} en={en} />
             <BenchmarkCard bench={bench} discord={discord} t={t} onShare={shareBench} />
