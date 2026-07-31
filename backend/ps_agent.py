@@ -1221,12 +1221,12 @@ function Run-FullBenchmark {
 function Send-Data($specs, $health, $startup) {
   $body = @{ data = $specs; health = $health; startup = $startup }
   try { $svc = Get-ServicesAudit; if ($svc -and $svc.Count -gt 0) { $body.services_audit = $svc } } catch {}
-  $body = $body | ConvertTo-Json -Depth 6 -Compress
-  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+  $body = [System.Text.Encoding]::UTF8.GetBytes(($body | ConvertTo-Json -Depth 6 -Compress))
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
 }
 function Send-Benchmark($rec) {
-  $body = @{ benchmark = $rec } | ConvertTo-Json -Depth 6 -Compress
-  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+  $body = [System.Text.Encoding]::UTF8.GetBytes((@{ benchmark = $rec } | ConvertTo-Json -Depth 6 -Compress))
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
 }
 function Get-Games {
   $games = New-Object System.Collections.Generic.List[string]
@@ -1289,8 +1289,8 @@ function Send-Games($games) {
   $arr = @($games)
   if ($arr.Count -eq 0) { return }
   $items = ($arr | ForEach-Object { '"' + ($_ -replace '\\', '\\' -replace '"', '\"') + '"' }) -join ','
-  $body = '{"games":[' + $items + ']}'
-  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+  $body = [System.Text.Encoding]::UTF8.GetBytes('{"games":[' + $items + ']}')
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
 }
 function Get-RunningApps {
   $cand = @('chrome', 'msedge', 'firefox', 'opera', 'brave', 'Discord', 'Slack', 'Teams', 'Telegram', 'WhatsApp',
@@ -5193,10 +5193,13 @@ if ($MODE -eq 'optimize') {
 
   function __FsPost($body, $label) {
     $json = $body | ConvertTo-Json -Depth 8 -Compress
+    # v0.8.1: UTF-8 esplicito. PS 5.1 invia il body in Latin-1 senza charset e i nomi
+    # dei servizi Windows in italiano (lettere accentate) rompevano il parse -> HTTP 400.
+    $__b = [System.Text.Encoding]::UTF8.GetBytes($json)
     try {
       $resp = Invoke-WebRequest -Uri "$BACKEND/api/agent/report-specs" -Method Post `
-        -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } `
-        -Body $json -UseBasicParsing -TimeoutSec 20
+        -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN } `
+        -Body $__b -UseBasicParsing -TimeoutSec 20
       Say ("  [OK] {0}: {1} bytes -> HTTP {2}" -f $label, $json.Length, $resp.StatusCode) 'DarkGreen'
       return $true
     } catch {
@@ -5964,8 +5967,8 @@ public static class FFWin {
           Say ("`n[STEP] Fine partita {0}: ripristino..." -f ($bGame -replace '\.exe$', '')) 'Cyan'
           if ($doPower) { if ($prevPlan) { powercfg /setactive $prevPlan 2>$null } else { powercfg /setactive scheme_balanced 2>$null }; Say '   [ OK ] Piano energetico ripristinato.' 'Green' }
           $dur = [int]((Get-Date) - $bStart).TotalSeconds
-          $body = @{ boost_session = @{ game = ($bGame -replace '\.exe$', ''); duration_s = $dur; actions = @($script:BACTS); ended_at = (Get-Date).ToString('o') } } | ConvertTo-Json -Depth 4 -Compress
-          try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+          $body = [System.Text.Encoding]::UTF8.GetBytes((@{ boost_session = @{ game = ($bGame -replace '\.exe$', ''); duration_s = $dur; actions = @($script:BACTS); ended_at = (Get-Date).ToString('o') } } | ConvertTo-Json -Depth 4 -Compress))
+          try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
           Say ("   Sessione registrata ({0} min). Torno in sorveglianza." -f [math]::Round($dur / 60, 1)) 'DarkGray'
         } else {
           Say "`n[INFO] Partita finita (boost annullato). Torno in sorveglianza." 'DarkGray'

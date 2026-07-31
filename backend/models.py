@@ -1,5 +1,5 @@
 from typing import Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ChatMessageInput(BaseModel):
@@ -56,6 +56,14 @@ class SpecsInput(BaseModel):
     games: Optional[list[str]] = None
     running_apps: Optional[list[str]] = None
     boost_session: Optional[dict[str, Any]] = None
+
+    @field_validator("startup", "services_audit", "games", "running_apps", mode="before")
+    @classmethod
+    def _coerce_list(cls, v):
+        # PS 5.1 ConvertTo-Json srotola gli array a 1 elemento in scalari -> wrap
+        if v is None or isinstance(v, list):
+            return v
+        return [v]
 
 
 class GoalInput(BaseModel):
