@@ -114,6 +114,33 @@ function MissionsTab({ t, lang }) {
 
   return (
     <div data-testid="missions-tab">
+      {/* Catena Recluta */}
+      {data.chain && !data.chain.done && (
+        <>
+          <SectionLabel icon={Crown} text={`${t("missions.chain_title", "Catena Recluta")} · ${data.chain.steps.filter((s) => s.status === "completed").length}/${data.chain.steps.length}`} />
+          <div className="border border-[#2A2A35] bg-[#0F0F12] mb-8 divide-y divide-[#1A1A24]" data-testid="chain-block">
+            {data.chain.steps.map((s) => (
+              <ChainStepRow key={s.code} s={s} en={en} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Settimanali AI */}
+      {data.weekly?.missions?.length > 0 && (
+        <>
+          <SectionLabel
+            icon={Sparkles}
+            text={`${t("missions.weekly_title", "Missioni della settimana")} · ${t("missions.weekly_expires", { date: new Date(data.weekly.expires_at).toLocaleDateString(en ? "en-US" : "it-IT"), defaultValue: `si rinnovano il ${new Date(data.weekly.expires_at).toLocaleDateString("it-IT")}` })}`}
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8" data-testid="weekly-block">
+            {data.weekly.missions.map((m) => (
+              <WeeklyMissionCard key={m.code} m={m} en={en} t={t} />
+            ))}
+          </div>
+        </>
+      )}
+
       {/* Attive */}
       <SectionLabel icon={Swords} text={`${t("missions.active", "Missioni attive")} · ${data.slots.used}/${data.slots.max}`} />
       {data.active.length === 0 ? (
@@ -172,6 +199,86 @@ function SectionLabel({ icon: Icon, text }) {
     <div className="flex items-center gap-2 mb-3">
       <Icon size={13} className="text-[#E5FF00]" />
       <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">{text}</span>
+    </div>
+  );
+}
+
+function ChainStepRow({ s, en }) {
+  const Icon = ICONS[s.icon] || Swords;
+  const done = s.status === "completed";
+  const locked = s.status === "locked";
+  const pct = Math.max(0, Math.min(100, Math.round((s.progress / s.target) * 100)));
+  return (
+    <div className={`flex items-center gap-4 p-4 ${locked ? "opacity-40" : ""}`} data-testid={`chain-step-${s.code}`}>
+      <div className={`w-9 h-9 flex items-center justify-center border shrink-0 ${
+        done ? "border-[#00FF66] text-[#00FF66]" : locked ? "border-[#2A2A35] text-zinc-600" : "border-[#E5FF00] text-[#E5FF00]"
+      }`}>
+        {done ? <CheckCircle2 size={16} /> : locked ? <Lock size={14} /> : <Icon size={16} />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono text-zinc-600">#{s.order}</span>
+          <span className={`text-sm font-semibold ${done ? "text-zinc-500 line-through" : "text-zinc-100"}`}>
+            {en ? s.name_en : s.name_it}
+          </span>
+          <span className="text-[10px] font-mono text-[#E5FF00]">+{s.xp} XP</span>
+        </div>
+        {!done && <div className="text-xs text-zinc-500 mt-0.5">{en ? s.desc_en : s.desc_it}</div>}
+        {s.status === "active" && s.target > 1 && (
+          <div className="flex items-center gap-3 mt-2">
+            <div className="flex-1 h-1 bg-[#0A0A0C] border border-[#2A2A35] overflow-hidden">
+              <div className="h-full bg-[#E5FF00]" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-[10px] font-mono text-zinc-500">{s.progress}/{s.target}</span>
+          </div>
+        )}
+      </div>
+      {s.status === "active" && (
+        <Link to={s.link} data-testid={`chain-go-${s.code}`}
+          className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-black bg-[#E5FF00] hover:bg-[#D4EC00] px-3 py-1.5 transition-colors shrink-0">
+          {en ? s.cta_en : s.cta_it} <ArrowRight size={11} />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function WeeklyMissionCard({ m, en, t }) {
+  const Icon = ICONS[m.icon] || Sparkles;
+  const done = !!m.completed_at;
+  const pct = Math.max(0, Math.min(100, Math.round((m.progress / m.target) * 100)));
+  const why = en ? m.why_en : m.why_it;
+  return (
+    <div className={`border p-4 ${done ? "border-[#00FF66]/40 bg-[#00FF66]/[0.03]" : "border-[#00E0FF]/30 bg-[#00E0FF]/[0.03]"}`} data-testid={`weekly-${m.template}`}>
+      <div className="flex items-start gap-3">
+        <div className={`w-10 h-10 flex items-center justify-center border shrink-0 ${done ? "border-[#00FF66]/50 text-[#00FF66]" : "border-[#00E0FF]/50 text-[#00E0FF]"}`}>
+          {done ? <CheckCircle2 size={16} /> : <Icon size={16} />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={`text-sm font-semibold ${done ? "text-zinc-500 line-through" : ""}`}>{en ? m.name_en : m.name_it}</span>
+            <span className="text-[10px] font-mono text-[#E5FF00]">+{m.xp} XP</span>
+          </div>
+          <div className="text-xs text-zinc-500 mt-1">{en ? m.desc_en : m.desc_it}</div>
+          {why && (
+            <div className="text-[11px] text-[#00E0FF]/90 mt-1.5 italic">
+              {t("missions.weekly_why", "Perché")}: {why}
+            </div>
+          )}
+          {!done && (
+            <div className="flex items-center gap-3 mt-3">
+              <div className="flex-1 h-1.5 bg-[#0A0A0C] border border-[#2A2A35] overflow-hidden">
+                <div className="h-full bg-[#00E0FF]" style={{ width: `${pct}%` }} />
+              </div>
+              <span className="text-[10px] font-mono text-zinc-400 tabular-nums">{m.progress}/{m.target}</span>
+              <Link to={m.link} data-testid={`weekly-go-${m.template}`}
+                className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-black bg-[#00E0FF] hover:bg-[#33E6FF] px-3 py-1.5 transition-colors">
+                {en ? m.cta_en : m.cta_it} <ArrowRight size={11} />
+              </Link>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

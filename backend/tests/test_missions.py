@@ -61,6 +61,20 @@ def test_unknown_mission_rejected(ctx):
     assert ctx["s"].post(f"{BASE_URL}/api/missions/activate/nope", timeout=10).status_code == 400
 
 
+def test_chain_and_weekly_initial(ctx):
+    d = ctx["s"].get(f"{BASE_URL}/api/missions", timeout=10).json()
+    steps = d["chain"]["steps"]
+    assert [s["code"] for s in steps] == ["recruit_scan", "recruit_optimize", "recruit_benchmark"]
+    assert steps[0]["status"] == "active"      # nessuno scan ancora
+    assert steps[1]["status"] == "locked"
+    assert d["chain"]["done"] is False
+    wk = d["weekly"]
+    assert wk["week_id"] and wk["expires_at"]
+    # utente senza specs.cpu -> fallback deterministico (niente chiamata AI)
+    assert {m["template"] for m in wk["missions"]} == {"w_bench", "w_net"}
+    assert all(m["progress"] == 0 and not m["completed_at"] for m in wk["missions"])
+
+
 def test_svc_purge_completes_and_awards_xp(ctx):
     xp_before = ctx["s"].get(f"{BASE_URL}/api/missions", timeout=10).json()["xp"]
     tracked = [
@@ -79,3 +93,26 @@ def test_svc_purge_completes_and_awards_xp(ctx):
     # just_completed e' one-shot: seconda GET non lo ripete
     d2 = ctx["s"].get(f"{BASE_URL}/api/missions", timeout=10).json()
     assert d2["just_completed"] == []
+
+
+def test_chain_advances_with_activity(ctx):
+    # dopo gli scan del test precedente: pc_scans>=1 e services_done>=1
+    d = ctx["s"].get(f"{BASE_URL}/api/missions", timeout=10).json()
+    st = {s["code"]: s["status"] for s in d["chain"]["steps"]}
+    assert st["recruit_scan"] == "completed"
+    assert st["recruit_optimize"] == "completed"
+    assert st["recruit_benchmark"] == "active"
+    assert d["chain"]["done"] is False
+
+
+def test_benchmark_completes_chain_and_weekly(ctx):
+    r = requests.post(f"{BASE_URL}/api/agent/report-specs",
+                      headers={"X-Agent-Token": ctx["agent_token"]},
+                      json={"benchmark": {"overall": 75, "duration_s": 30}}, timeout=15)
+    assert r.status_code == 200
+    d = ctx["s"].get(f"{BASE_URL}/api/missions", timeout=10).json()
+    just = [m["code"] for m in d["just_completed"]]
+    assert "recruit_benchmark" in just
+    assert d["chain"]["done"] is True
+    wk = {m["template"]: bool(m["completed_at"]) for m in d["weekly"]["missions"]}
+    assert wk["w_bench"] is True
