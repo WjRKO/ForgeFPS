@@ -375,7 +375,32 @@ def build(get_current_user):
             fields["benchmark"] = record
             await db.benchmarks.insert_one({**record})
         if data.boost_session is not None:
-            await db.boost_sessions.insert_one({**data.boost_session, "user_id": uid, "created_at": now_iso()})
+            _bs = {**data.boost_session, "user_id": uid, "created_at": now_iso()}
+            await db.boost_sessions.insert_one(dict(_bs))
+            # Recap post-partita -> notifica dashboard con confronto vs sessione precedente
+            _rec = _bs.get("recap") or {}
+            if isinstance(_rec, dict) and _rec.get("fps_avg"):
+                try:
+                    _prev = await db.boost_sessions.find_one(
+                        {"user_id": uid, "game": _bs.get("game"),
+                         "recap.fps_avg": {"$gt": 0}, "created_at": {"$lt": _bs["created_at"]}},
+                        sort=[("created_at", -1)])
+                    _mins = round((_bs.get("duration_s") or 0) / 60)
+                    _body = f"{_rec['fps_avg']} FPS medi"
+                    if _rec.get("fps_low"):
+                        _body += f" · 1% low {_rec['fps_low']}"
+                    if _rec.get("gpu_temp_max"):
+                        _body += f" · GPU max {_rec['gpu_temp_max']}°C"
+                    if _prev and (_prev.get("recap") or {}).get("fps_avg"):
+                        _d = int(_rec["fps_avg"]) - int(_prev["recap"]["fps_avg"])
+                        _body += f" · {'+' if _d >= 0 else ''}{_d} FPS vs sessione precedente"
+                    await db.notifications.insert_one({
+                        "user_id": uid, "type": "recap",
+                        "title": f"Recap {_bs.get('game')} · {_mins} min",
+                        "body": _body, "link": "/app/gaming",
+                        "created_at": now_iso(), "read": False})
+                except Exception:
+                    pass
         await db.pc_specs.update_one({"user_id": uid}, {"$set": fields}, upsert=True)
         # v0.7.7 Milestones: track scan + health + daily active
         try:

@@ -143,7 +143,7 @@ const resources = {
         cta_track: "Traccia un prodotto",
         pc_hw: "Hardware",
       },
-      gaming: { tab_games: "I miei giochi", tab_profiles: "Profili Gioco" },
+      gaming: { tab_games: "I miei giochi", tab_sessions: "Sessioni", tab_profiles: "Profili Gioco" },
       mypc: { tab_overview: "Panoramica", tab_live: "Monitoraggio Live", tab_benchmark: "Benchmark" },
       grp: { browser: "Browser", chat: "Chat & Voce (Discord, Teams...)", media: "Musica & Media (Spotify...)", cloud: "Sync cloud (OneDrive, Drive...)", launcher: "Launcher (Epic Games)", other: "Utility (CCleaner, Cortana...)" },
       tracker: {
@@ -921,7 +921,7 @@ const resources = {
         cta_track: "Track a product",
         pc_hw: "Hardware",
       },
-      gaming: { tab_games: "My games", tab_profiles: "Game Profiles" },
+      gaming: { tab_games: "My games", tab_sessions: "Sessions", tab_profiles: "Game Profiles" },
       mypc: { tab_overview: "Overview", tab_live: "Live Monitoring", tab_benchmark: "Benchmark" },
       grp: { browser: "Browsers", chat: "Chat & Voice (Discord, Teams...)", media: "Music & Media (Spotify...)", cloud: "Cloud sync (OneDrive, Drive...)", launcher: "Launcher (Epic Games)", other: "Utilities (CCleaner, Cortana...)" },
       tracker: {

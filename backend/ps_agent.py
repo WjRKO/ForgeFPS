@@ -5909,12 +5909,29 @@ public static class FFWin {
   Start-Fps
   $boosted = $false; $skipUntilExit = $false; $bGame = ''; $bStart = $null; $prevPlan = ''
   $curName = ''; $detCount = 0; $lostCount = 0; $script:BACTS = @()
+  # Recap post-partita: accumulatori sessione
+  $script:RCP_FPS = New-Object System.Collections.ArrayList
+  $script:RCP_LATS = 0.0; $script:RCP_LATN = 0; $script:RCP_HIT = 0; $script:RCP_TICK = 0
+  $script:RCP_GTS = 0; $script:RCP_GTN = 0; $script:RCP_GTMAX = 0; $script:RCP_CTMAX = 0
   Say "`n[SORVEGLIANZA ATTIVA] Avvia pure il tuo gioco quando vuoi." 'Green'
   try {
     while ($true) {
       $name = ''; $gpid = 0
       $f = Get-Fps
       if ($f -and $f.fps -ge 15) { $name = $f.game }
+      if ($boosted -and $f -and $f.fps -gt 0) {
+        [void]$script:RCP_FPS.Add([int]$f.fps)
+        if ($f.latency_ms) { $script:RCP_LATS += $f.latency_ms; $script:RCP_LATN++ }
+        if ($f.gd -and $f.gd.hitches) { $script:RCP_HIT += [int]$f.gd.hitches }
+        $script:RCP_TICK++
+        if (($script:RCP_TICK % 15) -eq 1) {
+          try {
+            $tt = Get-LhmTemps
+            if ($tt -and $tt.ContainsKey('gpu_temp')) { $gv = [int]$tt.gpu_temp; $script:RCP_GTS += $gv; $script:RCP_GTN++; if ($gv -gt $script:RCP_GTMAX) { $script:RCP_GTMAX = $gv } }
+            if ($tt -and $tt.ContainsKey('cpu_temp')) { $cv = [int]$tt.cpu_temp; if ($cv -gt $script:RCP_CTMAX) { $script:RCP_CTMAX = $cv } }
+          } catch {}
+        }
+      }
       if (-not $name) { $p = Get-FullscreenGame; if ($p) { $name = $p.Name; $gpid = $p.Id } }
       if ($name) {
         if ($name -eq $curName) { $detCount++ } else { $curName = $name; $detCount = 1 }
@@ -5967,13 +5984,36 @@ public static class FFWin {
           Say ("`n[STEP] Fine partita {0}: ripristino..." -f ($bGame -replace '\.exe$', '')) 'Cyan'
           if ($doPower) { if ($prevPlan) { powercfg /setactive $prevPlan 2>$null } else { powercfg /setactive scheme_balanced 2>$null }; Say '   [ OK ] Piano energetico ripristinato.' 'Green' }
           $dur = [int]((Get-Date) - $bStart).TotalSeconds
-          $body = [System.Text.Encoding]::UTF8.GetBytes((@{ boost_session = @{ game = ($bGame -replace '\.exe$', ''); duration_s = $dur; actions = @($script:BACTS); ended_at = (Get-Date).ToString('o') } } | ConvertTo-Json -Depth 4 -Compress))
+          $recap = $null
+          if ($script:RCP_FPS.Count -ge 5) {
+            $arr = [int[]]$script:RCP_FPS.ToArray(); [Array]::Sort($arr)
+            $rn = $arr.Length
+            $sum = 0; foreach ($v in $arr) { $sum += $v }
+            $recap = @{ fps_avg = [int][math]::Round($sum / $rn); fps_low = $arr[[math]::Max(0, [int][math]::Floor(0.01 * $rn))]; fps_min = $arr[0]; fps_max = $arr[$rn - 1]; samples = $rn }
+            if ($script:RCP_LATN -gt 0) { $recap.latency_ms = [int][math]::Round($script:RCP_LATS / $script:RCP_LATN) }
+            if ($script:RCP_HIT -gt 0) { $recap.hitches = $script:RCP_HIT }
+            if ($script:RCP_GTN -gt 0) { $recap.gpu_temp_max = $script:RCP_GTMAX; $recap.gpu_temp_avg = [int][math]::Round($script:RCP_GTS / $script:RCP_GTN) }
+            if ($script:RCP_CTMAX -gt 0) { $recap.cpu_temp_max = $script:RCP_CTMAX }
+          }
+          $__bs = @{ game = ($bGame -replace '\.exe$', ''); duration_s = $dur; actions = @($script:BACTS); ended_at = (Get-Date).ToString('o') }
+          if ($recap) { $__bs.recap = $recap }
+          $body = [System.Text.Encoding]::UTF8.GetBytes((@{ boost_session = $__bs } | ConvertTo-Json -Depth 5 -Compress))
           try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+          if ($recap) {
+            Say ("`n   == RECAP PARTITA: {0} ({1} min) ==" -f ($bGame -replace '\.exe$', ''), [math]::Round($dur / 60, 1)) 'Cyan'
+            Say ("   FPS medi: {0}  |  1% low: {1}  |  min/max: {2}/{3}" -f $recap.fps_avg, $recap.fps_low, $recap.fps_min, $recap.fps_max) 'White'
+            if ($recap.ContainsKey('gpu_temp_max')) { Say ("   GPU: max {0} C (media {1} C)" -f $recap.gpu_temp_max, $recap.gpu_temp_avg) 'White' }
+            if ($recap.ContainsKey('latency_ms')) { Say ("   Latenza media: {0} ms" -f $recap.latency_ms) 'White' }
+            Say '   Recap completo su forgefps.dev -> Gaming -> Sessioni.' 'DarkGray'
+          }
           Say ("   Sessione registrata ({0} min). Torno in sorveglianza." -f [math]::Round($dur / 60, 1)) 'DarkGray'
         } else {
           Say "`n[INFO] Partita finita (boost annullato). Torno in sorveglianza." 'DarkGray'
         }
         $boosted = $false; $skipUntilExit = $false; $bGame = ''; $prevPlan = ''; $curName = ''; $detCount = 0
+        $script:RCP_FPS = New-Object System.Collections.ArrayList
+        $script:RCP_LATS = 0.0; $script:RCP_LATN = 0; $script:RCP_HIT = 0; $script:RCP_TICK = 0
+        $script:RCP_GTS = 0; $script:RCP_GTN = 0; $script:RCP_GTMAX = 0; $script:RCP_CTMAX = 0
       }
       Start-Sleep -Milliseconds 2000
     }

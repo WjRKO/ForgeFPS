@@ -66,6 +66,65 @@ const DecisionBadge = ({ decision }) =>
     <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest font-bold text-orange-400"><RotateCcw size={12} /> Rollback</span>
   );
 
+function FleetValidationCard() {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    api.get("/lab/fleet-validation").then(({ data: d }) => setData(d)).catch(() => {});
+  }, []);
+  if (!data) return null;
+  const items = (data.items || []).filter((i) => i.tested >= 1);
+  return (
+    <HUDCard testid="fleet-validation-card">
+      <div className="p-5">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2">
+            <Users size={13} className="text-[#00E0FF]" /> {T("Validati dalla flotta", "Fleet-validated")}
+          </div>
+          <span className="text-[10px] font-mono text-zinc-500">
+            {data.total_tests} {T("test anonimi", "anonymous tests")} · {T("fascia hw", "hw class")}: <span className="text-zinc-300">{data.hw_class}</span>
+          </span>
+        </div>
+        <div className="text-[11px] text-zinc-500 mb-4">
+          {T("Risultati reali e anonimi degli esperimenti Lab di tutti gli utenti FrameForge.",
+             "Real, anonymous results from Lab experiments across all FrameForge users.")}
+        </div>
+        {items.length === 0 ? (
+          <div className="border border-dashed border-[#2A2A35] p-5 text-center text-sm text-zinc-500" data-testid="fleet-empty">
+            {T("La flotta sta ancora raccogliendo dati — completa un esperimento per contribuire ai primi risultati.",
+               "The fleet is still gathering data — complete an experiment to contribute the first results.")}
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-2">
+            {items.map((it) => (
+              <div key={it.tweak_id} className="border border-[#1A1A24] bg-black/30 p-3" data-testid={`fleet-tweak-${it.tweak_id}`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-zinc-200 flex-1 truncate">{it.name}</span>
+                  <span className={`text-sm font-mono font-black tabular-nums ${it.success_pct >= 60 ? "text-[#00FF66]" : it.success_pct >= 40 ? "text-[#E5FF00]" : "text-zinc-400"}`}>
+                    {it.success_pct}%
+                  </span>
+                </div>
+                <div className="mt-1.5 h-1 bg-[#0A0A0C] border border-[#1A1A24] overflow-hidden">
+                  <div className={`h-full ${it.success_pct >= 60 ? "bg-[#00FF66]" : it.success_pct >= 40 ? "bg-[#E5FF00]" : "bg-zinc-600"}`} style={{ width: `${it.success_pct}%` }} />
+                </div>
+                <div className="mt-1.5 flex items-center gap-2 text-[10px] font-mono text-zinc-500">
+                  <span>{it.tested} test</span>
+                  <span>·</span>
+                  <span>{it.avg_delta_pct >= 0 ? "+" : ""}{it.avg_delta_pct}% FPS {T("medio", "avg")}</span>
+                  {it.hw && (
+                    <span className="ml-auto text-[#00E0FF]" data-testid={`fleet-hw-${it.tweak_id}`}>
+                      {T("tuo hw", "your hw")}: {it.hw.success_pct}% ({it.hw.tested})
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </HUDCard>
+  );
+}
+
 function SetupCard({ registry, onStart, starting }) {
   const [risk, setRisk] = useState("medium");
   const [win, setWin] = useState(90);
@@ -683,6 +742,7 @@ export default function Lab() {
       {needSetup && (
         <>
           <SetupCard onStart={start} starting={starting} />
+          <FleetValidationCard />
           <InsightsCard onCheck={startCheck} busy={starting} />
           <HistoryCard />
         </>

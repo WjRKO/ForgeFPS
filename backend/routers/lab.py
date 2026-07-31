@@ -387,6 +387,38 @@ def build(get_current_user):
         await _save(sess)
         return {"session": _public(sess)}
 
+    @r.get("/lab/fleet-validation")
+    async def lab_fleet_validation(user: dict = Depends(get_current_user)):
+        """Tweak validati dalla flotta: aggregato anonimo globale + fascia hardware dell'utente."""
+        specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"data": 1})
+        hw = _hw_class((specs or {}).get("data") or {})
+        names = {t["tweak_id"]: {"name": t.get("name"), "family": t.get("family")} for t in TWEAKS}
+        agg = {}
+        async for d in db.lab_fleet_stats.find({}):
+            a = agg.setdefault(d["tweak_id"], {"tested": 0, "kept": 0, "delta_sum": 0.0, "hw": None})
+            a["tested"] += int(d.get("tested") or 0)
+            a["kept"] += int(d.get("kept") or 0)
+            a["delta_sum"] += float(d.get("delta_sum") or 0.0)
+            if d.get("hw_class") == hw and int(d.get("tested") or 0) > 0:
+                a["hw"] = {"tested": int(d["tested"]), "kept": int(d.get("kept") or 0),
+                           "success_pct": round(100 * int(d.get("kept") or 0) / int(d["tested"])),
+                           "avg_delta_pct": round(float(d.get("delta_sum") or 0.0) / int(d["tested"]), 1)}
+        items = []
+        for tid, a in agg.items():
+            if a["tested"] <= 0:
+                continue
+            meta = names.get(tid) or {}
+            items.append({
+                "tweak_id": tid, "name": meta.get("name") or tid,
+                "tested": a["tested"], "kept": a["kept"],
+                "success_pct": round(100 * a["kept"] / a["tested"]),
+                "avg_delta_pct": round(a["delta_sum"] / a["tested"], 1),
+                "hw": a["hw"],
+            })
+        items.sort(key=lambda x: (-(x["hw"] is not None), -x["success_pct"], -x["tested"]))
+        return {"hw_class": hw, "items": items,
+                "total_tests": sum(i["tested"] for i in items)}
+
     @r.get("/lab/history")
     async def lab_history(user: dict = Depends(get_current_user)):
         out = []
