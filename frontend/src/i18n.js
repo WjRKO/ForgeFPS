@@ -215,6 +215,16 @@ const resources = {
         personalized: "Consigli personalizzati sul tuo PC", empty_title: "Come posso aiutarti a spingere il tuo PC?",
         thinking: "Sto pensando…", copy_code: "Copia", copied: "Copiato",
         error_conn: "[Errore di connessione all'AI]",
+        credits_left: "{{count}} messaggi AI rimanenti",
+        credits_welcome: "di benvenuto",
+        credits_earned: "guadagnati (scadono lunedì)",
+        credits_weekly: "{{used}}/{{limit}} messaggi AI usati questa settimana (piano Pro)",
+        credits_weekly_empty: "Limite settimanale Pro raggiunto: si azzera lunedì.",
+        credits_unlimited: "Messaggi AI illimitati · piano Streamer",
+        credits_empty_title: "Crediti AI esauriti",
+        credits_empty_desc: "Completa missioni (+2 crediti) o sblocca trofei (+5/15) per guadagnarne altri, oppure passa a Pro per 50 messaggi a settimana.",
+        credits_go_missions: "Guadagna con le missioni",
+        credits_upgrade: "Passa a Pro",
         default_suggestions: ["Come riduco l'input lag per il gaming competitivo?", "Migliori impostazioni OBS per streaming a 1080p60", "Come ottimizzo Windows 11 per FPS massimi?", "Tweak per abbassare le temperature della GPU"],
         coach_suggestions: {
           default: [
@@ -993,6 +1003,16 @@ const resources = {
         personalized: "Tips personalized to your PC", empty_title: "How can I help you boost your PC?",
         thinking: "Thinking…", copy_code: "Copy", copied: "Copied",
         error_conn: "[AI connection error]",
+        credits_left: "{{count}} AI messages left",
+        credits_welcome: "welcome",
+        credits_earned: "earned (expire Monday)",
+        credits_weekly: "{{used}}/{{limit}} AI messages used this week (Pro plan)",
+        credits_weekly_empty: "Pro weekly limit reached: resets on Monday.",
+        credits_unlimited: "Unlimited AI messages · Streamer plan",
+        credits_empty_title: "AI credits exhausted",
+        credits_empty_desc: "Complete missions (+2 credits) or unlock trophies (+5/15) to earn more, or go Pro for 50 messages per week.",
+        credits_go_missions: "Earn via missions",
+        credits_upgrade: "Go Pro",
         default_suggestions: ["How do I reduce input lag for competitive gaming?", "Best OBS settings for 1080p60 streaming", "How do I optimize Windows 11 for max FPS?", "Tweaks to lower GPU temperatures"],
         coach_suggestions: {
           default: [

@@ -290,9 +290,11 @@ async def _evaluate_and_unlock(db, user_id: str, progress: dict) -> list[str]:
     pending_notify = list(progress.get("pending_notify", []))
     obs_pending = list(progress.get("obs_pending", []))
 
+    ai_bonus = 0
     for code in new_unlocks:
         m = MILESTONE_BY_CODE[code]
         total_xp += int(m.get("xp", 0))
+        ai_bonus += {"bronze": 5, "silver": 5, "gold": 10, "platinum": 15}.get(m.get("tier"), 5)
         unlocked_list.append(code)
         unlocked_at[code] = now
         pending_notify.append(code)
@@ -317,6 +319,13 @@ async def _evaluate_and_unlock(db, user_id: str, progress: dict) -> list[str]:
             "updated_at": now,
         }},
     )
+    # Earned Premium: i trofei regalano crediti AI (+5/10/15 per rarita')
+    if ai_bonus:
+        try:
+            from ai_credits import grant_credits
+            await grant_credits(db, user_id, ai_bonus)
+        except Exception:
+            pass
     return new_unlocks
 
 

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+import ai_credits
 import ai_engine
 from database import db, now_iso
 from helpers import pc_context_text, compute_health
@@ -423,10 +424,30 @@ def build(get_current_user):
         await db.chat_sessions.delete_one({"id": session_id, "user_id": str(user["_id"])})
         return {"ok": True}
 
+    @r.get("/credits")
+    async def ai_credits_status(user: dict = Depends(get_current_user)):
+        """Quota messaggi AI: crediti (starter), settimanale (pro), illimitato (streamer)."""
+        return await ai_credits.get_ai_quota(db, user)
+
     @r.post("/chat")
-    async def advisor_chat(data: ChatMessageInputExt, user: dict = Depends(require_pro_dep)):
+    async def advisor_chat(data: ChatMessageInputExt, user: dict = Depends(get_current_user)):
         uid = str(user["_id"])
         await _check_ai_rate_limit(uid)
+        quota = await ai_credits.get_ai_quota(db, user)
+        if quota["mode"] == "weekly" and quota["remaining"] <= 0:
+            raise HTTPException(status_code=402, detail={
+                "code": "weekly_limit",
+                "message": f"Hai raggiunto i {quota['limit']} messaggi settimanali del piano Pro. Il limite si azzera lunedì.",
+                "resets_at": quota["resets_at"],
+            })
+        if quota["mode"] == "credits":
+            if quota["total"] <= 0:
+                raise HTTPException(status_code=402, detail={
+                    "code": "no_credits",
+                    "message": "Crediti AI esauriti. Completa missioni (+2) o sblocca trofei (+5/15) per guadagnarne altri, oppure passa a Pro.",
+                    "upgrade_url": "/pricing",
+                })
+            await ai_credits.consume_credit(db, user)
         image_data_url = (data.image_data_url or "").strip()
         # Require at least one of {message, image}
         if not (data.message or "").strip() and not image_data_url:

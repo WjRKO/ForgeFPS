@@ -251,6 +251,9 @@ async def _award_xp(db, uid: str, xp: int) -> None:
         {"user_id": uid}, {"$set": {"xp": total, "tier": xp_to_tier(total)}})
     # Trofeo segreto 'mission_hunter': ogni missione completata bumpa il counter
     await bump_counter(db, uid, "missions_completed", 1)
+    # Earned Premium: ogni missione completata regala crediti AI (+2)
+    from ai_credits import grant_credits, MISSION_CREDITS
+    await grant_credits(db, uid, MISSION_CREDITS)
 
 
 async def _ensure_missions_doc(db, uid: str) -> dict:
