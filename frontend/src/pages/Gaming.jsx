@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Swords, Gamepad2 } from "lucide-react";
 import Games from "./Games";
 import Profiles from "./Profiles";
+import { MissionContextStrip } from "@/components/MissionContextStrip";
 
 const TABS = [
   { id: "games", key: "gaming.tab_games", icon: Swords },
@@ -14,6 +15,9 @@ export default function Gaming({ initialTab = "games" }) {
   const { t } = useTranslation();
   return (
     <div className="fade-up" data-testid="gaming-page">
+      <div className="max-w-6xl mx-auto">
+        <MissionContextStrip metrics={["boost_sessions"]} />
+      </div>
       <div className="max-w-6xl mx-auto mb-4 flex gap-2">
         {TABS.map((tb) => (
           <button key={tb.id} data-testid={`gaming-tab-${tb.id}`} onClick={() => setTab(tb.id)}

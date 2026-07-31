@@ -520,6 +520,7 @@ def _weekly_enrich(rec: dict, tpl: dict, progress: int) -> dict:
     return {
         "code": rec["code"], "template": rec["template"], "xp": int(tpl["xp"]),
         "icon": tpl["icon"], "link": tpl["link"], "target": int(rec["target"]),
+        "metric": tpl["metric"], "mode": tpl["mode"],
         "progress": progress, "completed_at": rec.get("completed_at"),
         "why_it": rec.get("why_it"), "why_en": rec.get("why_en"),
         "name_it": tpl["name_it"].replace("{n}", n), "name_en": tpl["name_en"].replace("{n}", n),

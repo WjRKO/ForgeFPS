@@ -24,7 +24,7 @@ const resources = {
         changelog: "Novita'",
         feedback: "Feedback",
       },
-      section: { optimize: "Ottimizza il PC", buy: "Acquisti", tools: "Strumenti", community: "Community" },
+      section: { optimize: "Ottimizza il PC", pc: "Il tuo PC", gaming: "Gaming", buy: "Acquisti", tools: "Strumenti", community: "Community" },
       network: {
         title: "Rete & Bufferbloat", subtitle: "Misura la latenza a riposo e sotto carico. Meno bufferbloat = meno lag online.",
         run_title: "Esegui il test", run_desc: "Copia il comando ed eseguilo in PowerShell. Non serve l'amministratore. Evita di usare internet durante il test (~15s).",
@@ -530,6 +530,8 @@ const resources = {
         weekly_title: "Missioni della settimana",
         weekly_expires: "si rinnovano il {{date}}",
         weekly_why: "Perché",
+        strip_label: "Missione attiva",
+        celebrate: "Missione completata",
       },
       admin: {
         eyebrow: "Admin", title: "Pannello amministratore",
@@ -797,7 +799,7 @@ const resources = {
         changelog: "What's New",
         feedback: "Feedback",
       },
-      section: { optimize: "Optimize PC", buy: "Shopping", tools: "Tools", community: "Community" },
+      section: { optimize: "Optimize PC", pc: "Your PC", gaming: "Gaming", buy: "Shopping", tools: "Tools", community: "Community" },
       network: {
         title: "Network & Bufferbloat", subtitle: "Measure idle vs loaded latency. Less bufferbloat = less online lag.",
         run_title: "Run the test", run_desc: "Copy the command and run it in PowerShell. No admin required. Avoid using the internet during the test (~15s).",
@@ -1303,6 +1305,8 @@ const resources = {
         weekly_title: "Missions of the week",
         weekly_expires: "renews on {{date}}",
         weekly_why: "Why",
+        strip_label: "Active mission",
+        celebrate: "Mission complete",
       },
       admin: {
         eyebrow: "Admin", title: "Administrator panel",

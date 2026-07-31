@@ -10,6 +10,7 @@ import { trackConversion } from "@/lib/gtag";
 import AgentPreview from "@/components/AgentPreview";
 import FirstScanBanner from "@/components/FirstScanBanner";
 import TokenMismatchHint from "@/components/TokenMismatchHint";
+import { MissionContextStrip } from "@/components/MissionContextStrip";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const isEn = () => i18n.language?.startsWith("en");
@@ -224,6 +225,8 @@ export default function DesktopAgent() {
         <h1 className="font-display font-black text-3xl tracking-tighter">{t("desktop.title")}</h1>
         <p className="text-zinc-500 text-sm mt-2 max-w-2xl">{s.exe_desc}</p>
       </div>
+
+      <MissionContextStrip metrics={["pc_scans", "pc_scans_total", "tweaks_applied"]} />
 
       {/* First-scan banner: mostrato solo se l'utente non ha ancora fatto il primo sync */}
       <FirstScanBanner />

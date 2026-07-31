@@ -12,6 +12,7 @@ import BenchmarkSparkline from "@/components/BenchmarkSparkline";
 import NextActionBanner from "@/components/NextActionBanner";
 import GpuReferenceCard from "@/components/GpuReferenceCard";
 import FullBenchmarkReport from "@/components/FullBenchmarkReport";
+import { MissionContextStrip } from "@/components/MissionContextStrip";
 
 const BENCH_METRICS = [
   { key: "score", lk: "m_score", unit: "/100", higherBetter: true },
@@ -248,6 +249,7 @@ export default function Benchmark() {
 
   return (
     <div className="max-w-6xl mx-auto fade-up">
+      <MissionContextStrip metrics={["benchmarks", "benchmarks_total"]} />
       <PageHeader eyebrow={t("bench.eyebrow", { defaultValue: "// benchmark" })} title={t("bench.title", { defaultValue: "Benchmark del sistema" })}
         actions={<>
           <button data-testid="silent-bench-btn" onClick={guardedLaunch} disabled={benchLaunch.running}

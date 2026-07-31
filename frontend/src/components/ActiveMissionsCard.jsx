@@ -2,26 +2,21 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Swords, ArrowRight, Target } from "lucide-react";
-import { toast } from "sonner";
 import api from "@/lib/api";
 
-export const ActiveMissionsCard = () => {
+export const ActiveMissionsCard = ({ data: dataProp }) => {
   const { t, i18n } = useTranslation();
   const en = (i18n.language || "it").startsWith("en");
-  const [data, setData] = useState(null);
+  const [fetched, setFetched] = useState(null);
+  const data = dataProp !== undefined ? dataProp : fetched;
 
   useEffect(() => {
+    if (dataProp !== undefined) return;
     api.get("/missions").then(({ data: d }) => {
-      setData(d);
-      (d.just_completed || []).forEach((m) => {
-        toast.success(
-          t("missions.completed_toast", {
-            name: en ? m.name_en : m.name_it,
-            xp: m.xp,
-            defaultValue: `Missione completata: ${en ? m.name_en : m.name_it} (+${m.xp} XP)`,
-          })
-        );
-      });
+      setFetched(d);
+      if (d.just_completed?.length) {
+        window.dispatchEvent(new CustomEvent("ff-mission-completed", { detail: d.just_completed }));
+      }
     }).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -70,6 +65,11 @@ export const ActiveMissionsCard = () => {
             {t("missions.dash_title", "Missioni attive")}
           </span>
           <span className="text-[10px] font-mono text-zinc-600">{data.slots.used}/{data.slots.max}</span>
+          {data.tier && (
+            <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 border border-[#2A2A35] text-zinc-400" data-testid="missions-card-tier">
+              {data.tier} · {data.xp} XP
+            </span>
+          )}
         </div>
         <Link to="/app/milestones" data-testid="missions-see-all" className="text-[10px] font-mono uppercase text-[#E5FF00] hover:underline">
           {t("missions.dash_all", "Tutte")} →

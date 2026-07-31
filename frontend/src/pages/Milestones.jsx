@@ -83,15 +83,9 @@ function MissionsTab({ t, lang }) {
   const load = () =>
     api.get("/missions").then(({ data: d }) => {
       setData(d);
-      (d.just_completed || []).forEach((m) => {
-        toast.success(
-          t("missions.completed_toast", {
-            name: en ? m.name_en : m.name_it,
-            xp: m.xp,
-            defaultValue: `Missione completata: ${en ? m.name_en : m.name_it} (+${m.xp} XP)`,
-          })
-        );
-      });
+      if (d.just_completed?.length) {
+        window.dispatchEvent(new CustomEvent("ff-mission-completed", { detail: d.just_completed }));
+      }
     }).catch(() => {});
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps

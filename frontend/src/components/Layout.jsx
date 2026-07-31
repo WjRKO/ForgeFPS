@@ -13,6 +13,7 @@ import ProfileMenu from "@/components/ProfileMenu";
 import FeedbackModal from "@/components/FeedbackModal";
 import AgentUpdateBanner from "@/components/AgentUpdateBanner";
 import XpSidebarWidget from "@/components/XpSidebarWidget";
+import { MissionCelebration } from "@/components/MissionCelebration";
 import { Smartphone } from "lucide-react";
 import api from "@/lib/api";
 import { pushSupported, getPushState, enablePush, disablePush } from "@/lib/push";
@@ -20,23 +21,27 @@ import { pushSupported, getPushState, enablePush, disablePush } from "@/lib/push
 const NAV_GROUPS = [
   { section: null, items: [
     { to: "/app", label: "nav.dashboard", icon: LayoutDashboard, end: true, id: "dashboard" },
+    { to: "/app/milestones", label: "nav.milestones", icon: Swords, id: "milestones" },
+  ]},
+  { section: "section.pc", items: [
     { to: "/app/pc", label: "nav.pc", icon: Activity, id: "pc" },
-    { to: "/app/advisor", label: "nav.advisor", icon: MessageSquareCode, id: "advisor" },
-    { to: "/app/gaming", label: "nav.gaming", icon: Gamepad2, id: "gaming" },
     { to: "/app/lab", label: "nav.lab", icon: FlaskConical, id: "lab" },
-    { to: "/app/milestones", label: "nav.milestones", icon: Trophy, id: "milestones" },
-    { to: "/app/tracker", label: "nav.tracker", icon: LineChart, id: "tracker" },
+    { to: "/app/network", label: "nav.network", icon: Gauge, id: "network" },
+    { to: "/app/bios", label: "nav.bios", icon: SlidersHorizontal, id: "bios" },
+  ]},
+  { section: "section.gaming", items: [
+    { to: "/app/gaming", label: "nav.gaming", icon: Gamepad2, id: "gaming" },
+    { to: "/app/advisor", label: "nav.advisor", icon: MessageSquareCode, id: "advisor" },
   ]},
   { section: "section.buy", items: [
     { to: "/app/builds", label: "nav.builds", icon: Cpu, id: "builds" },
     { to: "/app/upgrade", label: "nav.upgrade", icon: Rocket, id: "upgrade" },
+    { to: "/app/tracker", label: "nav.tracker", icon: LineChart, id: "tracker" },
   ]},
   { section: "section.tools", items: [
     { to: "/app/desktop", label: "nav.desktop", icon: MonitorDown, id: "desktop" },
     { to: "/app/report", label: "nav.report", icon: FileBarChart, id: "report" },
     { to: "/app/commands", label: "nav.commands", icon: TerminalSquare, id: "commands" },
-    { to: "/app/network", label: "nav.network", icon: Gauge, id: "network" },
-    { to: "/app/bios", label: "nav.bios", icon: SlidersHorizontal, id: "bios" },
   ]},
   { section: null, items: [
     { to: "/app/admin", label: "nav.admin", icon: Shield, id: "admin", adminOnly: true },
@@ -249,6 +254,7 @@ export default function Layout() {
         </main>
       </div>
       <OnboardingTour />
+      <MissionCelebration />
       <MobileHandoffModal open={handoffOpen} onClose={() => setHandoffOpen(false)} />
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </div>

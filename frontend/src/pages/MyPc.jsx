@@ -12,6 +12,7 @@ import SyncTimeline from "@/components/SyncTimeline";
 import { PageHeader } from "@/components/hud";
 import { useSilentLaunch } from "@/hooks/useSilentLaunch";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
+import { MissionContextStrip } from "@/components/MissionContextStrip";
 
 const SPEC_KEYS = ["os", "cpu", "gpu", "ram", "disk", "motherboard", "resolution"];
 const specLabel = (t, k) => ({ os: t("mypcpage.sl_os"), cpu: "CPU", gpu: "GPU", ram: "RAM", disk: t("mypcpage.sl_disk"), motherboard: t("mypcpage.sl_mb"), resolution: t("mypcpage.sl_res") }[k]);
@@ -340,6 +341,8 @@ export default function MyPc() {
           <Link to="/app/upgrade" data-testid="to-upgrade-btn" className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><Rocket size={15} /> {t("mypcpage.upgrade")}</Link>
           <button data-testid="refresh-pc-btn" onClick={load} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><RefreshCw size={15} /> {t("mypcpage.refresh")}</button>
         </>} />
+
+      <MissionContextStrip metrics={["services_done", "startup_done", "health_score", "optimize_total"]} />
 
       {specs?.updated_at && (() => {
         let diffSec = 0;

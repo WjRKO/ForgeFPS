@@ -8,6 +8,7 @@ import { PageHeader, SkeletonCard } from "@/components/hud";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
 import OneClickLaunchButton from "@/components/OneClickLaunchButton";
 import TechTerm from "@/components/TechTerm";
+import { MissionContextStrip } from "@/components/MissionContextStrip";
 
 const GRADE_COLOR = {
   "A+": "#00FF66", "A": "#00FF66", "B": "#E5FF00", "C": "#FF9500", "D": "#FF6B00", "F": "#FF3B30",
@@ -85,6 +86,8 @@ export default function Network() {
   return (
     <div data-testid="network-page">
       <PageHeader eyebrow="// NETWORK" title={t("network.title")} subtitle={t("network.subtitle")} />
+
+      <MissionContextStrip metrics={["net_tests"]} />
 
       {/* Run test */}
       <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 mb-6" data-testid="network-run">
