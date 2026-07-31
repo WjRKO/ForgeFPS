@@ -532,6 +532,9 @@ const resources = {
         weekly_why: "Perché",
         strip_label: "Missione attiva",
         celebrate: "Missione completata",
+        perks_title: "Vantaggi tier",
+        perks_slots: "{{n}} slot missioni",
+        perks_current: "il tuo tier",
       },
       admin: {
         eyebrow: "Admin", title: "Pannello amministratore",
@@ -1307,6 +1310,9 @@ const resources = {
         weekly_why: "Why",
         strip_label: "Active mission",
         celebrate: "Mission complete",
+        perks_title: "Tier perks",
+        perks_slots: "{{n}} mission slots",
+        perks_current: "your tier",
       },
       admin: {
         eyebrow: "Admin", title: "Administrator panel",

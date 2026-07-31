@@ -279,11 +279,12 @@ export default function Report() {
     if (!cardRef.current) return;
     setBusy("pdf");
     try {
-      const [{ toPng }, { jsPDF }, historyRes, tweaksRes] = await Promise.all([
+      const [{ toPng }, { jsPDF }, historyRes, tweaksRes, msRes] = await Promise.all([
         import("html-to-image"),
         import("jspdf"),
         api.get("/health-history").catch(() => ({ data: { points: [] } })),
         api.get("/advisor/applied-tweaks").catch(() => ({ data: [] })),
+        api.get("/milestones/me").catch(() => ({ data: null })),
       ]);
       const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, backgroundColor: "#0A0A0C", cacheBust: true });
       const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
@@ -297,7 +298,8 @@ export default function Report() {
       doc.setTextColor(229, 255, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(20);
       doc.text("FRAMEFORGE", margin, 42);
       doc.setTextColor(160, 160, 160); doc.setFont("helvetica", "normal"); doc.setFontSize(11);
-      doc.text(`${c.pdf_title}  ·  ${new Date().toLocaleDateString()}`, margin, 58);
+      const tierLine = msRes.data?.tier ? `  ·  ${String(msRes.data.tier).toUpperCase()} ${msRes.data.xp} XP` : "";
+      doc.text(`${c.pdf_title}  ·  ${new Date().toLocaleDateString()}${tierLine}`, margin, 58);
       // card image
       const ih = (img.height / img.width) * cw;
       doc.addImage(dataUrl, "PNG", margin, 90, cw, ih);

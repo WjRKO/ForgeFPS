@@ -250,11 +250,18 @@ def _complete(sess, reason=None):
     sess["status"] = "completed"
     sess["finished_at"] = now_iso()
     sess["report"] = _build_report(sess)
+    sess["_bump_lab_milestone"] = True
     _log(sess, "Laboratorio completato: report generato", "ok")
 
 
 async def _save(sess):
     sess["updated_at"] = now_iso()
+    if sess.pop("_bump_lab_milestone", None):
+        try:
+            from milestones import bump_counter
+            await bump_counter(db, sess.get("user_id"), "lab_experiments", 1)
+        except Exception:
+            pass
     await db.lab_sessions.replace_one({"session_id": sess["session_id"]}, sess, upsert=True)
 
 

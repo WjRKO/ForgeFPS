@@ -379,13 +379,23 @@ def build(get_current_user):
         await db.pc_specs.update_one({"user_id": uid}, {"$set": fields}, upsert=True)
         # v0.7.7 Milestones: track scan + health + daily active
         try:
-            from milestones import bump_counter, track_health_score, track_daily_active
+            from milestones import bump_counter, track_health_score, track_daily_active, set_flag
             await bump_counter(db, uid, "pc_scans", 1)
             await track_daily_active(db, uid)
             if data.health is not None:
                 _score = compute_health(data.health).get("score")
                 if _score is not None:
                     await track_health_score(db, uid, int(_score))
+            # v0.8.2 Trofei segreti
+            _h = datetime.now(timezone.utc).hour
+            if _h >= 22 or _h < 4:
+                await set_flag(db, uid, "night_owl_earned", True)
+            if data.benchmark is not None and (data.benchmark.get("overall") or 0) >= 90:
+                await set_flag(db, uid, "speed_demon_earned", True)
+            if data.startup is not None or data.services_audit is not None:
+                _d = await db.pc_specs.find_one({"user_id": uid}, {"services_done": 1, "startup_done": 1})
+                if len((_d or {}).get("services_done") or []) + len((_d or {}).get("startup_done") or []) >= 10:
+                    await set_flag(db, uid, "surgeon_earned", True)
         except Exception:
             pass
         return {"ok": True}

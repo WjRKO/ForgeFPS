@@ -26,7 +26,23 @@ const CATEGORY_LABELS = {
   performance: { it: "Performance", en: "Performance" },
   gaming: { it: "Gaming", en: "Gaming" },
   meta: { it: "Community", en: "Community" },
+  secret: { it: "Segreti", en: "Secret" },
 };
+
+const RARITY = (pct) => {
+  if (pct == null) return null;
+  if (pct < 5) return { it: "Leggendario", en: "Legendary", cls: "text-[#B26BFF] border-[#B26BFF]/50 bg-[#B26BFF]/10" };
+  if (pct < 20) return { it: "Epico", en: "Epic", cls: "text-[#00E0FF] border-[#00E0FF]/50 bg-[#00E0FF]/10" };
+  if (pct < 50) return { it: "Raro", en: "Rare", cls: "text-[#00FF66] border-[#00FF66]/50 bg-[#00FF66]/10" };
+  return { it: "Comune", en: "Common", cls: "text-zinc-400 border-zinc-600 bg-zinc-800/40" };
+};
+
+const TIER_PERKS = [
+  { tier: "bronze", xp: 0, slots: 3 },
+  { tier: "silver", xp: 100, slots: 4 },
+  { tier: "gold", xp: 300, slots: 5 },
+  { tier: "platinum", xp: 800, slots: 6 },
+];
 
 export default function Milestones() {
   const { t, i18n } = useTranslation();
@@ -431,6 +447,34 @@ function TrophiesTab({ t, lang }) {
         </div>
       </div>
 
+      {/* Vantaggi tier */}
+      <div className="border border-[#2A2A35] bg-[#0F0F12] p-4 mb-6" data-testid="tier-perks-panel">
+        <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">
+          {t("missions.perks_title", "Vantaggi tier")}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {TIER_PERKS.map((p) => {
+            const meta = TIER_META[p.tier];
+            const reached = state.xp >= p.xp;
+            const isCurrent = state.tier === p.tier;
+            return (
+              <div key={p.tier} data-testid={`tier-perk-${p.tier}`}
+                className={`border p-3 ${isCurrent ? `${meta.ring} ${meta.bg}` : reached ? "border-[#2A2A35]" : "border-[#1A1A24] opacity-50"}`}>
+                <div className={`text-[10px] font-black uppercase tracking-widest ${meta.color} flex items-center gap-1.5`}>
+                  {reached ? <CheckCircle2 size={11} /> : <Lock size={10} />}
+                  {p.tier}
+                  {isCurrent && <span className="ml-auto text-[8px] text-zinc-400 normal-case tracking-normal">{t("missions.perks_current", "il tuo tier")}</span>}
+                </div>
+                <div className="text-[11px] font-mono text-zinc-500 mt-1">{p.xp}+ XP</div>
+                <div className="text-xs text-zinc-300 mt-1.5">
+                  ⚔ {t("missions.perks_slots", { n: p.slots, defaultValue: `${p.slots} slot missioni` })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* OBS overlay copy */}
       {overlayUrl && (
         <div className="border border-[#2A2A35] bg-[#0F0F12] p-4 mb-6 flex items-center gap-3" data-testid="milestone-overlay-block">
@@ -499,6 +543,7 @@ function MilestoneCard({ m, lang, t }) {
   const desc = lang === "en" ? m.desc_en : m.desc_it;
   const rewardLabel = m.reward ? (lang === "en" ? m.reward.label_en : m.reward.label_it) : null;
   const progressPct = Math.max(0, Math.min(100, Math.round((m.progress / m.threshold) * 100)));
+  const rarity = RARITY(m.rarity_pct);
 
   return (
     <div
@@ -518,12 +563,27 @@ function MilestoneCard({ m, lang, t }) {
             <span className={`text-[9px] font-black uppercase tracking-widest ${tierMeta.color}`}>{m.tier}</span>
             <span className="text-zinc-700 text-[9px]">•</span>
             <span className="text-[9px] font-mono text-zinc-500">+{m.xp} XP</span>
+            {m.secret && (
+              <span className="text-[8px] font-black uppercase tracking-widest px-1 py-0.5 border border-[#B26BFF]/50 text-[#B26BFF]" data-testid={`milestone-${m.code}-secret`}>
+                {lang === "en" ? "Secret" : "Segreto"}
+              </span>
+            )}
             {m.unlocked && (
               <CheckCircle2 size={12} className="ml-auto text-[#00FF66]" data-testid={`milestone-${m.code}-check`} />
             )}
           </div>
           <div className="font-display font-black text-base leading-tight" data-testid={`milestone-${m.code}-name`}>{name}</div>
           <div className="text-xs text-zinc-500 mt-1 leading-snug">{desc}</div>
+          {rarity && (
+            <div className="mt-2 flex items-center gap-1.5">
+              <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 border ${rarity.cls}`} data-testid={`milestone-${m.code}-rarity`}>
+                {lang === "en" ? rarity.en : rarity.it}
+              </span>
+              <span className="text-[9px] font-mono text-zinc-600">
+                {m.rarity_pct}% {lang === "en" ? "of players" : "dei giocatori"}
+              </span>
+            </div>
+          )}
           {rewardLabel && (
             <div className="mt-2 text-[10px] uppercase tracking-widest text-[#E5FF00] font-bold">
               🎁 {rewardLabel}

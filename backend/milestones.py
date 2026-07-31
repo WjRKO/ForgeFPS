@@ -154,6 +154,56 @@ MILESTONES_CATALOG: list[dict[str, Any]] = [
         "condition": {"flag": "beta_tester_earned"},
         "reward": {"type": "badge", "shareable": True, "label_it": "Badge Founding Member", "label_en": "Founding Member badge"},
     },
+
+    # ---- Segreti (nascosti finche' non sbloccati) ----
+    {
+        "code": "night_owl", "category": "secret", "tier": "silver", "xp": 30, "secret": True,
+        "name_it": "Gufo Notturno", "name_en": "Night Owl",
+        "desc_it": "Hai completato uno scan nel cuore della notte.",
+        "desc_en": "You completed a scan in the dead of night.",
+        "icon": "Clock",
+        "condition": {"flag": "night_owl_earned"},
+    },
+    {
+        "code": "surgeon", "category": "secret", "tier": "gold", "xp": 75, "secret": True,
+        "name_it": "Chirurgo", "name_en": "Surgeon",
+        "desc_it": "10 tra servizi e app d'avvio disattivati seguendo i consigli.",
+        "desc_en": "10 services and startup apps disabled following our advice.",
+        "icon": "Wrench",
+        "condition": {"flag": "surgeon_earned"},
+    },
+    {
+        "code": "mad_scientist", "category": "secret", "tier": "gold", "xp": 100, "secret": True,
+        "name_it": "Scienziato Pazzo", "name_en": "Mad Scientist",
+        "desc_it": "5 esperimenti del Performance Lab completati.",
+        "desc_en": "5 Performance Lab experiments completed.",
+        "icon": "Timer",
+        "condition": {"counter": "lab_experiments", "threshold": 5},
+    },
+    {
+        "code": "speed_demon", "category": "secret", "tier": "gold", "xp": 75, "secret": True,
+        "name_it": "Demone della Velocità", "name_en": "Speed Demon",
+        "desc_it": "Benchmark con punteggio complessivo di almeno 90.",
+        "desc_en": "Benchmark with an overall score of at least 90.",
+        "icon": "Gauge",
+        "condition": {"flag": "speed_demon_earned"},
+    },
+    {
+        "code": "mission_hunter", "category": "secret", "tier": "silver", "xp": 50, "secret": True,
+        "name_it": "Cacciatore di Missioni", "name_en": "Mission Hunter",
+        "desc_it": "10 missioni completate.",
+        "desc_en": "10 missions completed.",
+        "icon": "Swords",
+        "condition": {"counter": "missions_completed", "threshold": 10},
+    },
+    {
+        "code": "collector", "category": "secret", "tier": "platinum", "xp": 150, "secret": True,
+        "name_it": "Collezionista", "name_en": "Collector",
+        "desc_it": "15 giochi diversi rilevati dall'Universal Game Detector.",
+        "desc_en": "15 different games detected by the Universal Game Detector.",
+        "icon": "Library",
+        "condition": {"counter_unique": "games_detected", "threshold": 15},
+    },
 ]
 
 MILESTONE_BY_CODE = {m["code"]: m for m in MILESTONES_CATALOG}

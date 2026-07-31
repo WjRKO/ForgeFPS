@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 MAX_ACTIVE = 3
+SLOTS_BY_TIER = {"bronze": 3, "silver": 4, "gold": 5, "platinum": 6}
 STARTER_MISSIONS = ["svc_purge", "bench_first", "advisor_consult"]
 
 MISSIONS_CATALOG: list[dict[str, Any]] = [
@@ -243,11 +244,13 @@ async def _progress(db, uid: str, mission: dict, state: dict) -> int:
 
 
 async def _award_xp(db, uid: str, xp: int) -> None:
-    from milestones import _ensure_progress_doc, xp_to_tier
+    from milestones import _ensure_progress_doc, xp_to_tier, bump_counter
     p = await _ensure_progress_doc(db, uid)
     total = int(p.get("xp", 0)) + int(xp)
     await db.user_progress.update_one(
         {"user_id": uid}, {"$set": {"xp": total, "tier": xp_to_tier(total)}})
+    # Trofeo segreto 'mission_hunter': ogni missione completata bumpa il counter
+    await bump_counter(db, uid, "missions_completed", 1)
 
 
 async def _ensure_missions_doc(db, uid: str) -> dict:
@@ -265,6 +268,11 @@ async def _ensure_missions_doc(db, uid: str) -> dict:
 
 def _enrich(mission: dict, extra: dict) -> dict:
     return {k: v for k, v in {**mission, **extra}.items()}
+
+
+async def _max_slots(db, uid: str) -> int:
+    p = await db.user_progress.find_one({"user_id": uid}, {"tier": 1})
+    return SLOTS_BY_TIER.get((p or {}).get("tier") or "bronze", MAX_ACTIVE)
 
 
 async def get_state(db, uid: str, lang_hint: str | None = None) -> dict:
@@ -311,6 +319,7 @@ async def get_state(db, uid: str, lang_hint: str | None = None) -> dict:
     just_completed = just_completed + just_chain + just_weekly
 
     prog_doc = await db.user_progress.find_one({"user_id": uid}, {"xp": 1, "tier": 1})
+    tier = (prog_doc or {}).get("tier", "bronze")
     return {
         "active": out_active,
         "available": available,
@@ -318,9 +327,9 @@ async def get_state(db, uid: str, lang_hint: str | None = None) -> dict:
         "just_completed": just_completed,
         "chain": chain,
         "weekly": weekly,
-        "slots": {"used": len(out_active), "max": MAX_ACTIVE},
+        "slots": {"used": len(out_active), "max": SLOTS_BY_TIER.get(tier, MAX_ACTIVE)},
         "xp": int((prog_doc or {}).get("xp", 0)),
-        "tier": (prog_doc or {}).get("tier", "bronze"),
+        "tier": tier,
     }
 
 
@@ -335,7 +344,7 @@ async def activate(db, uid: str, code: str) -> dict:
         return {"ok": False, "error": "already_active"}
     if code in completed:
         return {"ok": False, "error": "already_completed"}
-    if len(active) >= MAX_ACTIVE:
+    if len(active) >= await _max_slots(db, uid):
         return {"ok": False, "error": "slots_full"}
     active[code] = await _activation_record(db, uid, m)
     await db.user_missions.update_one(
