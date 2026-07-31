@@ -62,16 +62,30 @@ async def get_ai_quota(db, user: dict) -> dict:
             "total": welcome + earned, "earned_expires_at": week_end_iso()}
 
 
-async def consume_credit(db, user: dict) -> None:
-    """Scala 1 credito: prima i benvenuto, poi i guadagnati della settimana corrente."""
+async def consume_credit(db, user: dict) -> str | None:
+    """Scala 1 credito: prima i benvenuto, poi i guadagnati. Ritorna il bucket consumato."""
     res = await db.users.update_one(
         {"_id": user["_id"], "ai_welcome_credits": {"$gt": 0}},
         {"$inc": {"ai_welcome_credits": -1}})
     if res.modified_count:
-        return
-    await db.users.update_one(
+        return "welcome"
+    res = await db.users.update_one(
         {"_id": user["_id"], "ai_earned_week": week_id(), "ai_earned_credits": {"$gt": 0}},
         {"$inc": {"ai_earned_credits": -1}})
+    return "earned" if res.modified_count else None
+
+
+async def refund_credit(db, user: dict, bucket: str | None) -> None:
+    """Rimborsa 1 credito nel bucket originale (es. errore AI durante lo stream)."""
+    try:
+        if bucket == "welcome":
+            await db.users.update_one({"_id": user["_id"]}, {"$inc": {"ai_welcome_credits": 1}})
+        elif bucket == "earned":
+            await db.users.update_one(
+                {"_id": user["_id"], "ai_earned_week": week_id()},
+                {"$inc": {"ai_earned_credits": 1}})
+    except Exception:
+        pass
 
 
 async def grant_credits(db, uid: str, amount: int) -> None:

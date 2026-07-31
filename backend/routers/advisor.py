@@ -440,6 +440,7 @@ def build(get_current_user):
                 "message": f"Hai raggiunto i {quota['limit']} messaggi settimanali del piano Pro. Il limite si azzera lunedì.",
                 "resets_at": quota["resets_at"],
             })
+        consumed_bucket = None
         if quota["mode"] == "credits":
             if quota["total"] <= 0:
                 raise HTTPException(status_code=402, detail={
@@ -447,7 +448,7 @@ def build(get_current_user):
                     "message": "Crediti AI esauriti. Completa missioni (+2) o sblocca trofei (+5/15) per guadagnarne altri, oppure passa a Pro.",
                     "upgrade_url": "/pricing",
                 })
-            await ai_credits.consume_credit(db, user)
+            consumed_bucket = await ai_credits.consume_credit(db, user)
         image_data_url = (data.image_data_url or "").strip()
         # Require at least one of {message, image}
         if not (data.message or "").strip() and not image_data_url:
@@ -494,6 +495,7 @@ def build(get_current_user):
                 err = f"\n\n[Errore AI: {str(e)[:120]}]"
                 full += err
                 yield err
+                await ai_credits.refund_credit(db, user, consumed_bucket)
             await db.chat_messages.insert_one({"id": str(uuid.uuid4()), "session_id": session_id, "user_id": uid,
                                                "role": "assistant", "content": full, "created_at": now_iso()})
             await db.chat_sessions.update_one({"id": session_id, "user_id": uid}, {"$set": {"updated_at": now_iso()}})
