@@ -26,7 +26,11 @@ export async function getPushState() {
 export async function enablePush() {
   if (!pushSupported()) throw new Error("Notifiche push non supportate da questo browser.");
   const permission = await Notification.requestPermission();
-  if (permission !== "granted") throw new Error("Permesso notifiche negato.");
+  if (permission !== "granted") {
+    const err = new Error(permission === "denied" ? "PUSH_BLOCKED" : "PUSH_DISMISSED");
+    err.code = permission === "denied" ? "blocked" : "dismissed";
+    throw err;
+  }
   const reg = await navigator.serviceWorker.register("/sw.js");
   await navigator.serviceWorker.ready;
   const { data } = await api.get("/push/vapid-public-key");

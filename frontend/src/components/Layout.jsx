@@ -85,7 +85,14 @@ function Notifications() {
         await api.post("/push/test").catch(() => {});
       }
     } catch (e) {
-      toast.error(e.message || t("notif.push_err"));
+      if (e.code === "blocked") {
+        setPushState("denied");
+        toast.error(t("notif.push_blocked_help"), { duration: 10000 });
+      } else if (e.code === "dismissed") {
+        toast.error(t("notif.push_dismissed_help"), { duration: 8000 });
+      } else {
+        toast.error(e.message || t("notif.push_err"));
+      }
     } finally { setPushBusy(false); }
   };
 
@@ -110,12 +117,19 @@ function Notifications() {
             </div>
           </div>
           {pushSupported() && (
-            <button data-testid="toggle-push-btn" onClick={togglePush} disabled={pushBusy || pushState === "denied"}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs border-b border-[#1A1A24] hover:bg-[#141419] transition-colors disabled:opacity-50">
-              {pushState === "subscribed" ? <BellOff size={14} className="text-[#FF3B30]" /> : <BellRing size={14} className="text-[#00FF66]" />}
-              {pushState === "denied" ? t("notif.push_blocked")
-                : pushState === "subscribed" ? t("notif.push_off") : t("notif.push_on")}
-            </button>
+            <div className="border-b border-[#1A1A24]">
+              <button data-testid="toggle-push-btn" onClick={togglePush} disabled={pushBusy || pushState === "denied"}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-xs hover:bg-[#141419] transition-colors disabled:opacity-50">
+                {pushState === "subscribed" ? <BellOff size={14} className="text-[#FF3B30]" /> : <BellRing size={14} className="text-[#00FF66]" />}
+                {pushState === "denied" ? t("notif.push_blocked")
+                  : pushState === "subscribed" ? t("notif.push_off") : t("notif.push_on")}
+              </button>
+              {pushState === "denied" && (
+                <div data-testid="push-unblock-hint" className="px-3 pb-2.5 text-[11px] text-amber-400/90 leading-snug">
+                  {t("notif.push_unblock_hint")}
+                </div>
+              )}
+            </div>
           )}
           {items.length === 0 && <div className="p-4 text-sm text-zinc-500">{t("notif.empty")}</div>}
           {items.map((n) => (

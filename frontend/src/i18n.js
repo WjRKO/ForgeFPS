@@ -703,6 +703,9 @@ const resources = {
       notif: {
         title: "Notifiche", mark_read: "Segna lette", empty: "Nessuna notifica",
         push_blocked: "Push bloccate dal browser", push_off: "Disattiva notifiche push", push_on: "Attiva notifiche push sul dispositivo",
+        push_blocked_help: "Notifiche bloccate dal browser per questo sito. Clicca il lucchetto 🔒 accanto all'indirizzo → Notifiche → Consenti, poi riprova.",
+        push_dismissed_help: "Richiesta di permesso chiusa senza rispondere. Clicca di nuovo e scegli \"Consenti\" nel popup del browser (controlla l'icona 🔔 nella barra dell'indirizzo).",
+        push_unblock_hint: "Sblocca dal lucchetto 🔒 nella barra dell'indirizzo → Notifiche → Consenti",
         push_disabled: "Notifiche push disattivate", push_enabled: "Notifiche push attivate! Ti avviseremo sui cali di prezzo.", push_err: "Errore notifiche push",
         target: "Target!", price_drop: "Calo prezzo",
       },
@@ -1497,6 +1500,9 @@ const resources = {
       notif: {
         title: "Notifications", mark_read: "Mark read", empty: "No notifications",
         push_blocked: "Push blocked by browser", push_off: "Disable push notifications", push_on: "Enable push notifications on this device",
+        push_blocked_help: "Notifications are blocked by your browser for this site. Click the padlock 🔒 next to the address → Notifications → Allow, then try again.",
+        push_dismissed_help: "Permission prompt was dismissed. Click again and choose \"Allow\" in the browser popup (check the 🔔 icon in the address bar).",
+        push_unblock_hint: "Unblock via the padlock 🔒 in the address bar → Notifications → Allow",
         push_disabled: "Push notifications disabled", push_enabled: "Push notifications enabled! We'll alert you on price drops.", push_err: "Push notification error",
         target: "Target!", price_drop: "Price drop",
       },

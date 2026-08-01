@@ -1769,3 +1769,10 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
 - autopilot.py: endpoint /agent/restore-done → ultimo run 'done' → status 'reverted' + reverted_at; /status e quota includono 'reverted'.
 - AutoPilotCard.jsx: pulsante "Ripristina tutto" (autopilot-restore-btn, secondo useSilentLaunch mode=restore con detectDone su status reverted) visibile solo su run done con tweak applicati; badge "Ripristinato" (autopilot-reverted-badge) sui run reverted.
 - Reversibilità Auto-Pilot confermata: Invoke-ApplyTracked salva i valori originali in backup persistito (Save-Backup); restore globale + granulare (restore-one) preesistenti.
+
+## Aggiornamento 2026-08-01 (7) — Fix UX push bloccate dal browser (FATTO, self-test screenshot)
+- Diagnosi bug utente "push non si attivano" (Chrome desktop, produzione): permesso notifiche BLOCCATO a livello browser per forgefps.dev (non un bug del codice; VAPID/sw.js verificati OK sia in preview che su forgefps.dev).
+- push.js: enablePush distingue permesso "denied" (blocked) vs prompt chiuso (dismissed) con err.code.
+- Layout.jsx: toast con istruzioni di sblocco (lucchetto → Notifiche → Consenti, 10s) + hint amber persistente data-testid="push-unblock-hint" sotto il pulsante quando lo stato è denied; setPushState("denied") dopo tentativo bloccato.
+- i18n IT/EN: push_blocked_help, push_dismissed_help, push_unblock_hint.
+- NOTA: serve REDEPLOY su forgefps.dev per vedere il fix in produzione. L'utente deve comunque sbloccare il permesso da Chrome.
