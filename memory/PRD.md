@@ -1756,3 +1756,10 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
 - RETROCOMPATIBILITÀ: agent legacy senza X-Device → device primario, nessun doc orfano.
 - Note review (non bloccanti): reload() dopo switch (MVP ok); cookie banner sovrappone il preview overlay su /app/live (preesistente); device_limit non esposto in /subscriptions/status (frontend usa /api/devices).
 - Admin in preview ha 2 device simulati (gaming-rig attivo + stream-box "PC Streaming") per demo.
+
+## Aggiornamento 2026-08-01 (5) — Auto-Pilot + Confronto PC + Promemoria Streak (FATTO, iteration_54: 12/12 BE + FE 100%)
+- SCELTE UTENTE: Auto-Pilot Free 1/settimana + Pro/Streamer illimitato; Confronto PC come sezione in "Il mio PC"; promemoria streak push ~19:00 IT.
+- AUTO-PILOT: routers/autopilot.py — GET /status {limit,used,remaining,latest}, POST /start (quota ISO week per Free → 402 autopilot_limit; pending precedenti → expired), POST /agent/result (token+X-Device, compute_health before/after, delta_score, bump tweaks_applied → missioni/trofei si completano da soli). ps_agent.py: mode 'autopilot' (prima di restore): itera $script:TWEAKS risk=safe con state attuabile, Invoke-ApplyTracked + Save-Backup, Get-Health prima/dopo, POST risultato + Send-Data. Sintassi PS validata con /opt/pwsh/pwsh (installato arm64 in questo pod). Mode aggiunto alle 2 _ALLOWED_URI_MODES. Frontend: AutoPilotCard.jsx in Dashboard (badge quota, useSilentLaunch mode=autopilot con detectDone su /status, report before→after con delta colorato, lock+CTA Pro per Free esaurito).
+- CONFRONTO PC: GET /api/devices/compare (health latest, live avg su ultimi 30 sample, specs per device); DeviceCompare.jsx in MyPc (2+ PC): colonne per device, badge rosso "Sta soffrendo" sul peggiore (score min, tie-break GPU più calda).
+- PROMEMORIA STREAK: server.py scheduled_streak_reminders + APScheduler cron hour=17 UTC (19 IT): push a chi ha daily.streak>=1 e streak_day==ieri, idempotente via daily.reminder_day. Testato positivo+idempotente con chiamata diretta.
+- Note minori (non fatte): warning Recharts width(-1) preesistente; spacing textContent del report (visivamente ok da screenshot).
