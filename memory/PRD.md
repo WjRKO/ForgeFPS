@@ -1776,3 +1776,13 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
 - Layout.jsx: toast con istruzioni di sblocco (lucchetto → Notifiche → Consenti, 10s) + hint amber persistente data-testid="push-unblock-hint" sotto il pulsante quando lo stato è denied; setPushState("denied") dopo tentativo bloccato.
 - i18n IT/EN: push_blocked_help, push_dismissed_help, push_unblock_hint.
 - NOTA: serve REDEPLOY su forgefps.dev per vedere il fix in produzione. L'utente deve comunque sbloccare il permesso da Chrome.
+
+## Aggiornamento 2026-08-01 (8) — Fix Auto-Pilot "non risponde" (FATTO, self-test curl+pwsh)
+- ROOT CAUSE: l'exe installato v0.8.0 ha una whitelist silent hardcoded SENZA 'autopilot' → usciva muto senza lanciare PowerShell → timeout 5min → toast "Auto-Pilot non risponde". Sync funzionava perché 'sync' è in whitelist. Produzione era già redeployata (route autopilot presenti su forgefps.dev).
+- FIX (zero-rebuild, funziona con exe 0.8.0 già installati dopo redeploy):
+  - pc.py agent_launch_uri: alias autopilot→'cleanup' nell'URI firmato ('cleanup' è whitelistato nell'exe e libero nello script PS)
+  - ps_agent.py: dispatch `if ($MODE -eq 'autopilot' -or $MODE -eq 'cleanup')` — sintassi PS validata con pwsh Parser
+- Verifiche: HMAC su 'cleanup|ts' valido come lo verificherebbe l'exe; whitelist 0.8.0 accetta 'cleanup'; e2e start→agent result→status done OK
+- agent-build/forgefps_agent.py aggiornato per build futura 0.8.1: +autopilot in whitelist silent, +lab/autopilot in _PS_UI_MODES, versione 0.8.1 (vedi REBUILD_v0.8.1.md). AGENT_ZIP_UPSTREAM NON toccato (resta 0.8.0 finché non esiste la release).
+- NOTA: il 1-click del Lab (silent=0, mode=lab) è anch'esso non gestito dall'exe 0.8.0 (apre GUI optimize) — si sistema solo con rebuild 0.8.1. Non segnalato dall'utente.
+- RICHIEDE REDEPLOY su forgefps.dev.

@@ -1373,13 +1373,18 @@ def build(get_current_user):
         """
         if mode not in _ALLOWED_URI_MODES:
             raise HTTPException(status_code=400, detail=f"mode non valido. Ammessi: {sorted(_ALLOWED_URI_MODES)}")
+        # Alias retrocompat: l'exe <=0.8.0 ha una whitelist silent hardcoded che NON
+        # include 'autopilot' (usciva muto -> timeout "non risponde" sul web).
+        # 'cleanup' e' whitelistato nell'exe e libero nello script PS, che lo mappa
+        # ad autopilot lato server. Rimuovere quando la fleet sara' su >=0.8.1.
+        uri_mode = "cleanup" if mode == "autopilot" else mode
         silent_flag = 1 if silent else 0
         token = await get_or_create_agent_token(str(user["_id"]))
         ts = int(time.time())
         # HMAC su "mode|ts" (retrocompat v0.7.0). silent viaggia solo come hint.
-        msg = f"{mode}|{ts}".encode("utf-8")
+        msg = f"{uri_mode}|{ts}".encode("utf-8")
         sig = hmac.new(token.encode("utf-8"), msg, hashlib.sha256).hexdigest()
-        uri = f"frameforge://launch?mode={mode}&silent={silent_flag}&ts={ts}&sig={sig}"
+        uri = f"frameforge://launch?mode={uri_mode}&silent={silent_flag}&ts={ts}&sig={sig}"
         return {"uri": uri, "mode": mode, "silent": bool(silent_flag), "ts": ts, "expires_in": 60}
 
     return r

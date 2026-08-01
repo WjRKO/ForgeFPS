@@ -5126,7 +5126,7 @@ function Show-Gui {
 }
 
 # ---------------- Main ----------------
-if ($MODE -eq 'autopilot') {
+if ($MODE -eq 'autopilot' -or $MODE -eq 'cleanup') {
   Say "`n[AUTO-PILOT] Analisi del sistema in corso..." 'Cyan'
   $__apBefore = $null; try { $__apBefore = Get-Health } catch {}
   $__apApplied = @()
