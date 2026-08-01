@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Swords, ArrowRight, Target } from "lucide-react";
+import { Swords, ArrowRight, Target, Flame } from "lucide-react";
 import api from "@/lib/api";
 
 export const ActiveMissionsCard = ({ data: dataProp }) => {
@@ -26,7 +26,9 @@ export const ActiveMissionsCard = ({ data: dataProp }) => {
     ? (data.chain.steps || []).find((s) => s.status === "active")
     : null;
   const weekly = (data.weekly?.missions || []).filter((m) => !m.completed_at);
-  const isEmpty = active.length === 0 && !chainStep && weekly.length === 0;
+  const daily = (data.daily?.missions || []).filter((m) => !m.completed_at);
+  const streak = data.daily?.streak || 0;
+  const isEmpty = active.length === 0 && !chainStep && weekly.length === 0 && daily.length === 0;
 
   const Row = ({ m, badge, badgeCls, testid }) => {
     const pct = Math.max(0, Math.min(100, Math.round((m.progress / m.target) * 100)));
@@ -65,6 +67,11 @@ export const ActiveMissionsCard = ({ data: dataProp }) => {
             {t("missions.dash_title", "Missioni attive")}
           </span>
           <span className="text-[10px] font-mono text-zinc-600">{data.slots.used}/{data.slots.max}</span>
+          {streak > 0 && (
+            <span className="flex items-center gap-0.5 text-[10px] font-mono text-[#FF9F1C]" data-testid="daily-streak-badge">
+              <Flame size={11} /> {streak}
+            </span>
+          )}
           {data.tier && (
             <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 border border-[#2A2A35] text-zinc-400" data-testid="missions-card-tier">
               {data.tier} · {data.xp} XP
@@ -87,6 +94,11 @@ export const ActiveMissionsCard = ({ data: dataProp }) => {
               badgeCls="bg-[#E5FF00]/15 text-[#E5FF00] border border-[#E5FF00]/40"
               testid={`mission-chain-${chainStep.code}`} />
           )}
+          {daily.map((m) => (
+            <Row key={m.code} m={m} badge={t("missions.daily_badge", "Oggi")}
+              badgeCls="bg-[#FF9F1C]/15 text-[#FF9F1C] border border-[#FF9F1C]/40"
+              testid={`mission-daily-${m.template}`} />
+          ))}
           {weekly.map((m) => (
             <Row key={m.code} m={m} badge={t("missions.weekly_badge", "Week")}
               badgeCls="bg-[#00E0FF]/15 text-[#00E0FF] border border-[#00E0FF]/40"

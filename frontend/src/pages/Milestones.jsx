@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   Trophy, Search, Sparkles, Zap, Radio, Wrench, Cpu, Activity,
   HeartPulse, Gamepad2, Library, Clock, Timer, Crown, Star,
-  CheckCircle2, Lock, Filter, Swords, Gauge, ArrowRight, X, Target,
+  CheckCircle2, Lock, Filter, Swords, Gauge, ArrowRight, X, Target, Flame,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import api from "@/lib/api";
@@ -136,6 +136,24 @@ function MissionsTab({ t, lang }) {
         </>
       )}
 
+      {/* Giornaliere */}
+      {data.daily?.missions?.length > 0 && (
+        <>
+          <SectionLabel
+            icon={Flame}
+            text={`${t("missions.daily_title", "Missioni del giorno")}${data.daily.streak > 0 ? ` · ${t("missions.daily_streak", { count: data.daily.streak, defaultValue: `streak ${data.daily.streak}g` })}` : ""} · ${t("missions.daily_renew", "si rinnovano a mezzanotte")}`}
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2" data-testid="daily-block">
+            {data.daily.missions.map((m) => (
+              <WeeklyMissionCard key={m.code} m={m} en={en} t={t} variant="daily" />
+            ))}
+          </div>
+          <p className="text-[11px] text-zinc-600 mb-8" data-testid="daily-streak-hint">
+            {t("missions.daily_streak_hint", "Completa almeno 1 giornaliera al giorno: bonus +30 XP a 3 giorni, +70 XP a 7.")}
+          </p>
+        </>
+      )}
+
       {/* Settimanali AI */}
       {data.weekly?.missions?.length > 0 && (
         <>
@@ -253,15 +271,22 @@ function ChainStepRow({ s, en }) {
   );
 }
 
-function WeeklyMissionCard({ m, en, t }) {
+function WeeklyMissionCard({ m, en, t, variant = "weekly" }) {
   const Icon = ICONS[m.icon] || Sparkles;
   const done = !!m.completed_at;
   const pct = Math.max(0, Math.min(100, Math.round((m.progress / m.target) * 100)));
   const why = en ? m.why_en : m.why_it;
+  const daily = variant === "daily";
+  const box = done ? "border-[#00FF66]/40 bg-[#00FF66]/[0.03]"
+    : daily ? "border-[#FF9F1C]/30 bg-[#FF9F1C]/[0.03]" : "border-[#00E0FF]/30 bg-[#00E0FF]/[0.03]";
+  const iconBox = done ? "border-[#00FF66]/50 text-[#00FF66]"
+    : daily ? "border-[#FF9F1C]/50 text-[#FF9F1C]" : "border-[#00E0FF]/50 text-[#00E0FF]";
+  const barCls = daily ? "bg-[#FF9F1C]" : "bg-[#00E0FF]";
+  const goCls = daily ? "bg-[#FF9F1C] hover:bg-[#FFB54C]" : "bg-[#00E0FF] hover:bg-[#33E6FF]";
   return (
-    <div className={`border p-4 ${done ? "border-[#00FF66]/40 bg-[#00FF66]/[0.03]" : "border-[#00E0FF]/30 bg-[#00E0FF]/[0.03]"}`} data-testid={`weekly-${m.template}`}>
+    <div className={`border p-4 ${box}`} data-testid={`${variant}-${m.template}`}>
       <div className="flex items-start gap-3">
-        <div className={`w-10 h-10 flex items-center justify-center border shrink-0 ${done ? "border-[#00FF66]/50 text-[#00FF66]" : "border-[#00E0FF]/50 text-[#00E0FF]"}`}>
+        <div className={`w-10 h-10 flex items-center justify-center border shrink-0 ${iconBox}`}>
           {done ? <CheckCircle2 size={16} /> : <Icon size={16} />}
         </div>
         <div className="flex-1 min-w-0">
@@ -278,11 +303,11 @@ function WeeklyMissionCard({ m, en, t }) {
           {!done && (
             <div className="flex items-center gap-3 mt-3">
               <div className="flex-1 h-1.5 bg-[#0A0A0C] border border-[#2A2A35] overflow-hidden">
-                <div className="h-full bg-[#00E0FF]" style={{ width: `${pct}%` }} />
+                <div className={`h-full ${barCls}`} style={{ width: `${pct}%` }} />
               </div>
               <span className="text-[10px] font-mono text-zinc-400 tabular-nums">{m.progress}/{m.target}</span>
-              <Link to={m.link} data-testid={`weekly-go-${m.template}`}
-                className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-black bg-[#00E0FF] hover:bg-[#33E6FF] px-3 py-1.5 transition-colors">
+              <Link to={m.link} data-testid={`${variant}-go-${m.template}`}
+                className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-black px-3 py-1.5 transition-colors ${goCls}`}>
                 {en ? m.cta_en : m.cta_it} <ArrowRight size={11} />
               </Link>
             </div>

@@ -198,6 +198,212 @@ WEEKLY_TEMPLATES: dict[str, dict[str, Any]] = {
 }
 
 
+# --------------------------- Missioni giornaliere ---------------------------
+# Rotazione deterministica SENZA AI: pool parametrico filtrato sullo stato reale
+# del PC, seed md5(uid:giorno), anti-ripetizione col giorno precedente.
+DAILY_COUNT = 2
+DAILY_XP_STREAK_3 = 30
+DAILY_XP_STREAK_7 = 70
+
+DAILY_TEMPLATES: dict[str, dict[str, Any]] = {
+    "d_scan": {
+        "xp": 15, "metric": "pc_scans", "mode": "delta", "target": 1, "link": "/app/desktop", "icon": "Activity",
+        "name_it": "Scan del giorno", "name_en": "Daily scan",
+        "desc_it": "Esegui uno scan con l'agent per aggiornare salute e telemetria.",
+        "desc_en": "Run one agent scan to refresh health and telemetry.",
+    },
+    "d_advisor": {
+        "xp": 15, "metric": "advisor_messages", "mode": "delta", "target": 1, "link": "/app/advisor", "icon": "Sparkles",
+        "name_it": "Consulto rapido", "name_en": "Quick consult",
+        "desc_it": "Fai una domanda all'AI Advisor sul tuo PC.",
+        "desc_en": "Ask the AI Advisor one question about your PC.",
+    },
+    "d_advisor2": {
+        "xp": 20, "metric": "advisor_messages", "mode": "delta", "target": 2, "link": "/app/advisor", "icon": "Sparkles",
+        "name_it": "Doppio consulto", "name_en": "Double consult",
+        "desc_it": "Fai 2 domande all'AI Advisor: hardware, gaming o streaming.",
+        "desc_en": "Ask the AI Advisor 2 questions: hardware, gaming or streaming.",
+    },
+    "d_tweak": {
+        "xp": 20, "metric": "tweaks_applied", "mode": "delta", "target": 1, "link": "/app/desktop", "icon": "Cpu",
+        "name_it": "Tweak del giorno", "name_en": "Tweak of the day",
+        "desc_it": "Applica 1 tweak sicuro e reversibile tramite l'agent.",
+        "desc_en": "Apply 1 safe, reversible tweak via the agent.",
+    },
+    "d_tweak2": {
+        "xp": 25, "metric": "tweaks_applied", "mode": "delta", "target": 2, "link": "/app/desktop", "icon": "Cpu",
+        "name_it": "Doppietta di tweak", "name_en": "Tweak double",
+        "desc_it": "Applica 2 tweak sicuri oggi: piccoli passi, grandi FPS.",
+        "desc_en": "Apply 2 safe tweaks today: small steps, big FPS.",
+    },
+    "d_bench": {
+        "xp": 20, "metric": "benchmarks", "mode": "since", "target": 1, "link": "/app/benchmark", "icon": "Gauge",
+        "name_it": "Benchmark lampo", "name_en": "Flash benchmark",
+        "desc_it": "Esegui un benchmark oggi per aggiornare la fotografia delle prestazioni.",
+        "desc_en": "Run one benchmark today to refresh your performance snapshot.",
+    },
+    "d_svc": {
+        "xp": 20, "metric": "services_done", "mode": "since", "target": 1, "link": "/app/pc", "icon": "Wrench",
+        "name_it": "Un servizio in meno", "name_en": "One less service",
+        "desc_it": "Disattiva 1 servizio Windows tra quelli consigliati oggi.",
+        "desc_en": "Disable 1 recommended Windows service today.",
+    },
+    "d_startup": {
+        "xp": 15, "metric": "startup_done", "mode": "since", "target": 1, "link": "/app/pc", "icon": "Zap",
+        "name_it": "Avvio più snello", "name_en": "Leaner boot",
+        "desc_it": "Disattiva 1 app all'avvio tra quelle segnalate.",
+        "desc_en": "Disable 1 flagged startup app.",
+    },
+    "d_net": {
+        "xp": 20, "metric": "net_tests", "mode": "since", "target": 1, "link": "/app/network", "icon": "Radio",
+        "name_it": "Linea sotto esame", "name_en": "Line under review",
+        "desc_it": "Esegui il test bufferbloat oggi per verificare la connessione.",
+        "desc_en": "Run the bufferbloat test today to verify your connection.",
+    },
+    "d_boost": {
+        "xp": 25, "metric": "boost_sessions", "mode": "since", "target": 1, "link": "/app/gaming", "icon": "Gamepad2",
+        "name_it": "Partita boostata", "name_en": "Boosted match",
+        "desc_it": "Completa una sessione di gioco con il Boost attivo oggi.",
+        "desc_en": "Complete one gaming session with Boost on today.",
+    },
+    "d_health": {
+        "xp": 25, "metric": "health_score", "mode": "absolute", "target": 0, "link": "/app/pc", "icon": "HeartPulse",
+        "name_it": "Salute a {n}", "name_en": "Health to {n}",
+        "desc_it": "Porta l'Health Score ad almeno {n} entro fine giornata.",
+        "desc_en": "Bring your Health Score to at least {n} by the end of the day.",
+    },
+    "d_lab": {
+        "xp": 25, "metric": "lab_completed", "mode": "since", "target": 1, "link": "/app/lab", "icon": "Timer",
+        "name_it": "Esperimento del giorno", "name_en": "Experiment of the day",
+        "desc_it": "Completa un esperimento del Performance Lab oggi.",
+        "desc_en": "Complete one Performance Lab experiment today.",
+    },
+}
+
+
+def _day_id() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _yesterday_id() -> str:
+    from datetime import timedelta
+    return (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def _day_expires_iso() -> str:
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    return (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+
+def _daily_eligible(ctx: dict) -> list[str]:
+    if not ctx.get("has_specs"):
+        return ["d_scan", "d_advisor", "d_advisor2"]
+    keys = ["d_scan", "d_advisor", "d_advisor2", "d_tweak", "d_tweak2", "d_bench", "d_lab"]
+    if ctx.get("svc_actionable"):
+        keys.append("d_svc")
+    if ctx.get("startup_active"):
+        keys.append("d_startup")
+    if ctx.get("adv_tweaks"):
+        keys.extend(["d_net", "d_boost"])
+    h = ctx.get("health")
+    if h is not None and 0 < h < 93:
+        keys.append("d_health")
+    return keys
+
+
+def _pick_daily(uid: str, ctx: dict, prev: list[str]) -> list[dict]:
+    import hashlib
+    keys = _daily_eligible(ctx)
+    day = _day_id()
+    def h(k):
+        return hashlib.md5(f"{uid}:{day}:{k}".encode()).hexdigest()
+    fresh = sorted([k for k in keys if k not in (prev or [])], key=h)
+    stale = sorted([k for k in keys if k in (prev or [])], key=h)
+    picks = []
+    for k in (fresh + stale)[:DAILY_COUNT]:
+        target = int(DAILY_TEMPLATES[k]["target"])
+        if k == "d_health":
+            target = min(int(ctx.get("health") or 70) + 2, 95)
+        picks.append({"template": k, "target": target})
+    return picks
+
+
+def _daily_enrich(rec: dict, tpl: dict, progress: int) -> dict:
+    n = str(rec["target"])
+    return {
+        "code": rec["code"], "template": rec["template"], "xp": int(tpl["xp"]),
+        "icon": tpl["icon"], "link": tpl["link"], "target": int(rec["target"]),
+        "metric": tpl["metric"], "mode": tpl["mode"], "daily": True,
+        "progress": progress, "completed_at": rec.get("completed_at"),
+        "name_it": tpl["name_it"].replace("{n}", n), "name_en": tpl["name_en"].replace("{n}", n),
+        "desc_it": tpl["desc_it"].replace("{n}", n), "desc_en": tpl["desc_en"].replace("{n}", n),
+        "cta_it": "Vai", "cta_en": "Go",
+    }
+
+
+async def _eval_daily(db, uid: str, doc: dict):
+    day = _day_id()
+    dy = dict(doc.get("daily") or {})
+    if dy.get("day_id") != day:
+        ctx = await _weekly_context(db, uid)
+        prev = [m.get("template") for m in (dy.get("missions") or [])]
+        missions = []
+        for p in _pick_daily(uid, ctx, prev):
+            tpl = DAILY_TEMPLATES[p["template"]]
+            rec = {"code": f'{p["template"]}:{day}', "template": p["template"],
+                   "target": int(p["target"]), "activated_at": _now_iso(), "baseline": 0}
+            if tpl["mode"] == "delta":
+                rec["baseline"] = await _metric_value(db, uid, tpl["metric"], None)
+            missions.append(rec)
+        dy = {"day_id": day, "missions": missions, "prev_templates": prev,
+              "streak": int(dy.get("streak") or 0), "streak_day": dy.get("streak_day"),
+              "generated_at": _now_iso()}
+        await db.user_missions.update_one(
+            {"user_id": uid}, {"$set": {"daily": dy, "updated_at": _now_iso()}}, upsert=True)
+
+    out, just, dirty = [], [], False
+    for rec in dy.get("missions") or []:
+        tpl = DAILY_TEMPLATES.get(rec.get("template"))
+        if not tpl:
+            continue
+        target = int(rec["target"])
+        if rec.get("completed_at"):
+            out.append(_daily_enrich(rec, tpl, target))
+            continue
+        pseudo = {"metric": tpl["metric"], "mode": tpl["mode"], "target": target}
+        prog = await _progress(db, uid, pseudo, rec)
+        if prog >= target:
+            rec["completed_at"] = _now_iso()
+            await _award_xp_daily(db, uid, int(tpl["xp"]))
+            enriched = _daily_enrich(rec, tpl, target)
+            just.append(enriched)
+            out.append(enriched)
+            dirty = True
+            # Streak: il giorno conta al primo completamento di una daily
+            if dy.get("streak_day") != day:
+                streak = int(dy.get("streak") or 0) + 1 if dy.get("streak_day") == _yesterday_id() else 1
+                dy["streak"], dy["streak_day"] = streak, day
+                bonus = DAILY_XP_STREAK_3 if streak == 3 else (
+                    DAILY_XP_STREAK_7 if streak > 0 and streak % 7 == 0 else 0)
+                if bonus:
+                    await _add_xp(db, uid, bonus)
+                    just.append({
+                        "code": f"streak_{streak}", "xp": bonus, "icon": "Flame",
+                        "streak_bonus": True, "completed_at": _now_iso(),
+                        "name_it": f"Streak di {streak} giorni!", "name_en": f"{streak}-day streak!",
+                        "desc_it": f"Bonus +{bonus} XP per la costanza quotidiana.",
+                        "desc_en": f"+{bonus} XP daily consistency bonus."})
+        else:
+            out.append(_daily_enrich(rec, tpl, prog))
+    if dirty:
+        await db.user_missions.update_one(
+            {"user_id": uid}, {"$set": {"daily": dy, "updated_at": _now_iso()}})
+    streak_display = int(dy.get("streak") or 0) if dy.get("streak_day") in (day, _yesterday_id()) else 0
+    return {"day_id": day, "expires_at": _day_expires_iso(), "missions": out,
+            "streak": streak_display, "streak_done_today": dy.get("streak_day") == day}, just
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -253,17 +459,29 @@ async def _progress(db, uid: str, mission: dict, state: dict) -> int:
     return max(0, min(int(cur), int(mission["target"])))
 
 
-async def _award_xp(db, uid: str, xp: int) -> None:
-    from milestones import _ensure_progress_doc, xp_to_tier, bump_counter
+async def _add_xp(db, uid: str, xp: int) -> None:
+    from milestones import _ensure_progress_doc, xp_to_tier
     p = await _ensure_progress_doc(db, uid)
     total = int(p.get("xp", 0)) + int(xp)
     await db.user_progress.update_one(
         {"user_id": uid}, {"$set": {"xp": total, "tier": xp_to_tier(total)}})
+
+
+async def _award_xp(db, uid: str, xp: int) -> None:
+    await _add_xp(db, uid, xp)
+    from milestones import bump_counter
     # Trofeo segreto 'mission_hunter': ogni missione completata bumpa il counter
     await bump_counter(db, uid, "missions_completed", 1)
     # Earned Premium: ogni missione completata regala crediti AI (+2)
     from ai_credits import grant_credits, MISSION_CREDITS
     await grant_credits(db, uid, MISSION_CREDITS)
+
+
+async def _award_xp_daily(db, uid: str, xp: int) -> None:
+    """Le giornaliere danno solo XP (niente crediti AI), ma contano per i trofei."""
+    await _add_xp(db, uid, xp)
+    from milestones import bump_counter
+    await bump_counter(db, uid, "missions_completed", 1)
 
 
 async def _ensure_missions_doc(db, uid: str) -> dict:
@@ -332,7 +550,8 @@ async def get_state(db, uid: str, lang_hint: str | None = None) -> dict:
 
     chain, just_chain = await _eval_chain(db, uid, doc)
     weekly, just_weekly = await _eval_weekly(db, uid, doc)
-    just_completed = just_completed + just_chain + just_weekly
+    daily, just_daily = await _eval_daily(db, uid, doc)
+    just_completed = just_completed + just_chain + just_weekly + just_daily
 
     prog_doc = await db.user_progress.find_one({"user_id": uid}, {"xp": 1, "tier": 1})
     tier = (prog_doc or {}).get("tier", "bronze")
@@ -343,6 +562,7 @@ async def get_state(db, uid: str, lang_hint: str | None = None) -> dict:
         "just_completed": just_completed,
         "chain": chain,
         "weekly": weekly,
+        "daily": daily,
         "slots": {"used": len(out_active), "max": SLOTS_BY_TIER.get(tier, MAX_ACTIVE)},
         "xp": int((prog_doc or {}).get("xp", 0)),
         "tier": tier,
