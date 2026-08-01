@@ -1720,3 +1720,8 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
 - FRONTEND Advisor.jsx: rimosso il lock full-page PlanUpgradeBanner (chat accessibile ai Free); CreditsBar (ai-credits-bar/count/empty/missions-link/upgrade-link) con breakdown welcome/earned, CTA missioni (/app/milestones) e Passa a Pro (/pricing); input+send disabilitati a crediti 0 (banner rosso); gestione 402 nel send; refresh quota dopo ogni messaggio; DiagnosePanel solo per is_pro. i18n advisor.credits_* IT+EN.
 - Test: /app/backend/tests/test_ai_credits.py (7/7), testing_agent iteration_51 100% BE+FE. Utente test: credits_test@frameforge.dev (starter, vedi test_credentials.md).
 - Nota review (non bloccante): consume_credit non transazionale su race di doppio click (mitigato da rate limit).
+
+## Aggiornamento 2026-08-01 — Pagina Pricing allineata al nuovo modello crediti
+- Pricing.jsx (IT+EN): Starter card "AI Advisor — 5 messaggi di benvenuto + crediti extra con missioni e trofei"; Pro card "50 messaggi/settimana" (era "chat illimitata") + riga "Diagnosi AI + Gameplay Doctor"; Streamer card "AI Advisor illimitata — nessun limite settimanale".
+- Tabella comparativa: riga "AI Advisor" con valori testuali ["5 msg + crediti da missioni", "50 msg/settimana", "Illimitata"] + nuova riga "Diagnosi AI + Gameplay Doctor" [no, sì, sì].
+- Verificato via screenshot IT+EN (card e tabella).
