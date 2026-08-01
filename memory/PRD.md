@@ -1786,3 +1786,8 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
 - agent-build/forgefps_agent.py aggiornato per build futura 0.8.1: +autopilot in whitelist silent, +lab/autopilot in _PS_UI_MODES, versione 0.8.1 (vedi REBUILD_v0.8.1.md). AGENT_ZIP_UPSTREAM NON toccato (resta 0.8.0 finché non esiste la release).
 - NOTA: il 1-click del Lab (silent=0, mode=lab) è anch'esso non gestito dall'exe 0.8.0 (apre GUI optimize) — si sistema solo con rebuild 0.8.1. Non segnalato dall'utente.
 - RICHIEDE REDEPLOY su forgefps.dev.
+
+## Aggiornamento 2026-08-01 (9) — Preparazione release Agent v0.8.1 (IN ATTESA UTENTE)
+- Preparati: version_info.txt e forgefps-agent.manifest → 0.8.1.0; changelog.json entry 0.8.1 (verificata via /api/changelog); forgefps_agent.py già 0.8.1 (py_compile OK); REBUILD_v0.8.1.md.
+- PASSI RIMANENTI (dipendono dall'utente): 1) push dei 3 file su repo GitHub WjRKO/ForgeFPS, 2) tag v0.8.1 → Actions builda la release, 3) l'utente fornisce URL release + SHA256 → aggiornare AGENT_ZIP_UPSTREAM in /app/backend/routers/pc.py e AGENT_EXE_URL/SHA/VERSION/DATE in /app/frontend/src/config/agent.js, 4) redeploy.
+- NON aggiornare AGENT_ZIP_UPSTREAM prima che la release esista (romperebbe download/auto-update).

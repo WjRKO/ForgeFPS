@@ -7,7 +7,7 @@
 -->
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <assemblyIdentity
-    version="0.8.0.0"
+    version="0.8.1.0"
     processorArchitecture="*"
     name="FrameForge.Agent"
     type="win32"
