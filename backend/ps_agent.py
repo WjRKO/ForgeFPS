@@ -1222,11 +1222,11 @@ function Send-Data($specs, $health, $startup) {
   $body = @{ data = $specs; health = $health; startup = $startup }
   try { $svc = Get-ServicesAudit; if ($svc -and $svc.Count -gt 0) { $body.services_audit = $svc } } catch {}
   $body = [System.Text.Encoding]::UTF8.GetBytes(($body | ConvertTo-Json -Depth 6 -Compress))
-  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body | Out-Null } catch {}
 }
 function Send-Benchmark($rec) {
   $body = [System.Text.Encoding]::UTF8.GetBytes((@{ benchmark = $rec } | ConvertTo-Json -Depth 6 -Compress))
-  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body | Out-Null } catch {}
 }
 function Get-Games {
   $games = New-Object System.Collections.Generic.List[string]
@@ -1290,7 +1290,7 @@ function Send-Games($games) {
   if ($arr.Count -eq 0) { return }
   $items = ($arr | ForEach-Object { '"' + ($_ -replace '\\', '\\' -replace '"', '\"') + '"' }) -join ','
   $body = [System.Text.Encoding]::UTF8.GetBytes('{"games":[' + $items + ']}')
-  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body | Out-Null } catch {}
 }
 function Get-RunningApps {
   $cand = @('chrome', 'msedge', 'firefox', 'opera', 'brave', 'Discord', 'Slack', 'Teams', 'Telegram', 'WhatsApp',
@@ -1304,7 +1304,7 @@ function Send-Running($apps) {
   $arr = @($apps)
   $items = ($arr | ForEach-Object { '"' + $_ + '"' }) -join ','
   $body = '{"running_apps":[' + $items + ']}'
-  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body | Out-Null } catch {}
 }
 
 # ---------------- Live telemetry ----------------
@@ -1548,7 +1548,7 @@ function Get-TelemetrySample {
 function Send-Telemetry($sample) {
   $body = @{ sample = $sample } | ConvertTo-Json -Depth 5 -Compress
   try {
-    $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/telemetry" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body
+    $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/telemetry" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body
     # Backend signals a graceful stop when the user clicks Stop on the web
     # dashboard. Monitor loop reads this and breaks (see MODE=monitor).
     if ($resp -and $resp.stop) { return $true }
@@ -4753,7 +4753,7 @@ function Show-WebGui {
         elseif ($path -eq '/api/profiles-cloud' -and $method -eq 'GET') {
           # Proxy to FrameForge cloud: /api/agent/profiles (X-Agent-Token auth).
           try {
-            $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/profiles" -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 8
+            $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/profiles" -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -TimeoutSec 8
             Send-Json $ctx $resp
           } catch {
             Send-Json $ctx @{ err = "cloud unreachable"; profiles = @(); templates = @(); catalog = @() }
@@ -4768,7 +4768,7 @@ function Show-WebGui {
         elseif ($path -eq '/api/mobile-handoff/generate' -and $method -eq 'POST') {
           # Proxy to cloud: generate a 5-min single-use magic-link for mobile QR handoff.
           try {
-            $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/magic-link" -Method Post -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 10
+            $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/magic-link" -Method Post -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -TimeoutSec 10
             Send-Json $ctx $resp
           } catch {
             $code = try { [int]$_.Exception.Response.StatusCode.value__ } catch { 0 }
@@ -4785,7 +4785,7 @@ function Show-WebGui {
               # NOTA: Invoke-RestMethod auto-parsa image/svg+xml come [xml] object e
               # perde il markup. Usiamo Invoke-WebRequest -UseBasicParsing per ottenere
               # i bytes raw del SVG e inoltrarli intatti al browser.
-              $resp = Invoke-WebRequest -Uri "$BACKEND/api/agent/magic-qr?token=$([Uri]::EscapeDataString($magic))" -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 10 -UseBasicParsing
+              $resp = Invoke-WebRequest -Uri "$BACKEND/api/agent/magic-qr?token=$([Uri]::EscapeDataString($magic))" -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -TimeoutSec 10 -UseBasicParsing
               $bytes = if ($resp.RawContentStream) { $resp.RawContentStream.ToArray() } else { [System.Text.Encoding]::UTF8.GetBytes([string]$resp.Content) }
               $ctx.Response.ContentType = 'image/svg+xml'
               $ctx.Response.Headers.Add('Cache-Control','no-store')
@@ -5165,7 +5165,7 @@ if ($MODE -eq 'optimize') {
   # di attesa ad ogni apertura e togliamo l'effetto "primo scan a ogni apertura".
   $__skipFirstScan = $false
   try {
-    $__specsResp = Invoke-RestMethod -Uri "$BACKEND/api/pc-specs-agent" -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 6 -ErrorAction Stop
+    $__specsResp = Invoke-RestMethod -Uri "$BACKEND/api/pc-specs-agent" -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -TimeoutSec 6 -ErrorAction Stop
     if ($__specsResp -and $__specsResp.updated_at) {
       $__lastSync = [DateTime]::Parse($__specsResp.updated_at)
       $__ageMin = ((Get-Date).ToUniversalTime() - $__lastSync.ToUniversalTime()).TotalMinutes
@@ -5198,7 +5198,7 @@ if ($MODE -eq 'optimize') {
     $__b = [System.Text.Encoding]::UTF8.GetBytes($json)
     try {
       $resp = Invoke-WebRequest -Uri "$BACKEND/api/agent/report-specs" -Method Post `
-        -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN } `
+        -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } `
         -Body $__b -UseBasicParsing -TimeoutSec 20
       Say ("  [OK] {0}: {1} bytes -> HTTP {2}" -f $label, $json.Length, $resp.StatusCode) 'DarkGreen'
       return $true
@@ -5307,7 +5307,7 @@ function Send-NetResult($res) {
       '"' + $_.Key + '":' + $v
     }) -join ','
   $body = '{"result":{' + $items + '}}'
-  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/netresult" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/netresult" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body | Out-Null } catch {}
 }
 $script:DL_BLOCK = {
   param($u)
@@ -5392,7 +5392,7 @@ function Run-Bufferbloat {
 # ---------------- LAB: Laboratorio Automatico delle Prestazioni (Fase 1) ----------------
 function LabApi($method, $path, $body) {
   try {
-    $h = @{ 'X-Agent-Token' = $TOKEN }
+    $h = @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME }
     if ($body) { return Invoke-RestMethod -Uri "$BACKEND$path" -Method $method -ContentType 'application/json' -Headers $h -Body ($body | ConvertTo-Json -Depth 8 -Compress) -TimeoutSec 30 }
     return Invoke-RestMethod -Uri "$BACKEND$path" -Method $method -Headers $h -TimeoutSec 30
   } catch { return $null }
@@ -5998,7 +5998,7 @@ public static class FFWin {
           $__bs = @{ game = ($bGame -replace '\.exe$', ''); duration_s = $dur; actions = @($script:BACTS); ended_at = (Get-Date).ToString('o') }
           if ($recap) { $__bs.recap = $recap }
           $body = [System.Text.Encoding]::UTF8.GetBytes((@{ boost_session = $__bs } | ConvertTo-Json -Depth 5 -Compress))
-          try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+          try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body | Out-Null } catch {}
           if ($recap) {
             Say ("`n   == RECAP PARTITA: {0} ({1} min) ==" -f ($bGame -replace '\.exe$', ''), [math]::Round($dur / 60, 1)) 'Cyan'
             Say ("   FPS medi: {0}  |  1% low: {1}  |  min/max: {2}/{3}" -f $recap.fps_avg, $recap.fps_low, $recap.fps_min, $recap.fps_max) 'White'

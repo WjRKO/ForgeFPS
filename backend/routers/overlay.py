@@ -52,6 +52,7 @@ class OverlayConfigUpdate(BaseModel):
     show_gpu: Optional[bool] = None
     show_ping: Optional[bool] = None
     show_health: Optional[bool] = None
+    source_device: Optional[str] = None  # Multi-PC: quale PC alimenta l'overlay ("" = attivo)
 
 
 def _now_iso() -> str:
@@ -97,6 +98,7 @@ def build(get_current_user):
             "show_gpu": doc.get("show_gpu", True),
             "show_ping": doc.get("show_ping", True),
             "show_health": doc.get("show_health", True),
+            "source_device": doc.get("source_device"),
             "rotated_at": doc.get("rotated_at"),
         }
 
@@ -162,6 +164,15 @@ def build(get_current_user):
             v = getattr(body, k)
             if v is not None:
                 update[k] = bool(v)
+        if body.source_device is not None:
+            if body.source_device == "":
+                update["source_device"] = None
+            else:
+                from devices import slug_device
+                did = slug_device(body.source_device)
+                if not await db.devices.find_one({"user_id": uid, "device_id": did}, {"_id": 1}):
+                    raise HTTPException(status_code=400, detail="Device non trovato")
+                update["source_device"] = did
         if not update:
             raise HTTPException(status_code=400, detail="Nessun campo da aggiornare")
         # Ensure config exists first
@@ -179,10 +190,15 @@ def build(get_current_user):
         if not cfg:
             raise HTTPException(status_code=404, detail="Overlay non trovato")
         uid = cfg["user_id"]
+        # Multi-PC: l'overlay puo' essere alimentato da un PC specifico (source_device),
+        # altrimenti dal PC attivo/primario dell'utente.
+        from devices import get_active_device
+        _src = cfg.get("source_device") or await get_active_device(db, uid)
+        _tf = {"user_id": uid, **({"device_id": _src} if _src else {})}
         # Ultimo sample telemetry — l'agent PS emette chiavi diverse dal nostro naming:
         #   cpu_util, gpu_util, ram_used_pct (non cpu_pct/gpu_pct/ram_pct)
         # Facciamo il mapping qui.
-        tel = await db.pc_telemetry.find_one({"user_id": uid}, {"_id": 0, "samples": {"$slice": -1}, "updated_at": 1})
+        tel = await db.pc_telemetry.find_one(_tf, {"_id": 0, "samples": {"$slice": -1}, "updated_at": 1})
         last = None
         stale_seconds = None
         if tel and tel.get("samples"):
@@ -202,13 +218,13 @@ def build(get_current_user):
         # Ultimo ping_ms dal net_results o benchmark
         ping_ms = None
         try:
-            net = await db.net_results.find_one({"user_id": uid}, {"_id": 0, "result.idle_ms": 1})
+            net = await db.net_results.find_one(_tf, {"_id": 0, "result.idle_ms": 1})
             if net and net.get("result", {}).get("idle_ms") is not None:
                 ping_ms = int(net["result"]["idle_ms"])
         except Exception:
             pass
         # Ultimo health score
-        health = await db.health_history.find_one({"user_id": uid}, {"_id": 0, "score": 1, "grade": 1}, sort=[("created_at", -1)])
+        health = await db.health_history.find_one(_tf, {"_id": 0, "score": 1, "grade": 1}, sort=[("created_at", -1)])
         payload = {
             "fps": (last or {}).get("fps"),
             # Mapping dai campi ps_agent -> overlay

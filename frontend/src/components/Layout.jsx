@@ -5,6 +5,7 @@ import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { DeviceSwitcher } from "@/components/DeviceSwitcher";
 import FreshnessBadge from "@/components/FreshnessBadge";
 import OnboardingTour from "@/components/OnboardingTour";
 import MobileHandoffModal from "@/components/MobileHandoffModal";
@@ -240,6 +241,7 @@ export default function Layout() {
               <Smartphone size={14} />
               <span className="hidden lg:inline">{t("mobile.handoff_short", { defaultValue: "Telefono" })}</span>
             </button>
+            <DeviceSwitcher />
             <LanguageSwitcher />
             <Notifications />
             <ProfileMenu />

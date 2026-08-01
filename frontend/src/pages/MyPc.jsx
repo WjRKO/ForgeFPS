@@ -10,6 +10,7 @@ import HealthHistoryCard from "@/components/HealthHistoryCard";
 import { HwInsightsPanel } from "@/components/HwInsightsPanel";
 import SyncTimeline from "@/components/SyncTimeline";
 import { PageHeader } from "@/components/hud";
+import { DevicesPanel } from "@/components/DevicesPanel";
 import { useSilentLaunch } from "@/hooks/useSilentLaunch";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
 import { MissionContextStrip } from "@/components/MissionContextStrip";
@@ -343,6 +344,8 @@ export default function MyPc() {
         </>} />
 
       <MissionContextStrip metrics={["services_done", "startup_done", "health_score", "optimize_total"]} />
+
+      <DevicesPanel />
 
       {specs?.updated_at && (() => {
         let diffSec = 0;

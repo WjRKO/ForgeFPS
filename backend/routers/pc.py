@@ -21,6 +21,7 @@ from models import SpecsInput, GoalInput, FpsInput, FpsUpgradeInput, PcSpecsInpu
 from routers.profiles import resolve_tweak_ids, TWEAK_CATALOG, TEMPLATES
 from routers.advisor import _check_ai_rate_limit
 from plan_gate import require_pro, require_streamer, get_entitlements, plan_402
+from devices import resolve_device, device_filter
 
 # GPU vs Reference: modelli disponibili nel piano Free (i piu' diffusi). Pro/trofeo = catalogo completo.
 FREE_GPU_MODELS = (
@@ -155,7 +156,7 @@ async def _build_agent_script(user_id: str, profile: str = "", agent_version: st
     def _psb(v):
         return "$true" if v else "$false"
     if not agent_version:
-        _specs = await db.pc_specs.find_one({"user_id": user_id}, {"agent_version": 1})
+        _specs = await db.pc_specs.find_one(await device_filter(db, user_id), {"agent_version": 1})
         agent_version = (_specs or {}).get("agent_version") or ""
     return (PS_SCRIPT.replace("__BACKEND_URL__", backend)
             .replace("__PROFILE_IDS__", profile_literal)
@@ -300,7 +301,7 @@ def build(get_current_user):
                      headers={"Cache-Control": "no-store"})
 
     @r.get("/pc-specs-agent")
-    async def get_specs_agent(x_agent_token: str = Header(default="")):
+    async def get_specs_agent(x_agent_token: str = Header(default=""), x_device: str = Header(default="")):
         """Ritorna pc-specs autenticato via X-Agent-Token (lato PowerShell/exe locale).
         Serve al ps_agent.py optimize block per capire se un primo scan e' necessario:
         se updated_at e' recente (< 15 min) la GUI salta il primo scan.
@@ -308,22 +309,28 @@ def build(get_current_user):
         rec = await db.agent_tokens.find_one({"token": x_agent_token})
         if not rec:
             raise HTTPException(status_code=401, detail="Token agent non valido")
-        doc = await db.pc_specs.find_one({"user_id": rec["user_id"]}, {"_id": 0})
+        _did = await resolve_device(db, rec["user_id"], x_device)
+        doc = await db.pc_specs.find_one(
+            {"user_id": rec["user_id"], **({"device_id": _did} if _did else {})}, {"_id": 0})
         if not doc:
             raise HTTPException(status_code=404, detail="No specs yet")
         return doc
 
     @r.post("/agent/report-specs")
-    async def report_specs(data: SpecsInput, x_agent_token: str = Header(default="")):
+    async def report_specs(data: SpecsInput, x_agent_token: str = Header(default=""), x_device: str = Header(default="")):
         rec = await db.agent_tokens.find_one({"token": x_agent_token})
         if not rec:
             raise HTTPException(status_code=401, detail="Token agent non valido")
         uid = rec["user_id"]
+        did = await resolve_device(db, uid, x_device)
+        dflt = {"user_id": uid, **({"device_id": did} if did else {})}
         fields = {"user_id": uid, "updated_at": now_iso()}
+        if did:
+            fields["device_id"] = did
         prev = None
         if data.startup is not None or data.services_audit is not None:
             prev = await db.pc_specs.find_one(
-                {"user_id": uid},
+                dflt,
                 {"_id": 0, "startup": 1, "services_audit": 1, "startup_done": 1, "services_done": 1})
         if data.data:
             fields["data"] = data.data
@@ -331,7 +338,8 @@ def build(get_current_user):
             fields["health"] = data.health
             _h = compute_health(data.health)
             await db.health_history.insert_one({
-                "user_id": uid, "score": _h.get("score"), "grade": _h.get("grade"),
+                "user_id": uid, **({"device_id": did} if did else {}),
+                "score": _h.get("score"), "grade": _h.get("grade"),
                 "cpu_temp": _h.get("cpu_temp"), "gpu_temp": _h.get("gpu_temp"),
                 "created_at": now_iso()})
         if data.startup is not None:
@@ -421,7 +429,7 @@ def build(get_current_user):
                         "created_at": now_iso(), "read": False})
                 except Exception:
                     pass
-        await db.pc_specs.update_one({"user_id": uid}, {"$set": fields}, upsert=True)
+        await db.pc_specs.update_one(dflt, {"$set": fields}, upsert=True)
         # v0.7.7 Milestones: track scan + health + daily active
         try:
             from milestones import bump_counter, track_health_score, track_daily_active, set_flag
@@ -438,7 +446,7 @@ def build(get_current_user):
             if data.benchmark is not None and (data.benchmark.get("overall") or 0) >= 90:
                 await set_flag(db, uid, "speed_demon_earned", True)
             if data.startup is not None or data.services_audit is not None:
-                _d = await db.pc_specs.find_one({"user_id": uid}, {"services_done": 1, "startup_done": 1})
+                _d = await db.pc_specs.find_one(dflt, {"services_done": 1, "startup_done": 1})
                 if len((_d or {}).get("services_done") or []) + len((_d or {}).get("startup_done") or []) >= 10:
                     await set_flag(db, uid, "surgeon_earned", True)
         except Exception:
@@ -446,20 +454,22 @@ def build(get_current_user):
         return {"ok": True}
 
     @r.post("/agent/netresult")
-    async def agent_netresult(payload: NetResultInput, x_agent_token: str = Header(default="")):
+    async def agent_netresult(payload: NetResultInput, x_agent_token: str = Header(default=""), x_device: str = Header(default="")):
         rec = await db.agent_tokens.find_one({"token": x_agent_token})
         if not rec:
             raise HTTPException(status_code=401, detail="Token agent non valido")
         graded = grade_bufferbloat(payload.result)
+        _did = await resolve_device(db, rec["user_id"], x_device)
+        dflt = {"user_id": rec["user_id"], **({"device_id": _did} if _did else {})}
         await db.net_results.update_one(
-            {"user_id": rec["user_id"]},
-            {"$set": {"user_id": rec["user_id"], "result": graded, "updated_at": now_iso()}},
+            dflt,
+            {"$set": {**dflt, "result": graded, "updated_at": now_iso()}},
             upsert=True)
         return {"ok": True, "grade": graded.get("grade")}
 
     @r.get("/net-result")
     async def net_result(user: dict = Depends(require_adv_tweaks)):
-        doc = await db.net_results.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        doc = await db.net_results.find_one(await device_filter(db, str(user["_id"])), {"_id": 0})
         if not doc:
             return {"available": False}
         return {"available": True, **doc}
@@ -467,7 +477,7 @@ def build(get_current_user):
     @r.get("/pc-benchmark")
     async def pc_benchmark(user: dict = Depends(get_current_user)):
         uid = str(user["_id"])
-        doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "benchmark": 1})
+        doc = await db.pc_specs.find_one(await device_filter(db, uid), {"_id": 0, "benchmark": 1})
         history = await db.benchmarks.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(10)
         return {"latest": (doc or {}).get("benchmark"), "history": history}
 
@@ -508,7 +518,7 @@ def build(get_current_user):
           }
         """
         uid = str(user["_id"])
-        doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "data": 1, "benchmark": 1})
+        doc = await db.pc_specs.find_one(await device_filter(db, uid), {"_id": 0, "data": 1, "benchmark": 1})
         if not doc:
             return {"reference": None, "reason": "no_specs"}
         gpu_str = (doc.get("data") or {}).get("gpu") or ""
@@ -599,7 +609,7 @@ def build(get_current_user):
         users with similar CPU/GPU family. Returns null percentiles if not enough
         data is available (fleet<3 or similar<3)."""
         uid = str(user["_id"])
-        doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "benchmark": 1, "data": 1})
+        doc = await db.pc_specs.find_one(await device_filter(db, uid), {"_id": 0, "benchmark": 1, "data": 1})
         if not doc:
             return {"available": False}
         my_score = _bench_score(doc.get("benchmark"))
@@ -679,7 +689,7 @@ def build(get_current_user):
         Returns warnings but never blocks: the frontend decides whether to nudge
         the user before starting a benchmark."""
         uid = str(user["_id"])
-        doc = await db.pc_specs.find_one({"user_id": uid},
+        doc = await db.pc_specs.find_one(await device_filter(db, uid),
                                          {"_id": 0, "running_apps": 1, "running_at": 1})
         running = [str(a).lower() for a in (doc or {}).get("running_apps") or []]
         warnings: list[dict] = []
@@ -760,7 +770,7 @@ def build(get_current_user):
         days = max(1, min(30, int(days or 7)))
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         rows = await db.health_history.find(
-            {"user_id": uid, "created_at": {"$gte": cutoff}},
+            {**(await device_filter(db, uid)), "created_at": {"$gte": cutoff}},
             {"_id": 0, "user_id": 0}
         ).sort("created_at", 1).to_list(200)
         events = [{
@@ -781,7 +791,7 @@ def build(get_current_user):
         snap = {"captured_at": now_iso(), "health_score": None, "health_grade": None,
                 "bufferbloat_ms": None, "bufferbloat_grade": None,
                 "fps_avg": None, "bench_overall": None}
-        specs = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "health": 1, "benchmark": 1})
+        specs = await db.pc_specs.find_one(await device_filter(db, uid), {"_id": 0, "health": 1, "benchmark": 1})
         if specs:
             if specs.get("health"):
                 h = compute_health(specs["health"])
@@ -789,11 +799,11 @@ def build(get_current_user):
                 snap["health_grade"] = h.get("grade")
             bench = specs.get("benchmark") or {}
             snap["bench_overall"] = bench.get("overall") or (bench.get("after") or {}).get("overall")
-        net = await db.net_results.find_one({"user_id": uid}, {"_id": 0, "result": 1})
+        net = await db.net_results.find_one(await device_filter(db, uid), {"_id": 0, "result": 1})
         if net and net.get("result"):
             snap["bufferbloat_ms"] = net["result"].get("bufferbloat_ms")
             snap["bufferbloat_grade"] = net["result"].get("grade")
-        tel = await db.pc_telemetry.find_one({"user_id": uid}, {"_id": 0, "samples": 1})
+        tel = await db.pc_telemetry.find_one(await device_filter(db, uid), {"_id": 0, "samples": 1})
         if tel and tel.get("samples"):
             fps_vals = [s.get("fps") for s in tel["samples"] if isinstance(s.get("fps"), (int, float)) and s.get("fps") > 0]
             if fps_vals:
@@ -836,18 +846,20 @@ def build(get_current_user):
         return {"ok": True}
 
     @r.post("/agent/telemetry")
-    async def agent_telemetry(payload: TelemetryInput, x_agent_token: str = Header(default="")):
+    async def agent_telemetry(payload: TelemetryInput, x_agent_token: str = Header(default=""), x_device: str = Header(default="")):
         rec = await db.agent_tokens.find_one({"token": x_agent_token})
         if not rec:
             raise HTTPException(status_code=401, detail="Token agent non valido")
+        _did = await resolve_device(db, rec["user_id"], x_device)
+        dflt = {"user_id": rec["user_id"], **({"device_id": _did} if _did else {})}
         sample = {**payload.sample}
         sample.setdefault("ts", now_iso())
         await db.pc_telemetry.update_one(
-            {"user_id": rec["user_id"]},
-            {"$set": {"user_id": rec["user_id"], "updated_at": now_iso()},
+            dflt,
+            {"$set": {**dflt, "updated_at": now_iso()},
              "$push": {"samples": {"$each": [sample], "$slice": -1800}}},
             upsert=True)
-        await _check_temp_alerts(rec["user_id"], sample)
+        await _check_temp_alerts(rec["user_id"], sample, _did)
         # v0.7.7 Milestones: track distinct games (Universal Game Detector)
         try:
             _game_key = sample.get("steam_appid") or sample.get("game_name")
@@ -897,7 +909,7 @@ def build(get_current_user):
 
     @r.get("/pc-telemetry")
     async def pc_telemetry(user: dict = Depends(require_pro_dep)):
-        doc = await db.pc_telemetry.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        doc = await db.pc_telemetry.find_one(await device_filter(db, str(user["_id"])), {"_id": 0})
         if not doc:
             return {"samples": [], "updated_at": None, "live": False}
         live = False
@@ -908,24 +920,30 @@ def build(get_current_user):
             live = False
         return {"samples": doc.get("samples", [])[-60:], "updated_at": doc.get("updated_at"), "live": live}
 
-    async def _check_temp_alerts(uid, sample):
+    async def _check_temp_alerts(uid, sample, did=None):
         cfg = await db.alert_settings.find_one({"user_id": uid}) or {}
         if not cfg.get("enabled", True):
             return
+        dev_label = ""
+        if did:
+            _dev = await db.devices.find_one({"user_id": uid, "device_id": did}, {"name": 1})
+            if _dev and _dev.get("name"):
+                dev_label = f"[{_dev['name']}] "
+        suffix = f"_{did}" if did else ""
         cpu_max = cfg.get("cpu_max", 90)
         gpu_max = cfg.get("gpu_max", 85)
         to_send = []
         ct, gt = sample.get("cpu_temp"), sample.get("gpu_temp")
-        if ct and ct >= cpu_max and _iso_age(cfg.get("last_cpu_alert", "")) > 300:
-            to_send.append(("cpu", f"CPU a {ct}°C (soglia {cpu_max}°C). Riduci il carico o controlla il raffreddamento."))
-        if gt and gt >= gpu_max and _iso_age(cfg.get("last_gpu_alert", "")) > 300:
-            to_send.append(("gpu", f"GPU a {gt}°C (soglia {gpu_max}°C). Riduci il carico o controlla il raffreddamento."))
+        if ct and ct >= cpu_max and _iso_age(cfg.get(f"last_cpu_alert{suffix}", "")) > 300:
+            to_send.append(("cpu", f"{dev_label}CPU a {ct}°C (soglia {cpu_max}°C). Riduci il carico o controlla il raffreddamento."))
+        if gt and gt >= gpu_max and _iso_age(cfg.get(f"last_gpu_alert{suffix}", "")) > 300:
+            to_send.append(("gpu", f"{dev_label}GPU a {gt}°C (soglia {gpu_max}°C). Riduci il carico o controlla il raffreddamento."))
         for metric, body in to_send:
             try:
                 await push.send_push_to_user(db, uid, {"title": "🔥 Temperatura critica!", "body": body, "url": "/app/live"})
             except Exception:
                 pass
-            await db.alert_settings.update_one({"user_id": uid}, {"$set": {"user_id": uid, f"last_{metric}_alert": now_iso()}}, upsert=True)
+            await db.alert_settings.update_one({"user_id": uid}, {"$set": {"user_id": uid, f"last_{metric}_alert{suffix}": now_iso()}}, upsert=True)
 
     @r.get("/alerts")
     async def get_alerts(user: dict = Depends(get_current_user)):
@@ -946,7 +964,7 @@ def build(get_current_user):
 
     @r.get("/pc-specs")
     async def get_specs(user: dict = Depends(get_current_user)):
-        doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        doc = await db.pc_specs.find_one(await device_filter(db, str(user["_id"])), {"_id": 0})
         # Flag 'noise' a read-time: voci di sistema/driver non azionabili (KB aggiornabile)
         if doc and isinstance(doc.get("startup"), list):
             from services_kb import is_startup_noise
@@ -958,19 +976,19 @@ def build(get_current_user):
     @r.post("/pc-specs")
     async def save_specs(payload: PcSpecsInput, user: dict = Depends(get_current_user)):
         uid = str(user["_id"])
-        existing = await db.pc_specs.find_one({"user_id": uid})
+        existing = await db.pc_specs.find_one(await device_filter(db, uid))
         base = (existing or {}).get("data", {}) if existing else {}
         merged = {**base, **{k: v for k, v in payload.data.items() if v not in (None, "")}}
         await db.pc_specs.update_one(
-            {"user_id": uid},
+            await device_filter(db, uid),
             {"$set": {"user_id": uid, "data": merged, "source": payload.source, "updated_at": now_iso()}},
             upsert=True)
-        return await db.pc_specs.find_one({"user_id": uid}, {"_id": 0})
+        return await db.pc_specs.find_one(await device_filter(db, uid), {"_id": 0})
 
     @r.get("/prematch")
     async def get_prematch(user: dict = Depends(require_adv_tweaks)):
         doc = await db.prematch_settings.find_one({"user_id": str(user["_id"])}, {"_id": 0})
-        specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0, "running_apps": 1, "running_at": 1})
+        specs = await db.pc_specs.find_one(await device_filter(db, str(user["_id"])), {"_id": 0, "running_apps": 1, "running_at": 1})
         running = {"running_apps": (specs or {}).get("running_apps", []), "running_at": (specs or {}).get("running_at")}
         if not doc:
             return {"close_apps": DEFAULT_PREMATCH_APPS, "set_power": True, **running}
@@ -1000,7 +1018,7 @@ def build(get_current_user):
     @r.post("/benchmark/explain")
     async def benchmark_explain(payload: BenchExplainInput, user: dict = Depends(get_current_user)):
         uid = str(user["_id"])
-        doc = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0, "benchmark": 1, "data": 1})
+        doc = await db.pc_specs.find_one(await device_filter(db, uid), {"_id": 0, "benchmark": 1, "data": 1})
         bench = (doc or {}).get("benchmark")
         if not bench:
             raise HTTPException(status_code=404, detail="Nessun benchmark disponibile. Esegui prima un benchmark dal FrameForge Agent.")
@@ -1030,12 +1048,12 @@ def build(get_current_user):
 
     @r.get("/games")
     async def get_games(user: dict = Depends(get_current_user)):
-        doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0, "games": 1, "updated_at": 1})
+        doc = await db.pc_specs.find_one(await device_filter(db, str(user["_id"])), {"_id": 0, "games": 1, "updated_at": 1})
         return {"games": (doc or {}).get("games", []), "updated_at": (doc or {}).get("updated_at")}
 
     @r.get("/hw-insights")
     async def hw_insights(user: dict = Depends(get_current_user)):
-        doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0, "data": 1})
+        doc = await db.pc_specs.find_one(await device_filter(db, str(user["_id"])), {"_id": 0, "data": 1})
         d = (doc or {}).get("data") or {}
         if not d:
             return {"available": False, "insights": []}
@@ -1093,7 +1111,7 @@ def build(get_current_user):
 
     @r.get("/pc-health")
     async def pc_health(user: dict = Depends(get_current_user)):
-        doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        doc = await db.pc_specs.find_one(await device_filter(db, str(user["_id"])), {"_id": 0})
         if not doc or not doc.get("health"):
             return {"available": False}
         out = {**compute_health(doc["health"]), "available": True}
@@ -1120,7 +1138,7 @@ def build(get_current_user):
         except Exception:
             pass
         try:
-            tel = await db.pc_telemetry.find_one({"user_id": str(user["_id"])}, {"samples": {"$slice": -300}})
+            tel = await db.pc_telemetry.find_one(await device_filter(db, str(user["_id"])), {"samples": {"$slice": -300}})
             samples = (tel or {}).get("samples") or []
             clocks = [s.get("gpu_clock") for s in samples
                       if isinstance(s.get("gpu_clock"), (int, float)) and s.get("gpu_clock") > 0]
@@ -1140,7 +1158,7 @@ def build(get_current_user):
     @r.get("/health-history")
     async def health_history(user: dict = Depends(get_current_user)):
         uid = str(user["_id"])
-        rows = await db.health_history.find({"user_id": uid}, {"_id": 0, "user_id": 0}) \
+        rows = await db.health_history.find(await device_filter(db, uid), {"_id": 0, "user_id": 0}) \
             .sort("created_at", -1).limit(90).to_list(90)
         rows.reverse()
         ent = (await get_entitlements(db, user))["entitlements"]
@@ -1152,7 +1170,7 @@ def build(get_current_user):
 
     @r.post("/upgrade/analyze")
     async def upgrade_analyze(data: GoalInput, user: dict = Depends(get_current_user)):
-        specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        specs = await db.pc_specs.find_one(await device_filter(db, str(user["_id"])), {"_id": 0})
         if not specs or not specs.get("data"):
             raise HTTPException(status_code=400,
                                 detail="Nessun hardware rilevato. Usa il FrameForge Agent per inviare le specifiche.")
@@ -1162,7 +1180,7 @@ def build(get_current_user):
             raise HTTPException(status_code=502, detail=str(e))
 
     async def _fleet_fps(uid: str, game: str):
-        specs = await db.pc_specs.find_one({"user_id": uid}, {"data.gpu": 1})
+        specs = await db.pc_specs.find_one(await device_filter(db, uid), {"data.gpu": 1})
         gpu = (((specs or {}).get("data") or {}).get("gpu") or "")
         m = re.search(r"(rtx\s*\d{4}\s*(?:ti|super)?|gtx\s*\d{3,4}\s*(?:ti|super)?|rx\s*\d{4}\s*(?:xtx|xt)?|arc\s*\w?\d{3})", gpu, re.I)
         if not m or not game:
@@ -1192,7 +1210,7 @@ def build(get_current_user):
 
     @r.post("/fps/estimate")
     async def fps_estimate(data: FpsInput, user: dict = Depends(get_current_user)):
-        specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        specs = await db.pc_specs.find_one(await device_filter(db, str(user["_id"])), {"_id": 0})
         try:
             fleet = await _fleet_fps(str(user["_id"]), data.game)
         except Exception:
@@ -1212,7 +1230,7 @@ def build(get_current_user):
 
     @r.post("/fps/upgrade-compare")
     async def fps_upgrade_compare(data: FpsUpgradeInput, user: dict = Depends(get_current_user)):
-        specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        specs = await db.pc_specs.find_one(await device_filter(db, str(user["_id"])), {"_id": 0})
         if not specs or not specs.get("data"):
             raise HTTPException(status_code=400,
                                 detail="Nessun hardware rilevato. Usa il FrameForge Agent per inviare le specifiche.")
@@ -1227,7 +1245,7 @@ def build(get_current_user):
 
     @r.get("/services/analyze")
     async def services_analyze(user: dict = Depends(get_current_user)):
-        doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        doc = await db.pc_specs.find_one(await device_filter(db, str(user["_id"])), {"_id": 0})
         audit = (doc or {}).get("services_audit") or []
         if not audit:
             return {"available": False}
@@ -1238,7 +1256,7 @@ def build(get_current_user):
 
     @r.post("/startup/analyze")
     async def startup_analyze(user: dict = Depends(get_current_user)):
-        doc = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0})
+        doc = await db.pc_specs.find_one(await device_filter(db, str(user["_id"])), {"_id": 0})
         startup = (doc or {}).get("startup") or []
         if not startup:
             raise HTTPException(status_code=400, detail="Nessun dato di avvio. Usa il FrameForge Agent.")
@@ -1274,7 +1292,7 @@ def build(get_current_user):
         }
 
     @r.get("/agent/script")
-    async def agent_script(t: str = "", profile: str = "", x_agent_version: str = Header(default="")):
+    async def agent_script(t: str = "", profile: str = "", x_agent_version: str = Header(default=""), x_device: str = Header(default="")):
         rec = await db.agent_tokens.find_one({"token": t})
         if not rec:
             return PlainTextResponse(
@@ -1285,8 +1303,9 @@ def build(get_current_user):
         # doc utente e il banner di update apparira' finche' non aggiornano.
         if x_agent_version and len(x_agent_version) <= 20:
             try:
+                _did = await resolve_device(db, rec["user_id"], x_device)
                 await db.pc_specs.update_one(
-                    {"user_id": rec["user_id"]},
+                    {"user_id": rec["user_id"], **({"device_id": _did} if _did else {})},
                     {"$set": {"agent_version": x_agent_version, "agent_version_at": now_iso()}},
                     upsert=True,
                 )
@@ -1304,7 +1323,7 @@ def build(get_current_user):
         rilevata dall'header X-Agent-Version) vs versione ultima disponibile.
         Usato dal banner "Aggiorna l'agent" nella dashboard."""
         latest = LATEST_AGENT_VERSION
-        specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"agent_version": 1, "updated_at": 1})
+        specs = await db.pc_specs.find_one(await device_filter(db, str(user["_id"])), {"agent_version": 1, "updated_at": 1})
         installed = (specs or {}).get("agent_version") or None
         has_ever_run = bool(specs and specs.get("updated_at"))
         # Outdated se:

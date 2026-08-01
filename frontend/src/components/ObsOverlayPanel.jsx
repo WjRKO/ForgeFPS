@@ -45,6 +45,8 @@ const SIZES = [
 
 export default function ObsOverlayPanel() {
   const { t } = useTranslation();
+  const [devices, setDevices] = useState([]);
+  useEffect(() => { api.get("/devices").then(({ data }) => setDevices(data.devices || [])).catch(() => {}); }, []);
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
   const [lockedPlan, setLockedPlan] = useState("starter");
@@ -206,6 +208,25 @@ export default function ObsOverlayPanel() {
             ))}
           </div>
         </div>
+        {/* Multi-PC: sorgente dati dell'overlay */}
+        {devices.length >= 2 && (
+          <div data-testid="overlay-source-section">
+            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Data source (Multi-PC)" : "Sorgente dati (Multi-PC)"}</div>
+            <div className="grid grid-cols-1 gap-1">
+              <button onClick={() => updateCfg({ source_device: "" })} data-testid="overlay-source-active"
+                className={`text-xs px-3 py-2 border text-left transition-colors ${!cfg?.source_device ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/5" : "border-[#2A2A35] text-zinc-400 hover:border-zinc-600"}`}>
+                {isEn() ? "Active PC (default)" : "PC attivo (default)"}
+              </button>
+              {devices.map((d) => (
+                <button key={d.device_id} onClick={() => updateCfg({ source_device: d.device_id })}
+                  data-testid={`overlay-source-${d.device_id}`}
+                  className={`text-xs px-3 py-2 border text-left transition-colors ${cfg?.source_device === d.device_id ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/5" : "border-[#2A2A35] text-zinc-400 hover:border-zinc-600"}`}>
+                  {d.name} <span className="text-zinc-600">· {d.role}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Theme */}
         <div>
           <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Theme" : "Tema"}</div>

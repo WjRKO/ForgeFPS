@@ -175,5 +175,6 @@ async def get_entitlements(db, user: dict) -> dict:
         "gpu_reference_full": is_pro or bool(feats.get("gpu_reference_full")),
         "full_benchmark": is_pro,
         "tracker_limit": 25 if is_pro else 3,
+        "device_limit": 99 if info["is_streamer"] else (3 if is_pro else 1),
     }
     return info
