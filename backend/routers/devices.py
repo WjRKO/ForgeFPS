@@ -61,6 +61,9 @@ def build(get_current_user):
             raise HTTPException(404, "Device non trovato")
         for coll in PER_PC_COLLECTIONS:
             await db[coll].delete_many({"user_id": uid, "device_id": device_id})
+        # Overlay che puntava a questo PC → torna al PC attivo
+        await db.overlay_tokens.update_many(
+            {"user_id": uid, "source_device": device_id}, {"$set": {"source_device": None}})
         # Se era l'attivo, ripiega sul primario rimasto
         u = await db.users.find_one({"_id": user["_id"]}, {"active_device": 1})
         if (u or {}).get("active_device") == device_id:
