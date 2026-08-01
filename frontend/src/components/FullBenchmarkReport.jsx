@@ -111,7 +111,7 @@ export default function FullBenchmarkReport() {
   if (state.locked) {
     return (
       <PlanUpgradeBanner
-        tier="streamer"
+        tier="pro"
         title={t("plan_banner.fullbench.title")}
         description={t("plan_banner.fullbench.desc")}
         features={[

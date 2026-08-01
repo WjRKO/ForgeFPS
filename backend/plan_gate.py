@@ -152,3 +152,28 @@ def require_streamer(get_current_user):
             )
         return {**user, "_plan_info": info}
     return dep
+
+
+# --- Entitlements (piano + feature Earned Premium sbloccate via trofei) --------
+def plan_402(required: str, current: str, message: str, code: str = "plan_required") -> HTTPException:
+    return HTTPException(status_code=402, detail={
+        "code": code, "required": required, "current": current,
+        "message": message, "upgrade_url": "/pricing",
+    })
+
+
+async def get_entitlements(db, user: dict) -> dict:
+    """Piano effettivo + feature flags: incluse nel piano O guadagnate coi trofei."""
+    info = compute_effective_plan(user)
+    prog = await db.user_progress.find_one({"user_id": str(user["_id"])}, {"features": 1})
+    feats = (prog or {}).get("features") or {}
+    is_pro = info["is_pro"]
+    info["entitlements"] = {
+        "adv_tweaks": is_pro or bool(feats.get("adv_tweaks") or feats.get("advanced_registry_tweaks")),
+        "history_90d": is_pro or bool(feats.get("history_90d")),
+        "pdf_report": is_pro or bool(feats.get("pdf_report")),
+        "gpu_reference_full": is_pro or bool(feats.get("gpu_reference_full")),
+        "full_benchmark": is_pro,
+        "tracker_limit": 25 if is_pro else 3,
+    }
+    return info

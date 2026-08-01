@@ -6,9 +6,11 @@ import api from "@/lib/api";
 
 const T = {
   it: { title: "Storico salute & temperature", sub: "Andamento nel tempo di Health Score e temperature CPU/GPU.",
-        empty: "Servono almeno 2 sincronizzazioni dall'agent per mostrare l'andamento.", score: "Health Score", cpu: "Temp CPU", gpu: "Temp GPU" },
+        empty: "Servono almeno 2 sincronizzazioni dall'agent per mostrare l'andamento.", score: "Health Score", cpu: "Temp CPU", gpu: "Temp GPU",
+        limited: "Piano Free: ultimi 7 giorni · con Pro (o trofeo Zen Mode) vedi 90 giorni" },
   en: { title: "Health & temperature history", sub: "Health Score and CPU/GPU temperatures over time.",
-        empty: "At least 2 agent syncs are needed to show the trend.", score: "Health Score", cpu: "CPU temp", gpu: "GPU temp" },
+        empty: "At least 2 agent syncs are needed to show the trend.", score: "Health Score", cpu: "CPU temp", gpu: "GPU temp",
+        limited: "Free plan: last 7 days · Pro (or Zen Mode trophy) unlocks 90 days" },
 };
 
 const fmtTime = (iso) => {
@@ -22,9 +24,10 @@ export default function HealthHistoryCard() {
   const { i18n } = useTranslation();
   const c = T[i18n.language && i18n.language.startsWith("en") ? "en" : "it"];
   const [points, setPoints] = useState([]);
+  const [limitedDays, setLimitedDays] = useState(null);
 
   useEffect(() => {
-    api.get("/health-history").then(({ data }) => setPoints(data.points || [])).catch(() => {});
+    api.get("/health-history").then(({ data }) => { setPoints(data.points || []); setLimitedDays(data.limited_days || null); }).catch(() => {});
   }, []);
 
   if (!points || points.length < 2) return null;
@@ -36,6 +39,9 @@ export default function HealthHistoryCard() {
         <LineIcon size={14} className="text-[#E5FF00]" /> {c.title}
       </div>
       <p className="text-xs text-zinc-600 mb-4">{c.sub}</p>
+      {limitedDays && (
+        <p className="text-[11px] text-[#E5FF00]/80 -mt-2 mb-4" data-testid="health-history-limited">{c.limited}</p>
+      )}
       <div style={{ width: "100%", height: 240 }}>
         <ResponsiveContainer>
           <LineChart data={rows} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>

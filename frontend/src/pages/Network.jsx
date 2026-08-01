@@ -7,6 +7,7 @@ import api from "@/lib/api";
 import { PageHeader, SkeletonCard } from "@/components/hud";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
 import OneClickLaunchButton from "@/components/OneClickLaunchButton";
+import PlanUpgradeBanner from "@/components/PlanUpgradeBanner";
 import TechTerm from "@/components/TechTerm";
 import { MissionContextStrip } from "@/components/MissionContextStrip";
 
@@ -54,6 +55,7 @@ export default function Network() {
   const [token, setToken] = useState("");
   const [res, setRes] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [locked, setLocked] = useState(false);
   const timer = useRef(null);
   const launchTs = useRef(null);
 
@@ -63,7 +65,10 @@ export default function Network() {
       try {
         const { data } = await api.get("/net-result");
         setRes(data.available ? data.result : null);
-      } catch (e) { console.error("load net-result failed", e); }
+      } catch (e) {
+        if (e?.response?.status === 402) { setLocked(true); clearInterval(timer.current); }
+        else console.error("load net-result failed", e);
+      }
       setLoading(false);
     };
     load();
@@ -81,6 +86,16 @@ export default function Network() {
     if (res.base_quality === "fair" || res.base_quality === "poor") tips.push(t("network.tip_server"));
     if ((res.loss_pct || 0) > 1) tips.push(t("network.tip_loss"));
     if (tips.length === 0) tips.push(t("network.tip_great"));
+  }
+
+  if (locked) {
+    return (
+      <div data-testid="network-page">
+        <PageHeader eyebrow="// NETWORK" title={t("network.title")} subtitle={t("network.subtitle")} />
+        <PlanUpgradeBanner tier="pro" compact title={t("plan_banner.advtweaks.title")}
+          description={t("plan_banner.advtweaks.desc")} testid="network-locked" />
+      </div>
+    );
   }
 
   return (

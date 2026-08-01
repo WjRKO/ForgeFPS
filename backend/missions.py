@@ -228,6 +228,16 @@ async def _metric_value(db, uid: str, metric: str, since_iso: str | None) -> int
     return 0
 
 
+async def _adv_tweaks_ok(db, uid: str) -> bool:
+    try:
+        from bson import ObjectId
+        from plan_gate import get_entitlements
+        u = await db.users.find_one({"_id": ObjectId(uid)})
+        return bool(u) and (await get_entitlements(db, u))["entitlements"]["adv_tweaks"]
+    except Exception:
+        return True
+
+
 async def _activation_record(db, uid: str, mission: dict) -> dict:
     rec = {"activated_at": _now_iso(), "baseline": 0}
     if mission["mode"] == "delta":
@@ -311,6 +321,9 @@ async def get_state(db, uid: str, lang_hint: str | None = None) -> dict:
         _enrich(m, {}) for m in MISSIONS_CATALOG
         if m["code"] not in active and m["code"] not in completed
     ]
+    # Missioni legate ai tweak avanzati: non proposte a chi non li ha (Pro o trofeo)
+    if not await _adv_tweaks_ok(db, uid):
+        available = [m for m in available if m["code"] not in ("net_check", "boost_match")]
     out_completed = [
         _enrich(MISSION_BY_CODE[c], {"completed_at": v.get("completed_at")})
         for c, v in completed.items() if c in MISSION_BY_CODE
@@ -457,6 +470,7 @@ async def _weekly_context(db, uid: str) -> dict:
         "net_done": net_done,
         "health": health,
         "boost_total": boost_total,
+        "adv_tweaks": await _adv_tweaks_ok(db, uid),
     }
 
 
@@ -491,6 +505,8 @@ async def _pick_weekly_ai(uid: str, ctx: dict) -> list[dict] | None:
         tpl = WEEKLY_TEMPLATES.get(tkey)
         if not tpl or tkey in seen:
             continue
+        if not ctx.get("adv_tweaks", True) and tkey in ("w_net", "w_boost"):
+            continue
         seen.add(tkey)
         try:
             target = int(p.get("target") or 1)
@@ -516,7 +532,7 @@ def _pick_weekly_fallback(ctx: dict) -> list[dict]:
         picks.append({"template": "w_startup", "target": 2, "why_it": None, "why_en": None})
     if not ctx.get("bench_recent"):
         picks.append({"template": "w_bench", "target": 1, "why_it": None, "why_en": None})
-    if not ctx.get("net_done"):
+    if not ctx.get("net_done") and ctx.get("adv_tweaks", True):
         picks.append({"template": "w_net", "target": 1, "why_it": None, "why_en": None})
     picks.append({"template": "w_scan", "target": 3, "why_it": None, "why_en": None})
     dedup, seen = [], set()

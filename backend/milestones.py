@@ -71,7 +71,7 @@ MILESTONES_CATALOG: list[dict[str, Any]] = [
         "desc_en": "10 tweaks applied successfully.",
         "icon": "Wrench",
         "condition": {"counter": "tweaks_applied", "threshold": 10},
-        "reward": {"type": "unlock", "key": "advanced_registry_tweaks", "label_it": "Advanced Registry Tweaks", "label_en": "Advanced Registry Tweaks"},
+        "reward": {"type": "unlock", "key": "adv_tweaks", "label_it": "Tweak avanzati: BufferBloat, PreMatch, Booster", "label_en": "Advanced tweaks: BufferBloat, PreMatch, Booster"},
     },
     {
         "code": "tweaks_50", "category": "performance", "tier": "gold", "xp": 100,
@@ -80,6 +80,7 @@ MILESTONES_CATALOG: list[dict[str, Any]] = [
         "desc_en": "50 total tweaks. You know your stuff.",
         "icon": "Cpu",
         "condition": {"counter": "tweaks_applied", "threshold": 50},
+        "reward": {"type": "unlock", "key": "pdf_report", "label_it": "Export PDF del Report Prima/Dopo", "label_en": "Before/After Report PDF export"},
     },
     {
         "code": "health_streak_7", "category": "performance", "tier": "silver", "xp": 40,
@@ -88,7 +89,7 @@ MILESTONES_CATALOG: list[dict[str, Any]] = [
         "desc_en": "Health score above 85 for 7 straight days.",
         "icon": "Activity",
         "condition": {"counter": "health_streak_days", "threshold": 7},
-        "reward": {"type": "slot", "key": "profile_slots", "amount": 1, "label_it": "+1 slot Profile custom", "label_en": "+1 custom Profile slot"},
+        "reward": {"type": "unlock", "key": "history_90d", "label_it": "Storico salute 90 giorni", "label_en": "90-day health history"},
     },
     {
         "code": "pc_whisperer", "category": "performance", "tier": "gold", "xp": 75,
@@ -187,6 +188,7 @@ MILESTONES_CATALOG: list[dict[str, Any]] = [
         "desc_en": "Benchmark with an overall score of at least 90.",
         "icon": "Gauge",
         "condition": {"flag": "speed_demon_earned"},
+        "reward": {"type": "unlock", "key": "gpu_reference_full", "label_it": "GPU vs Reference completo (200+ GPU)", "label_en": "Full GPU vs Reference (200+ GPUs)"},
     },
     {
         "code": "mission_hunter", "category": "secret", "tier": "silver", "xp": 50, "secret": True,

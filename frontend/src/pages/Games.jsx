@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { PrimaryButton } from "@/components/hud";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
+import PlanUpgradeBanner from "@/components/PlanUpgradeBanner";
 
 const RES = ["1080p", "1440p", "4K"];
 
@@ -62,6 +63,7 @@ export default function Games() {
   const [boostCfg, setBoostCfg] = useState({ set_power: true, boost_priority: true, purge_ram: true });
   const [savingBoost, setSavingBoost] = useState(false);
   const [boostSessions, setBoostSessions] = useState([]);
+  const [advLocked, setAdvLocked] = useState(false);
 
   const loadGames = async () => {
     try { const { data } = await api.get("/games"); setGames(data.games || []); } catch (e) { console.error("loadGames failed", e); }
@@ -74,7 +76,10 @@ export default function Games() {
       const { data } = await api.get("/prematch");
       setRunningApps(data.running_apps || []);
       setRunningAt(data.running_at || null);
-    } catch (e) { console.error("loadRunningApps failed", e); }
+    } catch (e) {
+      if (e?.response?.status === 402) setAdvLocked(true);
+      else console.error("loadRunningApps failed", e);
+    }
   };
   useEffect(() => {
     loadGames();
@@ -85,8 +90,8 @@ export default function Games() {
     api.get("/booster").then(({ data }) => {
       setBoostCfg({ set_power: data.set_power !== false, boost_priority: data.boost_priority !== false, purge_ram: data.purge_ram !== false });
       setBoostCloseApps(new Set(data.close_apps || []));
-    }).catch((e) => console.error("load booster failed", e));
-    api.get("/booster/sessions").then(({ data }) => setBoostSessions(data.sessions || [])).catch((e) => console.error("load booster sessions failed", e));
+    }).catch((e) => { if (e?.response?.status === 402) setAdvLocked(true); else console.error("load booster failed", e); });
+    api.get("/booster/sessions").then(({ data }) => setBoostSessions(data.sessions || [])).catch((e) => { if (e?.response?.status !== 402) console.error("load booster sessions failed", e); });
   }, []);
 
   const toggleBoostApp = (proc) => {
@@ -145,6 +150,12 @@ export default function Games() {
       </div>
 
       {/* Game Booster: consolidato (ex Pre-match rimosso, il Booster fa lo stesso in automatico) */}
+      {advLocked ? (
+        <div className="mb-5">
+          <PlanUpgradeBanner tier="pro" compact title={t("plan_banner.advtweaks.title")}
+            description={t("plan_banner.advtweaks.desc")} testid="booster-locked" />
+        </div>
+      ) : (
       <div className="bg-gradient-to-br from-[#00E0FF]/10 to-transparent border border-[#00E0FF]/40 p-5 mb-5" data-testid="booster-card">
         <div className="flex items-center gap-2 text-sm font-bold mb-1 text-[#00E0FF]"><Zap size={16} /> {t("games.booster_title")}</div>
         <p className="text-xs text-zinc-400 mb-3 leading-relaxed">{t("games.booster_desc")}</p>
@@ -238,6 +249,7 @@ export default function Games() {
           </div>
         )}
       </div>
+      )}
 
       <div className="grid lg:grid-cols-[1fr_1.1fr] gap-4">
         {/* Detected games */}

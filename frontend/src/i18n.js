@@ -740,6 +740,10 @@ const resources = {
         cta_pro: "Passa a Pro",
         cta_streamer: "Passa a Streamer",
         current_plan: "Il tuo piano attuale:",
+        advtweaks: {
+          title: "Tweak avanzati: BufferBloat, PreMatch, Booster",
+          desc: "Test bufferbloat con voto A+–F, Game Booster automatico e ottimizzazione pre-partita sono del piano <b>Pro</b>. Oppure sbloccali gratis con il trofeo <b>Tuning Solido</b> (10 tweak applicati).",
+        },
         advisor: {
           title: "AI Advisor personalizzato",
           desc: "Un coach AI che <b>conosce il tuo hardware</b> (CPU, GPU, temperature, Health Score, benchmark, startup) e ti da <b>azioni prioritizzate</b> con impatto stimato in FPS, non consigli generici copia-incolla.",
@@ -1525,6 +1529,10 @@ const resources = {
         cta_pro: "Upgrade to Pro",
         cta_streamer: "Upgrade to Streamer",
         current_plan: "Your current plan:",
+        advtweaks: {
+          title: "Advanced tweaks: BufferBloat, PreMatch, Booster",
+          desc: "Bufferbloat grading (A+–F), automatic Game Booster and pre-match optimization are part of the <b>Pro</b> plan. Or unlock them for free with the <b>Solid Tuner</b> trophy (10 tweaks applied).",
+        },
         advisor: {
           title: "Personalized AI Advisor",
           desc: "An AI coach that <b>knows your actual hardware</b> (CPU, GPU, temps, Health Score, benchmark, startup apps) and gives you <b>prioritized actions</b> with estimated FPS impact — not generic copy-paste advice.",

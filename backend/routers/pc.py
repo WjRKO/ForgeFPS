@@ -20,7 +20,19 @@ from services.gpu_catalog_service import find_gpu_reference, compute_health_vs_r
 from models import SpecsInput, GoalInput, FpsInput, FpsUpgradeInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput
 from routers.profiles import resolve_tweak_ids, TWEAK_CATALOG, TEMPLATES
 from routers.advisor import _check_ai_rate_limit
-from plan_gate import require_pro, require_streamer
+from plan_gate import require_pro, require_streamer, get_entitlements, plan_402
+
+# GPU vs Reference: modelli disponibili nel piano Free (i piu' diffusi). Pro/trofeo = catalogo completo.
+FREE_GPU_MODELS = (
+    "rtx 3050", "rtx 3060", "rtx 3070", "rtx 3080", "rtx 4060", "rtx 4070",
+    "rtx 2060", "rtx 2070", "gtx 1660", "gtx 1650", "gtx 1060",
+    "rx 580", "rx 6600", "rx 6700 xt", "rx 7600", "rx 7800 xt", "arc a750", "arc a770",
+)
+
+
+def _is_free_gpu(model: str) -> bool:
+    m = (model or "").lower()
+    return any(k in m for k in FREE_GPU_MODELS)
 
 # Default background processes closed by "Prima del match" (must stay in sync with frontend groups)
 DEFAULT_PREMATCH_APPS = [
@@ -162,6 +174,14 @@ def build(get_current_user):
     r = APIRouter(prefix="/api", tags=["pc"])
     require_pro_dep = require_pro(get_current_user)
     require_streamer_dep = require_streamer(get_current_user)
+
+    async def require_adv_tweaks(user: dict = Depends(get_current_user)):
+        info = await get_entitlements(db, user)
+        if not info["entitlements"]["adv_tweaks"]:
+            raise plan_402("pro", info["plan_effective"],
+                           "I tweak avanzati (BufferBloat, PreMatch, Booster) richiedono il piano Pro — oppure sbloccali con il trofeo 'Tuning Solido' (10 tweak applicati).",
+                           code="adv_tweaks_required")
+        return user
 
     @r.get("/agent/token")
     async def agent_token(user: dict = Depends(get_current_user)):
@@ -438,7 +458,7 @@ def build(get_current_user):
         return {"ok": True, "grade": graded.get("grade")}
 
     @r.get("/net-result")
-    async def net_result(user: dict = Depends(get_current_user)):
+    async def net_result(user: dict = Depends(require_adv_tweaks)):
         doc = await db.net_results.find_one({"user_id": str(user["_id"])}, {"_id": 0})
         if not doc:
             return {"available": False}
@@ -452,10 +472,10 @@ def build(get_current_user):
         return {"latest": (doc or {}).get("benchmark"), "history": history}
 
     @r.get("/pc-benchmark/full")
-    async def pc_benchmark_full(user: dict = Depends(require_streamer_dep)):
+    async def pc_benchmark_full(user: dict = Depends(require_pro_dep)):
         """Ultimo Full Benchmark (~2-4min run) + storico ultimi 5.
 
-        FEATURE-GATED: solo piano Streamer (o streamer_trial attivo).
+        FEATURE-GATED: piano Pro o superiore (incl. trial attivi).
 
         Ritorna solo record che contengono il payload `full` (i.e. Full Benchmark,
         non Quick). Se nessun Full Benchmark e' mai stato eseguito -> latest=None.
@@ -495,6 +515,9 @@ def build(get_current_user):
         reference = find_gpu_reference(gpu_str)
         if not reference:
             return {"gpu_string": gpu_str, "reference": None, "reason": "not_in_catalog"}
+        ent = (await get_entitlements(db, user))["entitlements"]
+        if not ent["gpu_reference_full"] and not _is_free_gpu(reference.get("gpu_model")):
+            return {"gpu_string": gpu_str, "reference": None, "reason": "plan_required", "locked": True}
         # Measured perf: prende il quick-bench overall/score piu' recente.
         bench = doc.get("benchmark") or {}
         measured = _bench_overall(bench) or _bench_score(bench) or 0
@@ -911,6 +934,9 @@ def build(get_current_user):
 
     @r.put("/alerts")
     async def set_alerts(payload: AlertInput, user: dict = Depends(get_current_user)):
+        info = await get_entitlements(db, user)
+        if not info["is_pro"]:
+            raise plan_402("pro", info["plan_effective"], "Gli alert termici automatici richiedono il piano Pro.")
         await db.alert_settings.update_one(
             {"user_id": str(user["_id"])},
             {"$set": {"user_id": str(user["_id"]), "enabled": payload.enabled,
@@ -942,7 +968,7 @@ def build(get_current_user):
         return await db.pc_specs.find_one({"user_id": uid}, {"_id": 0})
 
     @r.get("/prematch")
-    async def get_prematch(user: dict = Depends(get_current_user)):
+    async def get_prematch(user: dict = Depends(require_adv_tweaks)):
         doc = await db.prematch_settings.find_one({"user_id": str(user["_id"])}, {"_id": 0})
         specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"_id": 0, "running_apps": 1, "running_at": 1})
         running = {"running_apps": (specs or {}).get("running_apps", []), "running_at": (specs or {}).get("running_at")}
@@ -951,13 +977,13 @@ def build(get_current_user):
         return {"close_apps": doc.get("close_apps", DEFAULT_PREMATCH_APPS), "set_power": doc.get("set_power", True), **running}
 
     @r.get("/booster")
-    async def get_booster(user: dict = Depends(get_current_user)):
+    async def get_booster(user: dict = Depends(require_adv_tweaks)):
         doc = await db.booster_settings.find_one({"user_id": str(user["_id"])}, {"_id": 0}) or {}
         return {"close_apps": doc.get("close_apps", []), "set_power": doc.get("set_power", True),
                 "boost_priority": doc.get("boost_priority", True), "purge_ram": doc.get("purge_ram", True)}
 
     @r.put("/booster")
-    async def set_booster(payload: BoosterInput, user: dict = Depends(get_current_user)):
+    async def set_booster(payload: BoosterInput, user: dict = Depends(require_adv_tweaks)):
         await db.booster_settings.update_one(
             {"user_id": str(user["_id"])},
             {"$set": {"user_id": str(user["_id"]), "close_apps": payload.close_apps,
@@ -967,7 +993,7 @@ def build(get_current_user):
         return {"ok": True}
 
     @r.get("/booster/sessions")
-    async def booster_sessions(user: dict = Depends(get_current_user)):
+    async def booster_sessions(user: dict = Depends(require_adv_tweaks)):
         rows = await db.boost_sessions.find({"user_id": str(user["_id"])}, {"_id": 0}).sort("created_at", -1).to_list(10)
         return {"sessions": rows}
 
@@ -995,7 +1021,7 @@ def build(get_current_user):
         return {"explanation": text, "cached": False}
 
     @r.put("/prematch")
-    async def set_prematch(payload: PrematchInput, user: dict = Depends(get_current_user)):
+    async def set_prematch(payload: PrematchInput, user: dict = Depends(require_adv_tweaks)):
         await db.prematch_settings.update_one(
             {"user_id": str(user["_id"])},
             {"$set": {"user_id": str(user["_id"]), "close_apps": payload.close_apps, "set_power": payload.set_power}},
@@ -1117,6 +1143,11 @@ def build(get_current_user):
         rows = await db.health_history.find({"user_id": uid}, {"_id": 0, "user_id": 0}) \
             .sort("created_at", -1).limit(90).to_list(90)
         rows.reverse()
+        ent = (await get_entitlements(db, user))["entitlements"]
+        if not ent["history_90d"]:
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+            rows = [p for p in rows if str(p.get("created_at") or "") >= cutoff]
+            return {"points": rows, "limited_days": 7}
         return {"points": rows}
 
     @r.post("/upgrade/analyze")

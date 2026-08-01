@@ -12,7 +12,8 @@
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Gauge, Cpu, Zap, AlertTriangle, CheckCircle2, HelpCircle } from "lucide-react";
+import { Gauge, Cpu, Zap, AlertTriangle, CheckCircle2, HelpCircle, Lock } from "lucide-react";
+import { Link } from "react-router-dom";
 import api from "@/lib/api";
 import { toast } from "sonner";
 
@@ -66,6 +67,23 @@ export default function GpuReferenceCard() {
   if (loading) return null;
   // No specs at all: componente nascosto (l'utente e' su un altro flow, il FirstScanBanner gestisce quello)
   if (!data || data.reason === "no_specs") return null;
+
+  // Plan gate: GPU fuori dai 20 modelli Free e utente senza catalogo completo
+  if (data.reason === "plan_required") {
+    return (
+      <div className="border border-[#2A2A35] bg-[#0F0F12] p-5" data-testid="gpu-reference-locked">
+        <div className="flex items-center gap-2 text-sm font-bold mb-1 text-zinc-200">
+          <Lock size={14} className="text-[#E5FF00]" /> {en ? "GPU vs Reference — full catalog (200+ GPUs)" : "GPU vs Reference — catalogo completo (200+ GPU)"}
+        </div>
+        <p className="text-xs text-zinc-500 leading-relaxed">
+          {en
+            ? "Your GPU is outside the 20 free models. Go Pro to compare against the full catalog — or earn it with a secret trophy."
+            : "La tua GPU è fuori dai 20 modelli gratuiti. Passa a Pro per il confronto sul catalogo completo — o sbloccalo con un trofeo segreto."}{" "}
+          <Link to="/pricing" className="text-[#E5FF00] hover:underline" data-testid="gpu-reference-upgrade-link">{en ? "Go Pro" : "Passa a Pro"}</Link>
+        </p>
+      </div>
+    );
+  }
 
   const gpuStr = data.gpu_string || (en ? "GPU not detected" : "GPU non rilevata");
   const ref = data.reference;
