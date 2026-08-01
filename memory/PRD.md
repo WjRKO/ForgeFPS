@@ -1763,3 +1763,9 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
 - CONFRONTO PC: GET /api/devices/compare (health latest, live avg su ultimi 30 sample, specs per device); DeviceCompare.jsx in MyPc (2+ PC): colonne per device, badge rosso "Sta soffrendo" sul peggiore (score min, tie-break GPU più calda).
 - PROMEMORIA STREAK: server.py scheduled_streak_reminders + APScheduler cron hour=17 UTC (19 IT): push a chi ha daily.streak>=1 e streak_day==ieri, idempotente via daily.reminder_day. Testato positivo+idempotente con chiamata diretta.
 - Note minori (non fatte): warning Recharts width(-1) preesistente; spacing textContent del report (visivamente ok da screenshot).
+
+## Aggiornamento 2026-08-01 (6) — Ripristino Auto-Pilot dal report (FATTO, self-test curl+screenshot)
+- ps_agent.py: mode 'restore' ora notifica il cloud (POST /api/autopilot/agent/restore-done) dopo Invoke-Restore. Sintassi PS rivalidata con pwsh.
+- autopilot.py: endpoint /agent/restore-done → ultimo run 'done' → status 'reverted' + reverted_at; /status e quota includono 'reverted'.
+- AutoPilotCard.jsx: pulsante "Ripristina tutto" (autopilot-restore-btn, secondo useSilentLaunch mode=restore con detectDone su status reverted) visibile solo su run done con tweak applicati; badge "Ripristinato" (autopilot-reverted-badge) sui run reverted.
+- Reversibilità Auto-Pilot confermata: Invoke-ApplyTracked salva i valori originali in backup persistito (Save-Backup); restore globale + granulare (restore-one) preesistenti.

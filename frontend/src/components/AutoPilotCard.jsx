@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Rocket, Loader2, Lock, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
+import { Rocket, Loader2, Lock, ArrowRight, ChevronDown, ChevronUp, RotateCcw, Undo2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
@@ -14,6 +14,9 @@ const T = {
     quota_free: "Gratis: 1 a settimana", quota_pro: "Illimitato",
     locked: "Hai usato l'Auto-Pilot gratuito di questa settimana.", upgrade: "Passa a Pro",
     report: "Ultimo rapporto", applied: "tweak applicati", health: "Health", none_needed: "Il PC era già ottimizzato: nessun tweak da applicare.",
+    restore_btn: "Ripristina tutto", restoring: "Ripristino in corso sul tuo PC...", restore_start: "Avvio ripristino...",
+    restored: "Backup ripristinato! Il PC è tornato com'era.", restore_failed: "Il ripristino non risponde. Hai installato FrameForge?",
+    reverted_badge: "Ripristinato",
   },
   en: {
     title: "Auto-Pilot", desc: "One click: I apply every safe tweak not yet active, measure before/after and show you the gain.",
@@ -22,6 +25,9 @@ const T = {
     quota_free: "Free: 1 per week", quota_pro: "Unlimited",
     locked: "You used this week's free Auto-Pilot run.", upgrade: "Go Pro",
     report: "Last report", applied: "tweaks applied", health: "Health", none_needed: "PC was already optimized: no tweaks to apply.",
+    restore_btn: "Restore all", restoring: "Restoring on your PC...", restore_start: "Starting restore...",
+    restored: "Backup restored! Your PC is back to how it was.", restore_failed: "Restore not responding. Is FrameForge installed?",
+    reverted_badge: "Restored",
   },
 };
 
@@ -47,6 +53,17 @@ export const AutoPilotCard = () => {
     onDone: () => { load(); setShowReport(true); },
   });
 
+  const restorer = useSilentLaunch({
+    mode: "restore",
+    timeoutMs: 120000,
+    labels: { starting: c.restore_start, running: c.restoring, done: c.restored, failed: c.restore_failed },
+    detectDone: async () => {
+      const { data } = await api.get("/autopilot/status");
+      return data?.latest?.status === "reverted";
+    },
+    onDone: () => load(),
+  });
+
   const start = async () => {
     if (launcher.running) return;
     try {
@@ -59,7 +76,7 @@ export const AutoPilotCard = () => {
     }
   };
 
-  const latest = status?.latest?.status === "done" ? status.latest : null;
+  const latest = ["done", "reverted"].includes(status?.latest?.status) ? status.latest : null;
   const locked = !!(status && status.limit != null && status.remaining <= 0 && !launcher.running);
 
   return (
@@ -99,6 +116,11 @@ export const AutoPilotCard = () => {
             className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors">
             {c.report} · {new Date(latest.completed_at).toLocaleString()} {showReport ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
           </button>
+          {latest.status === "reverted" && (
+            <span className="ml-3 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-zinc-400 border border-[#2A2A35] px-1.5 py-0.5" data-testid="autopilot-reverted-badge">
+              <Undo2 size={9} /> {c.reverted_badge}
+            </span>
+          )}
           {showReport && (
             <div className="mt-3 flex flex-wrap gap-6 text-sm" data-testid="autopilot-report">
               <div>
@@ -130,6 +152,13 @@ export const AutoPilotCard = () => {
                   ))}
                   {latest.applied.length > 10 && <span className="text-[9px] text-zinc-600">+{latest.applied.length - 10}</span>}
                 </div>
+              )}
+              {latest.status === "done" && (latest.applied || []).length > 0 && (
+                <button onClick={() => restorer.launch()} disabled={restorer.running || launcher.running}
+                  data-testid="autopilot-restore-btn"
+                  className="self-center flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest border border-[#2A2A35] text-zinc-400 px-3 py-2 hover:border-[#FF9F1C] hover:text-[#FF9F1C] transition-colors disabled:opacity-50">
+                  {restorer.running ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />} {c.restore_btn}
+                </button>
               )}
             </div>
           )}

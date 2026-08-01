@@ -33,7 +33,7 @@ def build(get_current_user):
         used = await db.autopilot_runs.count_documents({
             "user_id": str(user["_id"]),
             "created_at": {"$gte": week_start_iso()},
-            "status": {"$in": ["pending", "done"]},
+            "status": {"$in": ["pending", "done", "reverted"]},
         })
         return {"plan_effective": info["plan_effective"], "limit": FREE_RUNS_PER_WEEK, "used": used}
 
@@ -42,7 +42,7 @@ def build(get_current_user):
         uid = str(user["_id"])
         q = await _quota(user)
         latest = await db.autopilot_runs.find_one(
-            {"user_id": uid, "status": {"$in": ["pending", "done"]}}, {"_id": 0}, sort=[("created_at", -1)])
+            {"user_id": uid, "status": {"$in": ["pending", "done", "reverted"]}}, {"_id": 0}, sort=[("created_at", -1)])
         remaining = None if q["limit"] is None else max(0, q["limit"] - q["used"])
         return {**q, "remaining": remaining, "latest": latest}
 
@@ -96,5 +96,21 @@ def build(get_current_user):
             except Exception:
                 pass
         return {"ok": True, "applied": len(applied)}
+
+    @r.post("/agent/restore-done")
+    async def autopilot_restore_done(x_agent_token: str = Header(default=""),
+                                     x_device: str = Header(default="")):
+        """L'agent segnala che il ripristino dal backup e' completato."""
+        rec = await db.agent_tokens.find_one({"token": x_agent_token})
+        if not rec:
+            raise HTTPException(status_code=401, detail="Token agent non valido")
+        uid = rec["user_id"]
+        await resolve_device(db, uid, x_device)
+        run = await db.autopilot_runs.find_one(
+            {"user_id": uid, "status": "done"}, sort=[("created_at", -1)])
+        if run:
+            await db.autopilot_runs.update_one(
+                {"_id": run["_id"]}, {"$set": {"status": "reverted", "reverted_at": now_iso()}})
+        return {"ok": True, "reverted": bool(run)}
 
     return r

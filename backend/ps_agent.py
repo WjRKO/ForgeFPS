@@ -5158,7 +5158,7 @@ if ($MODE -eq 'autopilot') {
   return
 }
 
-if ($MODE -eq 'restore') { Say "`n[STEP] Ripristino dal backup..." 'Cyan'; Say ('   ' + (Invoke-Restore)) 'Green'; return }
+if ($MODE -eq 'restore') { Say "`n[STEP] Ripristino dal backup..." 'Cyan'; Say ('   ' + (Invoke-Restore)) 'Green'; try { Invoke-RestMethod -Uri "$BACKEND/api/autopilot/agent/restore-done" -Method Post -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -TimeoutSec 10 | Out-Null } catch {}; return }
 
 if ($MODE -eq 'benchmark') {
   Say "`n[STEP] Benchmark (CPU / RAM / Disco / Rete)..." 'Cyan'
