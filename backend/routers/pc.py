@@ -1344,7 +1344,7 @@ def build(get_current_user):
         }
 
     # Modalita' accettate dal FrameForge Agent quando aperto via protocollo frameforge://
-    _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "bufferbloat", "fullbench", "monitor", "prematch", "booster", "restore", "gui", "apply-one", "restore-one", "lab"}
+    _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "bufferbloat", "fullbench", "monitor", "prematch", "booster", "restore", "gui", "apply-one", "restore-one", "lab", "autopilot"}
 
     @r.get("/agent/script-info")
     async def agent_script_info(t: str = "", profile: str = "", user: dict = Depends(get_current_user)):
@@ -1356,7 +1356,7 @@ def build(get_current_user):
         return {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data), "filename": "forgefps.ps1"}
 
     # Modalita' accettate dal FrameForge Agent quando aperto via protocollo frameforge://
-    _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "bufferbloat", "fullbench", "monitor", "prematch", "booster", "restore", "gui", "lab"}
+    _ALLOWED_URI_MODES = {"optimize", "sync", "benchmark", "bufferbloat", "fullbench", "monitor", "prematch", "booster", "restore", "gui", "lab", "autopilot"}
 
     @r.get("/agent/launch-uri")
     async def agent_launch_uri(mode: str = "optimize", silent: int = 0, user: dict = Depends(get_current_user)):

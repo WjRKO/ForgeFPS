@@ -25,6 +25,32 @@ def build(get_current_user):
         return {"devices": devs, "active": await get_active_device(db, uid),
                 "limit": int(ent.get("device_limit") or 1)}
 
+    @r.get("/compare")
+    async def devices_compare(user: dict = Depends(get_current_user)):
+        """Confronto fianco a fianco dei PC: health, temperature, live, specs."""
+        uid = str(user["_id"])
+        devs = await list_devices(db, uid)
+        out = []
+        for d in devs:
+            f = {"user_id": uid, "device_id": d["device_id"]}
+            specs = await db.pc_specs.find_one(f, {"_id": 0, "data": 1, "updated_at": 1})
+            tel = await db.pc_telemetry.find_one(f, {"_id": 0, "samples": {"$slice": -30}})
+            samples = (tel or {}).get("samples") or []
+
+            def avg(k, _s=samples):
+                vals = [s.get(k) for s in _s if isinstance(s.get(k), (int, float)) and s.get(k) > 0]
+                return round(sum(vals) / len(vals), 1) if vals else None
+
+            h = await db.health_history.find_one(f, sort=[("created_at", -1)])
+            out.append({**d,
+                        "specs": (specs or {}).get("data") or {},
+                        "specs_updated_at": (specs or {}).get("updated_at"),
+                        "health": {"score": (h or {}).get("score"), "grade": (h or {}).get("grade"),
+                                   "cpu_temp": (h or {}).get("cpu_temp"), "gpu_temp": (h or {}).get("gpu_temp")},
+                        "live": {"cpu_util": avg("cpu_util"), "gpu_util": avg("gpu_util"), "fps": avg("fps"),
+                                 "cpu_temp": avg("cpu_temp"), "gpu_temp": avg("gpu_temp")}})
+        return {"devices": out}
+
     @r.put("/{device_id}")
     async def device_update(device_id: str, body: DeviceUpdate, user: dict = Depends(get_current_user)):
         uid = str(user["_id"])

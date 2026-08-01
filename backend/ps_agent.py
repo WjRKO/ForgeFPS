@@ -5126,6 +5126,38 @@ function Show-Gui {
 }
 
 # ---------------- Main ----------------
+if ($MODE -eq 'autopilot') {
+  Say "`n[AUTO-PILOT] Analisi del sistema in corso..." 'Cyan'
+  $__apBefore = $null; try { $__apBefore = Get-Health } catch {}
+  $__apApplied = @()
+  foreach ($t in $script:TWEAKS) {
+    if ($t.risk -ne 'safe') { continue }
+    $__fit = 'ok'; if ($t.fit) { try { $__fit = & $t.fit } catch { $__fit = 'ok' }; if (-not $__fit) { $__fit = 'ok' } }
+    if ("$__fit" -like 'skip*') { continue }
+    $__st = 'n/d'; try { $__st = & $t.state } catch { $__st = 'n/d' }
+    if ("$__st" -match '^(Attivo|Disabilitato|n/d)$') { continue }
+    try {
+      Invoke-ApplyTracked $t
+      $__apApplied += $t.id
+      Say ("  [OK] {0}" -f $t.name) 'Green'
+    } catch { Say ("  [SKIP] {0}" -f $t.name) 'Yellow' }
+  }
+  Save-Backup
+  Say ("`n[AUTO-PILOT] {0} tweak applicati. Misuro il dopo..." -f $__apApplied.Count) 'Cyan'
+  Start-Sleep -Seconds 2
+  $__apAfter = $null; try { $__apAfter = Get-Health } catch {}
+  try {
+    $__apBody = @{ applied = $__apApplied; before = $__apBefore; after = $__apAfter } | ConvertTo-Json -Depth 6 -Compress
+    $__apBytes = [System.Text.Encoding]::UTF8.GetBytes($__apBody)
+    Invoke-WebRequest -Uri "$BACKEND/api/autopilot/agent/result" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $__apBytes -UseBasicParsing -TimeoutSec 20 | Out-Null
+    Say "[AUTO-PILOT] Rapporto inviato al dashboard." 'Green'
+  } catch { Say ("[AUTO-PILOT] Invio rapporto fallito: {0}" -f $_.Exception.Message) 'Red' }
+  try { Send-Data (Get-Specs) $__apAfter (Get-StartupList) } catch {}
+  Say "`n[DONE] Auto-Pilot completato. Controlla il rapporto sul dashboard." 'Green'
+  Start-Sleep -Seconds 3
+  return
+}
+
 if ($MODE -eq 'restore') { Say "`n[STEP] Ripristino dal backup..." 'Cyan'; Say ('   ' + (Invoke-Restore)) 'Green'; return }
 
 if ($MODE -eq 'benchmark') {

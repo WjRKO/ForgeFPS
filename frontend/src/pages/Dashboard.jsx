@@ -14,6 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 import NextActionBanner from "@/components/NextActionBanner";
 import BottleneckDetector from "@/components/BottleneckDetector";
 import { ActiveMissionsCard } from "@/components/ActiveMissionsCard";
+import { AutoPilotCard } from "@/components/AutoPilotCard";
 import { PageHeader, EmptyState, HealthRing, Sparkline, HUDCard, Badge, SkeletonCard,
   stagger, item, BTN_CLASSES } from "@/components/hud";
 import { AGENT_EXE_URL, AGENT_EXE_VERSION, AGENT_RELEASES_URL } from "@/config/agent";
@@ -651,6 +652,10 @@ export default function Dashboard() {
           animate="show"
           className="min-w-0 space-y-4"
         >
+          <motion.div variants={item}>
+            <AutoPilotCard />
+          </motion.div>
+
           <motion.div variants={item}>
             <ActiveMissionsCard data={missions} />
           </motion.div>
