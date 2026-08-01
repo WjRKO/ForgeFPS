@@ -6,6 +6,7 @@ from database import db, now_iso
 from helpers import record_history, refresh_product_price, create_notification
 from scraper import scrape_product, search_products
 from models import TrackInput, ManualPriceInput, TargetInput, SearchInput, TitleInput
+from plan_gate import get_entitlements, plan_402
 
 
 def build(get_current_user):
@@ -18,6 +19,13 @@ def build(get_current_user):
 
     @r.post("/products/track")
     async def track_product(data: TrackInput, user: dict = Depends(get_current_user)):
+        info = await get_entitlements(db, user)
+        limit = info["entitlements"]["tracker_limit"]
+        count = await db.products.count_documents({"user_id": str(user["_id"])})
+        if count >= limit:
+            raise plan_402("pro", info["plan_effective"],
+                           f"Hai raggiunto il limite di {limit} prodotti tracciati del tuo piano. Passa a Pro per 25 prodotti.",
+                           code="tracker_limit")
         scraped = await scrape_product(data.url)
         pid = str(uuid.uuid4())
         price = scraped.get("price")

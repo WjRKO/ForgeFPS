@@ -7,8 +7,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+
+const isEn = () => i18n.language?.startsWith("en");
 import { PageHeader } from "@/components/hud";
 import PasswordResetsPanel from "@/components/PasswordResetsPanel";
 
@@ -34,14 +37,16 @@ function fmtDate(iso) {
   catch { return "—"; }
 }
 function fmtRelative(iso) {
-  if (!iso) return "mai";
+  const en = (i18n.resolvedLanguage || i18n.language || "it").toLowerCase().startsWith("en");
+  if (!iso) return en ? "never" : "mai";
   try {
     const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-    if (s < 60) return "or ora";
-    if (s < 3600) return `${Math.floor(s / 60)} min fa`;
-    if (s < 86400) return `${Math.floor(s / 3600)}h fa`;
-    if (s < 86400 * 7) return `${Math.floor(s / 86400)}g fa`;
-    return `${Math.floor(s / (86400 * 30))} mesi fa`;
+    const rtf = new Intl.RelativeTimeFormat(en ? "en" : "it", { numeric: "auto", style: "narrow" });
+    if (s < 60) return rtf.format(0, "minute");
+    if (s < 3600) return rtf.format(-Math.floor(s / 60), "minute");
+    if (s < 86400) return rtf.format(-Math.floor(s / 3600), "hour");
+    if (s < 86400 * 30) return rtf.format(-Math.floor(s / 86400), "day");
+    return rtf.format(-Math.floor(s / (86400 * 30)), "month");
   } catch { return "—"; }
 }
 
@@ -54,11 +59,11 @@ function GrantPlanModal({ open, onClose, user, onGranted }) {
     setSaving(true);
     try {
       const { data } = await api.post(`/admin/users/${user.id}/grant-plan`, { plan, months: Number(months) });
-      toast.success(`${user.email} → ${plan.toUpperCase()} per ${months === 0 ? "sempre" : months + " mesi"}`);
+      toast.success(`${user.email} → ${plan.toUpperCase()} ${isEn() ? "for" : "per"} ${months === 0 ? (isEn() ? "ever" : "sempre") : months + (isEn() ? " months" : " mesi")}`);
       onGranted?.(data);
       onClose();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Errore");
+      toast.error(e?.response?.data?.detail || (isEn() ? "Error" : "Errore"));
     } finally { setSaving(false); }
   };
   return (
@@ -67,41 +72,41 @@ function GrantPlanModal({ open, onClose, user, onGranted }) {
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-[#E5FF00] mb-1">// grant plan</div>
-            <h3 className="font-display font-black text-xl">Concedi piano paid</h3>
-            <p className="text-xs text-zinc-500 mt-1">A: <span className="font-mono text-zinc-300">{user.email}</span></p>
+            <h3 className="font-display font-black text-xl">{isEn() ? "Grant paid plan" : "Concedi piano paid"}</h3>
+            <p className="text-xs text-zinc-500 mt-1">{isEn() ? "To" : "A"}: <span className="font-mono text-zinc-300">{user.email}</span></p>
           </div>
           <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200"><X size={18} /></button>
         </div>
         <div className="space-y-3 mb-5">
           <div>
-            <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">Piano</label>
+            <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">{isEn() ? "Plan" : "Piano"}</label>
             <select value={plan} onChange={(e) => setPlan(e.target.value)}
               className="w-full bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none"
               data-testid="grant-plan-select">
-              <option value="pro">Pro (€7/mese equiv.)</option>
-              <option value="streamer">Streamer (€16/mese equiv.)</option>
-              <option value="starter">Starter (revoca piano)</option>
+              <option value="pro">Pro (€7/{isEn() ? "month equiv." : "mese equiv."})</option>
+              <option value="streamer">Streamer (€16/{isEn() ? "month equiv." : "mese equiv."})</option>
+              <option value="starter">Starter ({isEn() ? "revoke plan" : "revoca piano"})</option>
             </select>
           </div>
           {plan !== "starter" && (
             <div>
-              <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">Durata (mesi) · 0 = perpetuo</label>
+              <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">{isEn() ? "Duration (months) · 0 = perpetual" : "Durata (mesi) · 0 = perpetuo"}</label>
               <input type="number" min={0} max={120} value={months} onChange={(e) => setMonths(e.target.value)}
                 className="w-full bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none"
                 data-testid="grant-plan-months" />
               <div className="text-[10px] text-zinc-600 mt-1 font-mono">
-                {Number(months) === 0 ? "Piano perpetuo (senza scadenza)"
-                 : `Scade il ${new Date(Date.now() + Number(months) * 30 * 86400000).toLocaleDateString("it-IT")}`}
+                {Number(months) === 0 ? (isEn() ? "Perpetual plan (no expiry)" : "Piano perpetuo (senza scadenza)")
+                 : `${isEn() ? "Expires" : "Scade il"} ${new Date(Date.now() + Number(months) * 30 * 86400000).toLocaleDateString(isEn() ? "en-US" : "it-IT")}`}
               </div>
             </div>
           )}
         </div>
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} disabled={saving} className="px-4 py-2 border border-[#2A2A35] text-sm hover:border-zinc-500 transition-colors disabled:opacity-50">Annulla</button>
+          <button onClick={onClose} disabled={saving} className="px-4 py-2 border border-[#2A2A35] text-sm hover:border-zinc-500 transition-colors disabled:opacity-50">{isEn() ? "Cancel" : "Annulla"}</button>
           <button onClick={submit} disabled={saving} data-testid="grant-plan-submit"
             className="flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2 text-sm hover:bg-[#D4EE00] transition-colors disabled:opacity-50">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Gift size={14} />}
-            {saving ? "Salvo..." : "Concedi"}
+            {saving ? (isEn() ? "Saving..." : "Salvo...") : (isEn() ? "Grant" : "Concedi")}
           </button>
         </div>
       </div>
@@ -117,17 +122,17 @@ function BroadcastModal({ open, onClose }) {
   const [sending, setSending] = useState(false);
 
   const send = async () => {
-    if (!title.trim()) { toast.error("Titolo obbligatorio"); return; }
+    if (!title.trim()) { toast.error(isEn() ? "Title is required" : "Titolo obbligatorio"); return; }
     setSending(true);
     try {
       const { data } = await api.post("/admin/broadcast", {
         title: title.trim(), body: body.trim(), link: link.trim(), scope,
       });
-      toast.success(`Broadcast inviato a ${data.recipients} destinatari (${data.scope})`);
+      toast.success(isEn() ? `Broadcast sent to ${data.recipients} recipients (${data.scope})` : `Broadcast inviato a ${data.recipients} destinatari (${data.scope})`);
       setTitle(""); setBody(""); setLink("");
       onClose();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Errore invio broadcast");
+      toast.error(e?.response?.data?.detail || (isEn() ? "Broadcast send error" : "Errore invio broadcast"));
     } finally { setSending(false); }
   };
 
@@ -138,43 +143,43 @@ function BroadcastModal({ open, onClose }) {
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-[#E5FF00] mb-1">// broadcast in-app</div>
-            <h3 className="font-display font-black text-xl">Invia notifica a tutti</h3>
+            <h3 className="font-display font-black text-xl">{isEn() ? "Send notification to everyone" : "Invia notifica a tutti"}</h3>
           </div>
           <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200" data-testid="broadcast-close"><X size={18} /></button>
         </div>
 
         <div className="space-y-3 mb-5">
           <div>
-            <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">Titolo <span className="text-[#FF3B30]">*</span></label>
+            <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">{isEn() ? "Title" : "Titolo"} <span className="text-[#FF3B30]">*</span></label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120}
-              placeholder="Es: v0.7.4 è online — nuovo monitor live"
+              placeholder={isEn() ? "E.g.: v0.7.4 is live — new live monitor" : "Es: v0.7.4 è online — nuovo monitor live"}
               className="w-full bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none"
               data-testid="broadcast-title" />
           </div>
           <div>
-            <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">Corpo (facoltativo)</label>
+            <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">{isEn() ? "Body (optional)" : "Corpo (facoltativo)"}</label>
             <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={500} rows={3}
-              placeholder="Dettagli in 1-2 righe. Massimo 500 caratteri."
+              placeholder={isEn() ? "Details in 1-2 lines. Max 500 characters." : "Dettagli in 1-2 righe. Massimo 500 caratteri."}
               className="w-full bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none resize-none"
               data-testid="broadcast-body" />
             <div className="text-[10px] text-zinc-600 text-right mt-0.5">{body.length}/500</div>
           </div>
           <div>
-            <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">Link CTA (facoltativo)</label>
+            <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">{isEn() ? "CTA link (optional)" : "Link CTA (facoltativo)"}</label>
             <input value={link} onChange={(e) => setLink(e.target.value)}
-              placeholder="/app/desktop  oppure  https://..."
+              placeholder={isEn() ? "/app/desktop  or  https://..." : "/app/desktop  oppure  https://..."}
               className="w-full bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none"
               data-testid="broadcast-link" />
           </div>
           <div>
-            <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">Destinatari</label>
+            <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">{isEn() ? "Recipients" : "Destinatari"}</label>
             <select value={scope} onChange={(e) => setScope(e.target.value)}
               className="w-full bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none"
               data-testid="broadcast-scope">
-              <option value="all">Tutti gli utenti</option>
-              <option value="has_agent">Solo utenti con agent installato (pc_specs)</option>
-              <option value="boosted">Solo utenti Discord-linkati (Boosted)</option>
-              <option value="admins">Solo admin (test)</option>
+              <option value="all">{isEn() ? "All users" : "Tutti gli utenti"}</option>
+              <option value="has_agent">{isEn() ? "Only users with agent installed (pc_specs)" : "Solo utenti con agent installato (pc_specs)"}</option>
+              <option value="boosted">{isEn() ? "Only Discord-linked users (Boosted)" : "Solo utenti Discord-linkati (Boosted)"}</option>
+              <option value="admins">{isEn() ? "Admins only (test)" : "Solo admin (test)"}</option>
             </select>
           </div>
         </div>
@@ -182,12 +187,12 @@ function BroadcastModal({ open, onClose }) {
         <div className="flex justify-end gap-2">
           <button onClick={onClose} disabled={sending}
             className="px-4 py-2 border border-[#2A2A35] text-sm hover:border-zinc-500 transition-colors disabled:opacity-50"
-            data-testid="broadcast-cancel">Annulla</button>
+            data-testid="broadcast-cancel">{isEn() ? "Cancel" : "Annulla"}</button>
           <button onClick={send} disabled={sending || !title.trim()}
             className="flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2 text-sm hover:bg-[#D4EE00] transition-colors disabled:opacity-50"
             data-testid="broadcast-send">
             {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-            {sending ? "Invio..." : "Invia"}
+            {sending ? (isEn() ? "Sending..." : "Invio...") : (isEn() ? "Send" : "Invia")}
           </button>
         </div>
       </div>
@@ -200,11 +205,11 @@ function UserDetailsRow({ userId, colspan }) {
   const [err, setErr] = useState("");
   useEffect(() => {
     api.get(`/admin/users/${userId}/details`).then(({ data }) => setD(data))
-      .catch((e) => setErr(e?.response?.data?.detail || "Errore caricamento"));
+      .catch((e) => setErr(e?.response?.data?.detail || (isEn() ? "Loading error" : "Errore caricamento")));
   }, [userId]);
 
   if (err) return <tr><td colSpan={colspan} className="p-4 bg-[#141419] text-xs text-[#FF3B30]" data-testid={`user-details-err-${userId}`}>{err}</td></tr>;
-  if (!d) return <tr><td colSpan={colspan} className="p-4 bg-[#141419] text-xs text-zinc-500" data-testid={`user-details-loading-${userId}`}><Loader2 size={12} className="inline animate-spin mr-2" /> Caricamento…</td></tr>;
+  if (!d) return <tr><td colSpan={colspan} className="p-4 bg-[#141419] text-xs text-zinc-500" data-testid={`user-details-loading-${userId}`}><Loader2 size={12} className="inline animate-spin mr-2" /> {isEn() ? "Loading…" : "Caricamento…"}</td></tr>;
 
   const hw = d.pc_specs?.data || {};
   const health = d.last_health;
@@ -217,14 +222,14 @@ function UserDetailsRow({ userId, colspan }) {
           <div>
             <div className="uppercase tracking-widest text-zinc-500 mb-2">// account</div>
             <div className="space-y-1 text-zinc-300">
-              <div><span className="text-zinc-500">Registrato:</span> {fmtDate(d.created_at)} · <span className="text-zinc-400">{fmtRelative(d.created_at)}</span></div>
+              <div><span className="text-zinc-500">{isEn() ? "Signed up:" : "Registrato:"}</span> {fmtDate(d.created_at)} · <span className="text-zinc-400">{fmtRelative(d.created_at)}</span></div>
               <div><span className="text-zinc-500">Plan:</span> <span className="text-[#E5FF00] font-bold uppercase">{d.plan}</span></div>
-              <div><span className="text-zinc-500">Discord:</span> {d.discord_user_id ? (<span style={{ color: DISCORD_COLOR }} className="font-mono">{d.discord_user_id}</span>) : (<span className="text-zinc-600">non collegato</span>)}</div>
+              <div><span className="text-zinc-500">Discord:</span> {d.discord_user_id ? (<span style={{ color: DISCORD_COLOR }} className="font-mono">{d.discord_user_id}</span>) : (<span className="text-zinc-600">{isEn() ? "not linked" : "non collegato"}</span>)}</div>
               <div className="pt-2 flex flex-wrap gap-3 text-[11px]">
-                <span><span className="text-zinc-500">Prodotti:</span> <span className="text-zinc-200 font-bold">{d.products_count}</span></span>
+                <span><span className="text-zinc-500">{isEn() ? "Products:" : "Prodotti:"}</span> <span className="text-zinc-200 font-bold">{d.products_count}</span></span>
                 <span><span className="text-zinc-500">Build:</span> <span className="text-zinc-200 font-bold">{d.builds_count}</span></span>
                 <span><span className="text-zinc-500">Benchmark:</span> <span className="text-zinc-200 font-bold">{d.benchmarks_count}</span></span>
-                <span><span className="text-zinc-500">Notifiche non lette:</span> <span className="text-zinc-200 font-bold">{d.notifications_unread}</span></span>
+                <span><span className="text-zinc-500">{isEn() ? "Unread notifications:" : "Notifiche non lette:"}</span> <span className="text-zinc-200 font-bold">{d.notifications_unread}</span></span>
               </div>
             </div>
           </div>
@@ -237,25 +242,25 @@ function UserDetailsRow({ userId, colspan }) {
                 <div><span className="text-zinc-500">GPU:</span> <span className="text-[#00E0FF]">{hw.gpu || "—"}</span></div>
                 <div><span className="text-zinc-500">RAM:</span> <span className="text-[#00E0FF]">{hw.ram ? `${hw.ram} GB` : "—"}</span></div>
                 <div><span className="text-zinc-500">OS:</span> {hw.os || "—"}</div>
-                <div><span className="text-zinc-500">Ultima sync:</span> <span className="text-zinc-200">{fmtRelative(d.pc_specs.updated_at)}</span></div>
+                <div><span className="text-zinc-500">{isEn() ? "Last sync:" : "Ultima sync:"}</span> <span className="text-zinc-200">{fmtRelative(d.pc_specs.updated_at)}</span></div>
               </div>
             ) : (
-              <div className="text-zinc-600">L'utente non ha ancora installato l'agent (nessun documento pc_specs).</div>
+              <div className="text-zinc-600">{isEn() ? "The user hasn't installed the agent yet (no pc_specs document)." : "L'utente non ha ancora installato l'agent (nessun documento pc_specs)."}</div>
             )}
           </div>
 
           <div>
-            <div className="uppercase tracking-widest text-zinc-500 mb-2">// ultima salute PC</div>
+            <div className="uppercase tracking-widest text-zinc-500 mb-2">{isEn() ? "// last PC health" : "// ultima salute PC"}</div>
             {health && health.score != null ? (
               <div className="space-y-1 text-zinc-300">
                 <div className="flex items-baseline gap-2">
                   <span className={`font-display font-black text-3xl ${healthColor(health.score)}`}>{health.score}</span>
                   <span className="text-zinc-500 text-xs uppercase tracking-widest">/100 · {health.grade || "—"}</span>
                 </div>
-                <div className="text-zinc-500">Registrato {fmtRelative(health.created_at)}</div>
+                <div className="text-zinc-500">{isEn() ? "Recorded" : "Registrato"} {fmtRelative(health.created_at)}</div>
               </div>
             ) : (
-              <div className="text-zinc-600">Nessuno snapshot health finora.</div>
+              <div className="text-zinc-600">{isEn() ? "No health snapshots yet." : "Nessuno snapshot health finora."}</div>
             )}
           </div>
         </div>
@@ -356,15 +361,15 @@ export default function Admin() {
 
       {/* Extended stats — 8 cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 stagger">
-        <StatCard icon={Users} label="Utenti" value={stats?.total_users ?? "—"} hint={stats ? `${stats.signups_last_7d} negli ultimi 7gg` : null} testid="stat-users" />
+        <StatCard icon={Users} label={isEn() ? "Users" : "Utenti"} value={stats?.total_users ?? "—"} hint={stats ? `${stats.signups_last_7d} ${isEn() ? "in the last 7d" : "negli ultimi 7gg"}` : null} testid="stat-users" />
         <StatCard icon={ShieldCheck} label="Admin" value={stats?.total_admins ?? "—"} accent="text-[#00E0FF]" testid="stat-admins" />
-        <StatCard icon={Sparkles} label="Signup 24h" value={stats?.signups_last_24h ?? "—"} hint="nuove registrazioni" accent="text-[#00FF66]" testid="stat-signup-24h" />
-        <StatCard icon={MonitorCheck} label="Con agent" value={stats?.users_with_agent ?? "—"} hint={stats ? `${Math.round((stats.users_with_agent / Math.max(1, stats.total_users)) * 100)}% degli utenti` : null} accent="text-[#00E0FF]" testid="stat-agent" />
+        <StatCard icon={Sparkles} label="Signup 24h" value={stats?.signups_last_24h ?? "—"} hint={isEn() ? "new signups" : "nuove registrazioni"} accent="text-[#00FF66]" testid="stat-signup-24h" />
+        <StatCard icon={MonitorCheck} label={isEn() ? "With agent" : "Con agent"} value={stats?.users_with_agent ?? "—"} hint={stats ? `${Math.round((stats.users_with_agent / Math.max(1, stats.total_users)) * 100)}% ${isEn() ? "of users" : "degli utenti"}` : null} accent="text-[#00E0FF]" testid="stat-agent" />
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8 stagger">
-        <StatCard icon={Package} label="Prodotti tracciati" value={stats?.total_products ?? "—"} testid="stat-products" />
-        <StatCard icon={Cpu} label="Build salvate" value={stats?.total_builds ?? "—"} testid="stat-builds" />
-        <StatCard icon={Gauge} label="Benchmark totali" value={stats?.total_benchmarks ?? "—"} hint={stats ? `${stats.total_health_snapshots} snapshot health` : null} accent="text-[#E5FF00]" testid="stat-benchmarks" />
+        <StatCard icon={Package} label={isEn() ? "Tracked products" : "Prodotti tracciati"} value={stats?.total_products ?? "—"} testid="stat-products" />
+        <StatCard icon={Cpu} label={isEn() ? "Saved builds" : "Build salvate"} value={stats?.total_builds ?? "—"} testid="stat-builds" />
+        <StatCard icon={Gauge} label={isEn() ? "Total benchmarks" : "Benchmark totali"} value={stats?.total_benchmarks ?? "—"} hint={stats ? `${stats.total_health_snapshots} ${isEn() ? "health snapshots" : "snapshot health"}` : null} accent="text-[#E5FF00]" testid="stat-benchmarks" />
         <StatCard icon={MessageSquare} label="Discord linked" value={stats?.users_discord_linked ?? "—"} accent="text-[#5865F2]" testid="stat-discord" />
       </div>
 
@@ -372,12 +377,12 @@ export default function Admin() {
       <div className="bg-[#0F0F12] border border-[#2A2A35] mb-8">
         <div className="p-4 border-b border-[#2A2A35] flex flex-wrap items-center justify-between gap-3">
           <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-            Utenti · <span className="text-zinc-300 font-bold">{filtered.length}</span>{query && <span className="text-zinc-500"> / {users.length}</span>}
+            {isEn() ? "Users" : "Utenti"} · <span className="text-zinc-300 font-bold">{filtered.length}</span>{query && <span className="text-zinc-500"> / {users.length}</span>}
           </div>
           <div className="relative">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input value={query} onChange={(e) => setQuery(e.target.value)}
-              placeholder="Cerca per email o nome…"
+              placeholder={isEn() ? "Search by email or name…" : "Cerca per email o nome…"}
               className="bg-black border border-[#2A2A35] pl-8 pr-3 py-1.5 text-sm w-64 focus:border-[#E5FF00] outline-none"
               data-testid="user-search" />
           </div>
@@ -387,20 +392,20 @@ export default function Admin() {
             <thead>
               <tr className="text-left text-xs uppercase tracking-widest text-zinc-500 border-b border-[#2A2A35]">
                 <th className="p-4 w-10"></th>
-                <th className="p-4"><SortHeader col="email" label="Utente" /></th>
-                <th className="p-4"><SortHeader col="role" label="Ruolo" /></th>
+                <th className="p-4"><SortHeader col="email" label={isEn() ? "User" : "Utente"} /></th>
+                <th className="p-4"><SortHeader col="role" label={isEn() ? "Role" : "Ruolo"} /></th>
                 <th className="p-4"><SortHeader col="created_at" label="Signup" /></th>
                 <th className="p-4">Agent</th>
                 <th className="p-4">Discord</th>
-                <th className="p-4"><SortHeader col="tracked_products" label="Prodotti" /></th>
+                <th className="p-4"><SortHeader col="tracked_products" label={isEn() ? "Products" : "Prodotti"} /></th>
                 <th className="p-4"><SortHeader col="builds" label="Build" /></th>
-                <th className="p-4 text-right">Azioni</th>
+                <th className="p-4 text-right">{isEn() ? "Actions" : "Azioni"}</th>
               </tr>
             </thead>
             <tbody>
               {paginated.length === 0 && (
                 <tr><td colSpan={9} className="p-8 text-center text-zinc-500 text-sm" data-testid="users-empty">
-                  {query ? `Nessun utente trovato per "${query}".` : "Nessun utente."}
+                  {query ? (isEn() ? `No users found for "${query}".` : `Nessun utente trovato per "${query}".`) : (isEn() ? "No users." : "Nessun utente.")}
                 </td></tr>
               )}
               {paginated.map((u) => {
@@ -411,13 +416,13 @@ export default function Admin() {
                       <td className="p-4">
                         <button onClick={() => setExpanded(isExpanded ? null : u.id)}
                           className="p-1 hover:bg-black transition-colors" data-testid={`expand-${u.id}`}
-                          title={isExpanded ? "Chiudi dettagli" : "Apri dettagli"}>
+                          title={isExpanded ? (isEn() ? "Close details" : "Chiudi dettagli") : (isEn() ? "Open details" : "Apri dettagli")}>
                           {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </button>
                       </td>
                       <td className="p-4">
                         <div className="text-zinc-100">{u.name || "—"}</div>
-                        <div className="text-xs text-zinc-500 font-mono">{u.email}{u.id === user?.id && <span className="text-[#E5FF00] font-sans"> · tu</span>}</div>
+                        <div className="text-xs text-zinc-500 font-mono">{u.email}{u.id === user?.id && <span className="text-[#E5FF00] font-sans"> · {isEn() ? "you" : "tu"}</span>}</div>
                       </td>
                       <td className="p-4">
                         <span className={`text-xs font-bold uppercase px-2 py-0.5 ${u.role === "admin" ? "bg-[#E5FF00]/20 text-[#E5FF00]" : "bg-zinc-700/30 text-zinc-400"}`}>{u.role}</span>
@@ -425,17 +430,17 @@ export default function Admin() {
                       <td className="p-4 text-zinc-400 text-xs">{fmtRelative(u.created_at)}</td>
                       <td className="p-4">
                         {u.has_agent ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-[#00FF66]" title={`Ultima sync: ${fmtRelative(u.last_pc_sync)}`}>
+                          <span className="inline-flex items-center gap-1 text-[11px] text-[#00FF66]" title={`${isEn() ? "Last sync" : "Ultima sync"}: ${fmtRelative(u.last_pc_sync)}`}>
                             <MonitorCheck size={12} /> {fmtRelative(u.last_pc_sync)}
                           </span>
                         ) : (
-                          <span className="text-[11px] text-zinc-600">non installato</span>
+                          <span className="text-[11px] text-zinc-600">{isEn() ? "not installed" : "non installato"}</span>
                         )}
                       </td>
                       <td className="p-4">
                         {u.discord_linked ? (
                           <span className="inline-flex items-center gap-1 text-[11px]" style={{ color: DISCORD_COLOR }}>
-                            <Activity size={12} /> linkato
+                            <Activity size={12} /> {isEn() ? "linked" : "linkato"}
                           </span>
                         ) : (
                           <span className="text-[11px] text-zinc-600">—</span>
@@ -446,17 +451,17 @@ export default function Admin() {
                       <td className="p-4">
                         <div className="flex items-center justify-end gap-2">
                           <button data-testid={`grant-plan-${u.id}`} onClick={() => setGrantTarget(u)} disabled={busy[u.id]}
-                            title="Concedi/revoca piano paid manualmente"
+                            title={isEn() ? "Grant/revoke paid plan manually" : "Concedi/revoca piano paid manualmente"}
                             className="p-2 border border-[#2A2A35] hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors disabled:opacity-40">
                             <Gift size={14} />
                           </button>
                           <button data-testid={`toggle-role-${u.id}`} onClick={() => toggleRole(u)} disabled={busy[u.id] || u.id === user?.id}
-                            title={u.role === "admin" ? "Rimuovi admin" : "Promuovi ad admin"}
+                            title={u.role === "admin" ? (isEn() ? "Remove admin" : "Rimuovi admin") : (isEn() ? "Promote to admin" : "Promuovi ad admin")}
                             className="p-2 border border-[#2A2A35] hover:border-[#E5FF00] transition-colors disabled:opacity-40">
                             {busy[u.id] ? <Loader2 size={14} className="animate-spin" /> : u.role === "admin" ? <ShieldOff size={14} /> : <ShieldCheck size={14} />}
                           </button>
                           <button data-testid={`delete-user-${u.id}`} onClick={() => removeUser(u)} disabled={busy[u.id] || u.id === user?.id}
-                            title="Elimina account (irreversibile)"
+                            title={isEn() ? "Delete account (irreversible)" : "Elimina account (irreversibile)"}
                             className="p-2 border border-[#2A2A35] hover:border-[#FF3B30] hover:text-[#FF3B30] transition-colors disabled:opacity-40">
                             <Trash2 size={14} />
                           </button>
@@ -474,7 +479,7 @@ export default function Admin() {
         {/* Pagination footer */}
         {filtered.length > PAGE_SIZE && (
           <div className="p-3 border-t border-[#2A2A35] flex items-center justify-between text-xs text-zinc-500" data-testid="user-pagination">
-            <div>Pagina <span className="text-zinc-200 font-bold">{pageSafe}</span> di {totalPages} · mostrando {(pageSafe - 1) * PAGE_SIZE + 1}-{Math.min(pageSafe * PAGE_SIZE, filtered.length)} di {filtered.length}</div>
+            <div>{isEn() ? "Page" : "Pagina"} <span className="text-zinc-200 font-bold">{pageSafe}</span> {isEn() ? "of" : "di"} {totalPages} · {isEn() ? "showing" : "mostrando"} {(pageSafe - 1) * PAGE_SIZE + 1}-{Math.min(pageSafe * PAGE_SIZE, filtered.length)} {isEn() ? "of" : "di"} {filtered.length}</div>
             <div className="flex items-center gap-2">
               <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pageSafe === 1}
                 className="p-1.5 border border-[#2A2A35] hover:border-[#E5FF00] disabled:opacity-30 transition-colors" data-testid="page-prev">

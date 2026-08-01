@@ -19,6 +19,24 @@ from milestones import (
 def build(get_current_user):
     r = APIRouter(prefix="/api/milestones", tags=["milestones"])
 
+    _rarity_cache = {"at": 0.0, "data": {}}
+
+    async def _get_rarity():
+        """% di utenti flotta che hanno sbloccato ogni milestone. Cache 1h."""
+        import time
+        if time.time() - _rarity_cache["at"] < 3600:
+            return _rarity_cache["data"]
+        total = max(await db.user_progress.count_documents({}), 1)
+        data = {}
+        async for row in db.user_progress.aggregate([
+            {"$unwind": "$unlocked"},
+            {"$group": {"_id": "$unlocked", "n": {"$sum": 1}}},
+        ]):
+            data[row["_id"]] = round(100 * row["n"] / total, 1)
+        _rarity_cache["at"] = time.time()
+        _rarity_cache["data"] = data
+        return data
+
     @r.get("")
     async def list_milestones(user: dict = Depends(get_current_user)):
         uid = str(user["_id"])
@@ -26,12 +44,23 @@ def build(get_current_user):
         await check_beta_tester(db, uid, user.get("created_at"))
         progress = await _ensure_progress_doc(db, uid)
         catalog = enrich_catalog_for_user(progress)
+        rarity = await _get_rarity()
+        masked = []
+        for m in catalog:
+            m["rarity_pct"] = rarity.get(m["code"])
+            if m.get("secret") and not m["unlocked"]:
+                # Non rivelare nome/descrizione dei segreti bloccati
+                m = {**m, "name_it": "???", "name_en": "???",
+                     "desc_it": "Trofeo segreto — continua a usare FrameForge per scoprirlo.",
+                     "desc_en": "Secret trophy — keep using FrameForge to discover it.",
+                     "icon": "Lock", "progress": 0, "threshold": 1, "reward": None}
+            masked.append(m)
         return {
             "xp": int(progress.get("xp", 0)),
             "tier": progress.get("tier", "bronze"),
             "unlocked_count": len(progress.get("unlocked", []) or []),
             "total_count": len(MILESTONES_CATALOG),
-            "milestones": catalog,
+            "milestones": masked,
             "features": progress.get("features", {}) or {},
         }
 

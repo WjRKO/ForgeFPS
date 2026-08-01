@@ -4,14 +4,13 @@ import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { Send, Plus, Trash2, Loader2, MessageSquareCode, Terminal, Cpu, Copy, Check,
   ThumbsUp, ThumbsDown, RefreshCw, Image as ImageIcon, X as XIcon, Sparkles,
-  Brain, Stethoscope, Camera, Zap } from "lucide-react";
+  Zap, Infinity as InfinityIcon, Swords } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import api, { API } from "@/lib/api";
 import { PrimaryButton } from "@/components/hud";
 import { PageHeader } from "@/components/hud";
 import DiagnosePanel from "@/components/DiagnosePanel";
-import PlanUpgradeBanner from "@/components/PlanUpgradeBanner";
 
 function CodeBlock({ children }) {
   const [copied, setCopied] = useState(false);
@@ -65,6 +64,7 @@ export default function Advisor() {
   const [streaming, setStreaming] = useState(false);
   const [specs, setSpecs] = useState(null);
   const [planInfo, setPlanInfo] = useState(null); // null=loading, {is_pro, plan_effective}
+  const [quota, setQuota] = useState(null); // {mode: credits|weekly|unlimited, ...}
   const [mode, setMode] = useState(() => (typeof localStorage !== "undefined" && localStorage.getItem("advisor_mode")) || "default");
   // Personalized suggestions from backend (hardware-aware) — used only for "default" coach
   const [personalizedDefault, setPersonalizedDefault] = useState(null);
@@ -87,8 +87,12 @@ export default function Advisor() {
     try { const { data } = await api.get("/advisor/sessions"); setSessions(data); }
     catch (e) { console.warn("[Advisor] loadSessions failed", e); }
   };
+  const loadQuota = () => {
+    api.get("/advisor/credits").then(({ data }) => setQuota(data)).catch(() => {});
+  };
   useEffect(() => {
     loadSessions();
+    loadQuota();
     api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => {});
     api.get("/subscriptions/status").then(({ data }) => setPlanInfo(data)).catch(() => setPlanInfo({ is_pro: false, plan_effective: "starter" }));
     const lng = (i18n.resolvedLanguage || "it").slice(0, 2);
@@ -111,9 +115,13 @@ export default function Advisor() {
     loadSessions();
   };
 
+  const quotaExhausted = !!quota && (
+    (quota.mode === "credits" && quota.total <= 0) ||
+    (quota.mode === "weekly" && quota.remaining <= 0));
+
   const send = async (text, opts = {}) => {
     const msg = text ?? input;
-    if ((!msg.trim() && !imageDataUrl) || streaming) return;
+    if ((!msg.trim() && !imageDataUrl) || streaming || quotaExhausted) return;
     setInput("");
     setFollowups([]);
     const img = opts.keepImage ? imageDataUrl : imageDataUrl;
@@ -130,6 +138,17 @@ export default function Advisor() {
           lang: (i18n.resolvedLanguage || "it").slice(0, 2),
         }),
       });
+      if (res.status === 402) {
+        const j = await res.json().catch(() => null);
+        const errMsg = j?.detail?.message || t("advisor.credits_empty_desc");
+        setMessages((prev) => {
+          const copy = [...prev];
+          copy[copy.length - 1] = { role: "assistant", content: `⚠️ ${errMsg}` };
+          return copy;
+        });
+        loadQuota();
+        return;
+      }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let acc = "";
@@ -163,7 +182,7 @@ export default function Advisor() {
         copy[copy.length - 1] = { role: "assistant", content: t("advisor.error_conn") };
         return copy;
       });
-    } finally { setStreaming(false); }
+    } finally { setStreaming(false); loadQuota(); }
   };
 
   const submitFeedback = async (msgIndex, msg, rating) => {
@@ -235,23 +254,9 @@ export default function Advisor() {
           </div>
         )} />
 
-      {planInfo && !planInfo.is_pro ? (
-        <PlanUpgradeBanner
-          tier="pro"
-          title={t("plan_banner.advisor.title")}
-          description={t("plan_banner.advisor.desc")}
-          features={[
-            { icon: Brain, title: t("plan_banner.advisor.f1_t"), desc: t("plan_banner.advisor.f1_d") },
-            { icon: Stethoscope, title: t("plan_banner.advisor.f2_t"), desc: t("plan_banner.advisor.f2_d") },
-            { icon: Camera, title: t("plan_banner.advisor.f3_t"), desc: t("plan_banner.advisor.f3_d") },
-            { icon: Zap, title: t("plan_banner.advisor.f4_t"), desc: t("plan_banner.advisor.f4_d") },
-          ]}
-          currentPlan={planInfo.plan_effective || "starter"}
-          testid="advisor-locked"
-        />
-      ) : (
-        <>
-      <DiagnosePanel hasSpecs={!!specs?.data?.cpu} />
+      <CreditsBar quota={quota} t={t} />
+
+      {planInfo?.is_pro && <DiagnosePanel hasSpecs={!!specs?.data?.cpu} />}
 
       <div className="grid lg:grid-cols-[240px_1fr] gap-4">
         <div className="bg-[#0F0F12] border border-[#2A2A35] flex flex-col h-[70vh]">
@@ -321,17 +326,70 @@ export default function Advisor() {
             onSend={send}
             onPickImage={handleImageChoose}
             streaming={streaming}
-            placeholder={t("advisor.placeholder")}
+            disabled={quotaExhausted}
+            placeholder={quotaExhausted ? t("advisor.credits_empty_title") : t("advisor.placeholder")}
           />
         </div>
       </div>
-      </>
-      )}
     </div>
   );
 }
 
 // -------------------- Sub-components (kept in-file to preserve one-import contract) --------------------
+
+function CreditsBar({ quota, t }) {
+  const navigate = useNavigate();
+  if (!quota) return null;
+  if (quota.mode === "unlimited") {
+    return (
+      <div data-testid="ai-credits-bar" className="mb-4 flex items-center gap-2 border border-[#00E0FF]/40 bg-[#00E0FF]/5 px-3 py-2 text-xs text-[#00E0FF]">
+        <InfinityIcon size={14} /> <span data-testid="ai-credits-count">{t("advisor.credits_unlimited")}</span>
+      </div>
+    );
+  }
+  if (quota.mode === "weekly") {
+    const empty = quota.remaining <= 0;
+    return (
+      <div data-testid="ai-credits-bar" className={`mb-4 flex flex-wrap items-center gap-2 border px-3 py-2 text-xs ${empty ? "border-[#FF3B30]/50 bg-[#FF3B30]/5 text-[#FF3B30]" : "border-[#2A2A35] bg-[#0F0F12] text-zinc-400"}`}>
+        <Zap size={14} className={empty ? "" : "text-[#E5FF00]"} />
+        <span data-testid="ai-credits-count">
+          {empty ? t("advisor.credits_weekly_empty") : t("advisor.credits_weekly", { used: quota.used, limit: quota.limit })}
+        </span>
+      </div>
+    );
+  }
+  // mode === "credits" (starter)
+  const empty = quota.total <= 0;
+  return (
+    <div data-testid="ai-credits-bar" className={`mb-4 border px-3 py-2 ${empty ? "border-[#FF3B30]/50 bg-[#FF3B30]/5" : "border-[#2A2A35] bg-[#0F0F12]"}`}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
+        <Zap size={14} className={empty ? "text-[#FF3B30]" : "text-[#E5FF00]"} />
+        <span data-testid="ai-credits-count" className={empty ? "text-[#FF3B30] font-bold" : "text-white font-bold"}>
+          {empty ? t("advisor.credits_empty_title") : t("advisor.credits_left", { count: quota.total })}
+        </span>
+        {!empty && (
+          <span className="text-zinc-500">
+            {quota.welcome > 0 && <>{quota.welcome} {t("advisor.credits_welcome")}</>}
+            {quota.welcome > 0 && quota.earned > 0 && " · "}
+            {quota.earned > 0 && <>{quota.earned} {t("advisor.credits_earned")}</>}
+          </span>
+        )}
+        <span className="flex-1" />
+        <button data-testid="ai-credits-missions-link" onClick={() => navigate("/app/milestones")}
+          className="flex items-center gap-1 border border-[#E5FF00]/40 bg-[#E5FF00]/10 text-[#E5FF00] px-2 py-1 hover:bg-[#E5FF00]/20 transition-colors">
+          <Swords size={12} /> {t("advisor.credits_go_missions")}
+        </button>
+        <button data-testid="ai-credits-upgrade-link" onClick={() => navigate("/pricing")}
+          className="border border-[#2A2A35] text-zinc-400 px-2 py-1 hover:border-[#00E0FF] hover:text-[#00E0FF] transition-colors">
+          {t("advisor.credits_upgrade")}
+        </button>
+      </div>
+      {empty && (
+        <p data-testid="ai-credits-empty" className="mt-1.5 text-[11px] text-zinc-400">{t("advisor.credits_empty_desc")}</p>
+      )}
+    </div>
+  );
+}
 
 const COACH_OPTIONS = [
   { id: "default", label: "Default" },
@@ -413,15 +471,15 @@ function ChatBubble({ index, message, isLast, streaming, feedback, copied, onFee
       {showActions && (
         <div className="ml-9 mt-1 flex items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
           <button onClick={() => onFeedback(index, m, "up")} data-testid={`msg-thumb-up-${index}`}
-            className={`p-1 border transition-colors ${feedback === "up" ? "border-[#00FF66] bg-[#00FF66]/10 text-[#00FF66]" : "border-transparent text-zinc-500 hover:text-[#00FF66]"}`} aria-label="Utile">
+            className={`p-1 border transition-colors ${feedback === "up" ? "border-[#00FF66] bg-[#00FF66]/10 text-[#00FF66]" : "border-transparent text-zinc-500 hover:text-[#00FF66]"}`} aria-label={i18n.language?.startsWith("en") ? "Helpful" : "Utile"}>
             <ThumbsUp size={11} />
           </button>
           <button onClick={() => onFeedback(index, m, "down")} data-testid={`msg-thumb-down-${index}`}
-            className={`p-1 border transition-colors ${feedback === "down" ? "border-[#FF3B30] bg-[#FF3B30]/10 text-[#FF3B30]" : "border-transparent text-zinc-500 hover:text-[#FF3B30]"}`} aria-label="Non utile">
+            className={`p-1 border transition-colors ${feedback === "down" ? "border-[#FF3B30] bg-[#FF3B30]/10 text-[#FF3B30]" : "border-transparent text-zinc-500 hover:text-[#FF3B30]"}`} aria-label={i18n.language?.startsWith("en") ? "Not helpful" : "Non utile"}>
             <ThumbsDown size={11} />
           </button>
           <button onClick={() => onCopy(index, m.content)} data-testid={`msg-copy-${index}`}
-            className="p-1 border border-transparent text-zinc-500 hover:text-[#00E0FF]" aria-label="Copia">
+            className="p-1 border border-transparent text-zinc-500 hover:text-[#00E0FF]" aria-label={i18n.language?.startsWith("en") ? "Copy" : "Copia"}>
             {copied ? <Check size={11} className="text-[#00FF66]" /> : <Copy size={11} />}
           </button>
           {isLast && !streaming && (
@@ -436,13 +494,13 @@ function ChatBubble({ index, message, isLast, streaming, feedback, copied, onFee
   );
 }
 
-function ChatInput({ input, setInput, imageDataUrl, setImageDataUrl, fileInputRef, onSend, onPickImage, streaming, placeholder }) {
+function ChatInput({ input, setInput, imageDataUrl, setImageDataUrl, fileInputRef, onSend, onPickImage, streaming, disabled, placeholder }) {
   return (
     <div className="border-t border-[#2A2A35] p-3 space-y-2">
       {imageDataUrl && (
         <div className="flex items-center gap-2 bg-black/40 border border-[#00E0FF]/40 p-2" data-testid="image-preview">
           <img src={imageDataUrl} alt="allegato" className="h-16 border border-[#2A2A35]" />
-          <span className="text-xs text-[#00E0FF] font-mono flex-1">Immagine allegata (verrà inviata con il prossimo messaggio)</span>
+          <span className="text-xs text-[#00E0FF] font-mono flex-1">{i18n.language?.startsWith("en") ? "Image attached (will be sent with the next message)" : "Immagine allegata (verrà inviata con il prossimo messaggio)"}</span>
           <button onClick={() => setImageDataUrl("")} className="text-zinc-500 hover:text-[#FF3B30]" data-testid="image-remove">
             <XIcon size={16} />
           </button>
@@ -455,9 +513,9 @@ function ChatInput({ input, setInput, imageDataUrl, setImageDataUrl, fileInputRe
           <ImageIcon size={16} />
         </button>
         <input data-testid="chat-input" value={input} onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && onSend()} placeholder={placeholder}
-          className="flex-1 bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 text-sm transition-colors" />
-        <PrimaryButton testid="chat-send-btn" onClick={() => onSend()} disabled={streaming} className="!px-4">
+          onKeyDown={(e) => e.key === "Enter" && onSend()} placeholder={placeholder} disabled={disabled}
+          className="flex-1 bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 text-sm transition-colors disabled:opacity-50" />
+        <PrimaryButton testid="chat-send-btn" onClick={() => onSend()} disabled={streaming || disabled} className="!px-4">
           {streaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
         </PrimaryButton>
       </div>

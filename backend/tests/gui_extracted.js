@@ -42,6 +42,55 @@
   function safeRender(name, fn) {
     try { fn(); } catch (err) { reportClientError(name + ": " + (err && err.stack || err)); }
   }
+
+  // ===== GUI v3.2: skeleton + progresso stimato durante la prima analisi =====
+  // Il server PS e' single-thread: mentre esegue lo scan non puo' rispondere a
+  // richieste di progresso reale. Il progresso e' quindi stimato client-side,
+  // calibrato sulla durata effettiva dell'ultimo scan (localStorage ff_scan_ms).
+  let _scanTimer = null;
+  let _scanT0 = 0;
+  const _SCAN_STEPS = ["Gaming & FPS", "Latenza & Input", "Rete & Streaming", "Sistema & Debloat", "Servizi Windows", "GPU & driver"];
+  function renderScanSkeleton() {
+    const el = document.getElementById("cards");
+    if (!el || state.tweaks.length) return;
+    let est = 9000;
+    try { est = parseInt(localStorage.getItem("ff_scan_ms") || "9000", 10) || 9000; } catch (_) {}
+    est = Math.max(3000, Math.min(60000, est));
+    _scanT0 = Date.now();
+    const skel = Array.from({ length: 6 }, () => `
+      <div class="skel-card" aria-hidden="true">
+        <div class="skel-line w60"></div>
+        <div class="skel-line w40"></div>
+        <div class="skel-line w85"></div>
+        <div class="skel-line w75"></div>
+      </div>`).join("");
+    el.innerHTML = `
+      <div class="scan-strip" data-testid="scan-progress">
+        <div class="scan-title">// ANALISI SISTEMA IN CORSO</div>
+        <div class="scan-sub">Controllo lo stato REALE di ogni tweak sul tuo PC (registro, servizi, driver). Nessuna modifica viene applicata.</div>
+        <div class="scan-bar"><div class="scan-bar-fill" id="scanBarFill"></div></div>
+        <div class="scan-meta"><span id="scanStep">${_SCAN_STEPS[0]}…</span><span id="scanPct">0%</span></div>
+      </div>` + skel;
+    clearInterval(_scanTimer);
+    _scanTimer = setInterval(() => {
+      const fill = document.getElementById("scanBarFill");
+      if (!fill) { clearInterval(_scanTimer); _scanTimer = null; return; }
+      const p = Math.min(92, Math.round((Date.now() - _scanT0) / est * 100));
+      fill.style.width = p + "%";
+      const pctEl = document.getElementById("scanPct");
+      if (pctEl) pctEl.textContent = p + "%";
+      const stepEl = document.getElementById("scanStep");
+      if (stepEl) stepEl.textContent = _SCAN_STEPS[Math.min(_SCAN_STEPS.length - 1, Math.floor(p / (92 / _SCAN_STEPS.length)))] + "…";
+    }, 250);
+  }
+  function finishScanSkeleton() {
+    if (_scanTimer) { clearInterval(_scanTimer); _scanTimer = null; }
+    if (_scanT0) {
+      const took = Date.now() - _scanT0;
+      _scanT0 = 0;
+      if (took > 1500) { try { localStorage.setItem("ff_scan_ms", String(took)); } catch (_) {} }
+    }
+  }
   function toast(msg, cls) {
     const t = document.getElementById("toast");
     t.textContent = msg;
@@ -515,10 +564,13 @@
       if (!d || !Array.isArray(d.tweaks)) throw new Error("payload /api/state non valido");
     } catch (e) {
       reportClientError("refreshState: " + (e && e.message || e));
+      const sub = document.querySelector(".scan-strip .scan-sub");
+      if (sub) sub.textContent = "Collegamento all'agent in corso… riprovo tra qualche secondo.";
       if (_stateRetries++ < 6) setTimeout(() => refreshState(showToast), 2500);
       return;
     }
     _stateRetries = 0;
+    finishScanSkeleton();
     // Normalizza il payload: ConvertTo-Json (PS 5.1) puo' produrre scalari al posto
     // di array (1 elemento) o campi mancanti. Il render non deve MAI rompersi per
     // un dato inatteso (bug storico: griglia vuota all'avvio finche' non si
@@ -1017,6 +1069,7 @@
   if (mh.overlay)  mh.overlay.addEventListener("click", (e) => { if (e.target === mh.overlay) mhClose(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && mh.open) mhClose(); });
 
+  renderScanSkeleton();
   refreshState();
   setInterval(pollLog, 400);
 })();

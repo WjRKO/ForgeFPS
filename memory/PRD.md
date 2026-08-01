@@ -1453,3 +1453,341 @@ Scelte utente: a) multi-source cross-validation hardware, c) sensori avanzati Li
   3. _clear_runasadmin_compat_flag(): rimuove RUNASADMIN da HKCU AppCompatFlags\Layers (path exe + target launcher) a ogni avvio e con --register-protocol.
 - version_info.txt/manifest → 0.8.0.0 (asInvoker). changelog.json entry 0.8.0. REBUILD_v0.8.0.md. Test suite permanente /app/agent-build/tests_v080_antiuac.py (7 test logici, ALL PASS).
 - PENDING UTENTE: (a) pulizia one-time PC (protocollo punta ancora a exe vecchio pre-0.7.6: eliminare copie vecchie + eseguire v0.7.9 una volta); (b) push tag v0.8.0 su GitHub → SHA256 → aggiornare pc.py AGENT_ZIP_UPSTREAM + frontend config/agent.js; (c) REDEPLOY produzione (porta anche GUI v3.1 + fix griglia vuota).
+
+### 2026-07-28 (61) — Release v0.8.0 verificata e link aggiornati (FATTO, testato e2e)
+- Tag GitHub pubblicato: **v.0.8.0** (col punto — il regex di pc.py lo gestisce). SHA256 zip 408259a3...eedb VERIFICATO (match esatto con quello utente).
+- Verifiche release: workflow builda da agent-build/ con manifest+version file; agent-build/forgefps_agent.py al tag = byte-identico al locale; exe: asInvoker 3 occorrenze, requireAdministrator 0, version resource 0.8.0.0. NOTA: alla radice del repo c'è un forgefps_agent.py STALE (vecchio) — ignorarlo, il build usa agent-build/.
+- backend/routers/pc.py: AGENT_ZIP_UPSTREAM → v.0.8.0 (LATEST_AGENT_VERSION auto = 0.8.0). frontend/config/agent.js → URL/SHA/VERSION v0.8.0/DATE 2026-07-28.
+- Test e2e preview: /api/agent/latest-version = 0.8.0; login admin → /api/agent/download-zip 200 (9.1MB, exe + Avvia-FrameForge.bat personalizzato); pagina /app/desktop mostra v0.8.0 + SHA + banner update 0.7.5→0.8.0.
+- PENDING UTENTE: REDEPLOY produzione forgefps.dev (porta: agent 0.8.0 + GUI v3.1 + fix griglia vuota). Poi sul PC: pulizia exe vecchi + prima esecuzione del nuovo exe.
+
+### 2026-07-28 (62) — GUI v3.2: skeleton + progresso analisi iniziale (FATTO, self-test screenshot 2 fasi OK)
+- Feature (scelta utente #4): via il "buco nero" all'apertura della GUI agent. Durante il primo /api/state (scan sincrono lato PS, single-thread → progresso reale impossibile) la griglia mostra: strip "// ANALISI SISTEMA IN CORSO" con barra di progresso STIMATA (calibrata su localStorage ff_scan_ms = durata scan precedente, clamp 3-60s, cap 92%) + label step ciclica (Gaming & FPS → Latenza → Rete → Sistema → Servizi → GPU) + 6 skeleton card con shimmer CSS.
+- ps_agent.py: CSS .scan-strip/.skel-card/@keyframes skelShimmer; JS renderScanSkeleton()/finishScanSkeleton() hooked in boot e refreshState (successo → salva durata reale; errore → messaggio "riprovo" nella strip, skeleton resta). Ver-pill → GUI v3.2.
+- Harness aggiornato: build_gui_harness.py ora ritarda /api/state di 4s per testare la fase skeleton. Test: fase scan (6 skel, 19%, step ok) + fase dati (10 card, ring 50%, ff_scan_ms=4000, 0 errori).
+- PENDING UTENTE: redeploy produzione per vedere GUI v3.2.
+
+### 2026-07-28 (63) — GAMEPLAY DOCTOR (idea utente #1) — FATTO, testato iteration_41: 100% PASS
+- AI che "vede" il gameplay via firme frametime (non video). 3 strati:
+  1. AGENT (ps_agent.py): Get-Fps ora raccoglie frametime per-frame PresentMon e calcola per-tick ft_p99, ft_worst, hitches(>50ms), pace_dev → attaccati ai sample telemetria nel monitor loop.
+  2. BACKEND deterministico (advisor.py): _gd_last_session (gap<=30s), _gameplay_stats (fps avg/min/1%low, stutter_index, hitch_total, pacing, eventi hitch/fps_drop annotati con cause: CPU satura, RAM/VRAM, GPU declock termico vs mediana clock, VRM, "nessuno saturo→causa esterna").
+  3. AI (Claude): POST /api/advisor/gameplay-doctor (Pro-gated, rate-limited) → JSON {verdict, health, score, issues[{type,severity,title,evidence,cause,fix,gui_tweak}], positive}. Persistito in db.gameplay_reports. GET /gameplay-doctor/latest.
+- FRONTEND: components/GameplayDoctor.jsx in /app/live sotto SessionSummary (data-testid gameplay-doctor, gd-analyze-btn, gd-report, gd-issue-*, gd-tweak-badge). i18n live.gd_* it+en. Fix overlay cookie banner: pb-24.
+- FIX COLLATERALI: helpers.py pc_context_text startup con dict (rompeva anche /diagnose!); cap telemetria -300 → -1800 sample (30 min).
+- Test: pytest 7/7 (/app/backend/tests/test_gameplay_doctor.py) + frontend flow reale. Qualità referto AI eccellente (correla hitch→CPU, throttling→temp+declock, cita app avvio reali).
+- NOTA: i campi frametime richiedono monitor con PresentMon attivo (admin); senza, il prompt degrada onestamente (has_frametime_data=false). Serve REDEPLOY produzione. Fase 2 possibile: alert live durante il monitoring + AI Performance Lab (idea #2, architettura già discussa).
+
+### 2026-07-28 (64) — Bottone Condividi referto Gameplay Doctor (FATTO, self-test download PNG OK)
+- GameplayDoctor.jsx: bottone Share (gd-share-btn) accanto ad Analizza — esporta il referto come PNG (html-to-image, pattern identico a SessionSummary), navigator.share con fallback download. Footer branding nel PNG: "FRAMEFORGE · Gameplay Doctor · forgefps.dev". i18n live.gd_share/gd_share_text it+en.
+- BUG RIPETUTO E RISOLTO: di nuovo perso un edit per search_replace PARALLELI sullo stesso file (ref={cardRef} sparito → handler share usciva silenziosamente). REGOLA FERREA: mai edit paralleli sullo stesso file, verificare con grep dopo batch.
+- Test: click reale → download frameforge-gameplay-doctor.png 516KB + toast. PENDING: redeploy produzione.
+
+### 2026-07-28 (65) — FIX: monitor senza FPS dopo v0.8.0 (FATTO, testato iteration_42: 100% PASS)
+- BUG produzione: dopo redeploy il live monitoring non registrava gli FPS. ROOT CAUSE: PresentMon (ETW) richiede admin O gruppo "Performance Log Users" (SID S-1-5-32-559). Prima del fix UAC, il monitor girava ELEVATO per sbaglio (UAC del ghost exe) → FPS ok. Con v0.8.0 (niente elevazione via URI, comportamento corretto) Start-Fps aveva gate "Richiede Amministratore" → usciva → zero FPS. Il vecchio bug UAC mascherava questo requisito.
+- FIX in ps_agent.py (serve REDEPLOY, exe invariato):
+  1. Test-FpsCapable: 'ok' (admin o token con S-1-5-32-559) / 'relogon' (iscritto ma token vecchio) / 'no'.
+  2. Enable-FpsPermission: quando la GUI Ottimizza è elevata, iscrive l'utente al gruppo (Add-LocalGroupMember -SID, fallback net localgroup con nome localizzato). Chiamata all'avvio mode=optimize.
+  3. Start-Fps senza gate admin: procede se capability ok, messaggi guida per relogon/no. Booster: Start-Fps senza if(Test-Admin).
+- FLUSSO UTENTE: redeploy → aprire GUI Ottimizza una volta (UAC consensuale) → riavvio/logout Windows → monitor conta FPS senza admin per sempre.
+- Verifiche: pwsh 7.4.6 arm64 parser 0 errori su 5395 righe; runtime Get-Fps PASS (CSV sintetico: fps 104, 3 hitch — conferma anche che l'edit frametime di (63) è sano); script servito col fix; regressioni API ok. Harness persistito: /app/backend/tests/ps/.
+- LEZIONE: ogni cambio di modello di elevazione va incrociato con le feature che dipendono dai privilegi (ETW/PresentMon, LibreHardwareMonitor driver sensori?). NB: se l'utente segnala sensori mancanti nel monitor non-admin, valutare stesso pattern.
+
+### 2026-07-28 (66) — GAMEPLAY DOCTOR v2 (spec completa utente) — FATTO, testato iteration_43: PASS completo
+- AGENT (ps_agent.py, Get-Fps v2): soglia hitch ADATTIVA (3x mediana sessione via istogramma, min 25ms), ft_cv (coeff. variazione pacing), GD_HIST istogramma cumulativo 60 bucket (1ms fino a 50 + overflow) allegato ogni 30 tick (ft_hist/ft_n) → percentili di sessione ESATTI. Test runtime pwsh PASS.
+- BACKEND (advisor.py): finestra causale con LAG (sample i-1..i, la causa precede il sintomo), _GD_RULES pesate (throttle GPU 0.9, VRAM 0.85, CPU 0.8...), _gd_pattern (isolated/sporadic/periodic/burst da inter-arrival CV), DEDUP per causa dominante → problems[] con occurrences/impact_pct/impact_score/confidence_hint/concurrent_signals, ordinati per impatto reale. _gd_hist_pct per 1%/0.1% low esatti (exact_percentiles flag). Baseline storica per gioco (media ultime 5, delta %) + resolved[] (issue precedenti non ripresentate). Doc persistito con timeline{fps downsampled ≤150 pt, events} + baseline + resolved.
+- PROMPT v2: executive_summary(main_problem/main_fix), separazione evidence(numeri)/diagnosis(inferenza)/fix, confidence da confidence_hint, incertezza esplicita se concurrent_signals, tono report tecnico, fix.primary{text,gui_tweak}+alternatives+impact_estimate (solo se deducibile, MAI statistiche inventate), ordine issues = ordine deterministico.
+- FRONTEND (GameplayDoctor.jsx riscritto): executive summary top con score, badge Risolto, pannello baseline con delta colorati, timeline SVG FPS con marker cliccabili → espande issue corrispondente, issue a 2 livelli (simple_text + tech detail collassabile con Evidenza/Diagnosi/alternative), badge confidence, CTA unico "Applica in GUI" (apre frameforge:// via /agent/launch-uri mode=optimize), share card COMPATTA off-screen (score+top issue+fix, 600px social-ready). i18n gd_* aggiornate it/en (rimosse gd_cause duplicate).
+- NON implementati (dichiarato all'utente): export PDF (non esiste nell'app), stime impatto da dati aggregati flotta (niente dati reali).
+- INCIDENTE RISOLTO: sed 215,336d ha cancellato anche _enrich_specs_for_ai + 3 model class → recuperate da git HEAD. LEZIONE: mai delete a range con sed senza verificare i confini con grep dei def.
+- PENDING UTENTE: REDEPLOY produzione. Le nuove firme (ft_cv/ft_hist) arrivano dal monitor al prossimo avvio post-redeploy; sessioni vecchie degradano onestamente (exact_percentiles=false).
+
+## Aggiornamento 2026-07-29 — Laboratorio Automatico delle Prestazioni FASE 1 (FATTO, test 100% iteration_44)
+### Backend (nuovi file)
+- routers/lab.py: orchestratore. Endpoint utente: POST /api/lab/start (risk safe|medium, run_seconds 30-180, 409 se attiva), GET /api/lab/session, POST /api/lab/abort, GET /api/lab/registry. Endpoint agent (X-Agent-Token): GET /api/agent/lab/next (macchina a stati: snapshot->run_baseline->apply_tweak/run_test->abort/complete), POST /api/agent/lab/event (snapshot_done/tweak_applied/tweak_skip/rolled_back/aborted/waiting_game/game_detected), POST /api/agent/lab/run (baseline: CV check >5% -> 4o run + scarto outlier; test: 3 run -> Welch -> kept/rolled_back, baseline aggiornata se kept, adapt_priors per famiglia, auto-stop finestra 3). Report finale (baseline vs final, steps con p_value/reason, performance_index, durata). Fix agent_ack: il report viene consegnato all'agent UNA sola volta dopo il completamento.
+- lab_registry.py: registry versionato v1.0.0, 12 tweak no-reboot (safe+medium) con family/prior/applicabilita' (nvidia_tel solo GPU NVIDIA, visual filtrato per prior<=0.10). Gli id combaciano col catalogo $TWEAKS dell'agent.
+- lab_stats.py: Welch t-test (beta incompleta pure-Python, no scipy) + Mann-Whitney esatto + CV. Alpha adattivo 0.10 per n<5. Funzione significance() condivisa (riusabile in Fase 2 synergy/validazione).
+- models.py: LabStartInput/LabRunInput/LabEventInput. pc.py: mode 'lab' aggiunto alle 2 _ALLOWED_URI_MODES (launch-uri firmato funziona).
+### Agent PowerShell (ps_agent.py, PARSE OK pwsh 7.4.6)
+- Nuovo MODE 'lab': auto-elevazione UAC se non admin (Start-Process -Verb RunAs col file locale), Start-Fps obbligatorio, loop di polling su /api/agent/lab/next. Funzioni: LabApi/LabEvent, Get-LabTick (frametime grezzi PresentMon per tick), Wait-LabGame (attesa gioco + check abort ogni 12s), Invoke-LabRun (finestra 90/120s -> fps_avg, 1% low, 0.1% low, ft_var, frames + telemetria cpu/gpu). Snapshot: Checkpoint-Computer (punto ripristino, tollerante al limite 24h) + stato dei tweak candidati. Apply via Invoke-ApplyTracked + Save-Backup; rollback via Invoke-RestoreTweak. Abort: annulla tutti i tweak del Lab (rollback_ids dal backend, fallback lista locale).
+### Frontend
+- Nuova pagina pages/Lab.jsx (rotta /app/lab, nav 'Laboratorio'/'Performance Lab', icona FlaskConical, i18n nav.lab it+en). Setup (rischio + finestra 90/120s + preview candidati + stima durata), Connect card (nota ADMIN + OneClickLaunchButton mode=lab + SecureRunBlock), vista live (stepper 4 fasi, status pill, baseline card, timeline tweak kept/rollback/coda, log live, polling 2.5s, bottone Interrompi), report finale (gain totale, 1% low, performance index, steps con p-value, Nuova sessione), aborted card.
+### Test
+- Sim E2E backend: /app/backend/tests/test_lab_phase1_sim.py (CV/outlier, welch, kept/rollback, auto-stop marginale, report, abort, 401). Endpoint pytest: tests/test_lab_phase1_endpoints.py (7/7). testing_agent iteration_44: backend 100%, frontend 100%, lab_sessions ripulite.
+### FASE 2 (prossima, da spec /app/memory/laboratorio-automatico-spec.md)
+- Reboot-resume (tweak con riavvio: mpo/gpu_msi/timer/HAGS + requires_reboot_resume/pending_reboot_test_id), synergy pass greedy su coppie kept, validazione gioco reale 5-10 min. FASE 3: prior aggregati fleet + suggerimenti BIOS guidati.
+
+## Aggiornamento 2026-07-29 (2) — Traduzioni mancanti completate (i18n IT/EN al 100%)
+Audit completo del frontend: individuate e tradotte tutte le stringhe hardcoded in italiano che apparivano anche con lingua EN.
+- Componenti resi bilingue (pattern isEn() da @/i18n): OneClickLaunchButton (label/toast/fallback), MobileHandoffModal (QR telefono), AuthMobile (magic link), PasswordResetsPanel (pannello admin), TrialUpgradeBanner (countdown/CTA/prezzi), ObsOverlayPanel (tutta la UI overlay OBS + guida OBS), FullBenchmarkReport (empty state), FooterExtras (toast email).
+- Pagine: Billing (interamente tradotta), Admin (modali grant/broadcast, tabella utenti, dettagli, stat cards, paginazione), MyPc (nuovo dict EN CPU_TEMP_REASONS_EN per le 6 diagnosi temp CPU), Landing (usePageMeta title/description per lingua), Network (label bottone bufferbloat), Advisor (aria-label + preview immagine).
+- i18n.js: aggiunte sezioni mancanti it+en: freshness (badge sync header con plurali _one/_other), mobile (handoff), milestones (widget XP sidebar).
+- Fix: rimosso frammento duplicato in MobileHandoffModal introdotto da un edit. Parse Babel di tutti gli 88 file jsx OK.
+- Verifica: screenshot EN (dashboard/admin/billing: "Sync suggested", "Phone", "to next tier", "Administrator panel", "Billing & plan") e IT via toggle lang-it (tutto in italiano, nessuna regressione). Nota: la lingua dell'account salvata sul profilo sovrascrive localStorage al login (comportamento esistente, corretto).
+
+## Aggiornamento 2026-07-29 (3) — Auto-detect lingua browser + hreflang/SEO internazionale
+- i18n.js: aggiunto "querystring" (?lang=it|en) come prima fonte di rilevamento (poi localStorage -> navigator). Il rilevamento navigator al primo accesso era gia' attivo (fallback smart IT/EN); la preferenza account continua a prevalere dopo il login.
+- hooks/usePageMeta.js: riscritto — oltre a title/description ora sincronizza og:title/og:description/og:url, twitter:title/description, og:locale + og:locale:alternate (it_IT/en_US), canonical su https://forgefps.dev{path} e link hreflang it/en/x-default dinamici per rotta (usa useLocation).
+- public/index.html: aggiunti canonical statico, hreflang it/en/x-default e og:locale per i crawler senza JS.
+- public/sitemap.xml: esteso da 3 a 10 URL pubblici (/, /pricing, /guida, /demo, /changelog, /security, /privacy-telemetry, /terms, /login, /register) con xhtml:link hreflang alternates per ognuno. XML validato.
+- Verifica Playwright: ?lang=en su storage pulito -> UI EN, html lang=en, og:locale=en_US, boostpc_lang=en; ?lang=it -> IT; canonical/hreflang dinamici corretti su /pricing.
+
+## Aggiornamento 2026-07-29 (4) — Fix auto-logout ogni 15 minuti (refresh token ora usato)
+Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token 15 min, refresh token 7 giorni MA il frontend non chiamava mai /api/auth/refresh -> logout di fatto ogni ~15 min.
+- Fix (scelta utente: opzione a): interceptor axios in /app/frontend/src/lib/api.js — al primo 401 chiama POST /auth/refresh (promise condivisa tra richieste concorrenti, flag _retry anti-loop, esclusi /auth/refresh|login|register|logout) e riprova la richiesta originale.
+- Backend gia' corretto: /refresh ruota ENTRAMBI i cookie (sliding) -> sessione dura finche' l'utente usa l'app almeno 1 volta ogni 7 giorni.
+- Test: curl (refresh con solo refresh_token -> nuovi set-cookie + /me ok) e Playwright (rimosso access_token, tenuto solo refresh -> ricarico /app -> sessione sopravvive, access rigenerato). PASSATO.
+- Nuovo comportamento: logout automatico solo dopo 7 giorni di inattivita' totale (o logout manuale). Va rideployato in produzione per avere effetto su forgefps.dev.
+
+## Aggiornamento 2026-07-29 (5) — Laboratorio Automatico FASE 2 (FATTO, iteration_45 + fix verificato)
+### Reboot-resume (tweak con riavvio)
+- lab_registry v1.1.0: aggiunti mpo/gpu_msi/timer (requires_reboot=True, medium), ordinati IN CODA (meno riavvii). LabStartInput.include_reboot (default true) + toggle UI.
+- Flusso: apply_tweak(requires_reboot) -> event tweak_applied{requires_reboot} -> status awaiting_reboot -> agent registra RunOnce HKCU + %LOCALAPPDATA%\FrameForge\lab_resume.ps1 (bootstrap che riscarica lo script e rilancia -Mode lab), prompt S/N per shutdown /r -> dopo login: next=reboot_required, agent confronta LastBootUpTime vs applied_at -> event reboot_done -> 1 run WARM-UP da 45s (scartato) -> 3 run test normali.
+### Synergy pass
+- Dopo il test loop (queue vuota o auto-stop) con >=2 kept no-reboot di famiglie diverse senza conflitti: max 2 coppie greedy (ordinate per somma delta). Per coppia: synergy_toggle OFF (rollback entrambi) -> 2 run -> toggle ON (riapplica) -> 2 run -> combined vs somma singoli, sinergia se > x1.15. Stato in sess["synergy"], risultati in report.synergies_found.
+### Validazione gioco reale
+- Status validation: 1 run da 300s con config finale -> real_gain vs predicted (baseline finale vs baseline0), discrepancy=true se real < 50% predicted (con predicted>=2%). In report.validation. _complete dopo.
+### Altro
+- next() ritorna action='transition' durante i cambi di fase (l'agent ripolla senza messaggi fuorvianti). Report esteso: synergies_found, validation, reboots_required.
+- UI Lab.jsx: stepper 6 fasi (+ Synergy, Validazione), toggle lab-reboot-toggle nel setup (14<->11 candidati), RebootBanner (lab-reboot-banner), SynergyCard (lab-synergy-card), ValidationBlock (lab-validation-block), sinergie+riavvii nel report.
+- BUG RISOLTO: durante un fix di file corrotto erano andati persi i 3 componenti UI (ValidationBlock/RebootBanner/SynergyCard -> crash pagina con report). Ri-aggiunti, verificato con screenshot: report +15.84% con validazione e sinergia visibili.
+- Test: test_lab_phase2_sim.py (E2E completo PASS), test_lab_phase2_endpoints.py (8/8, creato dal testing agent), test_lab_phase1_sim.py aggiornato al nuovo flusso (PASS). testing_agent iteration_45: backend 100%.
+### FASE 3 (prossima, da spec)
+- Prior aggregati fleet (per hardware simile) + suggerimenti BIOS guidati (XMP/EXPO, Resizable BAR) con istruzioni manuali e verifica post-riavvio.
+
+## Aggiornamento 2026-07-29 (6) — Laboratorio Automatico FASE 3 + report condivisibile brandizzato (FATTO, iteration_46 = 100%)
+### Fleet aggregated priors
+- lab.py `_fleet_blend(candidates, hw)`: fonde il prior statico con lo storico anonimo `db.lab_fleet_stats` (per hw_class es. nvidia_amd), min 3 campioni, peso w=min(0.7, n/(n+10)), rate clampato 0.05-0.9; candidato arricchito con `fleet:{tested,kept,avg_delta_pct}`. Update fleet stats con $inc a ogni decisione kept/rollback. `_hw_class()` da gpu+cpu regex. Applicato sia a /lab/start (log "Prior arricchiti...") che a /lab/registry.
+### Suggerimenti BIOS guidati
+- lab_registry.bios_suggestions(specs): xmp (RAM sotto profilo: confronto ram_speed_mhz vs ram_speed_nominal_mhz da ps_agent + soglia base DDR4/DDR5), rebar (GPU RTX 3000+/RX 6000+/Arc, verifica NVIDIA CP/AMD Software), dual_channel (ram_modules==1). Ognuno con title/why/steps/expected_gain. Salvati in sessione + inclusi nel report finale.
+### Report condivisibile brandizzato
+- Lab.jsx ShareCard off-screen (620px, FRAMEFORGE LAB + gain gigante + FPS before→after + kept steps con p-value + validazione + footer forgefps.dev) esportata in PNG via html-to-image toPng (pixelRatio 2, skipFonts:true per evitare SecurityError cross-origin Google Fonts — fix verificato: 0 errori console). Web Share API con fallback download frameforge-lab-report.png + toast. UI: BiosSuggestions (details espandibili, lab-report-bios / lab-bios-{id}), fleet hint nel setup (lab-fleet-hint "N test su PC con hardware simile").
+### Verifica
+- Backend self-test curl: registry con fleet reali (26 test telemetry nvidia_amd), bios=['rebar'], report completo con bios_suggestions/synergies/validation. Sim Fase 1+2 ri-eseguiti PASS (NB: vanno lanciati come `python tests/test_lab_phaseN_sim.py`, NON via pytest — xdist li esegue in parallelo → 409 sessione attiva). PS PARSE OK (pwsh).
+- testing_agent iteration_46: frontend 100% (report card, gain +15.84%, BIOS expand, share download reale, fleet hint 69 test, toggle reboot 14<->11, persistenza dopo reload).
+- LABORATORIO AUTOMATICO COMPLETO (Fasi 1+2+3).
+
+## Aggiornamento 2026-07-29 (7) — JSON-LD structured data sulla landing (FATTO, verificato)
+- public/index.html: aggiunto script application/ld+json con @graph schema.org: Organization (#org), SoftwareApplication (#app: UtilitiesApplication, Windows 10/11, featureList, Offer price 0 EUR, softwareHelp=/security, releaseNotes=/changelog, inLanguage it+en), WebSite (#website). URL assoluti su forgefps.dev (coerenti con canonical/OG).
+- Verificato: restart frontend (index.html richiede restart), JSON servito e parse-valido, landing renderizza senza regressioni (h1 presente).
+- NON implementati (decisione utente): title keyword-rich (proposta 2), sezione FAQ + FAQPage schema (proposta 3), apertura robots.txt ai crawler AI search (proposta 4 — spiegata all'utente: consentire bot di ricerca tipo OAI-SearchBot/PerplexityBot tenendo bloccati quelli di training). Restano nel backlog visibilità.
+
+## Aggiornamento 2026-07-29 (8) — robots.txt: bot AI search ammessi esplicitamente (FATTO, verificato)
+- CONTESTO: il robots.txt servito ha un blocco "Cloudflare Managed content" iniettato a monte (edge) che blocca i bot di TRAINING (GPTBot, ClaudeBot, CCBot, Bytespider, Google-Extended, meta-externalagent, Amazonbot, Applebot-Extended) — non modificabile dal codice e va bene così.
+- public/robots.txt riscritto: gruppi espliciti Allow:/ + Disallow:/app/ per i bot di AI SEARCH (OAI-SearchBot, ChatGPT-User, PerplexityBot, Perplexity-User, Claude-SearchBot, Claude-User, DuckAssistBot, MistralAI-User) così restano ammessi anche se la blocklist gestita cambia. Wildcard * e Sitemap invariati.
+- Verificato: restart frontend, robots.txt servito con i nuovi gruppi + blocco Cloudflare intatto, llms.txt HTTP 200, landing renderizza (h1 ok).
+- Backlog visibilità residuo: title/description keyword-rich (proposta 2), sezione FAQ + FAQPage schema (proposta 3).
+
+## Aggiornamento 2026-07-29 (9) — Lab FASE 4: stutter score, latenza input, mini-lab verifica BIOS/driver, storico (FATTO, sim PASS + iteration_47 = 100%)
+### Stutter score nel criterio kept/rollback (lab.py)
+- Decisione test estesa: STUTTER_GUARD (fps kept ma 1% low <= -5% -> rollback "fluidita' peggiorata"), FLUIDITY keep (fps neutri >= -0.5% ma 1% low >= +3% con Welch significativo sui fps_p1 -> kept). Nuovi campi result: significance_p1, decision_basis (fps|fluidity|stutter_guard). Costanti: STUTTER_KEEP_PCT=3, STUTTER_GUARD_PCT=-5, FPS_NEUTRAL_PCT=-0.5.
+### Latenza input nel Lab
+- ps_agent Get-LabTick: parsa anche colonna PresentMon MsUntilDisplayed (iLat, byLat per app) -> Invoke-LabRun somma lat e aggiunge run.latency_ms (>=50 campioni). _run_stats calcola latency_ms medio; delta.latency_ms per tweak (test - baseline); se kept e <= -1ms -> ", input lag -Xms" nel reason. Report: steps.latency_delta_ms + total_latency_delta_ms; UI chip "Xms lat" ciano + stat "Input lag" (lab-report-latency), mostrati solo se dati presenti.
+### Mini-lab di verifica (kind=check) — chiude il loop BIOS + regression check driver
+- POST /api/lab/check {reason: bios_xmp|bios_rebar|bios_dual|driver_update|manual} (LabCheckInput): richiede ultimo Lab completo come riferimento (409 se sessione attiva, 400 senza ref). Sessione kind=check: waiting_agent -> baseline (CHECK_RUNS=2, riusa azione run_baseline dell'agent SENZA modifiche al loop PS) -> report {kind:'check', total_gain_pct vs check_ref, regression se <= -5%}. Warning nel log se gioco diverso dal riferimento. L'agent riceve 'complete' col report (campi baseline/final/total_gain compatibili con la stampa PS esistente).
+- GET /api/lab/insights: confronta ultimo Lab completo (nuovo campo specs_at: ram_speed_mhz/ram_modules/gpu_driver salvato in lab_start) con pc_specs correnti -> items: bios_xmp (RAM +10% piu' veloce), bios_dual (moduli>=2), bios_rebar (sempre offerto se suggerito, conferma manuale), driver_update (gpu_driver_version cambiata).
+- GET /api/lab/history: ultime 15 sessioni completed (kind, game, gain, kept, fps, check_reason, regression).
+### UI Lab.jsx (+170 righe)
+- InsightsCard (lab-insights-card, lab-insight-{id}, lab-check-start-{id}), HistoryCard (badge LAB giallo / CHECK ciano, badge rosso Regressione), CheckProgress (run x/2 vs riferimento), CheckResultCard (lab-check-result, lab-check-gain, banner verde confermato / rosso regressione + CTA nuovo Lab). Render: setup e report mostrano Insights+History; sessione check attiva ha vista dedicata (ConnectCard/CheckProgress+LogFeed). Step del report full con chip "1% low ±X%" e "±Xms lat".
+### Test
+- Sim E2E /app/backend/tests/test_lab_phase4_sim.py: PASS (fluidity kept, stutter guard rollback, kept con input lag -4ms, report con p1/lat/basis, insights [bios_rebar], check +3% no regression, check -10% regression, history, 422 reason invalida). Regressione sim Fase 1/2: PASS. PS PARSE OK (pwsh reinstallato in /opt/pwsh, ambiente lo ripulisce). testing_agent iteration_47: frontend 100% IT+EN, nessun bug.
+- NOTE tech-debt dal testing agent (non bloccanti): Lab.jsx 734 righe da splittare in componenti; Insights/History fetch a ogni mount; 3x 401 cosmetici pre-login.
+
+## Aggiornamento 2026-07-30 — Health check completo app (iteration_48) + 5 fix minori (FATTO, verificati)
+- CHECK COMPLETO: backend 25/25 pass (auth, 401 protetti, 12 endpoint core, 422 advisor, security headers, 8 pagine pubbliche); frontend tutte le 8 pagine pubbliche + 15 /app/* renderizzano senza errori critici; AI verificata live (upgrade plan reale Claude, build job avviato, diagnosi personalizzata). Suite riusabile: /app/backend/tests/test_full_regression_iter48.py (idempotente).
+- FIX applicati e verificati via screenshot:
+  1. i18n leak "DA MIGLIORARE" nel Health ring Dashboard in EN -> ora t(`mypcpage.health.grade.${grade_key}`) (mostra "Needs work").
+  2. i18n leak "5g fa" in Admin users table in EN -> fmtRelative riscritta con Intl.RelativeTimeFormat(locale i18n).
+  3. Dashboard BenchmarkCard "0 / -100% vs previous" quando latest senza overall -> empty state "No benchmarks yet".
+  4. CSP bloccava static.cloudflareinsights.com su /app/live -> aggiunto a script-src (server.py).
+  5. UX Advisor: chat input sepolto sotto DiagnosePanel espanso (y=2046) -> useDiagnose auto-collassa la diagnosi se piu' vecchia di 1h e l'utente non ha preferenza esplicita (localStorage diagnose_collapsed); chat ora a y=742.
+- Non-bug confermati: advisor chat esiste (era sotto il fold); scraping Amazon datacenter = fallback manuale atteso; 3x 401 pre-login cosmetici.
+
+## Aggiornamento 2026-07-30 (2) — "Precision Pass" professionale su tutte le feature (FATTO, sim PASS + iteration_49 = 100%)
+### A. Rigore statistico Lab
+- lab_stats.py: nuove funzioni t_ppf (quantile t via bisezione), welch_ci (IC95 Welch su diff medie), cohens_d, holm_adjust (correzione Holm-Bonferroni).
+- lab.py: delta.fps_ci_pct [lo,hi] + delta.effect_d per ogni tweak; report steps con ci_pct/effect_d/p_adj/holm_ok (per basis=fluidity il p e' quello su fps_p1); report.multiple_testing {method, alpha, kept_total, kept_confirmed} + report.drift_events.
+- Drift check A/B/A: dopo ogni 3 risultati (recheck_after) e a cur=None, azione run_recheck (1 run vs baseline corrente). Drift <=3% -> stabile; altrimenti 3 run -> RE-BASELINE (sostituisce baseline runs+stats). Fase 'recheck' aggiunta a LabRunInput.
+- Guardia termica agent (ps_agent): $script:LAB_TREF = media temp GPU baseline; Wait-ThermalStable attende (max 90s) che la GPU torni entro +3C prima di run_test/recheck/synergy/validation. Handler PS run_recheck aggiunto.
+### B. Evidenza fleet visibile
+- Lab.jsx SetupCard: lista 'Evidenza misurata dalla community' (lab-evidence-list, top 5 candidati con fleet.tested>=3): 'N PC · ±X% medio · tenuto Y%'. Nota rigore nel report (lab-report-rigor) con Holm + drift compensati. Step con IC95 e badge ambra 'non confermato dopo correzione Holm'.
+### C. Health Score pro
+- pc.py /pc-health esteso: fleet percentile (stesso vendor GPU, minimo 5 PC -> out.fleet {percentile,n,vendor}) + throttling GPU da pc_telemetry ultimi 300 sample (gpu_util>=90, clock < 92% del picco, temp>=80, >=5 eventi -> detected). MyPc.jsx: righe health-fleet-percentile e health-throttling (i18n fleetpct/throttle_yes/throttle_no). VERIFICATO live: admin ha throttling detected (17 eventi, picco 86C).
+### D. Stima FPS calibrata fleet
+- pc.py /fps/estimate: _fleet_fps cerca mediana FPS reali da pc_telemetry di utenti con stessa GPU (token regex rtx/gtx/rx/arc) e stesso gioco (>=2 utenti, >=30 sample) -> out.fleet + out.source ('fleet+ai'|'ai'). Games.jsx badge fps-source: 'Calibrata su dati reali: N PC...' vs 'Stima AI (nessun dato misurato...)' (i18n games.src_fleet/src_ai).
+### E. Benchmark ripetuto
+- ps_agent Run-Benchmark: CPU e RAM 3 ripetizioni -> mediana + cpu_cv_pct/ram_cv_pct/cv_pct/bench_runs/reliable (CV<=10). Benchmark.jsx footer bench-reliability (i18n mypcpage.bench_cv/bench_unreliable), mostrato solo se cv_pct presente.
+### F. ReBAR/PCIe reali
+- ps_agent Get-Specs (ramo NVIDIA): pcie_link/pcie_width/pcie_width_max da nvidia-smi query pcie.*; rebar_status on/off da BAR1 Memory Total (>=1024MiB = ON). lab_registry.bios_suggestions salta rebar se rebar_status=on; lab.py insights: bios_rebar diventa kind=confirm con detail 'ReBAR attivo rilevato' quando on.
+### Test
+- Sim: test_lab_phase4_sim.py esteso (recheck stabile, IC95, Holm 2/2) PASS; NUOVO test_lab_drift_sim.py (drift -6% -> re-baseline + drift_events) PASS; phase1/2 sims aggiornati con handler run_recheck e PASS; PS PARSE OK; pc-health curl OK. testing_agent iteration_49: frontend 100% IT+EN.
+- Fix post-test: ResponsiveContainer minWidth/minHeight (warning Recharts), 'Priorita'->'Priorità' in lab_registry.
+- NOTA: fleet percentile appare solo con >=5 PC stesso vendor con health nella fleet (in preview assente = atteso).
+
+## Aggiornamento 2026-07-30 (3) — Fix ParserError agent + Startup Detection PRO (FATTO, verificato E2E)
+### Fix critico segnalato dall'utente
+- ParserError PS 5.1 riga ~5318: due statement fusi su una riga in Invoke-LabRun ('$arr = ...ToArray()  $sorted = ...') causato da un edit che aveva rimosso un newline. FIXATO.
+- ROOT CAUSE della mancata detection: /api/agent/script SENZA ?t=token ritorna 1 riga di errore -> il parse pwsh dava sempre OK (falso positivo). PROCEDURA CORRETTA (in /app/memory/learnings.md): login -> /api/agent/token -> /api/agent/script?t=$TK -> wc -l > 5000 -> pwsh ParseFile. Script reale 5955 righe ora PARSE OK 0 errori.
+### Startup Detection PRO (scelta utente: punto 1 + guida manuale, NO disattivazione via agent)
+- ps_agent Get-StartupList v2 multi-fonte: (1) registry Run HKLM/HKCU/Wow6432Node con STATO REALE enabled/disabled da StartupApproved (primo byte pari=attivo), (2) cartelle Startup utente+comune con risoluzione .lnk via WScript.Shell, (3) task pianificati Logon/Boot non-Microsoft, (4) servizi Auto con path fuori \Windows\. Per voce: publisher da firma digitale (Get-AuthenticodeSignature, cache), ram_mb dal working set se processo attivo, source, enabled. Cap 60, fallback legacy Win32_StartupCommand, dedup name+source. Runtime smoke su pwsh Linux: ArrayList count 0 senza errori.
+- ai_engine.analyze_startup: prompt arricchito (publisher/fonte/GIA' DISATTIVATO/RAM/cmd), regole pro: già disattivato->mantieni, non firmato->valuta+antivirus, mai antivirus/driver/critici, service->services.msc. VERIFICATO live: Steam disabled->mantieni, SospettoTool non firmato->valuta con sospetto, RAM citata nelle motivazioni.
+- MyPc.jsx card startup: lista rilevata pre-analisi (badge Attivo/Disattivato, publisher o 'Non firmato', fonte tradotta, RAM MB, testid startup-detected-N) + hint disattivazione manuale; post-analisi AI: RAM inline nel nome + riga come-disattivare per source (Task Manager/Utilità pianificazione/services.msc). i18n IT+EN (mypcpage.startup_hint/on/off/unsigned/src.*/how_*).
+- Backend invariato (startup dict pass-through già compatibile). Screenshot IT/EN OK entrambi gli stati.
+
+## Aggiornamento 2026-07-30 (4) — Servizi Windows: quali disattivare (DETERMINISTICO, FATTO, verificato E2E)
+- METODO scelto: niente AI — knowledge base curata + dipendenze reali + contesto PC. Zero costi, risposte riproducibili e sicure.
+- /app/backend/services_kb.py (NUOVO): SERVICES_KB con ~28 servizi noti (telemetria: DiagTrack/dmwappushservice/NvTelemetryContainer, updater: edgeupdate*/gupdate*/AdobeARM, legacy: Fax/RemoteRegistry/RetailDemo/WMPNetworkSvc/SharedAccess/SCardSvr, condizionali: SysMain(cond ssd)/WSearch/Spooler+PrintNotify(cond printer)/Xbl*(cond xbox)/WbioSrvc/TabletInputService) con why bilingue it/en + condition. analyze_services(): regole pro — dependents>2 declassa disattiva->valuta; Stopped+Manual->gia_ok; cond ssd (disk specs match ssd/nvme)->SysMain disattiva; giochi xbox/minecraft->Xbl* mantieni; terze parti sconosciute Auto con nome updat|telemetr|crash|report->valuta. Sort per priorità+RAM, summary {disattiva,valuta,gia_ok,ram_mb_saveable}.
+- Agent ps_agent: Get-ServicesAudit (Win32_Service Auto+Manual max 200: state, start_mode, shared svchost flag, ram_mb SOLO processi dedicati via ProcessId, dependents da ServicesDependedOn, ms=path in \Windows\). Inviato in primo scan ($__body.services_audit) e in Send-Data (sync). PARSE OK script reale 5990 righe.
+- Backend: SpecsInput.services_audit, report-specs salva (cap 220) + services_audit_at; GET /api/services/analyze (deterministico, no AI) -> {available, audited_at, items, summary}.
+- MyPc.jsx ServicesCard (services-card): summary (N disattivabili · M da valutare · tot · ~MB RAM), badge Disattiva/Valuta/Già ok/Mantieni, why nella lingua UI (campo bilingue dal backend, L(obj) picker), condizioni ambra, istruzioni services.msc con revert, stato Attivo/Disattivato·start_mode, show more/less oltre 10. i18n mypcpage.services_* IT+EN.
+- TEST: unit della logica (9 casi: dependents declassa RemoteRegistry, NVMe sblocca SysMain, updater sconosciuto->valuta, Fax->gia_ok), E2E curl (inject audit via report-specs + analyze), screenshot EN OK. Nessuna azione automatica (scelta utente: solo guida).
+
+## Aggiornamento 2026-07-30 (5) — Accuratezza startup: già-disattivati gestiti correttamente (FATTO, verificato E2E)
+- Segnalazione utente: 'mi rileva programmi che sono già disabilitati'. Fix su 3 livelli:
+  1. Agent: StartupApproved\StartupFolder usa il nome file CON estensione (.lnk) -> lookup enabled per voci folder ora prova nome+estensione e poi basename (prima falliva -> enabled null -> mostrate come attive).
+  2. Backend /startup/analyze: ESCLUDE enabled=false dall'analisi AI (se tutti disattivati -> summary 'nessuna azione necessaria' senza chiamata AI). Verificato: Steam/Epic disabled esclusi, AI riceve solo attivi.
+  3. UI MyPc: ordinamento attivi prima / disattivati in fondo con opacity-50, badge solo quando enabled è booleano certo (null = nessun badge, niente falso 'Attivo' sui dati vecchi), header 'N attivi all'avvio · M già disattivati (esclusi dall'analisi)' (i18n startup_counts IT+EN).
+- PARSE OK script reale 5996 righe. Screenshot verificato (attivi verdi sopra, DISABLED grigi sotto).
+- NOTA UTENTE (produzione): la card Servizi richiede il redeploy DOPO la feature servizi (il redeploy dell'utente la precedeva) + rilancio scan agent.
+
+## Aggiornamento 2026-07-30 (6) — Falso positivo Windows Defender sullo scan agent (FIXATO, iteration_50)
+- BUG UTENTE (produzione): dopo il redeploy servizi/startup non si aggiornavano + 'Windows Defender ha trovato minacce' dopo il primo scan. RCA: Get-StartupList usava New-Object -ComObject WScript.Shell per risolvere i .lnk della cartella Esecuzione automatica -> pattern identico ai malware di persistenza -> euristica Defender blocca/quarantena lo script -> scan interrotto -> nessun dato inviato (per questo servizi e startup non comparivano).
+- FIX: (1) risoluzione .lnk riscritta senza COM: lettura bytes + regex Unicode/ASCII sul path .exe (_lnkTarget, testata con lnk sintetici); (2) rimosso anche l'ultimo COM Shell.Application da Get-CleanableMb (dimensione Cestino ora via Get-ChildItem -Force su $Recycle.Bin) segnalato dal testing agent; (3) nessuna stringa 'WScript'/'ComObject' in tutto lo script servito (grep = 0).
+- TEST: testing_agent iteration_50 backend 6/7 -> dopo fix ComObject 7/7 (suite /app/backend/tests/test_services_startup_flow.py riusata), frontend 100% (services-card, ordinamento startup, conteggi, badge). PARSE OK script reale 6009 righe.
+- ISTRUZIONI UTENTE: ripristinare/consentire il file in Defender (Protezione da virus > Cronologia protezione), redeploy, rilanciare scan. Se Defender risegnala, farsi dare il NOME esatto della minaccia per mitigazioni mirate (eventuale submission a Microsoft come falso positivo).
+- Tech-debt noto (dal testing agent): ps_agent.py 6000+ righe da modularizzare; aggiungere guard-test CI che greppa ComObject/WScript per evitare regressioni.
+
+## Aggiornamento 2026-07-31 (7) — Fix sync agent HTTP 400/422 (FATTO, verificato E2E)
+- BUG UTENTE: `[FAIL] specs+health+startup -> HTTP 400` e `[FAIL] running_apps (1) -> HTTP 422` durante il primo scan.
+- RCA 400: PS 5.1 invia il body Invoke-WebRequest in Latin-1 se il charset non è esplicito; i display name dei servizi Windows in italiano (lettere accentate, es. "attività") producono byte non-UTF8 -> FastAPI 400 "There was an error parsing the body". Riprodotto con curl body latin-1.
+- RCA 422: bug noto PS 5.1, ConvertTo-Json srotola gli array a 1 elemento dentro le hashtable -> {"running_apps":"chrome"} invece di ["chrome"] -> Pydantic 422. Confermato dal "(1)" nel log utente.
+- FIX: (1) ps_agent.py: tutti i POST verso /api/agent/report-specs (__FsPost, Send-Data, Send-Benchmark, Send-Games, boost_session) ora inviano bytes UTF-8 espliciti + ContentType 'application/json; charset=utf-8'. (2) models.py SpecsInput: field_validator mode=before su startup/services_audit/games/running_apps che wrappa gli scalari in lista (tollera anche client vecchi con array srotolati).
+- TEST: pwsh Parser su script completo generato = SYNTAX OK; e2e curl: running_apps scalare 200 (prima 422), payload completo con accenti UTF-8 200 (prima 400), regressione legacy list[str] 200; suite tests/test_agent_launch_uri.py 14/14; test obsoleto backend_test.py (startup formato list[str] pre-0.7.4) aggiornato al formato list[dict] e passa.
+- NOTA: lo script è servito dinamicamente da /api/agent/script -> i client ricevono il fix al prossimo avvio. In PRODUZIONE (forgefps.dev) serve il REDEPLOY.
+- NOTA AMBIENTE TEST: la suite pytest completa richiede REACT_APP_BACKEND_URL esportato (cookie Secure non inviati su http://localhost); molti login ravvicinati fanno scattare la protezione brute-force (mfa_required) causando falsi negativi nei run full-suite.
+
+## Aggiornamento 2026-07-31 (8) — Startup/Servizi: nascondi disattivati + tracking "Fatto" + filtro rumore (FATTO, verificato E2E)
+- Scelta utente: opzioni 1+a+c. (1) Voci già disattivate nascoste di default: startup mostra solo attive + pulsante "N già disattivate — mostra" (startup-toggle-off); servizi 'gia_ok' nascosti + pulsante "N già ok — mostra" (services-toggle-ok).
+- (a) Tracking "Fatto": report-specs confronta lo scan precedente — startup prima attiva ora disabled/rimossa -> pc_specs.startup_done; servizio consigliato (disattiva/valuta) sparito dall'audit (=Disabled/disinstallato, guard len>=10 anti scan parziali) -> pc_specs.services_done (cap 50, con ram_mb). Se la voce ricompare attiva viene rimossa dal done. UI: strisce verdi "✓ N disattivate dopo l'analisi: nomi" (startup-done-strip) e "✓ N servizi disattivati · ~MB RAM" (services-done-strip). /services/analyze ritorna anche "done".
+- (c) Filtro rumore: services_kb.is_startup_noise(name, publisher) regex (SecurityHealth, Realtek/Waves audio, Synaptics/ELAN touchpad, igfx*, ctfmon, TextInputHost...). Flag 'noise' applicato a READ-TIME in GET /pc-specs (KB aggiornabile senza rescan), escluse da UI ("N voci di sistema nascoste"), dall'analisi AI startup e dal tracking done.
+- TEST: E2E curl con utente dedicato (svc_test_4641@test.io / Test_Pass_123!): 3 scan simulati -> done popolati e ripuliti su riattivazione, noise mai nel done. Screenshot UI OK (strip verde, toggle, counter). Suite tests/test_services_startup_flow.py 7/7 (pwsh arm64 reinstallato in /opt/pwsh: NON persiste tra fork, riscaricare powershell-7.4.6-linux-arm64.tar.gz se serve).
+- LEZIONE: edit paralleli multipli sullo stesso file possono perdersi silenziosamente (uno dei search_replace su pc.py risultò "successful" ma non presente) -> verificare con grep dopo batch di edit sullo stesso file.
+
+## Aggiornamento 2026-07-31 (9) — MISSIONI Fase 1 (FATTO, verificato E2E + UI)
+- Scelta utente: gamification "missioni" opzione (a) Fase 1 completa. Missioni = obiettivi ATTIVI (max 3 slot) verificati sui dati reali; distinte dalle milestones (trofei passivi). XP nello stesso pool tier user_progress.
+- Backend: /app/backend/missions.py (catalogo 10 missioni + engine con 3 modes: delta=counter con baseline all'attivazione, since=conteggio docs con timestamp>=activated_at, absolute=health score) + routers/missions.py (GET /api/missions con auto-complete e just_completed one-shot, POST /activate/{code}, POST /abandon/{code}). Collection user_missions {active:{code:{activated_at,baseline}}, completed}. Starter auto-attivate al primo accesso: svc_purge, bench_first, advisor_consult.
+- Missioni: svc_purge(services_done x2, 60xp), startup_slim(startup_done x2, 50xp), bench_first(benchmark, 40xp), health_80(score>=80, 60xp), scan_week(3 scan, 40xp), advisor_consult(20xp), tweak_hero(3 tweak, 50xp), net_check(bufferbloat, 30xp), boost_match(boost session, 40xp), lab_scientist(lab completed, 100xp). Verifica sfrutta il tracking 'Fatto' (aggiornamento 8) via done_at >= activated_at.
+- Frontend: ActiveMissionsCard.jsx in cima alla Dashboard (progress bar, CTA diretta alla pagina giusta, toast just_completed); pagina Milestones.jsx riscritta con tab MISSIONI (attive con abbandona/CTA, disponibili con Attiva, completate) + tab TROFEI (contenuto precedente invariato, stessi data-testid); nav sidebar "Traguardi/Milestones" -> "Missioni/Missions"; i18n missions.* IT+EN.
+- TEST: curl E2E (starter, slots_full 400, abandon/activate, completamento svc_purge +60xp con 2 scan, just_completed one-shot), screenshot UI (dashboard card, tab, attivazione da UI 2->3 righe, trofei con XP aggregato 70), regressione test_full_regression_iter48 25/25, nuova suite tests/test_missions.py 5/5 (nota: xp assert >= per milestone concorrenti tipo first_scan).
+- FASE 2 (backlog): catena onboarding "Recluta" con step sequenziali. FASE 3: missioni settimanali proposte dall'AI sui dati del PC.
+
+## Aggiornamento 2026-07-31 (10) — MISSIONI Fase 2 (Catena Recluta) + Fase 3 (Settimanali AI) (FATTO, verificato E2E + UI)
+- Catena Recluta: 3 step SEQUENZIALI (recruit_scan 15xp -> recruit_optimize 25xp -> recruit_benchmark 30xp) con metriche LIFETIME (i veterani la completano subito al primo GET, con XP). Step successivo bloccato finche' il precedente non e' completo. Non occupa i 3 slot. Stato in user_missions.chain.completed. UI: stepper in cima al tab Missioni (nascosto se done) + riga badge RECLUTA nella dashboard card.
+- Settimanali AI: 2 missioni/settimana generate una volta per ISO week (user_missions.weekly {week_id, missions}). 8 template parametrici VERIFICABILI (w_svc, w_startup, w_scan, w_bench, w_boost, w_net, w_advisor, w_health con target dinamico health+3..+10). Generazione: se specs.data.cpu presente -> AI via ai_engine._run_json (session weekly-missions-{uid}-{week}, ~4.5s una tantum) con contesto reale (health, servizi azionabili, startup attive, bench recenti, net, boost) e "why_it/why_en" personalizzati; altrimenti/on-error -> fallback deterministico a regole. Scadenza/rinnovo automatico al cambio settimana (expires_at = lunedi 00:00 UTC). UI: card ciano con "Perche': ..." + righe badge WEEK in dashboard.
+- Verifica E2E notevole: 1 benchmark + 1 net test hanno completato 5 missioni in un colpo (bench_first, net_check, recruit_benchmark, w_bench, w_net) -> XP 110->280, tier Bronze->Silver.
+- TEST: tests/test_missions.py esteso a 8/8 (chain initial locked/active, weekly fallback per utente senza specs, avanzamento chain, benchmark completa chain+weekly). Screenshot UI nuovo utente (stepper 0/3 + week cards + dashboard badges) e veterano (chain nascosta, weekly completate verdi con why AI che cita RTX 3070/i7).
+- NOTA: pytest.ini usa xdist loadscope: i test dello stesso modulo restano in ordine sullo stesso worker. Il fallback weekly evita chiamate AI nei test (utenti senza specs.cpu).
+
+## Aggiornamento 2026-07-31 (11) — Layout mission-driven (1+2+3+4) (FATTO, verificato UI + regressione)
+- (1) Dashboard pulita: rimossa OnboardingChecklist (ridondante con Catena Recluta, funzione+memo eliminati da Dashboard.jsx); NextActionBanner "post-sync" soppresso quando ci sono missioni attive o catena incompleta; ActiveMissionsCard ora accetta prop `data` (fetch centralizzato in Dashboard) e mostra badge tier·XP nell'header (missions-card-tier).
+- (2) Missioni contestuali: nuovo componente MissionContextStrip.jsx ({metrics}) mostrato in 5 pagine: MyPc (services_done/startup_done/health_score/optimize_total), Benchmark (benchmarks/benchmarks_total), Network (net_tests), Gaming (boost_sessions), DesktopAgent (pc_scans/pc_scans_total/tweaks_applied). Matcha la prima missione attiva (chain step > weekly > active) col metric della pagina. Backend: _weekly_enrich ora include metric e mode.
+- (3) Celebrazione: MissionCelebration.jsx montato in Layout, overlay achievement-style (framer-motion, coda, 3s auto-dismiss, badge +XP) via CustomEvent globale "ff-mission-completed" dispatched da Dashboard/ActiveMissionsCard/MissionsTab/MissionContextStrip al posto dei vecchi toast. just_completed e' one-shot server-side quindi nessun doppio evento.
+- (4) Sidebar raggruppata: Dashboard+Missioni (icona Swords) in alto, poi sezioni IL TUO PC (My PC, Lab, Network, BIOS), GAMING (Gaming, AI Advisor), ACQUISTI (Build, Upgrade, Tracker), STRUMENTI (Agent, Report, Commands). i18n section.pc/section.gaming IT+EN.
+- TEST: screenshot E2E con utente reale (celebrazione visibile al login con +30 XP Network check, strip su My PC, nav a gruppi, checklist assente, tier badge presente); webpack compila; regressione test_missions 8/8 + iter48 25/25 = 33/33.
+
+## Aggiornamento 2026-07-31 (12) — Trofei segreti + rarità flotta + vantaggi tier (B+C) (FATTO, verificato E2E + UI)
+- TROFEI SEGRETI: 6 nuove milestone con "secret": True, category "secret" in milestones.py (totale catalogo 20): night_owl (flag night_owl_earned, scan ora UTC 22-04, set in report-specs), surgeon (flag, >=10 services_done+startup_done, check a ingest), mad_scientist (counter lab_experiments>=5, bump in lab.py _save via marker _bump_lab_milestone settato da _complete), speed_demon (flag, benchmark overall>=90 a ingest), mission_hunter (counter missions_completed>=10, bump in missions._award_xp), collector (games_detected unique>=15).
+- MASKING: GET /api/milestones maschera i segreti bloccati (name "???", desc generica, icon Lock, no reward). Rivelati solo da sbloccati.
+- RARITÀ: GET /api/milestones calcola rarity_pct per milestone (aggregation $unwind unlocked su user_progress, cache in-memory 1h). UI: badge Leggendario(<5%, viola)/Epico(<20%, ciano)/Raro(<50%, verde)/Comune + "X% dei giocatori".
+- VANTAGGI TIER: SLOTS_BY_TIER in missions.py {bronze:3, silver:4, gold:5, platinum:6} applicato a get_state (slots.max) e activate (_max_slots). Pannello "Vantaggi tier" nel tab Trofei (tier corrente evidenziato, futuri con lucchetto). Report PDF: header ora include "TIER · XP" (Report.jsx fetch /milestones/me nel Promise.all).
+- TEST: E2E curl (masking ???, speed_demon sbloccato con bench 92 -> nome rivelato + rarity 9.1% + 75xp -> tier gold -> slots.max 5; missions_completed counter=1 dopo completamento startup_slim). Screenshot UI (perks panel, badge SECRET viola, card ??? e Speed Demon rivelata con EPIC 9.1%). Regressione 40/40 (unico fail = pwsh mancante nel container, reinstallato -> passa; /opt/pwsh NON persiste, arm64!).
+- NOTA: la sessione auth cookie scade in fretta nei test curl -> rifare login prima di batch GET.
+
+## Aggiornamento 2026-07-31 (13) — Recap Post-Partita + Tweak validati dalla flotta (FATTO, verificato E2E + UI)
+- RECAP POST-PARTITA:
+  - Agent (ps_agent.py, boost loop): durante la sessione boostata accumula sample FPS da Get-Fps (gia' chiamato ogni 2s), latenza, hitches; temp GPU/CPU via Get-LhmTemps ogni ~30s (RCP_* script vars, reset a inizio/fine partita). A fine partita costruisce recap {fps_avg, fps_low (p1 dai sample), fps_min/max, samples, latency_ms, hitches, gpu_temp_max/avg, cpu_temp_max}, lo include nel payload boost_session e stampa "== RECAP PARTITA ==" in console. Sintassi PS validata (pwsh Parser OK).
+  - Backend (pc.py): boost_session con recap.fps_avg -> crea notifica type "recap" con confronto delta FPS vs sessione precedente stesso gioco ("+14 FPS vs sessione precedente"), link /app/gaming. GET /booster/sessions gia' esistente ritorna il recap.
+  - Frontend: PostGameRecap.jsx nel nuovo tab "Sessioni" di Gaming.jsx (gaming-tab-sessions): card ultima sessione (FPS grande con trend verde/rosso vs precedente, 1% low, GPU max/avg con rosso se >=83, latenza+hitch, chip azioni boost) + storico compatto 7 sessioni + empty states (nessuna sessione / sessione senza metriche = agent vecchio).
+- TWEAK VALIDATI DALLA FLOTTA:
+  - Backend: GET /api/lab/fleet-validation aggrega db.lab_fleet_stats (gia' popolata a fine sessione Lab: tweak_id, hw_class, tested, kept, delta_sum): per tweak success_pct globale + avg_delta_pct + blocco hw (stessa hw_class dell'utente via _hw_class). Sort: hw match, poi success, poi tested.
+  - Frontend: FleetValidationCard in Lab.jsx (fleet-validation-card, sotto SetupCard nel needSetup): griglia tweak con barra % successo (verde>=60/giallo>=40), n test, FPS medio, "tuo hw: X%" ciano se disponibile; empty state se flotta senza dati. 133 test reali gia' in preview DB.
+- TEST: curl E2E (2 boost_session -> notifica con delta +14, sessions con recap, fleet-validation 11 tweak/133 test), screenshot UI entrambe le pagine, regressione 40/40.
+
+## Aggiornamento 2026-07-31 — Sistema Crediti AI Advisor + limiti per piano (Earned Premium) (FATTO, test 7/7 BE + FE 100% iteration_51)
+- SCELTE UTENTE: 5 crediti benvenuto per tutti (anche esistenti, lazy-init); Pro 50 msg/settimana SENZA crediti extra (bloccato fino a lunedì); crediti guadagnati SCADONO a fine settimana ISO (welcome no).
+- BACKEND nuovo modulo `ai_credits.py`: get_ai_quota (starter=credits welcome+earned, pro=weekly used/50 contando chat_messages della settimana, streamer=unlimited), consume_credit (welcome prima, poi earned; ritorna bucket), refund_credit (rimborso su errore AI durante stream), grant_credits (bucket settimanale ai_earned_week, mai rompe il chiamante).
+- `routers/advisor.py`: POST /chat non è più Pro-gated → get_current_user + gating quota (402 no_credits / weekly_limit); nuovo GET /api/advisor/credits. Diagnose e Gameplay Doctor RESTANO Pro-gated.
+- REWARD: missions._award_xp → +2 crediti a ogni missione (normali/chain/weekly); milestones._evaluate_and_unlock → +5 bronze/silver, +10 gold, +15 platinum per trofeo.
+- FRONTEND Advisor.jsx: rimosso il lock full-page PlanUpgradeBanner (chat accessibile ai Free); CreditsBar (ai-credits-bar/count/empty/missions-link/upgrade-link) con breakdown welcome/earned, CTA missioni (/app/milestones) e Passa a Pro (/pricing); input+send disabilitati a crediti 0 (banner rosso); gestione 402 nel send; refresh quota dopo ogni messaggio; DiagnosePanel solo per is_pro. i18n advisor.credits_* IT+EN.
+- Test: /app/backend/tests/test_ai_credits.py (7/7), testing_agent iteration_51 100% BE+FE. Utente test: credits_test@frameforge.dev (starter, vedi test_credentials.md).
+- Nota review (non bloccante): consume_credit non transazionale su race di doppio click (mitigato da rate limit).
+
+## Aggiornamento 2026-08-01 — Pagina Pricing allineata al nuovo modello crediti
+- Pricing.jsx (IT+EN): Starter card "AI Advisor — 5 messaggi di benvenuto + crediti extra con missioni e trofei"; Pro card "50 messaggi/settimana" (era "chat illimitata") + riga "Diagnosi AI + Gameplay Doctor"; Streamer card "AI Advisor illimitata — nessun limite settimanale".
+- Tabella comparativa: riga "AI Advisor" con valori testuali ["5 msg + crediti da missioni", "50 msg/settimana", "Illimitata"] + nuova riga "Diagnosi AI + Gameplay Doctor" [no, sì, sì].
+- Verificato via screenshot IT+EN (card e tabella).
+
+## Aggiornamento 2026-08-01 (2) — Gating reale feature per piano (FATTO, test 17/17 BE + FE 100% iteration_52)
+- SCELTE UTENTE: Full Benchmark → Pro (era Streamer nel backend); Tracker 3 prodotti Free / 25 Pro (blocco solo NUOVI inserimenti, 402 tracker_limit); Storico salute 7gg Free / 90gg Pro (dati restano nel DB, risposta con limited_days:7); abbinamenti trofei→feature decisi dall'agent.
+- plan_gate.py: get_entitlements(db,user) → {adv_tweaks, history_90d, pdf_report, gpu_reference_full, full_benchmark, tracker_limit} (piano O trofeo); plan_402() helper. /api/subscriptions/status ora include entitlements.
+- pc.py: require_adv_tweaks dep → 402 adv_tweaks_required su net-result, prematch GET/PUT, booster GET/PUT/sessions; pc-benchmark/full → require_pro; PUT /alerts → Pro; health-history filtrato 7gg per Free; gpu-reference → reason plan_required se GPU fuori da FREE_GPU_MODELS (~20 modelli popolari) e senza catalogo completo.
+- products.py: track_product blocca oltre il limite piano (3/25) con 402 tracker_limit.
+- EARNED PREMIUM (milestones.py rewards): Tuning Solido(10 tweak)→adv_tweaks; Zen Mode(streak 7gg)→history_90d (sostituisce +1 slot profili); Overclock Master(50 tweak)→pdf_report; Speed Demon(secret)→gpu_reference_full. Legacy advanced_registry_tweaks onorato come adv_tweaks.
+- missions.py: net_check/boost_match esclusi da 'available' e w_net/w_boost dai weekly per chi non ha adv_tweaks (missioni non completabili).
+- FRONTEND: Network.jsx e Games.jsx → PlanUpgradeBanner compact (network-locked / booster-locked) su 402; FullBenchmarkReport tier streamer→pro; Report.jsx PDF con lucchetto+toast se non entitled (PNG resta free); HealthHistoryCard hint "ultimi 7 giorni" (health-history-limited); GpuReferenceCard branch plan_required (gpu-reference-locked + CTA pricing); api.js formatApiErrorDetail gestisce detail.message.
+- Test: /app/backend/tests/test_plan_gating.py (17/17), testing_agent iteration_52 100% BE+FE, regressione crediti AI OK. Note review non bloccanti: race teorica su count tracker, flash pdfOk iniziale.
+
+## Aggiornamento 2026-08-01 (3) — Missioni giornaliere con streak (FATTO, self-test BE completo + screenshot FE)
+- SCELTE UTENTE: rotazione intelligente SENZA AI (zero costi), 2 missioni/giorno, solo XP (niente crediti AI), streak bonus a 3 giorni (+30 XP) e ogni 7 (+70 XP).
+- missions.py: DAILY_TEMPLATES (12 template parametrici: scan, advisor x2, tweak x2, bench, svc, startup, net*, boost*, health dinamico, lab; *=solo con adv_tweaks); eligibility su stato reale (_weekly_context riusato); _pick_daily deterministico md5(uid:giorno) con anti-ripetizione (fresh prima di stale, funziona anche con pool piccolo no-specs); _eval_daily con reset a mezzanotte UTC, streak (conta al 1° completamento del giorno, si spezza se salti un giorno), bonus in just_completed (code streak_N, icon Flame) → celebration overlay.
+- XP refactor: _add_xp (solo XP) / _award_xp (missioni normali: XP+counter+2 crediti AI) / _award_xp_daily (XP+counter, NIENTE crediti — scelta utente).
+- GET /api/missions ora include "daily": {day_id, expires_at, missions, streak, streak_done_today}.
+- FRONTEND: ActiveMissionsCard (dashboard) → righe daily badge "Oggi" arancio #FF9F1C + fiamma streak nell'header (daily-streak-badge); Milestones.jsx → sezione "Missioni del giorno" (daily-block) con WeeklyMissionCard variant="daily" (testid daily-{template}) + hint streak. i18n missions.daily_* IT+EN.
+- TEST: curl e2e (generazione, completamento via advisor msg, streak 2→3 con bonus +30 in just_completed, crediti AI NON regalati dalle daily), simulazione rotazione 7 giorni tutti diversi, anti-repeat pool piccolo, 2 screenshot (dashboard + milestones) OK. Bug fixato in corsa: const streak mancante in ActiveMissionsCard (runtime error) → risolto e riverificato.
+
+## Aggiornamento 2026-08-01 (4) — MULTI-PC Fase 1 (FATTO, testing_agent iteration_53: 12/12 BE + FE 100%)
+- SCELTE UTENTE: scope completo Fase 1; ruoli PC (gaming/streaming/laptop/other) + nome custom; alert incrociati subito.
+- ARCHITETTURA: agent PS invia header X-Device ($env:COMPUTERNAME) su TUTTE le chiamate (replace_all in ps_agent.py su @{ 'X-Agent-Token' = $TOKEN }); db.devices registro {user_id, device_id(slug), hostname, name, role, first_seen, last_seen}; collezioni per-PC (pc_specs, pc_telemetry, health_history, net_results, benchmarks) con device_id.
+- devices.py: resolve_device (registrazione + limiti piano + ADOZIONE legacy: al 1° device i doc senza device_id vengono stampati con update_many, users.active_device settato), get_active_device (users.active_device, fallback primario), device_filter (filtro web-side), list_devices (online <5min, health per device).
+- routers/devices.py: GET /api/devices {devices, active, limit}; PUT rename/role; POST /{id}/activate; DELETE (+ purge dati per-PC + reset overlay source_device + ripiego attivo su primario).
+- pc.py: agent endpoints (report-specs, telemetry, netresult, pc-specs-agent, agent/script version) risolvono il device dall'header; ~28 query web convertite a device_filter via script; _check_temp_alerts con prefisso [NomePC] e cooldown per-device (alert incrociati: la notifica arriva ovunque tu sia).
+- LIMITI PIANO: entitlements.device_limit = 1 Free / 3 Pro / 99 Streamer; nuovo device oltre limite → 402 code=device_limit (verificato: starter bloccato al 2° PC).
+- OVERLAY CROSS-PC: overlay_tokens.source_device (PUT /api/overlay/config, validato, ''=PC attivo); overlay_data legge telemetria/net/health del device sorgente → overlay sul PC streaming può mostrare i dati del PC gaming (verificato gpu 88 vs 25).
+- FRONTEND: DeviceSwitcher.jsx (dropdown header, visibile solo con 2+ PC, online dot + health, switch → reload); DevicesPanel.jsx in /app/pc (rename inline, select ruolo, attiva, elimina con conferma, contatore N/limite); ObsOverlayPanel sezione "Sorgente dati (Multi-PC)" (overlay-source-active / overlay-source-{id}). Bilingue via dict locali.
+- RETROCOMPATIBILITÀ: agent legacy senza X-Device → device primario, nessun doc orfano.
+- Note review (non bloccanti): reload() dopo switch (MVP ok); cookie banner sovrappone il preview overlay su /app/live (preesistente); device_limit non esposto in /subscriptions/status (frontend usa /api/devices).
+- Admin in preview ha 2 device simulati (gaming-rig attivo + stream-box "PC Streaming") per demo.
+
+## Aggiornamento 2026-08-01 (5) — Auto-Pilot + Confronto PC + Promemoria Streak (FATTO, iteration_54: 12/12 BE + FE 100%)
+- SCELTE UTENTE: Auto-Pilot Free 1/settimana + Pro/Streamer illimitato; Confronto PC come sezione in "Il mio PC"; promemoria streak push ~19:00 IT.
+- AUTO-PILOT: routers/autopilot.py — GET /status {limit,used,remaining,latest}, POST /start (quota ISO week per Free → 402 autopilot_limit; pending precedenti → expired), POST /agent/result (token+X-Device, compute_health before/after, delta_score, bump tweaks_applied → missioni/trofei si completano da soli). ps_agent.py: mode 'autopilot' (prima di restore): itera $script:TWEAKS risk=safe con state attuabile, Invoke-ApplyTracked + Save-Backup, Get-Health prima/dopo, POST risultato + Send-Data. Sintassi PS validata con /opt/pwsh/pwsh (installato arm64 in questo pod). Mode aggiunto alle 2 _ALLOWED_URI_MODES. Frontend: AutoPilotCard.jsx in Dashboard (badge quota, useSilentLaunch mode=autopilot con detectDone su /status, report before→after con delta colorato, lock+CTA Pro per Free esaurito).
+- CONFRONTO PC: GET /api/devices/compare (health latest, live avg su ultimi 30 sample, specs per device); DeviceCompare.jsx in MyPc (2+ PC): colonne per device, badge rosso "Sta soffrendo" sul peggiore (score min, tie-break GPU più calda).
+- PROMEMORIA STREAK: server.py scheduled_streak_reminders + APScheduler cron hour=17 UTC (19 IT): push a chi ha daily.streak>=1 e streak_day==ieri, idempotente via daily.reminder_day. Testato positivo+idempotente con chiamata diretta.
+- Note minori (non fatte): warning Recharts width(-1) preesistente; spacing textContent del report (visivamente ok da screenshot).
+
+## Aggiornamento 2026-08-01 (6) — Ripristino Auto-Pilot dal report (FATTO, self-test curl+screenshot)
+- ps_agent.py: mode 'restore' ora notifica il cloud (POST /api/autopilot/agent/restore-done) dopo Invoke-Restore. Sintassi PS rivalidata con pwsh.
+- autopilot.py: endpoint /agent/restore-done → ultimo run 'done' → status 'reverted' + reverted_at; /status e quota includono 'reverted'.
+- AutoPilotCard.jsx: pulsante "Ripristina tutto" (autopilot-restore-btn, secondo useSilentLaunch mode=restore con detectDone su status reverted) visibile solo su run done con tweak applicati; badge "Ripristinato" (autopilot-reverted-badge) sui run reverted.
+- Reversibilità Auto-Pilot confermata: Invoke-ApplyTracked salva i valori originali in backup persistito (Save-Backup); restore globale + granulare (restore-one) preesistenti.
+
+## Aggiornamento 2026-08-01 (7) — Fix UX push bloccate dal browser (FATTO, self-test screenshot)
+- Diagnosi bug utente "push non si attivano" (Chrome desktop, produzione): permesso notifiche BLOCCATO a livello browser per forgefps.dev (non un bug del codice; VAPID/sw.js verificati OK sia in preview che su forgefps.dev).
+- push.js: enablePush distingue permesso "denied" (blocked) vs prompt chiuso (dismissed) con err.code.
+- Layout.jsx: toast con istruzioni di sblocco (lucchetto → Notifiche → Consenti, 10s) + hint amber persistente data-testid="push-unblock-hint" sotto il pulsante quando lo stato è denied; setPushState("denied") dopo tentativo bloccato.
+- i18n IT/EN: push_blocked_help, push_dismissed_help, push_unblock_hint.
+- NOTA: serve REDEPLOY su forgefps.dev per vedere il fix in produzione. L'utente deve comunque sbloccare il permesso da Chrome.
+
+## Aggiornamento 2026-08-01 (8) — Fix Auto-Pilot "non risponde" (FATTO, self-test curl+pwsh)
+- ROOT CAUSE: l'exe installato v0.8.0 ha una whitelist silent hardcoded SENZA 'autopilot' → usciva muto senza lanciare PowerShell → timeout 5min → toast "Auto-Pilot non risponde". Sync funzionava perché 'sync' è in whitelist. Produzione era già redeployata (route autopilot presenti su forgefps.dev).
+- FIX (zero-rebuild, funziona con exe 0.8.0 già installati dopo redeploy):
+  - pc.py agent_launch_uri: alias autopilot→'cleanup' nell'URI firmato ('cleanup' è whitelistato nell'exe e libero nello script PS)
+  - ps_agent.py: dispatch `if ($MODE -eq 'autopilot' -or $MODE -eq 'cleanup')` — sintassi PS validata con pwsh Parser
+- Verifiche: HMAC su 'cleanup|ts' valido come lo verificherebbe l'exe; whitelist 0.8.0 accetta 'cleanup'; e2e start→agent result→status done OK
+- agent-build/forgefps_agent.py aggiornato per build futura 0.8.1: +autopilot in whitelist silent, +lab/autopilot in _PS_UI_MODES, versione 0.8.1 (vedi REBUILD_v0.8.1.md). AGENT_ZIP_UPSTREAM NON toccato (resta 0.8.0 finché non esiste la release).
+- NOTA: il 1-click del Lab (silent=0, mode=lab) è anch'esso non gestito dall'exe 0.8.0 (apre GUI optimize) — si sistema solo con rebuild 0.8.1. Non segnalato dall'utente.
+- RICHIEDE REDEPLOY su forgefps.dev.
+
+## Aggiornamento 2026-08-01 (9) — Preparazione release Agent v0.8.1 (IN ATTESA UTENTE)
+- Preparati: version_info.txt e forgefps-agent.manifest → 0.8.1.0; changelog.json entry 0.8.1 (verificata via /api/changelog); forgefps_agent.py già 0.8.1 (py_compile OK); REBUILD_v0.8.1.md.
+- PASSI RIMANENTI (dipendono dall'utente): 1) push dei 3 file su repo GitHub WjRKO/ForgeFPS, 2) tag v0.8.1 → Actions builda la release, 3) l'utente fornisce URL release + SHA256 → aggiornare AGENT_ZIP_UPSTREAM in /app/backend/routers/pc.py e AGENT_EXE_URL/SHA/VERSION/DATE in /app/frontend/src/config/agent.js, 4) redeploy.
+- NON aggiornare AGENT_ZIP_UPSTREAM prima che la release esista (romperebbe download/auto-update).

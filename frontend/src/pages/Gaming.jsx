@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Swords, Gamepad2 } from "lucide-react";
+import { Swords, Gamepad2, Timer } from "lucide-react";
 import Games from "./Games";
 import Profiles from "./Profiles";
+import { MissionContextStrip } from "@/components/MissionContextStrip";
+import { PostGameRecap } from "@/components/PostGameRecap";
 
 const TABS = [
   { id: "games", key: "gaming.tab_games", icon: Swords },
+  { id: "sessions", key: "gaming.tab_sessions", icon: Timer },
   { id: "profiles", key: "gaming.tab_profiles", icon: Gamepad2 },
 ];
 
@@ -14,6 +17,9 @@ export default function Gaming({ initialTab = "games" }) {
   const { t } = useTranslation();
   return (
     <div className="fade-up" data-testid="gaming-page">
+      <div className="max-w-6xl mx-auto">
+        <MissionContextStrip metrics={["boost_sessions"]} />
+      </div>
       <div className="max-w-6xl mx-auto mb-4 flex gap-2">
         {TABS.map((tb) => (
           <button key={tb.id} data-testid={`gaming-tab-${tb.id}`} onClick={() => setTab(tb.id)}
@@ -22,7 +28,9 @@ export default function Gaming({ initialTab = "games" }) {
           </button>
         ))}
       </div>
-      {tab === "games" ? <Games /> : <Profiles />}
+      {tab === "games" ? <Games /> : tab === "sessions" ? (
+        <div className="max-w-6xl mx-auto"><PostGameRecap /></div>
+      ) : <Profiles />}
     </div>
   );
 }

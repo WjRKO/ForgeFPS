@@ -1,0 +1,25 @@
+{
+  "summary": "Full E2E testing of the AI Advisor credits system (Earned Premium model) — backend + frontend. Backend: 7/7 pytest passing (streamer unlimited, starter mode=credits with welcome+earned+total shape, chat consumes welcome first, 402 no_credits when zero, grant_credits via missions +2 and trophy bronze +5, diagnose still Pro-gated for starter). Additionally verified via ad-hoc script: Pro plan → mode=weekly limit=50, chat increments used counter without touching welcome/earned; resets_at correctly returns next Monday (2026-08-03 given container date Fri 2026-07-31). Frontend: /app/advisor renders ai-credits-bar with count '5 AI messages left · 3 welcome · 2 earned (expire Monday)', ai-credits-missions-link navigates to /app/milestones, ai-credits-upgrade-link navigates to /pricing. After sending a chat message the bar decrements 5→4 (welcome consumed first, then earned) and the AI response streams normally with session persistence in the left sidebar. When credits are zeroed in mongo, the red 'AI credits exhausted' banner appears (ai-credits-empty visible), chat-input and chat-send-btn are BOTH disabled. Admin (streamer) sees 'Unlimited AI messages · Streamer plan' in ai-credits-bar and DiagnosePanel (diagnose-panel, diagnose-result etc.) is present.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_ai_credits.py",
+    "/app/test_reports/pytest/ai_credits.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ai_credits.consume_credit performs two sequential update_one calls without a transaction — under a rare race two concurrent chat requests could both decrement the same bucket. Not blocking (rate limit + user click flow) but worth guarding with a $bit/optimistic condition or using find_one_and_update.",
+    "get_ai_quota lazily writes ai_welcome_credits=5 for existing starter users but only when they hit /credits or /chat; this is by design (spec says 'lazily-initialized') and works correctly.",
+    "Advisor.jsx (525 lines) is close to the 700-line guideline — consider splitting CreditsBar and chat send/stream logic into hooks/components if it grows further.",
+    "resets_at uses timezone-naive comparison but week_start_iso/week_end_iso are UTC-based — OK; document 'Monday 00:00 UTC' in the UI copy to avoid confusion for non-EU users.",
+    "advisor_chat should ideally consume_credit ONLY after the AI call succeeds; currently a stream error still burns a credit (see gen() where error is captured but consume already happened above)."
+  ],
+  "updated_files": ["/app/backend/tests/test_ai_credits.py"],
+  "success_rate": {"backend": "100% (7/7 pytest + pro/streamer sanity via script)", "frontend": "100%"},
+  "test_credentials": "admin@boostpc.io / 4zWK4o_xSw5prU-2b7w9dQ ; credits_test@frameforge.dev / Cr3d1ts!Test99",
+  "seed_data_creation": "Test user left as starter with ai_welcome_credits=3, ai_earned_credits=2, ai_earned_week=2026-W31 (matches container ISO week). Admin plan untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All credits paths verified. If E1 changes consume_credit ordering (post-stream), re-run tests/test_ai_credits.py — the no_credits and mission grant tests will still hold. For Pro weekly limit=0 boundary case, either seed 50 user messages in chat_messages for the current week or temporarily lower PRO_WEEKLY_LIMIT.",
+  "rca of the issue": "N/A — no functional bug found. Minor observation: consume_credit runs BEFORE ai_engine.stream_advisor, so an AI outage would still charge the user a credit. Recommend moving consume_credit inside the streaming generator's success branch, or refund on exception (not urgent)."
+}

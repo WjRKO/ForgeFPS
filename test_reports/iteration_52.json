@@ -1,0 +1,25 @@
+{
+  "summary": "E2E testing of SaaS plan gating (Starter/Pro/Streamer) + Earned Premium unlocks. Backend: 17/17 pytest passing in /app/backend/tests/test_plan_gating.py — subscriptions/status entitlements shape (starter false/3 vs streamer true/25), all adv_tweaks-required 402s (net-result, prematch GET/PUT, booster GET/PUT/sessions, pc-benchmark/full, alerts PUT), GET /api/alerts remains 200, trophy flag features.adv_tweaks=True flips booster+net-result to 200, tracker_limit 402 at 4th product with code='tracker_limit', health-history limited_days=7 for starter and absent for admin, plan='pro' promotion opens all gated endpoints, milestones catalog exposes rewards adv_tweaks/pdf_report/history_90d and secret speed_demon masked, missions catalog excludes net_check+boost_match from 'available' when adv_tweaks locked. Frontend: starter sees data-testid='network-locked' on /app/network, 'booster-locked' on /app/gaming (booster-card absent), report-export-pdf-btn shows lucide-lock icon and clicking after a Before-capture triggers the exact toast 'PDF export is a Pro feature — or unlock it with the Overclock Master trophy (50 tweaks).', ai-credits-bar still visible on /app/advisor (regression OK), dashboard/milestones load without errors. Tracker UI at /app/tracker with 3 seeded products shows the inline red error 'Hai raggiunto il limite di 3 prodotti tracciati del tuo piano. Passa a Pro per 25 prodotti.' when attempting a 4th add — no crash. Admin (streamer): network-page renders (no lock), booster-card present (no booster-locked), no fullbench-locked. All test data cleaned up post-run.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_plan_gating.py",
+    "/app/test_reports/pytest/plan_gating.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "products.py:track_product uses count_documents + insert_one without a lock — under concurrent 4th-product race two inserts could both pass the check. Low impact given per-user rate & UI serial flow but consider a Mongo find_one_and_update guard or a unique compound sequence.",
+    "pc.py health_history filter uses string comparison on ISO timestamps (str(p.get('created_at')) >= cutoff). Works because ISO-8601 UTC strings sort lexicographically, but only if 'created_at' is always stored as ISO string with the same timezone offset. If a doc ever stored as datetime object or with a different offset, this filter breaks silently. Recommend parsing to datetime for the comparison.",
+    "plan_gate.get_entitlements does one extra DB read (user_progress.find_one) on every /subscriptions/status call. Not a hotspot today but consider caching within the request (contextvar) since multiple endpoints (missions, milestones, pc router) recompute it per call.",
+    "Report.jsx: pdfOk defaults to true and is set from entitlements; if /subscriptions/status is slow, briefly a starter user sees the PDF icon (not lock) before the fetch resolves. Suggest initial pdfOk=false or a small skeleton state to avoid the misleading unlocked flash.",
+    "milestones.py: for the secret trophy 'speed_demon', when locked the reward object is masked to None. Frontend consumers looking for reward.key === 'gpu_reference_full' won't find it until the secret is triggered — intentional but worth documenting so the catalog listing UI doesn't fail lookup."
+  ],
+  "updated_files": ["/app/backend/tests/test_plan_gating.py"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100%"},
+  "test_credentials": "admin@boostpc.io / 4zWK4o_xSw5prU-2b7w9dQ (streamer) ; credits_test@frameforge.dev / Cr3d1ts!Test99 (starter)",
+  "seed_data_creation": "During TestTrackerLimit and TestHealthHistoryLimit and frontend tracker UI test: seeded 3 TEST_ products + 4 TEST_ health_history points for starter, plus temporary plan='pro' flip and features.adv_tweaks=True flag. ALL cleaned up in teardown fixture (_restore_starter) and after Playwright run — verified: plan='starter', features={}, products=0. Admin plan untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Full gating verified end-to-end. If E1 changes the trophy-flag key naming or the tracker_limit constant, only two spots need updating: plan_gate.get_entitlements and the test's parametrize list. The pytest file uses python-dotenv to auto-load /app/frontend/.env for REACT_APP_BACKEND_URL. Run with: pytest /app/backend/tests/test_plan_gating.py -v -o addopts=''  (rootdir pytest.ini forces xdist which the file supports scope=module fixtures for). Nothing pending for E1 to fix.",
+  "rca of the issue": "N/A — no functional bug. All 17 backend gates + 4 frontend flows (network lock, booster lock, report PDF lock toast, tracker limit UI) + admin unlocked flows work exactly as spec'd."
+}

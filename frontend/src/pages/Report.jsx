@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { Lock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Zap, HeartPulse, Gauge, Activity, Cpu, Share2, RotateCcw, Loader2, Camera, ArrowRight, TrendingUp, TrendingDown, Minus, FileText } from "lucide-react";
@@ -21,6 +22,7 @@ const DICT = {
     reset: "Reset",
     export: "Esporta PNG",
     export_pdf: "Esporta PDF",
+    pdf_locked: "L'export PDF è del piano Pro — o sbloccalo con il trofeo Overclock Master (50 tweak).",
     exported: "Report esportato!",
     notes: "Note per il cliente (opzionale)",
     notes_ph: "Es. Boost eseguito il... Interventi: piano energetico, DNS Cloudflare, bufferbloat SQM. Consigli: aggiornare driver GPU.",
@@ -68,6 +70,7 @@ const DICT = {
     reset: "Reset",
     export: "Export PNG",
     export_pdf: "Export PDF",
+    pdf_locked: "PDF export is a Pro feature — or unlock it with the Overclock Master trophy (50 tweaks).",
     exported: "Report exported!",
     notes: "Notes for the client (optional)",
     notes_ph: "E.g. Boost done on... Applied: power plan, Cloudflare DNS, bufferbloat SQM. Recommendations: update GPU drivers.",
@@ -239,11 +242,15 @@ export default function Report() {
   const [report, setReport] = useState({ before: null, after: null, deltas: {} });
   const [busy, setBusy] = useState("");
   const [notes, setNotes] = useState("");
+  const [pdfOk, setPdfOk] = useState(true);
 
   const load = useCallback(async () => {
     try { const { data } = await api.get("/report"); setReport(data); } catch (e) { console.error("load report failed", e); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    api.get("/subscriptions/status").then(({ data }) => setPdfOk(!!data?.entitlements?.pdf_report)).catch(() => {});
+  }, []);
 
   const capture = async (phase) => {
     setBusy(phase);
@@ -277,13 +284,15 @@ export default function Report() {
 
   const exportPdf = async () => {
     if (!cardRef.current) return;
+    if (!pdfOk) { toast.error(c.pdf_locked); return; }
     setBusy("pdf");
     try {
-      const [{ toPng }, { jsPDF }, historyRes, tweaksRes] = await Promise.all([
+      const [{ toPng }, { jsPDF }, historyRes, tweaksRes, msRes] = await Promise.all([
         import("html-to-image"),
         import("jspdf"),
         api.get("/health-history").catch(() => ({ data: { points: [] } })),
         api.get("/advisor/applied-tweaks").catch(() => ({ data: [] })),
+        api.get("/milestones/me").catch(() => ({ data: null })),
       ]);
       const dataUrl = await toPng(cardRef.current, { pixelRatio: 2, backgroundColor: "#0A0A0C", cacheBust: true });
       const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
@@ -297,7 +306,8 @@ export default function Report() {
       doc.setTextColor(229, 255, 0); doc.setFont("helvetica", "bold"); doc.setFontSize(20);
       doc.text("FRAMEFORGE", margin, 42);
       doc.setTextColor(160, 160, 160); doc.setFont("helvetica", "normal"); doc.setFontSize(11);
-      doc.text(`${c.pdf_title}  ·  ${new Date().toLocaleDateString()}`, margin, 58);
+      const tierLine = msRes.data?.tier ? `  ·  ${String(msRes.data.tier).toUpperCase()} ${msRes.data.xp} XP` : "";
+      doc.text(`${c.pdf_title}  ·  ${new Date().toLocaleDateString()}${tierLine}`, margin, 58);
       // card image
       const ih = (img.height / img.width) * cw;
       doc.addImage(dataUrl, "PNG", margin, 90, cw, ih);
@@ -434,7 +444,7 @@ export default function Report() {
         </button>
         <button onClick={exportPdf} disabled={!!busy || (!before && !after)} data-testid="report-export-pdf-btn"
           className="inline-flex items-center gap-2 border border-[#E5FF00]/60 text-[#E5FF00] font-bold px-5 py-2.5 hover:bg-[#E5FF00]/10 transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
-          {busy === "pdf" ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />} {c.export_pdf}
+          {busy === "pdf" ? <Loader2 size={15} className="animate-spin" /> : (!pdfOk ? <Lock size={15} /> : <FileText size={15} />)} {c.export_pdf}
         </button>
       </div>
 

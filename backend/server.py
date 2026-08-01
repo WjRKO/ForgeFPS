@@ -10,7 +10,7 @@ from database import db, client
 from auth import build_auth_router, seed_admin
 from helpers import refresh_product_price
 from settings import get_cors_origins, get_cors_origin_regex
-from routers import advisor, builds, products, pc, push_routes, admin, profiles, discord as discord_router, subscriptions, payments, overlay, community, milestones
+from routers import advisor, builds, products, pc, push_routes, admin, profiles, discord as discord_router, subscriptions, payments, overlay, community, milestones, lab, missions, devices as devices_router, autopilot as autopilot_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("boostpc")
@@ -20,7 +20,7 @@ auth_router, get_current_user = build_auth_router(db)
 scheduler = AsyncIOScheduler()
 
 app.include_router(auth_router)
-for module in (advisor, builds, products, pc, push_routes, admin, profiles, discord_router, subscriptions, payments, overlay, community, milestones):
+for module in (advisor, builds, products, pc, push_routes, admin, profiles, discord_router, subscriptions, payments, overlay, community, milestones, lab, missions, devices_router, autopilot_router):
     app.include_router(module.build(get_current_user))
 
 
@@ -65,7 +65,7 @@ async def security_headers(request: Request, call_next):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "style-src 'self' 'unsafe-inline'; "
-            "script-src 'self' 'unsafe-inline'; "
+            "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; "
             "connect-src 'self'; "
             "img-src 'self' data:; "
             "font-src 'self' data:; "
@@ -153,6 +153,27 @@ def _write_test_credentials():
         "- POST /api/auth/logout\n- POST /api/auth/refresh\n")
 
 
+async def scheduled_streak_reminders():
+    """~19:00 IT (17:00 UTC): push a chi ha una streak attiva ma nessuna daily completata oggi."""
+    from missions import _day_id, _yesterday_id
+    import push
+    today, yday = _day_id(), _yesterday_id()
+    cur = db.user_missions.find({"daily.streak": {"$gte": 1}, "daily.streak_day": yday,
+                                 "daily.reminder_day": {"$ne": today}})
+    async for doc in cur:
+        uid = doc["user_id"]
+        streak = int((doc.get("daily") or {}).get("streak") or 0)
+        try:
+            await push.send_push_to_user(db, uid, {
+                "title": "🔥 Streak a rischio!",
+                "body": f"La tua streak di {streak} giorni scade a mezzanotte. Completa una missione giornaliera per salvarla.",
+                "url": "/app/milestones"})
+        except Exception:
+            logger.warning("Streak reminder push failed for %s", uid)
+        await db.user_missions.update_one(
+            {"user_id": uid}, {"$set": {"daily.reminder_day": today}})
+
+
 @app.on_event("startup")
 async def startup():
     await _ensure_indexes()
@@ -160,6 +181,7 @@ async def startup():
     _write_test_credentials()
     scheduler.add_job(scheduled_price_check, "interval", minutes=45, id="price_check", replace_existing=True)
     scheduler.add_job(scheduled_trial_reminders, "cron", hour=9, minute=0, id="trial_reminders", replace_existing=True)
+    scheduler.add_job(scheduled_streak_reminders, "cron", hour=17, minute=0, id="streak_reminders", replace_existing=True)
     scheduler.start()
     # Discord: annuncia release nuove (non-blocking se webhook non configurato)
     try:

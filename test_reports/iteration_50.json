@@ -1,0 +1,37 @@
+{
+  "summary": "Backend + Frontend regression testing for FrameForge Windows Services card + Startup detection fix (anti-Defender). 6/7 backend tests pass. Frontend fully verified: services-card visible on /app/pc with correct DiagTrack=disattiva and Fax=gia_ok mapping; startup section shows '1 active · 1 already disabled' counts with Discord (ACTIVE badge) on top and Steam (DISABLED, dimmed) at bottom. Both cards persist after reload. PowerShell agent script parses cleanly (>5900 lines, ~300KB) and contains all required functions (Get-ServicesAudit, Get-StartupList, _lnkTarget, StartupApproved) with NO 'WScript' references. HOWEVER, one 'ComObject' reference is still present in Get-CleanableMb (line 398, New-Object -ComObject Shell.Application for Recycle Bin size). Per spec the string 'ComObject' must not appear anywhere in the script.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/agent/script", "issue": "Line 398 in /app/backend/ps_agent.py (Get-CleanableMb) still uses 'New-Object -ComObject Shell.Application' to enumerate the Recycle Bin. Spec requires the script to contain no ComObject reference at all (anti-Defender). This function runs during Get-Health (each report), not only during scan, so it could still be flagged by Defender heuristics. Replace with alternative (e.g. read %USERPROFILE%\\$Recycle.Bin size via Get-ChildItem, or drop RB size entirely)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_services_startup_flow.py",
+    "/app/test_reports/pytest/services_startup_flow.xml"
+  ],
+  "action_items": [
+    "Remove the last 'New-Object -ComObject Shell.Application' from /app/backend/ps_agent.py Get-CleanableMb (line 398) to fully honour the anti-Defender guarantee promised in the bug fix note.",
+    "Optional: add a CI-level guard test that greps ps_agent.py for 'ComObject' / 'WScript' so this doesn't regress."
+  ],
+  "critical_code_review_comments": [
+    "ps_agent.py is 6021 lines — well past the 700-line guideline. It should be split into modules (health, startup, services, benchmark, sync) and assembled via includes.",
+    "Anti-Defender promise is only partially delivered: WScript.Shell removed, ComObject partially removed (Get-StartupList clean, Get-CleanableMb still uses Shell.Application).",
+    "analyze_services in services_kb.py is deterministic and well structured; good separation from LLM."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_services_startup_flow.py (new)"
+  ],
+  "success_rate": {"backend": "86% (6/7)", "frontend": "100%"},
+  "test_credentials": "admin@boostpc.io / 4zWK4o_xSw5prU-2b7w9dQ",
+  "seed_data_creation": "Test posted mock services_audit (DiagTrack running, Fax stopped) and startup list (Discord enabled, Steam disabled) via /api/agent/report-specs for the admin user in pc_specs collection. These are the same records shown in the frontend screenshots.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Only outstanding issue is line 398 ComObject usage in Get-CleanableMb. Everything else — PS parser (pwsh at /opt/pwsh/pwsh), services E2E flow, startup E2E flow (Steam filtered out from AI call), UI services-card + startup ordering with counts and Attivo/Disattivato badges — is verified working. AI call count for startup analyze is 1 (single POST triggers a single ai_engine.analyze_startup).",
+  "rca of the issue": "The bug fix note claims 'nessun oggetto COM shell nello scan' and removed WScript.Shell/COM from Get-StartupList (now uses _lnkTarget with byte-read + regex — verified). But Get-CleanableMb still instantiates Shell.Application to sum Recycle Bin items. It runs on every Get-Health cycle, so Defender may still see a ComObject shell instantiation from the agent process and quarantine, defeating the stated fix goal. Mitigation: read %SystemDrive%\\$Recycle.Bin\\<SID>\\ file sizes directly with Get-ChildItem -Force, or omit RB from cleanable estimate."
+}

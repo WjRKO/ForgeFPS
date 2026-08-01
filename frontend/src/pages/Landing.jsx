@@ -271,10 +271,15 @@ function FeatureRow({ eyebrow, title, desc, bullets, accent, reverse, mockup }) 
 }
 
 export default function Landing() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const enMeta = i18n.language?.startsWith("en");
   usePageMeta(
-    "FrameForge — AI Performance Command Center per gamer & streamer",
-    "FrameForge ottimizza il tuo PC gaming con consigli AI, telemetria live (FPS, temperature, input lag), build su misura e price tracking dei componenti. Gratis, in meno di un minuto.",
+    enMeta
+      ? "FrameForge — AI Performance Command Center for gamers & streamers"
+      : "FrameForge — AI Performance Command Center per gamer & streamer",
+    enMeta
+      ? "FrameForge optimizes your gaming PC with AI advice, live telemetry (FPS, temperatures, input lag), tailored builds and component price tracking. Free, in under a minute."
+      : "FrameForge ottimizza il tuo PC gaming con consigli AI, telemetria live (FPS, temperature, input lag), build su misura e price tracking dei componenti. Gratis, in meno di un minuto.",
   );
 
   const trust = [

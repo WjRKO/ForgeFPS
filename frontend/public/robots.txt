@@ -1,3 +1,39 @@
+# AI SEARCH crawlers (citano e linkano il sito nelle risposte): AMMESSI
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /app/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /app/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /app/
+
+User-agent: Perplexity-User
+Allow: /
+Disallow: /app/
+
+User-agent: Claude-SearchBot
+Allow: /
+Disallow: /app/
+
+User-agent: Claude-User
+Allow: /
+Disallow: /app/
+
+User-agent: DuckAssistBot
+Allow: /
+Disallow: /app/
+
+User-agent: MistralAI-User
+Allow: /
+Disallow: /app/
+
+# AI TRAINING crawlers (GPTBot, ClaudeBot, CCBot, Bytespider, Google-Extended,
+# meta-externalagent, ...): bloccati dal blocco gestito Cloudflare a monte.
+
 User-agent: *
 Allow: /
 Disallow: /app/

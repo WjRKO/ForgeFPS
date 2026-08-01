@@ -1,10 +1,11 @@
 import { NavLink, useNavigate, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal, TerminalSquare, Swords, Gauge, Menu, Settings, FileBarChart, Sparkles, MessageSquare, Trophy } from "lucide-react";
+import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal, TerminalSquare, Swords, Gauge, Menu, Settings, FileBarChart, Sparkles, MessageSquare, Trophy, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { DeviceSwitcher } from "@/components/DeviceSwitcher";
 import FreshnessBadge from "@/components/FreshnessBadge";
 import OnboardingTour from "@/components/OnboardingTour";
 import MobileHandoffModal from "@/components/MobileHandoffModal";
@@ -13,6 +14,7 @@ import ProfileMenu from "@/components/ProfileMenu";
 import FeedbackModal from "@/components/FeedbackModal";
 import AgentUpdateBanner from "@/components/AgentUpdateBanner";
 import XpSidebarWidget from "@/components/XpSidebarWidget";
+import { MissionCelebration } from "@/components/MissionCelebration";
 import { Smartphone } from "lucide-react";
 import api from "@/lib/api";
 import { pushSupported, getPushState, enablePush, disablePush } from "@/lib/push";
@@ -20,22 +22,27 @@ import { pushSupported, getPushState, enablePush, disablePush } from "@/lib/push
 const NAV_GROUPS = [
   { section: null, items: [
     { to: "/app", label: "nav.dashboard", icon: LayoutDashboard, end: true, id: "dashboard" },
+    { to: "/app/milestones", label: "nav.milestones", icon: Swords, id: "milestones" },
+  ]},
+  { section: "section.pc", items: [
     { to: "/app/pc", label: "nav.pc", icon: Activity, id: "pc" },
-    { to: "/app/advisor", label: "nav.advisor", icon: MessageSquareCode, id: "advisor" },
+    { to: "/app/lab", label: "nav.lab", icon: FlaskConical, id: "lab" },
+    { to: "/app/network", label: "nav.network", icon: Gauge, id: "network" },
+    { to: "/app/bios", label: "nav.bios", icon: SlidersHorizontal, id: "bios" },
+  ]},
+  { section: "section.gaming", items: [
     { to: "/app/gaming", label: "nav.gaming", icon: Gamepad2, id: "gaming" },
-    { to: "/app/milestones", label: "nav.milestones", icon: Trophy, id: "milestones" },
-    { to: "/app/tracker", label: "nav.tracker", icon: LineChart, id: "tracker" },
+    { to: "/app/advisor", label: "nav.advisor", icon: MessageSquareCode, id: "advisor" },
   ]},
   { section: "section.buy", items: [
     { to: "/app/builds", label: "nav.builds", icon: Cpu, id: "builds" },
     { to: "/app/upgrade", label: "nav.upgrade", icon: Rocket, id: "upgrade" },
+    { to: "/app/tracker", label: "nav.tracker", icon: LineChart, id: "tracker" },
   ]},
   { section: "section.tools", items: [
     { to: "/app/desktop", label: "nav.desktop", icon: MonitorDown, id: "desktop" },
     { to: "/app/report", label: "nav.report", icon: FileBarChart, id: "report" },
     { to: "/app/commands", label: "nav.commands", icon: TerminalSquare, id: "commands" },
-    { to: "/app/network", label: "nav.network", icon: Gauge, id: "network" },
-    { to: "/app/bios", label: "nav.bios", icon: SlidersHorizontal, id: "bios" },
   ]},
   { section: null, items: [
     { to: "/app/admin", label: "nav.admin", icon: Shield, id: "admin", adminOnly: true },
@@ -78,7 +85,14 @@ function Notifications() {
         await api.post("/push/test").catch(() => {});
       }
     } catch (e) {
-      toast.error(e.message || t("notif.push_err"));
+      if (e.code === "blocked") {
+        setPushState("denied");
+        toast.error(t("notif.push_blocked_help"), { duration: 10000 });
+      } else if (e.code === "dismissed") {
+        toast.error(t("notif.push_dismissed_help"), { duration: 8000 });
+      } else {
+        toast.error(e.message || t("notif.push_err"));
+      }
     } finally { setPushBusy(false); }
   };
 
@@ -103,12 +117,19 @@ function Notifications() {
             </div>
           </div>
           {pushSupported() && (
-            <button data-testid="toggle-push-btn" onClick={togglePush} disabled={pushBusy || pushState === "denied"}
-              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs border-b border-[#1A1A24] hover:bg-[#141419] transition-colors disabled:opacity-50">
-              {pushState === "subscribed" ? <BellOff size={14} className="text-[#FF3B30]" /> : <BellRing size={14} className="text-[#00FF66]" />}
-              {pushState === "denied" ? t("notif.push_blocked")
-                : pushState === "subscribed" ? t("notif.push_off") : t("notif.push_on")}
-            </button>
+            <div className="border-b border-[#1A1A24]">
+              <button data-testid="toggle-push-btn" onClick={togglePush} disabled={pushBusy || pushState === "denied"}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-xs hover:bg-[#141419] transition-colors disabled:opacity-50">
+                {pushState === "subscribed" ? <BellOff size={14} className="text-[#FF3B30]" /> : <BellRing size={14} className="text-[#00FF66]" />}
+                {pushState === "denied" ? t("notif.push_blocked")
+                  : pushState === "subscribed" ? t("notif.push_off") : t("notif.push_on")}
+              </button>
+              {pushState === "denied" && (
+                <div data-testid="push-unblock-hint" className="px-3 pb-2.5 text-[11px] text-amber-400/90 leading-snug">
+                  {t("notif.push_unblock_hint")}
+                </div>
+              )}
+            </div>
           )}
           {items.length === 0 && <div className="p-4 text-sm text-zinc-500">{t("notif.empty")}</div>}
           {items.map((n) => (
@@ -234,6 +255,7 @@ export default function Layout() {
               <Smartphone size={14} />
               <span className="hidden lg:inline">{t("mobile.handoff_short", { defaultValue: "Telefono" })}</span>
             </button>
+            <DeviceSwitcher />
             <LanguageSwitcher />
             <Notifications />
             <ProfileMenu />
@@ -248,6 +270,7 @@ export default function Layout() {
         </main>
       </div>
       <OnboardingTour />
+      <MissionCelebration />
       <MobileHandoffModal open={handoffOpen} onClose={() => setHandoffOpen(false)} />
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </div>

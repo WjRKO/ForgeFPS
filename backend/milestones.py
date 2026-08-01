@@ -71,7 +71,7 @@ MILESTONES_CATALOG: list[dict[str, Any]] = [
         "desc_en": "10 tweaks applied successfully.",
         "icon": "Wrench",
         "condition": {"counter": "tweaks_applied", "threshold": 10},
-        "reward": {"type": "unlock", "key": "advanced_registry_tweaks", "label_it": "Advanced Registry Tweaks", "label_en": "Advanced Registry Tweaks"},
+        "reward": {"type": "unlock", "key": "adv_tweaks", "label_it": "Tweak avanzati: BufferBloat, PreMatch, Booster", "label_en": "Advanced tweaks: BufferBloat, PreMatch, Booster"},
     },
     {
         "code": "tweaks_50", "category": "performance", "tier": "gold", "xp": 100,
@@ -80,6 +80,7 @@ MILESTONES_CATALOG: list[dict[str, Any]] = [
         "desc_en": "50 total tweaks. You know your stuff.",
         "icon": "Cpu",
         "condition": {"counter": "tweaks_applied", "threshold": 50},
+        "reward": {"type": "unlock", "key": "pdf_report", "label_it": "Export PDF del Report Prima/Dopo", "label_en": "Before/After Report PDF export"},
     },
     {
         "code": "health_streak_7", "category": "performance", "tier": "silver", "xp": 40,
@@ -88,7 +89,7 @@ MILESTONES_CATALOG: list[dict[str, Any]] = [
         "desc_en": "Health score above 85 for 7 straight days.",
         "icon": "Activity",
         "condition": {"counter": "health_streak_days", "threshold": 7},
-        "reward": {"type": "slot", "key": "profile_slots", "amount": 1, "label_it": "+1 slot Profile custom", "label_en": "+1 custom Profile slot"},
+        "reward": {"type": "unlock", "key": "history_90d", "label_it": "Storico salute 90 giorni", "label_en": "90-day health history"},
     },
     {
         "code": "pc_whisperer", "category": "performance", "tier": "gold", "xp": 75,
@@ -153,6 +154,57 @@ MILESTONES_CATALOG: list[dict[str, Any]] = [
         "icon": "Star",
         "condition": {"flag": "beta_tester_earned"},
         "reward": {"type": "badge", "shareable": True, "label_it": "Badge Founding Member", "label_en": "Founding Member badge"},
+    },
+
+    # ---- Segreti (nascosti finche' non sbloccati) ----
+    {
+        "code": "night_owl", "category": "secret", "tier": "silver", "xp": 30, "secret": True,
+        "name_it": "Gufo Notturno", "name_en": "Night Owl",
+        "desc_it": "Hai completato uno scan nel cuore della notte.",
+        "desc_en": "You completed a scan in the dead of night.",
+        "icon": "Clock",
+        "condition": {"flag": "night_owl_earned"},
+    },
+    {
+        "code": "surgeon", "category": "secret", "tier": "gold", "xp": 75, "secret": True,
+        "name_it": "Chirurgo", "name_en": "Surgeon",
+        "desc_it": "10 tra servizi e app d'avvio disattivati seguendo i consigli.",
+        "desc_en": "10 services and startup apps disabled following our advice.",
+        "icon": "Wrench",
+        "condition": {"flag": "surgeon_earned"},
+    },
+    {
+        "code": "mad_scientist", "category": "secret", "tier": "gold", "xp": 100, "secret": True,
+        "name_it": "Scienziato Pazzo", "name_en": "Mad Scientist",
+        "desc_it": "5 esperimenti del Performance Lab completati.",
+        "desc_en": "5 Performance Lab experiments completed.",
+        "icon": "Timer",
+        "condition": {"counter": "lab_experiments", "threshold": 5},
+    },
+    {
+        "code": "speed_demon", "category": "secret", "tier": "gold", "xp": 75, "secret": True,
+        "name_it": "Demone della Velocità", "name_en": "Speed Demon",
+        "desc_it": "Benchmark con punteggio complessivo di almeno 90.",
+        "desc_en": "Benchmark with an overall score of at least 90.",
+        "icon": "Gauge",
+        "condition": {"flag": "speed_demon_earned"},
+        "reward": {"type": "unlock", "key": "gpu_reference_full", "label_it": "GPU vs Reference completo (200+ GPU)", "label_en": "Full GPU vs Reference (200+ GPUs)"},
+    },
+    {
+        "code": "mission_hunter", "category": "secret", "tier": "silver", "xp": 50, "secret": True,
+        "name_it": "Cacciatore di Missioni", "name_en": "Mission Hunter",
+        "desc_it": "10 missioni completate.",
+        "desc_en": "10 missions completed.",
+        "icon": "Swords",
+        "condition": {"counter": "missions_completed", "threshold": 10},
+    },
+    {
+        "code": "collector", "category": "secret", "tier": "platinum", "xp": 150, "secret": True,
+        "name_it": "Collezionista", "name_en": "Collector",
+        "desc_it": "15 giochi diversi rilevati dall'Universal Game Detector.",
+        "desc_en": "15 different games detected by the Universal Game Detector.",
+        "icon": "Library",
+        "condition": {"counter_unique": "games_detected", "threshold": 15},
     },
 ]
 
@@ -240,9 +292,11 @@ async def _evaluate_and_unlock(db, user_id: str, progress: dict) -> list[str]:
     pending_notify = list(progress.get("pending_notify", []))
     obs_pending = list(progress.get("obs_pending", []))
 
+    ai_bonus = 0
     for code in new_unlocks:
         m = MILESTONE_BY_CODE[code]
         total_xp += int(m.get("xp", 0))
+        ai_bonus += {"bronze": 5, "silver": 5, "gold": 10, "platinum": 15}.get(m.get("tier"), 5)
         unlocked_list.append(code)
         unlocked_at[code] = now
         pending_notify.append(code)
@@ -267,6 +321,13 @@ async def _evaluate_and_unlock(db, user_id: str, progress: dict) -> list[str]:
             "updated_at": now,
         }},
     )
+    # Earned Premium: i trofei regalano crediti AI (+5/10/15 per rarita')
+    if ai_bonus:
+        try:
+            from ai_credits import grant_credits
+            await grant_credits(db, user_id, ai_bonus)
+        except Exception:
+            pass
     return new_unlocks
 
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket, Pencil } from "lucide-react";
+import { Cpu, Activity, RefreshCw, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Thermometer, MonitorDown, Sparkles, Loader2, Rocket, Pencil, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
@@ -10,8 +10,11 @@ import HealthHistoryCard from "@/components/HealthHistoryCard";
 import { HwInsightsPanel } from "@/components/HwInsightsPanel";
 import SyncTimeline from "@/components/SyncTimeline";
 import { PageHeader } from "@/components/hud";
+import { DevicesPanel } from "@/components/DevicesPanel";
+import { DeviceCompare } from "@/components/DeviceCompare";
 import { useSilentLaunch } from "@/hooks/useSilentLaunch";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
+import { MissionContextStrip } from "@/components/MissionContextStrip";
 
 const SPEC_KEYS = ["os", "cpu", "gpu", "ram", "disk", "motherboard", "resolution"];
 const specLabel = (t, k) => ({ os: t("mypcpage.sl_os"), cpu: "CPU", gpu: "GPU", ram: "RAM", disk: t("mypcpage.sl_disk"), motherboard: t("mypcpage.sl_mb"), resolution: t("mypcpage.sl_res") }[k]);
@@ -129,11 +132,75 @@ const CPU_TEMP_REASONS = {
   },
 };
 
+const CPU_TEMP_REASONS_EN = {
+  not_admin: {
+    title: "CPU temperature unreadable — the agent isn't running as Administrator",
+    body: "The CPU sensor driver requires elevated privileges (UAC). Reopen FrameForge Agent and confirm the UAC prompt when it appears.",
+    fix_label: "How to fix",
+    steps: [
+      "Close the agent window",
+      "Double-click Avvia-FrameForge.bat (or forgefps-agent.exe)",
+      "When the Windows UAC prompt appears, click Yes",
+    ],
+  },
+  vbs_on: {
+    title: "CPU temperature blocked by Windows — Memory Integrity is on",
+    body: "Windows Security is blocking the low-level driver that reads the CPU temperature. It's a protection (VBS). You can turn it off if you need the temp.",
+    fix_label: "How to disable (optional)",
+    steps: [
+      "Settings → Privacy & security → Windows Security",
+      "Device security → Core isolation → Memory integrity → OFF",
+      "Restart your PC",
+    ],
+  },
+  blocklist_on: {
+    title: "CPU temperature blocked by Windows — Vulnerable driver blocklist",
+    body: "Windows 11 blocks WinRing0 (the driver used to read CPU sensors) via the Blocklist. It's on by default for security — GPU temp keeps working anyway.",
+    fix_label: "Alternative",
+    steps: [
+      "The blocklist protects against malicious drivers — we recommend keeping it on",
+      "As a workaround, keep HWMonitor/HWiNFO open in parallel to see the CPU temp",
+      "The GPU (which matters most for gaming) is detected normally",
+    ],
+  },
+  no_sensors: {
+    title: "CPU sensors not recognized — likely Ryzen Zen4 or outdated BIOS",
+    body: "LibreHardwareMonitor runs correctly but didn't find a CPU sensor among the standard names (Tctl, Tdie, CPU Package). On Ryzen 7000+ sensors can have non-standard names, or the BIOS doesn't expose them.",
+    fix_label: "How to fix",
+    steps: [
+      "Update the BIOS to the latest stable version from your motherboard vendor's site",
+      "Alternatively download standalone LibreHardwareMonitor (github.com/LibreHardwareMonitor) and check which CPU sensors it sees: if it finds any, send me a screenshot of the names and I'll add them to the whitelist",
+      "Restart FrameForge Agent after the BIOS update",
+    ],
+  },
+  no_lhm: {
+    title: "CPU sensor driver not loaded — WinRing0 blocked",
+    body: "LibreHardwareMonitor couldn't load the WinRing0 driver needed to read CPU sensors. Even without VBS/Blocklist enabled, Windows can block unsigned drivers on first launch.",
+    fix_label: "60-second fix (works on Ryzen)",
+    steps: [
+      "Download standalone LibreHardwareMonitor from github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases",
+      "Extract the ZIP and open LibreHardwareMonitor.exe as Administrator (right click → Run as Administrator)",
+      "If it shows the CPU temperature, close it — the WinRing0 driver is now trusted on your PC",
+      "Reopen FrameForge Agent: the CPU temp will be detected automatically",
+    ],
+  },
+  unknown: {
+    title: "CPU temperature unreadable",
+    body: "The agent couldn't determine the reason. If the problem persists, contact support with a screenshot of the agent console.",
+    fix_label: "Debug",
+    steps: [
+      "Run the agent as Administrator",
+      "Check the console for [WARN] or [INFO][diag] messages",
+    ],
+  },
+};
+
 function CpuTempReasonHint({ checks }) {
   if (!Array.isArray(checks)) return null;
   const cpuCheck = checks.find((c) => c.id === "cpu_temp");
   if (!cpuCheck || cpuCheck.status !== "unknown" || !cpuCheck.reason) return null;
-  const info = CPU_TEMP_REASONS[cpuCheck.reason] || CPU_TEMP_REASONS.unknown;
+  const dict = i18n.language?.startsWith("en") ? CPU_TEMP_REASONS_EN : CPU_TEMP_REASONS;
+  const info = dict[cpuCheck.reason] || dict.unknown;
   const isSecurity = cpuCheck.reason === "vbs_on" || cpuCheck.reason === "blocklist_on";
   const color = isSecurity ? "#E5FF00" : "#00E0FF"; // giallo = protezione security, azzurro = altro
 
@@ -187,12 +254,14 @@ function ScoreRing({ score, grade }) {
 }
 
 export default function MyPc() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const lang = (i18n.resolvedLanguage || i18n.language || "it").slice(0, 2) === "en" ? "en" : "it";
   const [specs, setSpecs] = useState(null);
   const [health, setHealth] = useState(null);
   const [startup, setStartup] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [err, setErr] = useState("");
+  const [showOff, setShowOff] = useState(false);
   const [editing, setEditing] = useState(false);
 
   const load = async () => {
@@ -275,6 +344,12 @@ export default function MyPc() {
           <button data-testid="refresh-pc-btn" onClick={load} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><RefreshCw size={15} /> {t("mypcpage.refresh")}</button>
         </>} />
 
+      <MissionContextStrip metrics={["services_done", "startup_done", "health_score", "optimize_total"]} />
+
+      <DevicesPanel />
+
+      <DeviceCompare />
+
       {specs?.updated_at && (() => {
         let diffSec = 0;
         try { diffSec = Math.floor((Date.now() - new Date(specs.updated_at).getTime()) / 1000); } catch { diffSec = 999999; }
@@ -325,6 +400,26 @@ export default function MyPc() {
             </div>
           </div>
           <CpuTempReasonHint checks={health.checks} />
+          {(health.fleet || health.throttling?.checked) && (
+            <div className="mt-4 flex flex-wrap gap-3 border-t border-[#1A1A24] pt-3">
+              {health.fleet && (
+                <div className="flex items-center gap-2 text-xs" data-testid="health-fleet-percentile">
+                  <Users size={13} className="text-[#00E0FF]" />
+                  <span className="text-zinc-400">{t("mypcpage.health.fleetpct", { pct: health.fleet.percentile, n: health.fleet.n })}</span>
+                </div>
+              )}
+              {health.throttling?.checked && (
+                <div className="flex items-center gap-2 text-xs" data-testid="health-throttling">
+                  <Thermometer size={13} className={health.throttling.detected ? "text-[#FF3B30]" : "text-[#00FF66]"} />
+                  <span className={health.throttling.detected ? "text-red-400" : "text-zinc-400"}>
+                    {health.throttling.detected
+                      ? t("mypcpage.health.throttle_yes", { n: health.throttling.events, temp: health.throttling.max_temp })
+                      : t("mypcpage.health.throttle_no")}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
           {(health.gpu_temp != null || health.cpu_temp != null) && (
             <div className="mt-4 flex flex-wrap gap-3 border-t border-[#1A1A24] pt-3">
               {health.cpu_temp != null && (
@@ -394,19 +489,141 @@ export default function MyPc() {
           </button>
         </div>
         {err && <div className="p-3 text-xs text-[#FF3B30]">{err}</div>}
-        {!startup && !err && <div className="p-6 text-sm text-zinc-500">{t("mypcpage.startup_count", { count: (specs.startup || []).length })}</div>}
+        {!startup && !err && (() => {
+          const all = specs.startup || [];
+          const noiseN = all.filter((s) => s.noise).length;
+          const vis = all.filter((s) => !s.noise);
+          const activeList = vis.filter((s) => s.enabled !== false);
+          const offList = vis.filter((s) => s.enabled === false);
+          const doneList = specs.startup_done || [];
+          const shown = [...activeList.slice(0, 30), ...(showOff ? offList : [])];
+          return (
+          <div>
+            <div className="p-3 text-xs text-zinc-500 border-b border-[#1A1A24]">
+              {offList.length > 0
+                ? t("mypcpage.startup_counts", { active: activeList.length, off: offList.length })
+                : t("mypcpage.startup_count", { count: activeList.length })}
+              {noiseN > 0 && <span className="text-zinc-600"> · {t("mypcpage.startup_noise_hidden", { n: noiseN })}</span>}
+              {" · "}{t("mypcpage.startup_hint")}
+            </div>
+            {doneList.length > 0 && (
+              <div className="px-3 py-2 border-b border-[#1A1A24] bg-[#00FF66]/5 text-[11px]" data-testid="startup-done-strip">
+                <span className="text-[#00FF66] font-bold">✓ {t("mypcpage.startup_done", { n: doneList.length })}</span>{" "}
+                <span className="text-zinc-500">{doneList.map((d) => d.name).join(", ")}</span>
+              </div>
+            )}
+            {shown.map((s, i) => (
+              <div key={`${s.name}-${i}`} className={`flex items-center gap-3 px-3 py-2 border-b border-[#1A1A24] ${s.enabled === false ? "opacity-50" : ""}`} data-testid={`startup-detected-${i}`}>
+                {s.enabled !== null && s.enabled !== undefined && (
+                  <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 shrink-0 ${s.enabled === false ? "bg-zinc-700/40 text-zinc-400" : "bg-[#00FF66]/15 text-[#00FF66]"}`}>
+                    {s.enabled === false ? t("mypcpage.startup_off") : t("mypcpage.startup_on")}
+                  </span>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm truncate">{s.name}</div>
+                  <div className="text-[11px] text-zinc-500 truncate">
+                    {s.publisher || t("mypcpage.startup_unsigned")}
+                    {s.source && <span className="text-zinc-600"> · {t(`mypcpage.startup_src.${s.source}`, s.source)}</span>}
+                  </div>
+                </div>
+                {s.ram_mb ? <span className="text-[11px] text-zinc-400 tabular-nums shrink-0">{s.ram_mb} MB</span> : null}
+              </div>
+            ))}
+            {offList.length > 0 && (
+              <button onClick={() => setShowOff(!showOff)} data-testid="startup-toggle-off" className="w-full p-2.5 text-[11px] uppercase tracking-widest text-zinc-600 hover:text-[#E5FF00] transition-colors">
+                {showOff ? t("mypcpage.startup_hide_off") : t("mypcpage.startup_show_off", { n: offList.length })}
+              </button>
+            )}
+          </div>
+          );
+        })()}
         {startup && (
           <div>
             <div className="p-4 text-sm text-zinc-300 border-b border-[#1A1A24] bg-black">{startup.summary}</div>
-            {startup.items.map((it, i) => (
-              <div key={it.name || i} className="flex items-center gap-3 p-3 border-b border-[#1A1A24]" data-testid={`startup-item-${i}`}>
-                <span className={`text-xs font-bold uppercase px-2 py-0.5 shrink-0 ${it.recommendation === "disabilita" ? "bg-[#FF3B30]/20 text-[#FF3B30]" : it.recommendation === "mantieni" ? "bg-[#00FF66]/20 text-[#00FF66]" : "bg-[#E5FF00]/20 text-[#E5FF00]"}`}>{it.recommendation}</span>
-                <div className="flex-1 min-w-0"><div className="text-sm truncate">{it.name}</div><div className="text-xs text-zinc-500">{it.reason}</div></div>
-              </div>
-            ))}
+            {startup.items.map((it, i) => {
+              const det = (specs.startup || []).find((s) => s.name && it.name && (s.name.toLowerCase().includes(it.name.toLowerCase()) || it.name.toLowerCase().includes(s.name.toLowerCase())));
+              const how = det?.source === "service" ? t("mypcpage.startup_how_service") : det?.source === "task" ? t("mypcpage.startup_how_task") : t("mypcpage.startup_how_taskmgr");
+              return (
+                <div key={it.name || i} className="flex items-center gap-3 p-3 border-b border-[#1A1A24]" data-testid={`startup-item-${i}`}>
+                  <span className={`text-xs font-bold uppercase px-2 py-0.5 shrink-0 ${it.recommendation === "disabilita" ? "bg-[#FF3B30]/20 text-[#FF3B30]" : it.recommendation === "mantieni" ? "bg-[#00FF66]/20 text-[#00FF66]" : "bg-[#E5FF00]/20 text-[#E5FF00]"}`}>{it.recommendation}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm truncate">{it.name}{det?.ram_mb ? <span className="text-[11px] text-zinc-500"> · {det.ram_mb} MB RAM</span> : null}</div>
+                    <div className="text-xs text-zinc-500">{it.reason}</div>
+                    {it.recommendation === "disabilita" && <div className="text-[11px] text-[#00E0FF] mt-0.5">→ {how}</div>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
+
+      <ServicesCard t={t} lang={lang} />
+    </div>
+  );
+}
+
+function ServicesCard({ t, lang }) {
+  const [data, setData] = useState(null);
+  const [showAll, setShowAll] = useState(false);
+  const [showOk, setShowOk] = useState(false);
+  useEffect(() => { api.get("/services/analyze").then(({ data }) => setData(data)).catch(() => {}); }, []);
+  if (!data || !data.available || !data.items?.length) return null;
+  const L = (obj) => (obj ? (lang === "en" ? obj.en : obj.it) : null);
+  const REC = {
+    disattiva: { cls: "bg-[#FF3B30]/20 text-[#FF3B30]", it: "Disattiva", en: "Disable" },
+    valuta: { cls: "bg-[#E5FF00]/20 text-[#E5FF00]", it: "Valuta", en: "Consider" },
+    gia_ok: { cls: "bg-zinc-700/40 text-zinc-400", it: "Già ok", en: "Already ok" },
+    mantieni: { cls: "bg-[#00FF66]/20 text-[#00FF66]", it: "Mantieni", en: "Keep" },
+  };
+  const actionable = data.items.filter((it) => it.recommendation !== "gia_ok");
+  const okItems = data.items.filter((it) => it.recommendation === "gia_ok");
+  const rows = [...(showAll ? actionable : actionable.slice(0, 10)), ...(showOk ? okItems : [])];
+  const done = data.done || [];
+  const doneMb = done.reduce((a, d) => a + (d.ram_mb || 0), 0);
+  return (
+    <div className="bg-[#0F0F12] border border-[#2A2A35]" data-testid="services-card">
+      <div className="p-5 border-b border-[#2A2A35] flex items-center justify-between flex-wrap gap-2">
+        <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">{t("mypcpage.services_title")}</span>
+        <span className="text-[11px] text-zinc-500" data-testid="services-summary">
+          {t("mypcpage.services_summary", { n: data.summary.disattiva, m: data.summary.valuta, tot: data.summary.total_audited })}
+          {data.summary.ram_mb_saveable > 0 && ` · ~${data.summary.ram_mb_saveable} MB RAM`}
+        </span>
+      </div>
+      <div className="p-3 text-[11px] text-zinc-500 border-b border-[#1A1A24]">{t("mypcpage.services_hint")}</div>
+      {done.length > 0 && (
+        <div className="px-3 py-2 border-b border-[#1A1A24] bg-[#00FF66]/5 text-[11px]" data-testid="services-done-strip">
+          <span className="text-[#00FF66] font-bold">✓ {t("mypcpage.services_done", { n: done.length })}{doneMb > 0 ? ` · ~${doneMb} MB RAM` : ""}</span>{" "}
+          <span className="text-zinc-500">{done.map((d) => d.display || d.name).join(", ")}</span>
+        </div>
+      )}
+      {rows.map((it, i) => {
+        const r = REC[it.recommendation] || REC.valuta;
+        return (
+          <div key={it.name} className="flex items-start gap-3 p-3 border-b border-[#1A1A24]" data-testid={`service-item-${i}`}>
+            <span className={`text-xs font-bold uppercase px-2 py-0.5 shrink-0 ${r.cls}`}>{lang === "en" ? r.en : r.it}</span>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm truncate">{it.display} <span className="text-[11px] text-zinc-600">({it.name})</span>{it.ram_mb ? <span className="text-[11px] text-zinc-500"> · {it.ram_mb} MB</span> : null}</div>
+              {L(it.why) && <div className="text-xs text-zinc-500">{L(it.why)}</div>}
+              {L(it.condition) && <div className="text-[11px] text-amber-500/90 mt-0.5">⚠ {L(it.condition)}</div>}
+              {(it.recommendation === "disattiva" || it.recommendation === "valuta") && (
+                <div className="text-[11px] text-[#00E0FF] mt-0.5">→ {t("mypcpage.services_how", { name: it.display })}</div>
+              )}
+            </div>
+            <span className="text-[10px] text-zinc-600 shrink-0 uppercase">{it.state === "Running" ? t("mypcpage.startup_on") : t("mypcpage.startup_off")} · {it.start_mode}</span>
+          </div>
+        );
+      })}
+      {actionable.length > 10 && (
+        <button onClick={() => setShowAll(!showAll)} data-testid="services-show-all" className="w-full p-2.5 text-[11px] uppercase tracking-widest text-zinc-500 hover:text-[#E5FF00] transition-colors">
+          {showAll ? t("mypcpage.services_less") : t("mypcpage.services_more", { n: actionable.length - 10 })}
+        </button>
+      )}
+      {okItems.length > 0 && (
+        <button onClick={() => setShowOk(!showOk)} data-testid="services-toggle-ok" className="w-full p-2.5 text-[11px] uppercase tracking-widest text-zinc-600 hover:text-[#E5FF00] transition-colors border-t border-[#1A1A24]">
+          {showOk ? t("mypcpage.services_hide_ok") : t("mypcpage.services_show_ok", { n: okItems.length })}
+        </button>
+      )}
     </div>
   );
 }

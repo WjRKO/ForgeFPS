@@ -12,6 +12,7 @@ import BenchmarkSparkline from "@/components/BenchmarkSparkline";
 import NextActionBanner from "@/components/NextActionBanner";
 import GpuReferenceCard from "@/components/GpuReferenceCard";
 import FullBenchmarkReport from "@/components/FullBenchmarkReport";
+import { MissionContextStrip } from "@/components/MissionContextStrip";
 
 const BENCH_METRICS = [
   { key: "score", lk: "m_score", unit: "/100", higherBetter: true },
@@ -157,8 +158,14 @@ function BenchmarkCard({ bench }) {
         )}
       </div>
       {latest.ts && (
-        <div className="mt-3 text-xs text-zinc-600 border-t border-[#1A1A24] pt-3">
-          {t("mypcpage.last_run")} {(() => { try { return new Date(latest.ts).toLocaleString((i18n.resolvedLanguage || i18n.language || "en").slice(0, 2)); } catch { return new Date(latest.ts).toLocaleString(); } })()}
+        <div className="mt-3 text-xs text-zinc-600 border-t border-[#1A1A24] pt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span>{t("mypcpage.last_run")} {(() => { try { return new Date(latest.ts).toLocaleString((i18n.resolvedLanguage || i18n.language || "en").slice(0, 2)); } catch { return new Date(latest.ts).toLocaleString(); } })()}</span>
+          {after?.cv_pct != null && (
+            <span className={after.reliable === false ? "text-amber-500/90" : "text-zinc-500"} data-testid="bench-reliability">
+              {t("mypcpage.bench_cv", { runs: after.bench_runs || 3, cv: after.cv_pct })}
+              {after.reliable === false && ` — ${t("mypcpage.bench_unreliable")}`}
+            </span>
+          )}
         </div>
       )}
     </div>
@@ -242,6 +249,7 @@ export default function Benchmark() {
 
   return (
     <div className="max-w-6xl mx-auto fade-up">
+      <MissionContextStrip metrics={["benchmarks", "benchmarks_total"]} />
       <PageHeader eyebrow={t("bench.eyebrow", { defaultValue: "// benchmark" })} title={t("bench.title", { defaultValue: "Benchmark del sistema" })}
         actions={<>
           <button data-testid="silent-bench-btn" onClick={guardedLaunch} disabled={benchLaunch.running}

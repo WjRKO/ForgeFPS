@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from database import db
-from plan_gate import compute_effective_plan, TRIAL_DAYS
+from plan_gate import compute_effective_plan, get_entitlements, TRIAL_DAYS
 
 
 # --- Upgrade suggestion (engagement-driven) ----------------------------------
@@ -88,8 +88,8 @@ def build(get_current_user):
 
     @r.get("/status")
     async def status(user: dict = Depends(get_current_user)):
-        """Piano corrente + trial info + suggestione upgrade personalizzata."""
-        info = compute_effective_plan(user)
+        """Piano corrente + trial info + entitlements + suggestione upgrade personalizzata."""
+        info = await get_entitlements(db, user)
         suggestion = await compute_upgrade_suggestion(user, info)
         return {**info, "suggested_upgrade": suggestion}
 

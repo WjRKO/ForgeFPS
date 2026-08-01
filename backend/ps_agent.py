@@ -395,9 +395,12 @@ function Get-CleanableMb {
     }
   }
   try {
-    $sh = New-Object -ComObject Shell.Application
-    $rb = $sh.NameSpace(0xA)
-    if ($rb) { foreach ($it in $rb.Items()) { try { $total += [double]$it.Size } catch {} } }
+    # Cestino: lettura diretta dei file (niente oggetti COM shell, vedi nota Defender)
+    $rbRoot = Join-Path $env:SystemDrive '$Recycle.Bin'
+    if (Test-Path $rbRoot) {
+      $sum = (Get-ChildItem $rbRoot -Recurse -File -Force -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+      if ($sum) { $total += [double]$sum }
+    }
   } catch {}
   return [math]::Round($total / 1MB, 1)
 }
@@ -508,6 +511,20 @@ function Get-Specs {
     $s.gpu = $p[0].Trim(); $s.gpu_vram_gb = "$([math]::Round([double]$p[1].Trim()/1024))"; $s.gpu_driver_version = $p[2].Trim()
     $s.gpu_provider = 'NVIDIA'
     $gpuSources++
+    # PCIe link reale + stato Resizable BAR (BAR1 ~ VRAM => ReBAR ON, 256MB => OFF)
+    try {
+      $pcieQ = & nvidia-smi --query-gpu=pcie.link.width.current,pcie.link.width.max,pcie.link.gen.max --format=csv,noheader,nounits 2>$null
+      if ($pcieQ) {
+        $pl = ($pcieQ | Select-Object -First 1).Split(',')
+        $s.pcie_width = $pl[0].Trim(); $s.pcie_width_max = $pl[1].Trim()
+        $s.pcie_link = ('x{0} (max x{1} Gen{2})' -f $pl[0].Trim(), $pl[1].Trim(), $pl[2].Trim())
+      }
+      $qFull = (& nvidia-smi -q 2>$null) -join "`n"
+      if ($qFull -match 'BAR1 Memory Usage[\s\S]{0,120}?Total\s*:\s*(\d+)\s*MiB') {
+        $barMb = [int]$Matches[1]
+        $s.rebar_status = $(if ($barMb -ge 1024) { 'on' } else { 'off' })
+      }
+    } catch {}
   }
   # WMI: prendi tutti i video controller reali (non virtuali).
   $vcAll = Get-CimInstance Win32_VideoController | Where-Object { $_.Name -and $_.Name -notmatch 'Basic|Virtual|Remote|Meta|Parsec|Citrix|DameWare|Idd' }
@@ -741,17 +758,164 @@ function Get-Health {
 }
 
 function Get-StartupList {
-  # v0.7.4: emetti list[dict] invece di list[str] per allineare al modello backend.
-  # ArrayList (invece di @()) sopravvive al quirk di PS5 con ConvertTo-Json su
-  # array a 1 elemento (che verrebbe unwrap-ato a oggetto).
+  # v0.8.1: rilevamento PRO multi-fonte: registry Run (con stato reale StartupApproved),
+  # cartelle Esecuzione automatica, task pianificati al logon, servizi auto di terze parti.
+  # Per ogni voce: publisher (firma digitale), path exe, RAM corrente se in esecuzione.
+  $al = New-Object System.Collections.ArrayList
+  $approved = @{}
+  foreach ($k in @(
+    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
+    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder',
+    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
+    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32')) {
+    try {
+      $key = Get-Item $k -ErrorAction SilentlyContinue
+      if ($key) {
+        foreach ($n in $key.GetValueNames()) {
+          $v = $key.GetValue($n)
+          if ($v -is [byte[]] -and $v.Length -gt 0) { $approved[$n.ToLower()] = (($v[0] % 2) -eq 0) }
+        }
+      }
+    } catch {}
+  }
+  $procRam = @{}
+  try {
+    Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
+      $n = $_.ProcessName.ToLower()
+      if ($procRam.ContainsKey($n)) { $procRam[$n] += $_.WorkingSet64 } else { $procRam[$n] = $_.WorkingSet64 }
+    }
+  } catch {}
+  $sigCache = @{}
+  function _exeFromCmd([string]$cmd) {
+    if (-not $cmd) { return $null }
+    if ($cmd -match '^"([^"]+\.exe)"') { return $Matches[1] }
+    if ($cmd -match '^([^\s]+\.exe)') { return $Matches[1] }
+    if ($cmd.ToLower().Contains('.exe')) { $i = $cmd.ToLower().IndexOf('.exe'); return $cmd.Substring(0, $i + 4).Trim('"') }
+    return $null
+  }
+  function _publisher([string]$exe) {
+    if (-not $exe) { return $null }
+    if ($sigCache.ContainsKey($exe)) { return $sigCache[$exe] }
+    $pub = $null
+    try {
+      if (Test-Path $exe) {
+        $sig = Get-AuthenticodeSignature $exe -ErrorAction SilentlyContinue
+        if ($sig -and $sig.SignerCertificate -and $sig.SignerCertificate.Subject -match 'CN=("[^"]+"|[^,]+)') { $pub = $Matches[1].Trim('"') }
+      }
+    } catch {}
+    $sigCache[$exe] = $pub
+    return $pub
+  }
+  function _add($name, $cmd, $loc, $src, $usr) {
+    if (-not $name) { return }
+    foreach ($e in $al) { if ($e.name -eq "$name" -and $e.source -eq $src) { return } }
+    $exe = _exeFromCmd "$cmd"
+    $ram = $null
+    if ($exe) {
+      $bn = [System.IO.Path]::GetFileNameWithoutExtension($exe).ToLower()
+      if ($procRam.ContainsKey($bn)) { $ram = [math]::Round($procRam[$bn] / 1MB) }
+    }
+    $en = $null
+    if ($approved.ContainsKey("$name".ToLower())) { $en = $approved["$name".ToLower()] }
+    [void]$al.Add(@{
+      name = "$name"; command = "$cmd"; user = "$usr"; location = "$loc"
+      source = $src; enabled = $en; publisher = (_publisher $exe); ram_mb = $ram
+    })
+  }
+  foreach ($rk in @(
+    @{ p = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run'; u = 'SYSTEM' },
+    @{ p = 'HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Run'; u = 'SYSTEM' },
+    @{ p = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'; u = "$env:USERNAME" })) {
+    try {
+      $key = Get-Item $rk.p -ErrorAction SilentlyContinue
+      if ($key) { foreach ($n in $key.GetValueNames()) { _add $n ($key.GetValue($n)) $rk.p 'registry' $rk.u } }
+    } catch {}
+  }
+  # Risoluzione .lnk senza oggetti COM shell (pattern che triggera l'euristica
+  # anti-persistenza di Defender): semplice lettura bytes + regex sul path.
+  function _lnkTarget([string]$lnk) {
+    try {
+      $bytes = [System.IO.File]::ReadAllBytes($lnk)
+      $uni = [System.Text.Encoding]::Unicode.GetString($bytes)
+      if ($uni -match '([A-Za-z]:\\[^\x00-\x1F"<>|?*]+?\.exe)') { return $Matches[1] }
+      $asc = [System.Text.Encoding]::ASCII.GetString($bytes)
+      if ($asc -match '([A-Za-z]:\\[^\x00-\x1F"<>|?*]+?\.exe)') { return $Matches[1] }
+    } catch {}
+    return $null
+  }
+  foreach ($fd in @([Environment]::GetFolderPath('Startup'), [Environment]::GetFolderPath('CommonStartup'))) {
+    if (-not $fd -or -not (Test-Path $fd)) { continue }
+    Get-ChildItem $fd -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'desktop.ini' } | Select-Object -First 15 | ForEach-Object {
+      $target = $_.FullName
+      if ($_.Extension -eq '.lnk') { $t2 = _lnkTarget $_.FullName; if ($t2) { $target = $t2 } }
+      _add $_.BaseName $target $fd 'folder' "$env:USERNAME"
+      if ($al.Count -gt 0) {
+        # StartupApproved\StartupFolder usa il nome file CON estensione (es. app.lnk)
+        $k1 = $_.Name.ToLower(); $k2 = $_.BaseName.ToLower()
+        if ($approved.ContainsKey($k1)) { $al[$al.Count - 1].enabled = $approved[$k1] }
+        elseif ($approved.ContainsKey($k2)) { $al[$al.Count - 1].enabled = $approved[$k2] }
+      }
+    }
+  }
+  try {
+    Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
+      $_.TaskPath -notlike '\Microsoft*' -and $_.State -ne 'Disabled' -and
+      ($_.Triggers | Where-Object { $_.CimClass.CimClassName -match 'Logon|Boot' })
+    } | Select-Object -First 15 | ForEach-Object {
+      $act = ''
+      try { $act = ($_.Actions | Select-Object -First 1).Execute } catch {}
+      _add $_.TaskName $act $_.TaskPath 'task' "$env:USERNAME"
+      if ($al.Count -gt 0) { $al[$al.Count - 1].enabled = $true }
+    }
+  } catch {}
+  try {
+    Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object {
+      $_.StartMode -eq 'Auto' -and $_.PathName -and $_.PathName -notmatch '(?i)\\Windows\\'
+    } | Select-Object -First 15 | ForEach-Object {
+      _add $_.DisplayName $_.PathName 'services' 'service' 'SYSTEM'
+      if ($al.Count -gt 0) { $al[$al.Count - 1].enabled = ($_.State -eq 'Running') }
+    }
+  } catch {}
+  if ($al.Count -eq 0) {
+    try {
+      Get-CimInstance Win32_StartupCommand -ErrorAction Stop | Select-Object -First 40 | ForEach-Object {
+        _add $_.Name $_.Command $_.Location 'registry' $_.User
+      }
+    } catch {}
+  }
+  if ($al.Count -gt 60) {
+    $trim = New-Object System.Collections.ArrayList
+    foreach ($e in ($al | Select-Object -First 60)) { [void]$trim.Add($e) }
+    $al = $trim
+  }
+  return ,$al
+}
+
+function Get-ServicesAudit {
+  # Audit servizi per l'analisi 'quali disattivare': stato, tipo avvio, dipendenze
+  # reali (quanti servizi dipendono da questo), RAM (solo processi dedicati, non
+  # svchost condivisi) e flag Microsoft (path dentro \Windows\).
   $al = New-Object System.Collections.ArrayList
   try {
-    Get-CimInstance Win32_StartupCommand -ErrorAction Stop | Select-Object -First 40 | ForEach-Object {
+    $procs = @{}
+    Get-Process -ErrorAction SilentlyContinue | ForEach-Object { $procs[[int]$_.Id] = [math]::Round($_.WorkingSet64 / 1MB) }
+    $deps = @{}
+    Get-Service -ErrorAction SilentlyContinue | ForEach-Object {
+      foreach ($d in $_.ServicesDependedOn) {
+        $dn = $d.Name.ToLower()
+        if ($deps.ContainsKey($dn)) { $deps[$dn]++ } else { $deps[$dn] = 1 }
+      }
+    }
+    Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object { $_.StartMode -in @('Auto', 'Manual') } | Select-Object -First 200 | ForEach-Object {
+      $shared = ($_.PathName -match '(?i)svchost\.exe\s+-k')
+      $ram = $null
+      if (-not $shared -and $_.ProcessId -gt 0 -and $procs.ContainsKey([int]$_.ProcessId)) { $ram = $procs[[int]$_.ProcessId] }
+      $dn = "$($_.Name)".ToLower()
       [void]$al.Add(@{
-        name     = "$($_.Name)"
-        command  = "$($_.Command)"
-        user     = "$($_.User)"
-        location = "$($_.Location)"
+        name = "$($_.Name)"; display = "$($_.DisplayName)"; state = "$($_.State)"
+        start_mode = "$($_.StartMode)"; shared = $shared; ram_mb = $ram
+        dependents = $(if ($deps.ContainsKey($dn)) { [int]$deps[$dn] } else { 0 })
+        ms = ([bool]($_.PathName -match '(?i)\\Windows\\'))
       })
     }
   } catch {}
@@ -762,14 +926,30 @@ function Get-StartupList {
 function Run-Benchmark {
   $r = @{}
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
-  $acc = 0.0
-  for ($i = 0; $i -lt 3000000; $i++) { $acc += [math]::Sqrt($i) }
-  $sw.Stop()
-  $r.cpu_score = [int]([math]::Round(3000000 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001) / 1000))
+  # CPU e RAM: 3 ripetizioni -> mediana + CV (affidabilita' della misura)
+  $cpuRuns = New-Object System.Collections.ArrayList
+  $ramRuns = New-Object System.Collections.ArrayList
   $size = 64MB
   $buf = New-Object byte[] $size; $dst = New-Object byte[] $size
-  $sw.Restart(); for ($i = 0; $i -lt 5; $i++) { [Array]::Copy($buf, $dst, $size) }; $sw.Stop()
-  $r.ram_mbps = [int]([math]::Round((5 * $size / 1MB) / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+  for ($rep = 0; $rep -lt 3; $rep++) {
+    $acc = 0.0
+    $sw.Restart(); for ($i = 0; $i -lt 3000000; $i++) { $acc += [math]::Sqrt($i) }; $sw.Stop()
+    [void]$cpuRuns.Add([double](3000000 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001) / 1000))
+    $sw.Restart(); for ($i = 0; $i -lt 5; $i++) { [Array]::Copy($buf, $dst, $size) }; $sw.Stop()
+    [void]$ramRuns.Add([double]((5 * $size / 1MB) / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+  }
+  $cpuS = @($cpuRuns | Sort-Object); $ramS = @($ramRuns | Sort-Object)
+  $r.cpu_score = [int][math]::Round($cpuS[1])
+  $r.ram_mbps = [int][math]::Round($ramS[1])
+  $cpuAvg = ($cpuRuns | Measure-Object -Average).Average
+  $ramAvg = ($ramRuns | Measure-Object -Average).Average
+  $cv1 = 0.0; foreach ($x in $cpuRuns) { $cv1 += [math]::Pow($x - $cpuAvg, 2) }
+  $cv2 = 0.0; foreach ($x in $ramRuns) { $cv2 += [math]::Pow($x - $ramAvg, 2) }
+  $r.cpu_cv_pct = [math]::Round([math]::Sqrt($cv1 / 3) / [math]::Max($cpuAvg, 1) * 100, 1)
+  $r.ram_cv_pct = [math]::Round([math]::Sqrt($cv2 / 3) / [math]::Max($ramAvg, 1) * 100, 1)
+  $r.bench_runs = 3
+  $r.cv_pct = [math]::Max($r.cpu_cv_pct, $r.ram_cv_pct)
+  $r.reliable = ($r.cv_pct -le 10)
   # Disco: scrittura sequenziale REALE (WriteThrough bypassa la cache, 256MB)
   $tmp = Join-Path $env:TEMP 'boostpc_bench.bin'
   try {
@@ -1039,12 +1219,14 @@ function Run-FullBenchmark {
 
 # ---------------- Reporting ----------------
 function Send-Data($specs, $health, $startup) {
-  $body = @{ data = $specs; health = $health; startup = $startup } | ConvertTo-Json -Depth 6 -Compress
-  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+  $body = @{ data = $specs; health = $health; startup = $startup }
+  try { $svc = Get-ServicesAudit; if ($svc -and $svc.Count -gt 0) { $body.services_audit = $svc } } catch {}
+  $body = [System.Text.Encoding]::UTF8.GetBytes(($body | ConvertTo-Json -Depth 6 -Compress))
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body | Out-Null } catch {}
 }
 function Send-Benchmark($rec) {
-  $body = @{ benchmark = $rec } | ConvertTo-Json -Depth 6 -Compress
-  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+  $body = [System.Text.Encoding]::UTF8.GetBytes((@{ benchmark = $rec } | ConvertTo-Json -Depth 6 -Compress))
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body | Out-Null } catch {}
 }
 function Get-Games {
   $games = New-Object System.Collections.Generic.List[string]
@@ -1107,8 +1289,8 @@ function Send-Games($games) {
   $arr = @($games)
   if ($arr.Count -eq 0) { return }
   $items = ($arr | ForEach-Object { '"' + ($_ -replace '\\', '\\' -replace '"', '\"') + '"' }) -join ','
-  $body = '{"games":[' + $items + ']}'
-  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+  $body = [System.Text.Encoding]::UTF8.GetBytes('{"games":[' + $items + ']}')
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body | Out-Null } catch {}
 }
 function Get-RunningApps {
   $cand = @('chrome', 'msedge', 'firefox', 'opera', 'brave', 'Discord', 'Slack', 'Teams', 'Telegram', 'WhatsApp',
@@ -1122,7 +1304,7 @@ function Send-Running($apps) {
   $arr = @($apps)
   $items = ($arr | ForEach-Object { '"' + $_ + '"' }) -join ','
   $body = '{"running_apps":[' + $items + ']}'
-  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body | Out-Null } catch {}
 }
 
 # ---------------- Live telemetry ----------------
@@ -1366,7 +1548,7 @@ function Get-TelemetrySample {
 function Send-Telemetry($sample) {
   $body = @{ sample = $sample } | ConvertTo-Json -Depth 5 -Compress
   try {
-    $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/telemetry" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body
+    $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/telemetry" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body
     # Backend signals a graceful stop when the user clicks Stop on the web
     # dashboard. Monitor loop reads this and breaks (see MODE=monitor).
     if ($resp -and $resp.stop) { return $true }
@@ -1399,8 +1581,53 @@ function Read-Shared($path) {
     $t = $sr.ReadToEnd(); $sr.Close(); $fs.Close(); return $t
   } catch { return '' }
 }
+function Test-FpsCapable {
+  # 'ok' = ETW consentito (admin, o token con gruppo Performance Log Users S-1-5-32-559)
+  # 'relogon' = utente iscritto al gruppo ma token vecchio: serve logout/riavvio
+  # 'no' = permessi assenti
+  if (Test-Admin) { return 'ok' }
+  try { $tok = (whoami /groups) 2>$null; if ($tok -match 'S-1-5-32-559') { return 'ok' } } catch {}
+  try {
+    $me = $env:USERNAME
+    $mem = Get-LocalGroupMember -SID 'S-1-5-32-559' -ErrorAction Stop | Where-Object { $_.Name -like ("*\" + $me) }
+    if ($mem) { return 'relogon' }
+  } catch {}
+  return 'no'
+}
+
+function Enable-FpsPermission {
+  # Eseguito quando siamo ELEVATI (GUI Ottimizza): iscrive l'utente al gruppo
+  # 'Performance Log Users' (SID S-1-5-32-559) cosi PresentMon cattura gli FPS
+  # anche SENZA admin. Windows richiede logout/riavvio per aggiornare il token.
+  # Necessario da v0.8.0: il monitor non gira piu elevato (fix UAC), quindi la
+  # cattura ETW va autorizzata una tantum qui.
+  if (-not (Test-Admin)) { return $false }
+  $me = $env:USERNAME
+  try {
+    $already = $null
+    try { $already = Get-LocalGroupMember -SID 'S-1-5-32-559' -ErrorAction Stop | Where-Object { $_.Name -like ("*\" + $me) } } catch {}
+    if ($already) { return $true }
+    try { Add-LocalGroupMember -SID 'S-1-5-32-559' -Member $me -ErrorAction Stop }
+    catch {
+      $gname = ((New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-559')).Translate([System.Security.Principal.NTAccount]).Value -split '\\')[-1]
+      net localgroup "$gname" "$me" /add 2>$null | Out-Null
+    }
+    Say '   [FPS] Permessi cattura FPS attivati (gruppo Performance Log Users): dopo un riavvio o logout il monitor contera gli FPS senza admin.' 'Green'
+    try { WebLog '[FPS] Permessi cattura FPS attivati: riavvia il PC (o fai logout) per renderli effettivi.' } catch {}
+    return $true
+  } catch { return $false }
+}
+
 function Start-Fps {
-  if (-not (Test-Admin)) { Say '   [FPS] Richiede Amministratore: avvia PowerShell come Admin per gli FPS.' 'DarkYellow'; return }
+  $cap = Test-FpsCapable
+  if ($cap -eq 'relogon') {
+    Say '   [FPS] Permessi FPS gia attivati ma serve un riavvio (o logout) di Windows per renderli effettivi. Dopo, gli FPS verranno contati senza admin.' 'DarkYellow'
+    return
+  }
+  if ($cap -eq 'no') {
+    Say '   [FPS] Cattura FPS non disponibile: apri una volta la GUI FrameForge (doppio click su forgefps-agent.exe -> Ottimizza, con conferma amministratore) per attivare i permessi in automatico, poi riavvia il PC.' 'DarkYellow'
+    return
+  }
   if (-not (Test-Path $script:PM_EXE)) {
     Say '   [FPS] Scarico PresentMon (una volta sola)...' 'DarkGray'
     try {
@@ -1476,8 +1703,9 @@ function Get-Fps {
     $app = if ($iApp -ge 0 -and $c.Count -gt $iApp) { $c[$iApp] } else { 'game' }
     try { $ms = [double]::Parse($c[$iMs], $inv) } catch { continue }
     if ($ms -le 0) { continue }
-    if (-not $byApp.ContainsKey($app)) { $byApp[$app] = @{ sum = 0.0; n = 0; lsum = 0.0; ln = 0 } }
+    if (-not $byApp.ContainsKey($app)) { $byApp[$app] = @{ sum = 0.0; n = 0; lsum = 0.0; ln = 0; fr = (New-Object System.Collections.ArrayList) } }
     $byApp[$app].sum += $ms; $byApp[$app].n++
+    [void]$byApp[$app].fr.Add($ms)
     if ($iLat -ge 0 -and $c.Count -gt $iLat) {
       try { $lat = [double]::Parse($c[$iLat], $inv); if ($lat -gt 0 -and $lat -lt 1000) { $byApp[$app].lsum += $lat; $byApp[$app].ln++ } } catch {}
     }
@@ -1487,7 +1715,43 @@ function Get-Fps {
   $avg = $top.Value.sum / $top.Value.n
   if ($avg -le 0) { return $null }
   $lat = if ($top.Value.ln -gt 0) { [int]([math]::Round($top.Value.lsum / $top.Value.ln)) } else { $null }
-  return @{ fps = [int]([math]::Round(1000 / $avg)); game = ($top.Key -replace '\.exe$', ''); latency_ms = $lat }
+  # Gameplay Doctor v2: firme frametime per-tick con soglia hitch ADATTIVA
+  # (3x mediana di sessione, min 25ms) + CV pacing + istogramma cumulativo di
+  # sessione (60 bucket) per 1% / 0.1% low ESATTI lato backend.
+  $gd = $null
+  $fr = $top.Value.fr
+  if ($fr -and $fr.Count -ge 10) {
+    if (-not $script:GD_HIST) { $script:GD_HIST = New-Object 'int[]' 60; $script:GD_N = 0; $script:GD_TICK = 0 }
+    foreach ($v in $fr) {
+      $bi = [int][math]::Floor([double]$v)
+      if ($bi -lt 0) { $bi = 0 }
+      if ($bi -ge 50) {
+        if ($v -lt 60) { $bi = 50 } elseif ($v -lt 70) { $bi = 51 } elseif ($v -lt 80) { $bi = 52 }
+        elseif ($v -lt 90) { $bi = 53 } elseif ($v -lt 100) { $bi = 54 } elseif ($v -lt 125) { $bi = 55 }
+        elseif ($v -lt 150) { $bi = 56 } elseif ($v -lt 200) { $bi = 57 } elseif ($v -lt 300) { $bi = 58 } else { $bi = 59 }
+      }
+      $script:GD_HIST[$bi]++
+    }
+    $script:GD_N += $fr.Count
+    $script:GD_TICK++
+    # mediana di sessione dall'istogramma (bucket <50 ~= ms)
+    $half = $script:GD_N / 2; $cum = 0; $med = 8
+    for ($b = 0; $b -lt 60; $b++) { $cum += $script:GD_HIST[$b]; if ($cum -ge $half) { $med = $b + 0.5; break } }
+    $thr = [math]::Max(25.0, 3.0 * $med)
+    $sorted = [double[]]$fr.ToArray(); [Array]::Sort($sorted)
+    $p99 = $sorted[[math]::Min($sorted.Length - 1, [int][math]::Ceiling(0.99 * $sorted.Length) - 1)]
+    $hit = 0; foreach ($v in $sorted) { if ($v -gt $thr) { $hit++ } }
+    $mean = 0.0; foreach ($v in $fr) { $mean += $v }; $mean = $mean / $fr.Count
+    $sd = 0.0; foreach ($v in $fr) { $sd += ([double]$v - $mean) * ([double]$v - $mean) }
+    $cv = if ($mean -gt 0) { [math]::Round([math]::Sqrt($sd / $fr.Count) / $mean, 3) } else { 0 }
+    $pd = 0.0
+    for ($q = 1; $q -lt $fr.Count; $q++) { $pd += [math]::Abs([double]$fr[$q] - [double]$fr[$q - 1]) }
+    $pd = $pd / ($fr.Count - 1)
+    $gd = @{ ft_p99 = [math]::Round($p99, 1); ft_worst = [math]::Round($sorted[$sorted.Length - 1], 1); hitches = $hit; pace_dev = [math]::Round($pd, 2); ft_cv = $cv; hitch_thr = [math]::Round($thr, 1) }
+    # ogni 30 tick allega l'istogramma cumulativo (compatto: 60 int)
+    if (($script:GD_TICK % 30) -eq 0) { $gd.hist = $script:GD_HIST; $gd.hist_n = $script:GD_N }
+  }
+  return @{ fps = [int]([math]::Round(1000 / $avg)); game = ($top.Key -replace '\.exe$', ''); latency_ms = $lat; gd = $gd }
 }
 
 # ---------------- Tweak actions ----------------
@@ -2499,6 +2763,39 @@ function Show-WebGui {
   .tab.active .count { color: var(--accent); }
   .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 
+  /* ===== GUI v3.2: skeleton + progresso analisi iniziale ===== */
+  .scan-strip {
+    grid-column: 1 / -1; background: var(--card);
+    border: 1px solid var(--border); padding: 14px 18px;
+  }
+  .scan-title {
+    font-family: "Consolas", monospace; font-size: 11px;
+    color: var(--accent); letter-spacing: 0.2em; margin-bottom: 6px;
+  }
+  .scan-sub { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .scan-bar { height: 6px; background: #000; border: 1px solid var(--border); overflow: hidden; }
+  .scan-bar-fill { height: 100%; width: 0%; background: var(--accent); transition: width 300ms ease; }
+  .scan-meta {
+    font-family: "Consolas", monospace; font-size: 11px; color: var(--dim);
+    margin-top: 6px; display: flex; justify-content: space-between; gap: 10px;
+  }
+  .skel-card {
+    background: var(--card); border: 1px solid var(--border);
+    padding: 16px 18px; min-height: 150px; position: relative; overflow: hidden;
+  }
+  .skel-line { height: 12px; background: var(--card-hi); margin-bottom: 10px; }
+  .skel-line.w60 { width: 60%; }
+  .skel-line.w40 { width: 40%; height: 9px; }
+  .skel-line.w85 { width: 85%; height: 9px; }
+  .skel-line.w75 { width: 75%; height: 9px; }
+  .skel-card::after {
+    content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+    animation: skelShimmer 1.4s infinite;
+  }
+  @keyframes skelShimmer { 100% { transform: translateX(100%); } }
+
   main {
     flex: 1; overflow-y: auto;
     padding: 20px 28px 12px;
@@ -3055,7 +3352,7 @@ function Show-WebGui {
     <div class="brand-row">
       <div class="brand">FRAMEFORGE AGENT</div>
       <div class="brand-sub">Trova i colli di bottiglia. Ottimizza in sicurezza.</div>
-      <div class="ver-pill">GUI v3.1</div>
+      <div class="ver-pill">GUI v3.2</div>
     </div>
     <div class="safety">
       <strong>SICUREZZA</strong> - Non tocchiamo mai Windows Defender, Firewall o servizi di sicurezza. Ogni modifica ha backup automatico ed e reversibile.
@@ -3234,6 +3531,55 @@ function Show-WebGui {
   window.addEventListener("unhandledrejection", e => reportClientError("promise: " + (e.reason && (e.reason.stack || e.reason.message) || e.reason)));
   function safeRender(name, fn) {
     try { fn(); } catch (err) { reportClientError(name + ": " + (err && err.stack || err)); }
+  }
+
+  // ===== GUI v3.2: skeleton + progresso stimato durante la prima analisi =====
+  // Il server PS e' single-thread: mentre esegue lo scan non puo' rispondere a
+  // richieste di progresso reale. Il progresso e' quindi stimato client-side,
+  // calibrato sulla durata effettiva dell'ultimo scan (localStorage ff_scan_ms).
+  let _scanTimer = null;
+  let _scanT0 = 0;
+  const _SCAN_STEPS = ["Gaming & FPS", "Latenza & Input", "Rete & Streaming", "Sistema & Debloat", "Servizi Windows", "GPU & driver"];
+  function renderScanSkeleton() {
+    const el = document.getElementById("cards");
+    if (!el || state.tweaks.length) return;
+    let est = 9000;
+    try { est = parseInt(localStorage.getItem("ff_scan_ms") || "9000", 10) || 9000; } catch (_) {}
+    est = Math.max(3000, Math.min(60000, est));
+    _scanT0 = Date.now();
+    const skel = Array.from({ length: 6 }, () => `
+      <div class="skel-card" aria-hidden="true">
+        <div class="skel-line w60"></div>
+        <div class="skel-line w40"></div>
+        <div class="skel-line w85"></div>
+        <div class="skel-line w75"></div>
+      </div>`).join("");
+    el.innerHTML = `
+      <div class="scan-strip" data-testid="scan-progress">
+        <div class="scan-title">// ANALISI SISTEMA IN CORSO</div>
+        <div class="scan-sub">Controllo lo stato REALE di ogni tweak sul tuo PC (registro, servizi, driver). Nessuna modifica viene applicata.</div>
+        <div class="scan-bar"><div class="scan-bar-fill" id="scanBarFill"></div></div>
+        <div class="scan-meta"><span id="scanStep">${_SCAN_STEPS[0]}…</span><span id="scanPct">0%</span></div>
+      </div>` + skel;
+    clearInterval(_scanTimer);
+    _scanTimer = setInterval(() => {
+      const fill = document.getElementById("scanBarFill");
+      if (!fill) { clearInterval(_scanTimer); _scanTimer = null; return; }
+      const p = Math.min(92, Math.round((Date.now() - _scanT0) / est * 100));
+      fill.style.width = p + "%";
+      const pctEl = document.getElementById("scanPct");
+      if (pctEl) pctEl.textContent = p + "%";
+      const stepEl = document.getElementById("scanStep");
+      if (stepEl) stepEl.textContent = _SCAN_STEPS[Math.min(_SCAN_STEPS.length - 1, Math.floor(p / (92 / _SCAN_STEPS.length)))] + "…";
+    }, 250);
+  }
+  function finishScanSkeleton() {
+    if (_scanTimer) { clearInterval(_scanTimer); _scanTimer = null; }
+    if (_scanT0) {
+      const took = Date.now() - _scanT0;
+      _scanT0 = 0;
+      if (took > 1500) { try { localStorage.setItem("ff_scan_ms", String(took)); } catch (_) {} }
+    }
   }
   function toast(msg, cls) {
     const t = document.getElementById("toast");
@@ -3708,10 +4054,13 @@ function Show-WebGui {
       if (!d || !Array.isArray(d.tweaks)) throw new Error("payload /api/state non valido");
     } catch (e) {
       reportClientError("refreshState: " + (e && e.message || e));
+      const sub = document.querySelector(".scan-strip .scan-sub");
+      if (sub) sub.textContent = "Collegamento all'agent in corso… riprovo tra qualche secondo.";
       if (_stateRetries++ < 6) setTimeout(() => refreshState(showToast), 2500);
       return;
     }
     _stateRetries = 0;
+    finishScanSkeleton();
     // Normalizza il payload: ConvertTo-Json (PS 5.1) puo' produrre scalari al posto
     // di array (1 elemento) o campi mancanti. Il render non deve MAI rompersi per
     // un dato inatteso (bug storico: griglia vuota all'avvio finche' non si
@@ -4210,6 +4559,7 @@ function Show-WebGui {
   if (mh.overlay)  mh.overlay.addEventListener("click", (e) => { if (e.target === mh.overlay) mhClose(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && mh.open) mhClose(); });
 
+  renderScanSkeleton();
   refreshState();
   setInterval(pollLog, 400);
 })();
@@ -4403,7 +4753,7 @@ function Show-WebGui {
         elseif ($path -eq '/api/profiles-cloud' -and $method -eq 'GET') {
           # Proxy to FrameForge cloud: /api/agent/profiles (X-Agent-Token auth).
           try {
-            $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/profiles" -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 8
+            $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/profiles" -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -TimeoutSec 8
             Send-Json $ctx $resp
           } catch {
             Send-Json $ctx @{ err = "cloud unreachable"; profiles = @(); templates = @(); catalog = @() }
@@ -4418,7 +4768,7 @@ function Show-WebGui {
         elseif ($path -eq '/api/mobile-handoff/generate' -and $method -eq 'POST') {
           # Proxy to cloud: generate a 5-min single-use magic-link for mobile QR handoff.
           try {
-            $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/magic-link" -Method Post -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 10
+            $resp = Invoke-RestMethod -Uri "$BACKEND/api/agent/magic-link" -Method Post -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -TimeoutSec 10
             Send-Json $ctx $resp
           } catch {
             $code = try { [int]$_.Exception.Response.StatusCode.value__ } catch { 0 }
@@ -4435,7 +4785,7 @@ function Show-WebGui {
               # NOTA: Invoke-RestMethod auto-parsa image/svg+xml come [xml] object e
               # perde il markup. Usiamo Invoke-WebRequest -UseBasicParsing per ottenere
               # i bytes raw del SVG e inoltrarli intatti al browser.
-              $resp = Invoke-WebRequest -Uri "$BACKEND/api/agent/magic-qr?token=$([Uri]::EscapeDataString($magic))" -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 10 -UseBasicParsing
+              $resp = Invoke-WebRequest -Uri "$BACKEND/api/agent/magic-qr?token=$([Uri]::EscapeDataString($magic))" -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -TimeoutSec 10 -UseBasicParsing
               $bytes = if ($resp.RawContentStream) { $resp.RawContentStream.ToArray() } else { [System.Text.Encoding]::UTF8.GetBytes([string]$resp.Content) }
               $ctx.Response.ContentType = 'image/svg+xml'
               $ctx.Response.Headers.Add('Cache-Control','no-store')
@@ -4776,7 +5126,39 @@ function Show-Gui {
 }
 
 # ---------------- Main ----------------
-if ($MODE -eq 'restore') { Say "`n[STEP] Ripristino dal backup..." 'Cyan'; Say ('   ' + (Invoke-Restore)) 'Green'; return }
+if ($MODE -eq 'autopilot' -or $MODE -eq 'cleanup') {
+  Say "`n[AUTO-PILOT] Analisi del sistema in corso..." 'Cyan'
+  $__apBefore = $null; try { $__apBefore = Get-Health } catch {}
+  $__apApplied = @()
+  foreach ($t in $script:TWEAKS) {
+    if ($t.risk -ne 'safe') { continue }
+    $__fit = 'ok'; if ($t.fit) { try { $__fit = & $t.fit } catch { $__fit = 'ok' }; if (-not $__fit) { $__fit = 'ok' } }
+    if ("$__fit" -like 'skip*') { continue }
+    $__st = 'n/d'; try { $__st = & $t.state } catch { $__st = 'n/d' }
+    if ("$__st" -match '^(Attivo|Disabilitato|n/d)$') { continue }
+    try {
+      Invoke-ApplyTracked $t
+      $__apApplied += $t.id
+      Say ("  [OK] {0}" -f $t.name) 'Green'
+    } catch { Say ("  [SKIP] {0}" -f $t.name) 'Yellow' }
+  }
+  Save-Backup
+  Say ("`n[AUTO-PILOT] {0} tweak applicati. Misuro il dopo..." -f $__apApplied.Count) 'Cyan'
+  Start-Sleep -Seconds 2
+  $__apAfter = $null; try { $__apAfter = Get-Health } catch {}
+  try {
+    $__apBody = @{ applied = $__apApplied; before = $__apBefore; after = $__apAfter } | ConvertTo-Json -Depth 6 -Compress
+    $__apBytes = [System.Text.Encoding]::UTF8.GetBytes($__apBody)
+    Invoke-WebRequest -Uri "$BACKEND/api/autopilot/agent/result" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $__apBytes -UseBasicParsing -TimeoutSec 20 | Out-Null
+    Say "[AUTO-PILOT] Rapporto inviato al dashboard." 'Green'
+  } catch { Say ("[AUTO-PILOT] Invio rapporto fallito: {0}" -f $_.Exception.Message) 'Red' }
+  try { Send-Data (Get-Specs) $__apAfter (Get-StartupList) } catch {}
+  Say "`n[DONE] Auto-Pilot completato. Controlla il rapporto sul dashboard." 'Green'
+  Start-Sleep -Seconds 3
+  return
+}
+
+if ($MODE -eq 'restore') { Say "`n[STEP] Ripristino dal backup..." 'Cyan'; Say ('   ' + (Invoke-Restore)) 'Green'; try { Invoke-RestMethod -Uri "$BACKEND/api/autopilot/agent/restore-done" -Method Post -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -TimeoutSec 10 | Out-Null } catch {}; return }
 
 if ($MODE -eq 'benchmark') {
   Say "`n[STEP] Benchmark (CPU / RAM / Disco / Rete)..." 'Cyan'
@@ -4806,13 +5188,16 @@ if ($MODE -eq 'fullbench') {
 }
 
 if ($MODE -eq 'optimize') {
+  # v0.8.0-fps: se elevati, autorizza una tantum la cattura FPS non-admin
+  # (gruppo Performance Log Users) per il monitor senza UAC.
+  try { Enable-FpsPermission | Out-Null } catch {}
   # v0.7.4c: first-scan CONDIZIONALE. Il primo scan e' utile SOLO se i dati cloud
   # sono stantii o assenti (utente nuovo, o non ha aperto la GUI da giorni).
   # Se pc-specs.updated_at e' recente (< 15 min) saltiamo: risparmiamo 3-5s
   # di attesa ad ogni apertura e togliamo l'effetto "primo scan a ogni apertura".
   $__skipFirstScan = $false
   try {
-    $__specsResp = Invoke-RestMethod -Uri "$BACKEND/api/pc-specs-agent" -Headers @{ 'X-Agent-Token' = $TOKEN } -TimeoutSec 6 -ErrorAction Stop
+    $__specsResp = Invoke-RestMethod -Uri "$BACKEND/api/pc-specs-agent" -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -TimeoutSec 6 -ErrorAction Stop
     if ($__specsResp -and $__specsResp.updated_at) {
       $__lastSync = [DateTime]::Parse($__specsResp.updated_at)
       $__ageMin = ((Get-Date).ToUniversalTime() - $__lastSync.ToUniversalTime()).TotalMinutes
@@ -4840,10 +5225,13 @@ if ($MODE -eq 'optimize') {
 
   function __FsPost($body, $label) {
     $json = $body | ConvertTo-Json -Depth 8 -Compress
+    # v0.8.1: UTF-8 esplicito. PS 5.1 invia il body in Latin-1 senza charset e i nomi
+    # dei servizi Windows in italiano (lettere accentate) rompevano il parse -> HTTP 400.
+    $__b = [System.Text.Encoding]::UTF8.GetBytes($json)
     try {
       $resp = Invoke-WebRequest -Uri "$BACKEND/api/agent/report-specs" -Method Post `
-        -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } `
-        -Body $json -UseBasicParsing -TimeoutSec 20
+        -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } `
+        -Body $__b -UseBasicParsing -TimeoutSec 20
       Say ("  [OK] {0}: {1} bytes -> HTTP {2}" -f $label, $json.Length, $resp.StatusCode) 'DarkGreen'
       return $true
     } catch {
@@ -4860,16 +5248,18 @@ if ($MODE -eq 'optimize') {
     }
   }
 
-  $__scanSpecs = $null; $__scanHealth = $null; $__scanStartup = $null
+  $__scanSpecs = $null; $__scanHealth = $null; $__scanStartup = $null; $__scanSvc = $null
   try { $__scanSpecs = Get-Specs;         Say ("  specs: CPU={0}, GPU={1}, RAM={2}" -f $__scanSpecs.cpu, $__scanSpecs.gpu, $__scanSpecs.ram) 'DarkGray' } catch { Say ("  Get-Specs FAIL: {0}" -f $_.Exception.Message) 'Red' }
   try { $__scanHealth = Get-Health;       Say ("  health: {0} chiavi" -f $__scanHealth.Count) 'DarkGray' } catch { Say ("  Get-Health FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
   try { $__scanStartup = Get-StartupList; Say ("  startup: {0} app all'avvio" -f $__scanStartup.Count) 'DarkGray' } catch { Say ("  Get-StartupList FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
+  try { $__scanSvc = Get-ServicesAudit;   Say ("  servizi: {0} controllati" -f $__scanSvc.Count) 'DarkGray' } catch { Say ("  Get-ServicesAudit FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
 
   if ($__scanSpecs) {
     $__body = @{}
     if ($__scanSpecs)   { $__body.data    = $__scanSpecs }
     if ($__scanHealth)  { $__body.health  = $__scanHealth }
     if ($__scanStartup) { $__body.startup = $__scanStartup }
+    if ($__scanSvc -and $__scanSvc.Count -gt 0) { $__body.services_audit = $__scanSvc }
     $__ok = __FsPost $__body 'specs+health+startup'
     if ($__ok) {
       Say ("[ OK ] Primo scan completato: {0} | GPU {1} | RAM {2}. Dati inviati al cloud." -f $__scanSpecs.cpu, $__scanSpecs.gpu, $__scanSpecs.ram) 'Green'
@@ -4949,7 +5339,7 @@ function Send-NetResult($res) {
       '"' + $_.Key + '":' + $v
     }) -join ','
   $body = '{"result":{' + $items + '}}'
-  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/netresult" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+  try { Invoke-RestMethod -Uri "$BACKEND/api/agent/netresult" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body | Out-Null } catch {}
 }
 $script:DL_BLOCK = {
   param($u)
@@ -5031,6 +5421,408 @@ function Run-Bufferbloat {
   Say "`n[ OK ] Test rete completato. Apri FrameForge -> Rete per il voto (A-F) e i consigli." 'Green'
 }
 
+# ---------------- LAB: Laboratorio Automatico delle Prestazioni (Fase 1) ----------------
+function LabApi($method, $path, $body) {
+  try {
+    $h = @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME }
+    if ($body) { return Invoke-RestMethod -Uri "$BACKEND$path" -Method $method -ContentType 'application/json' -Headers $h -Body ($body | ConvertTo-Json -Depth 8 -Compress) -TimeoutSec 30 }
+    return Invoke-RestMethod -Uri "$BACKEND$path" -Method $method -Headers $h -TimeoutSec 30
+  } catch { return $null }
+}
+function LabEvent($type, $data) {
+  $b = @{ type = $type }
+  if ($data) { $b.data = $data }
+  LabApi 'Post' '/api/agent/lab/event' $b | Out-Null
+}
+function Get-LabTick {
+  # Frametime (ms) NUOVI dal flusso PresentMon, per l'app con piu frame nel tick
+  if (-not $script:PM_ON) { return $null }
+  $raw = Read-Shared $script:PM_OUT
+  if (-not $raw) { return $null }
+  $lines = $raw -split "`r?`n" | Where-Object { $_ -ne '' }
+  if (-not $lines -or $lines.Count -le $script:PM_ROWS) { return $null }
+  $hdr = $lines[0] -split ','
+  $iApp = -1; $iMs = -1; $iLat = -1
+  for ($k = 0; $k -lt $hdr.Count; $k++) {
+    $h = $hdr[$k].Trim().ToLower()
+    if ($h -eq 'application') { $iApp = $k }
+    if ($h -like '*betweenpresents*') { $iMs = $k }
+    if ($h -like '*untildisplayed*') { $iLat = $k }
+  }
+  if ($iMs -lt 0) { $script:PM_ROWS = $lines.Count; return $null }
+  $new = $lines[$script:PM_ROWS..($lines.Count - 1)]
+  $script:PM_ROWS = $lines.Count
+  $byApp = @{}
+  $byLat = @{}
+  $inv = [Globalization.CultureInfo]::InvariantCulture
+  foreach ($ln in $new) {
+    $c = $ln -split ','
+    if ($c.Count -le $iMs) { continue }
+    $app = if ($iApp -ge 0 -and $c.Count -gt $iApp) { $c[$iApp] } else { 'game' }
+    try { $ms = [double]::Parse($c[$iMs], $inv) } catch { continue }
+    if ($ms -le 0) { continue }
+    if (-not $byApp.ContainsKey($app)) { $byApp[$app] = New-Object System.Collections.ArrayList }
+    [void]$byApp[$app].Add($ms)
+    if ($iLat -ge 0 -and $c.Count -gt $iLat) {
+      try {
+        $lv = [double]::Parse($c[$iLat], $inv)
+        if ($lv -gt 0 -and $lv -lt 1000) {
+          if (-not $byLat.ContainsKey($app)) { $byLat[$app] = New-Object System.Collections.ArrayList }
+          [void]$byLat[$app].Add($lv)
+        }
+      } catch {}
+    }
+  }
+  if ($byApp.Count -eq 0) { return $null }
+  $top = $byApp.GetEnumerator() | Sort-Object { $_.Value.Count } -Descending | Select-Object -First 1
+  return @{ app = $top.Key; ms = $top.Value; lat = $byLat[$top.Key] }
+}
+function Wait-LabGame {
+  $shown = $false
+  $lastPoll = Get-Date
+  while ($true) {
+    $t = Get-LabTick
+    if ($t -and $t.ms.Count -ge 15) {
+      if ($shown) { Say ("   [LAB] Gioco rilevato: {0}" -f $t.app) 'Green'; LabEvent 'game_detected' @{ game = $t.app } }
+      return $t.app
+    }
+    if (-not $shown) {
+      $shown = $true
+      Say '   [LAB] In attesa del gioco... avvia il gioco e resta in partita (scena il piu possibile ripetibile).' 'Yellow'
+      LabEvent 'waiting_game' $null
+    }
+    if (((Get-Date) - $lastPoll).TotalSeconds -ge 12) {
+      $lastPoll = Get-Date
+      $nx = LabApi 'Get' '/api/agent/lab/next' $null
+      if ($nx -and ($nx.action -eq 'abort' -or $nx.action -eq 'complete')) { return '__STOP__' }
+    }
+    Start-Sleep -Milliseconds 1500
+  }
+}
+function Invoke-LabRun($seconds, $label) {
+  $fr = New-Object System.Collections.ArrayList
+  $lt = New-Object System.Collections.ArrayList
+  $app = ''
+  $t0 = Get-Date
+  $lastSay = -100
+  while (((Get-Date) - $t0).TotalSeconds -lt $seconds) {
+    $t = Get-LabTick
+    if ($t) {
+      $app = $t.app
+      foreach ($v in $t.ms) { [void]$fr.Add($v) }
+      if ($t.lat) { foreach ($v in $t.lat) { [void]$lt.Add($v) } }
+    }
+    $el = [int]((Get-Date) - $t0).TotalSeconds
+    if (($el - $lastSay) -ge 15) { $lastSay = $el; Say ("      [{0}] {1}/{2}s - frame raccolti: {3}" -f $label, $el, $seconds, $fr.Count) 'DarkGray' }
+    Start-Sleep -Milliseconds 900
+  }
+  if ($fr.Count -lt 100) { return $null }
+  $arr = [double[]]$fr.ToArray()
+  $sorted = [double[]]$arr.Clone(); [Array]::Sort($sorted)
+  $sum = 0.0; foreach ($v in $arr) { $sum += $v }
+  $avg = $sum / $arr.Length
+  $var = 0.0; foreach ($v in $arr) { $var += ($v - $avg) * ($v - $avg) }
+  $var = $var / $arr.Length
+  $p99 = $sorted[[math]::Min($sorted.Length - 1, [math]::Max(0, [int][math]::Ceiling(0.99 * $sorted.Length) - 1))]
+  $p999 = $sorted[[math]::Min($sorted.Length - 1, [math]::Max(0, [int][math]::Ceiling(0.999 * $sorted.Length) - 1))]
+  $run = @{
+    fps_avg = [math]::Round(1000.0 / $avg, 2)
+    fps_p1 = [math]::Round(1000.0 / $p99, 2)
+    fps_p01 = [math]::Round(1000.0 / $p999, 2)
+    ft_avg_ms = [math]::Round($avg, 3)
+    ft_var = [math]::Round($var, 3)
+    frames = $arr.Length
+    duration_s = [int]$seconds
+    game = $app
+  }
+  try {
+    $tel = Get-TelemetrySample
+    if ($tel.ContainsKey('cpu_util')) { $run.cpu_pct = $tel.cpu_util }
+    if ($tel.ContainsKey('gpu_util')) { $run.gpu_pct = $tel.gpu_util }
+    if ($tel.ContainsKey('gpu_temp')) { $run.temp_gpu = $tel.gpu_temp }
+    if ($tel.ContainsKey('cpu_temp')) { $run.temp_cpu = $tel.cpu_temp }
+  } catch {}
+  if ($lt.Count -ge 50) {
+    $ls = 0.0; foreach ($v in $lt) { $ls += $v }
+    $run.latency_ms = [math]::Round($ls / $lt.Count, 2)
+  }
+  return $run
+}
+
+function Register-LabResume {
+  # Riprende il Lab automaticamente dopo il riavvio (RunOnce al logon + bootstrap che riscarica lo script)
+  try {
+    $dir = Join-Path $env:LOCALAPPDATA 'FrameForge'
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $rs = Join-Path $dir 'lab_resume.ps1'
+    $lines = @(
+      "`$t = '$TOKEN'",
+      "`$u = '$BACKEND/api/agent/script?t=' + `$t",
+      "`$f = Join-Path `$env:TEMP 'ff_lab_resume.ps1'",
+      "try { Invoke-WebRequest -UseBasicParsing -Uri `$u -OutFile `$f -TimeoutSec 60 } catch { Start-Sleep 15; Invoke-WebRequest -UseBasicParsing -Uri `$u -OutFile `$f -TimeoutSec 60 }",
+      "powershell -NoProfile -ExecutionPolicy Bypass -File `$f -Token `$t -Mode lab"
+    )
+    Set-Content -Path $rs -Value ($lines -join "`r`n") -Encoding UTF8
+    $cmd = 'powershell -NoProfile -WindowStyle Normal -ExecutionPolicy Bypass -File "' + $rs + '"'
+    Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'FrameForgeLabResume' -Value $cmd -Force
+    return $true
+  } catch { return $false }
+}
+function Remove-LabResume {
+  try { Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'FrameForgeLabResume' -ErrorAction SilentlyContinue } catch {}
+  try { Remove-Item (Join-Path $env:LOCALAPPDATA 'FrameForge\lab_resume.ps1') -Force -ErrorAction SilentlyContinue } catch {}
+}
+function Invoke-LabRebootPrompt($tweakId) {
+  $reg = Register-LabResume
+  if ($reg) { Say '   [ OK ] Ripresa automatica registrata: dopo il riavvio e il login, il Lab continua da solo (conferma UAC richiesta).' 'Green' }
+  else { Say '   [WARN] Non sono riuscito a registrare la ripresa automatica: dopo il riavvio rilancia tu il comando Lab.' 'DarkYellow' }
+  Say ("`n   Il tweak '{0}' richiede un RIAVVIO per avere effetto." -f $tweakId) 'Yellow'
+  $ans = Read-Host '   Riavviare ADESSO? Digita S per riavviare subito, altro tasto per riavviare tu manualmente'
+  if ($ans -match '^[sS]') {
+    Say '   Riavvio in 8 secondi... salva tutto!' 'Yellow'
+    shutdown /r /t 8 | Out-Null
+  } else {
+    Say '   OK: riavvia quando vuoi. Il Lab riprendera automaticamente al prossimo login.' 'Gray'
+  }
+}
+
+if ($MODE -eq 'lab') {
+  Say "`n== FrameForge LAB - Laboratorio Automatico delle Prestazioni ==" 'Cyan'
+  Say '   Testo i tweak UNO ALLA VOLTA sul tuo gioco: baseline x3, misura, statistica, rollback se inutile.' 'Gray'
+  if (-not (Test-Admin)) {
+    if ($PSCommandPath) {
+      Say '   [LAB] Servono i permessi amministratore (tweak di sistema + punto di ripristino): riavvio elevato...' 'Yellow'
+      try {
+        Start-Process powershell -Verb RunAs -ArgumentList ('-ExecutionPolicy Bypass -File "' + $PSCommandPath + '" -Token ' + $TOKEN + ' -Mode lab')
+        return
+      } catch {}
+    }
+    Say '[ERR ] Il Laboratorio richiede PowerShell come AMMINISTRATORE.' 'Red'
+    Say '       Apri PowerShell con tasto destro -> Esegui come amministratore e rilancia il comando.' 'Yellow'
+    return
+  }
+  $script:TWMAP = @{}
+  foreach ($t in $script:TWEAKS) { $script:TWMAP[$t.id] = $t }
+  $script:LAB_APPLIED = New-Object System.Collections.ArrayList
+  $script:LAB_BTEMPS = New-Object System.Collections.ArrayList
+  $script:LAB_TREF = $null
+  function Wait-ThermalStable {
+    if (-not $script:LAB_TREF) { return }
+    $t0 = Get-Date
+    while (((Get-Date) - $t0).TotalSeconds -lt 90) {
+      $tel = Get-TelemetrySample
+      $g = $null
+      if ($tel.ContainsKey('gpu_temp')) { $g = [double]$tel.gpu_temp }
+      if ((-not $g) -or ($g -le ($script:LAB_TREF + 3))) { return }
+      Say ("   [TERMICA] GPU {0}C oltre il riferimento baseline ({1}C): attendo il raffreddamento per una misura pulita..." -f $g, $script:LAB_TREF) 'DarkGray'
+      Start-Sleep -Seconds 8
+    }
+  }
+  Start-Fps
+  if (-not $script:PM_ON) { Say '[ERR ] Cattura FPS non disponibile: il Lab non puo misurare i benchmark.' 'Red'; return }
+  Say '   Collegato. Controllo la sessione Lab (avviala da FrameForge -> Laboratorio se non lo hai gia fatto)...' 'DarkGray'
+  $idleWaits = 0
+  $labDone = $false
+  try {
+    while (-not $labDone) {
+      $nx = LabApi 'Get' '/api/agent/lab/next' $null
+      if (-not $nx) { Start-Sleep -Seconds 5; continue }
+      $act = "$($nx.action)"
+      if ($act -eq 'wait') {
+        $idleWaits++
+        if ($idleWaits -eq 1) { Say '   [LAB] Nessuna sessione attiva. Avviane una da FrameForge -> Laboratorio (resto in ascolto).' 'Yellow' }
+        if ($idleWaits -gt 75) { Say '   [LAB] Nessuna sessione avviata in 5 minuti: esco.' 'DarkYellow'; $labDone = $true; continue }
+        Start-Sleep -Seconds 4
+      }
+      elseif ($act -eq 'snapshot') {
+        $idleWaits = 0
+        Say "`n[FASE 1/4] SNAPSHOT - punto di ripristino Windows + stato iniziale" 'Cyan'
+        $rp = $false
+        try {
+          Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction SilentlyContinue
+          Checkpoint-Computer -Description 'FrameForge Lab' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop
+          $rp = $true
+          Say '   [ OK ] Punto di ripristino Windows creato.' 'Green'
+        } catch {
+          Say ('   [WARN] Punto di ripristino non creato: ' + $_.Exception.Message) 'DarkYellow'
+          Say '          (Windows ne consente 1 ogni 24h; il backup mirato per-tweak resta comunque attivo.)' 'DarkGray'
+        }
+        $states = @{}
+        foreach ($cid in @($nx.candidate_ids)) {
+          $tw = $script:TWMAP[$cid]
+          if ($tw) { try { $states[$cid] = "$(& $tw.state)" } catch { $states[$cid] = 'n/d' } }
+        }
+        LabEvent 'snapshot_done' @{ restore_point = $rp; states = $states }
+        Say '   [ OK ] Snapshot inviato. Si passa alla BASELINE.' 'Green'
+      }
+      elseif ($act -eq 'run_baseline') {
+        Say ("`n[FASE 2/4] BASELINE - run {0}/{1} ({2}s)" -f ([int]$nx.runs_done + 1), $nx.runs_target, $nx.run_seconds) 'Cyan'
+        $g = Wait-LabGame
+        if ($g -eq '__STOP__') { continue }
+        $run = Invoke-LabRun $nx.run_seconds 'baseline'
+        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti (gioco chiuso o in pausa?). Riprovo.' 'DarkYellow'; continue }
+        Say ("   run: {0} FPS avg | 1% low {1} | frame {2}" -f $run.fps_avg, $run.fps_p1, $run.frames) 'Gray'
+        $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'baseline'; run = $run }
+        if ($run.temp_gpu) { [void]$script:LAB_BTEMPS.Add([double]$run.temp_gpu) }
+        if ($resp -and $resp.baseline_ok) {
+          Say ("   [ OK ] BASELINE stabile: {0} FPS avg (CV {1}%)" -f $resp.stats.fps_avg, $resp.stats.cv_pct) 'Green'
+          if ($script:LAB_BTEMPS.Count -gt 0) { $script:LAB_TREF = [int](($script:LAB_BTEMPS | Measure-Object -Average).Average) }
+        }
+        elseif ($resp -and $resp.extra_run) { Say '   [INFO] Variabilita alta tra i run (CV > 5%): 4o run e scarto l outlier.' 'DarkYellow' }
+      }
+      elseif ($act -eq 'apply_tweak') {
+        $tw = $script:TWMAP[$nx.tweak_id]
+        if (-not $tw) {
+          LabEvent 'tweak_skip' @{ tweak_id = $nx.tweak_id; reason = 'tweak non presente nel catalogo agent' }
+          Say ("   [WARN] Tweak {0} non trovato nel catalogo: salto." -f $nx.tweak_id) 'DarkYellow'
+        } else {
+          Say ("`n[FASE 3/4] TEST {0}/{1}: {2}" -f $nx.step, $nx.total, $tw.name) 'Cyan'
+          Invoke-ApplyTracked $tw
+          Save-Backup
+          [void]$script:LAB_APPLIED.Add("$($nx.tweak_id)")
+          LabEvent 'tweak_applied' @{ tweak_id = $nx.tweak_id; requires_reboot = [bool]$nx.requires_reboot }
+          if ($nx.requires_reboot) {
+            Invoke-LabRebootPrompt $nx.tweak_id
+            $labDone = $true
+          } else {
+            Say '   [ OK ] Tweak applicato (backup automatico). Attendo 3s che si assesti...' 'Green'
+            Start-Sleep -Seconds 3
+          }
+        }
+      }
+      elseif ($act -eq 'reboot_required') {
+        $rebooted = $false
+        try {
+          $bootUtc = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime()
+          $appliedUtc = ([DateTimeOffset]::Parse("$($nx.applied_at)")).UtcDateTime
+          if ($bootUtc -gt $appliedUtc) { $rebooted = $true }
+        } catch {}
+        if ($rebooted) {
+          Remove-LabResume
+          Say ("`n[LAB] Riavvio rilevato: riprendo il test di {0}." -f $nx.tweak_id) 'Green'
+          LabEvent 'reboot_done' @{ tweak_id = $nx.tweak_id }
+        } else {
+          Invoke-LabRebootPrompt $nx.tweak_id
+          $labDone = $true
+        }
+      }
+      elseif ($act -eq 'run_warmup') {
+        Say ("   [WARM-UP] run di assestamento post-riavvio ({0}s, scartato dalle statistiche)" -f $nx.run_seconds) 'Cyan'
+        $g = Wait-LabGame
+        if ($g -eq '__STOP__') { continue }
+        $run = Invoke-LabRun $nx.run_seconds 'warmup'
+        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        LabApi 'Post' '/api/agent/lab/run' @{ phase = 'warmup'; tweak_id = $nx.tweak_id; run = $run } | Out-Null
+        Say ("   warm-up: {0} FPS avg (ok, ora si misura sul serio)" -f $run.fps_avg) 'Gray'
+      }
+      elseif ($act -eq 'synergy_toggle') {
+        $p = @($nx.pair)
+        Say ("`n[SYNERGY {0}/{1}] {2} + {3} - preparo misura {4}" -f $nx.pair_num, $nx.pairs_total, $p[0], $p[1], "$($nx.stage)".ToUpper()) 'Cyan'
+        foreach ($tid in $p) {
+          if ($nx.stage -eq 'off') {
+            $msg = Invoke-RestoreTweak "$tid"
+            Say ("   OFF {0}: {1}" -f $tid, $msg) 'DarkGray'
+          } else {
+            $tw = $script:TWMAP[$tid]
+            if ($tw) { Invoke-ApplyTracked $tw }
+            Say ("   ON  {0}: riapplicato" -f $tid) 'DarkGray'
+          }
+        }
+        Save-Backup
+        Start-Sleep -Seconds 3
+        LabEvent 'synergy_toggled' @{ stage = "$($nx.stage)" }
+      }
+      elseif ($act -eq 'run_synergy') {
+        Say ("   [SYNERGY {0}] run {1}/{2} ({3}s)" -f "$($nx.stage)".ToUpper(), ([int]$nx.runs_done + 1), $nx.runs_target, $nx.run_seconds) 'Cyan'
+        $g = Wait-LabGame
+        if ($g -eq '__STOP__') { continue }
+        Wait-ThermalStable
+        $run = Invoke-LabRun $nx.run_seconds ('synergy ' + $nx.stage)
+        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        Say ("   run: {0} FPS avg" -f $run.fps_avg) 'Gray'
+        $ph = 'synergy_' + $nx.stage
+        $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = $ph; run = $run }
+        if ($resp -and $resp.pair_done -and $resp.synergy) {
+          if ($resp.synergy.is_synergy) { Say ("   [ OK ] SINERGIA: insieme {0}% vs somma singoli {1}%" -f $resp.synergy.combined_delta_pct, $resp.synergy.individual_sum_pct) 'Green' }
+          else { Say ("   [INFO] Nessuna sinergia extra ({0}% vs {1}%)" -f $resp.synergy.combined_delta_pct, $resp.synergy.individual_sum_pct) 'Gray' }
+        }
+      }
+      elseif ($act -eq 'run_validation') {
+        Say ("`n[VALIDAZIONE] Sessione di gioco reale da {0} minuti con la configurazione finale. Gioca normalmente!" -f [int]($nx.run_seconds / 60)) 'Cyan'
+        $g = Wait-LabGame
+        if ($g -eq '__STOP__') { continue }
+        Wait-ThermalStable
+        $run = Invoke-LabRun $nx.run_seconds 'validazione'
+        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'validation'; run = $run }
+        if ($resp -and $resp.validation) {
+          Say ("   Reale: {0}% vs previsto {1}%" -f $resp.validation.real_gain_pct, $resp.validation.predicted_gain_pct) 'Yellow'
+          if ($resp.validation.discrepancy) { Say '   [WARN] Guadagno reale sotto il 50% del previsto: segnalato nel report.' 'DarkYellow' }
+        }
+      }
+      elseif ($act -eq 'run_recheck') {
+        Say ("   [DRIFT CHECK] run di controllo baseline {0}/{1} ({2}s)" -f ([int]$nx.runs_done + 1), $nx.runs_target, $nx.run_seconds) 'Cyan'
+        $g = Wait-LabGame
+        if ($g -eq '__STOP__') { continue }
+        Wait-ThermalStable
+        $run = Invoke-LabRun $nx.run_seconds 'drift check'
+        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'recheck'; run = $run }
+        if ($resp) {
+          if ($resp.stable) { Say ("   [ OK ] Baseline stabile (drift {0}%)" -f $resp.drift_pct) 'Green' }
+          elseif ($resp.rebaselined) { Say ("   [ OK ] Nuova baseline: {0} FPS avg (drift compensato)" -f $resp.stats.fps_avg) 'Yellow' }
+          elseif ($null -ne $resp.drift_pct) { Say ("   [WARN] Drift {0}% rilevato: ri-misuro la baseline" -f $resp.drift_pct) 'DarkYellow' }
+        }
+      }
+      elseif ($act -eq 'run_test') {
+        Say ("   [TEST {0}] run {1}/{2} ({3}s)" -f $nx.tweak_id, ([int]$nx.runs_done + 1), $nx.runs_target, $nx.run_seconds) 'Cyan'
+        $g = Wait-LabGame
+        if ($g -eq '__STOP__') { continue }
+        Wait-ThermalStable
+        $run = Invoke-LabRun $nx.run_seconds ("test " + $nx.tweak_id)
+        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        Say ("   run: {0} FPS avg | 1% low {1}" -f $run.fps_avg, $run.fps_p1) 'Gray'
+        $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'test'; tweak_id = $nx.tweak_id; run = $run }
+        if ($resp -and $resp.decision) {
+          if ($resp.decision -eq 'kept') {
+            Say ("   [ OK ] MANTENUTO: {0}" -f $resp.reason) 'Green'
+          } else {
+            Say ("   [ROLLBACK] {0}" -f $resp.reason) 'Yellow'
+            $msg = Invoke-RestoreTweak "$($nx.tweak_id)"
+            $script:LAB_APPLIED.Remove("$($nx.tweak_id)")
+            LabEvent 'rolled_back' @{ tweak_id = $nx.tweak_id }
+            Say ("   [ OK ] {0}" -f $msg) 'DarkGray'
+          }
+          if ($resp.completed) { Say '   [LAB] Sequenza completata: genero il report...' 'Cyan' }
+        }
+      }
+      elseif ($act -eq 'abort') {
+        Say "`n[LAB] Interruzione richiesta dal web: annullo tutti i tweak applicati dal Lab..." 'Yellow'
+        $ids = @($nx.rollback_ids)
+        if ($ids.Count -eq 0) { $ids = @($script:LAB_APPLIED) }
+        foreach ($rid in $ids) { $msg = Invoke-RestoreTweak "$rid"; Say ("   {0}: {1}" -f $rid, $msg) 'DarkGray' }
+        $script:LAB_APPLIED.Clear()
+        LabEvent 'aborted' $null
+        Say '[ OK ] Tutto annullato. Sessione interrotta.' 'Green'
+        $labDone = $true
+      }
+      elseif ($act -eq 'complete') {
+        Say "`n[FASE 4/4] REPORT" 'Cyan'
+        if ($nx.report) {
+          $rep = $nx.report
+          Say ("   Gioco: {0}" -f $rep.game) 'Gray'
+          Say ("   Baseline: {0} FPS -> Finale: {1} FPS ({2}%)" -f $rep.baseline.fps_avg, $rep.final.fps_avg, $rep.total_gain_pct) 'Yellow'
+          Say ("   Tweak mantenuti: {0} su {1} testati" -f @($rep.kept).Count, $rep.tweaks_tested) 'Gray'
+        }
+        Say "`n[ OK ] Laboratorio completato! Apri FrameForge -> Laboratorio per il report dettagliato." 'Green'
+        $labDone = $true
+      }
+      else { Start-Sleep -Seconds 4 }
+    }
+  } finally { Stop-Fps }
+  return
+}
+
 if ($MODE -eq 'bufferbloat') {
   Say "`n== FrameForge Agent - Test rete / Bufferbloat ==" 'Cyan'
   Say '   Non usare internet durante il test (~15s). Misuro latenza a riposo e sotto carico.' 'DarkGray'
@@ -5048,7 +5840,16 @@ if ($MODE -eq 'monitor') {
     while ($true) {
       $s = Get-TelemetrySample
       $f = Get-Fps
-      if ($f) { $s.fps = $f.fps; $s.game = $f.game; if ($null -ne $f.latency_ms) { $s.latency_ms = $f.latency_ms }; $noFpsCount = 0 }
+      if ($f) {
+        $s.fps = $f.fps; $s.game = $f.game
+        if ($null -ne $f.latency_ms) { $s.latency_ms = $f.latency_ms }
+        if ($f.gd) {
+          $s.ft_p99 = $f.gd.ft_p99; $s.ft_worst = $f.gd.ft_worst; $s.hitches = $f.gd.hitches; $s.pace_dev = $f.gd.pace_dev
+          $s.ft_cv = $f.gd.ft_cv; $s.hitch_thr = $f.gd.hitch_thr
+          if ($f.gd.hist) { $s.ft_hist = $f.gd.hist; $s.ft_n = $f.gd.hist_n }
+        }
+        $noFpsCount = 0
+      }
       elseif ($script:PM_ON) { $noFpsCount++; if ($noFpsCount -eq 10) { Show-FpsDiag } }
       $stopFromWeb = Send-Telemetry $s
       $g = if ($s.ContainsKey('gpu_util')) { ("GPU {0}% {1}C {2}MHz" -f $s.gpu_util, $s.gpu_temp, $s.gpu_clock) } else { 'GPU n/d' }
@@ -5106,7 +5907,7 @@ if ($MODE -eq 'booster') {
   $doPurge = __BOOSTER_PURGE__
   $apps = @(__BOOSTER_APPS__)
   Say ("   Azioni configurate (FrameForge -> Games): priorita={0} energia={1} purgeRAM={2} appDaChiudere={3}" -f $doPriority, $doPower, $doPurge, $apps.Count) 'DarkGray'
-  if (-not (Test-Admin)) { Say '   [INFO] Senza Amministratore rilevo il gioco dalla finestra a schermo intero (niente conteggio FPS).' 'DarkYellow' }
+  if (-not (Test-Admin) -and (Test-FpsCapable) -ne 'ok') { Say '   [INFO] Cattura FPS non ancora autorizzata: apri una volta la GUI (Ottimizza) e riavvia il PC. Intanto rilevo il gioco dalla finestra a schermo intero.' 'DarkYellow' }
   if (-not ('FFWin' -as [type])) {
     Add-Type -TypeDefinition @"
 using System;
@@ -5137,15 +5938,32 @@ public static class FFWin {
       return $p
     } catch { return $null }
   }
-  if (Test-Admin) { Start-Fps }
+  Start-Fps
   $boosted = $false; $skipUntilExit = $false; $bGame = ''; $bStart = $null; $prevPlan = ''
   $curName = ''; $detCount = 0; $lostCount = 0; $script:BACTS = @()
+  # Recap post-partita: accumulatori sessione
+  $script:RCP_FPS = New-Object System.Collections.ArrayList
+  $script:RCP_LATS = 0.0; $script:RCP_LATN = 0; $script:RCP_HIT = 0; $script:RCP_TICK = 0
+  $script:RCP_GTS = 0; $script:RCP_GTN = 0; $script:RCP_GTMAX = 0; $script:RCP_CTMAX = 0
   Say "`n[SORVEGLIANZA ATTIVA] Avvia pure il tuo gioco quando vuoi." 'Green'
   try {
     while ($true) {
       $name = ''; $gpid = 0
       $f = Get-Fps
       if ($f -and $f.fps -ge 15) { $name = $f.game }
+      if ($boosted -and $f -and $f.fps -gt 0) {
+        [void]$script:RCP_FPS.Add([int]$f.fps)
+        if ($f.latency_ms) { $script:RCP_LATS += $f.latency_ms; $script:RCP_LATN++ }
+        if ($f.gd -and $f.gd.hitches) { $script:RCP_HIT += [int]$f.gd.hitches }
+        $script:RCP_TICK++
+        if (($script:RCP_TICK % 15) -eq 1) {
+          try {
+            $tt = Get-LhmTemps
+            if ($tt -and $tt.ContainsKey('gpu_temp')) { $gv = [int]$tt.gpu_temp; $script:RCP_GTS += $gv; $script:RCP_GTN++; if ($gv -gt $script:RCP_GTMAX) { $script:RCP_GTMAX = $gv } }
+            if ($tt -and $tt.ContainsKey('cpu_temp')) { $cv = [int]$tt.cpu_temp; if ($cv -gt $script:RCP_CTMAX) { $script:RCP_CTMAX = $cv } }
+          } catch {}
+        }
+      }
       if (-not $name) { $p = Get-FullscreenGame; if ($p) { $name = $p.Name; $gpid = $p.Id } }
       if ($name) {
         if ($name -eq $curName) { $detCount++ } else { $curName = $name; $detCount = 1 }
@@ -5198,13 +6016,36 @@ public static class FFWin {
           Say ("`n[STEP] Fine partita {0}: ripristino..." -f ($bGame -replace '\.exe$', '')) 'Cyan'
           if ($doPower) { if ($prevPlan) { powercfg /setactive $prevPlan 2>$null } else { powercfg /setactive scheme_balanced 2>$null }; Say '   [ OK ] Piano energetico ripristinato.' 'Green' }
           $dur = [int]((Get-Date) - $bStart).TotalSeconds
-          $body = @{ boost_session = @{ game = ($bGame -replace '\.exe$', ''); duration_s = $dur; actions = @($script:BACTS); ended_at = (Get-Date).ToString('o') } } | ConvertTo-Json -Depth 4 -Compress
-          try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json' -Headers @{ 'X-Agent-Token' = $TOKEN } -Body $body | Out-Null } catch {}
+          $recap = $null
+          if ($script:RCP_FPS.Count -ge 5) {
+            $arr = [int[]]$script:RCP_FPS.ToArray(); [Array]::Sort($arr)
+            $rn = $arr.Length
+            $sum = 0; foreach ($v in $arr) { $sum += $v }
+            $recap = @{ fps_avg = [int][math]::Round($sum / $rn); fps_low = $arr[[math]::Max(0, [int][math]::Floor(0.01 * $rn))]; fps_min = $arr[0]; fps_max = $arr[$rn - 1]; samples = $rn }
+            if ($script:RCP_LATN -gt 0) { $recap.latency_ms = [int][math]::Round($script:RCP_LATS / $script:RCP_LATN) }
+            if ($script:RCP_HIT -gt 0) { $recap.hitches = $script:RCP_HIT }
+            if ($script:RCP_GTN -gt 0) { $recap.gpu_temp_max = $script:RCP_GTMAX; $recap.gpu_temp_avg = [int][math]::Round($script:RCP_GTS / $script:RCP_GTN) }
+            if ($script:RCP_CTMAX -gt 0) { $recap.cpu_temp_max = $script:RCP_CTMAX }
+          }
+          $__bs = @{ game = ($bGame -replace '\.exe$', ''); duration_s = $dur; actions = @($script:BACTS); ended_at = (Get-Date).ToString('o') }
+          if ($recap) { $__bs.recap = $recap }
+          $body = [System.Text.Encoding]::UTF8.GetBytes((@{ boost_session = $__bs } | ConvertTo-Json -Depth 5 -Compress))
+          try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body | Out-Null } catch {}
+          if ($recap) {
+            Say ("`n   == RECAP PARTITA: {0} ({1} min) ==" -f ($bGame -replace '\.exe$', ''), [math]::Round($dur / 60, 1)) 'Cyan'
+            Say ("   FPS medi: {0}  |  1% low: {1}  |  min/max: {2}/{3}" -f $recap.fps_avg, $recap.fps_low, $recap.fps_min, $recap.fps_max) 'White'
+            if ($recap.ContainsKey('gpu_temp_max')) { Say ("   GPU: max {0} C (media {1} C)" -f $recap.gpu_temp_max, $recap.gpu_temp_avg) 'White' }
+            if ($recap.ContainsKey('latency_ms')) { Say ("   Latenza media: {0} ms" -f $recap.latency_ms) 'White' }
+            Say '   Recap completo su forgefps.dev -> Gaming -> Sessioni.' 'DarkGray'
+          }
           Say ("   Sessione registrata ({0} min). Torno in sorveglianza." -f [math]::Round($dur / 60, 1)) 'DarkGray'
         } else {
           Say "`n[INFO] Partita finita (boost annullato). Torno in sorveglianza." 'DarkGray'
         }
         $boosted = $false; $skipUntilExit = $false; $bGame = ''; $prevPlan = ''; $curName = ''; $detCount = 0
+        $script:RCP_FPS = New-Object System.Collections.ArrayList
+        $script:RCP_LATS = 0.0; $script:RCP_LATN = 0; $script:RCP_HIT = 0; $script:RCP_TICK = 0
+        $script:RCP_GTS = 0; $script:RCP_GTN = 0; $script:RCP_GTMAX = 0; $script:RCP_CTMAX = 0
       }
       Start-Sleep -Milliseconds 2000
     }

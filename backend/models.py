@@ -1,5 +1,5 @@
 from typing import Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ChatMessageInput(BaseModel):
@@ -51,10 +51,19 @@ class SpecsInput(BaseModel):
     # Accetta sia list[str] (client legacy come .exe v0.7.x) sia list[dict] (client
     # ricchi). Normalizzato server-side in _normalize_startup prima di scrivere.
     startup: Optional[list[Any]] = None
+    services_audit: Optional[list[Any]] = None
     benchmark: Optional[dict[str, Any]] = None
     games: Optional[list[str]] = None
     running_apps: Optional[list[str]] = None
     boost_session: Optional[dict[str, Any]] = None
+
+    @field_validator("startup", "services_audit", "games", "running_apps", mode="before")
+    @classmethod
+    def _coerce_list(cls, v):
+        # PS 5.1 ConvertTo-Json srotola gli array a 1 elemento in scalari -> wrap
+        if v is None or isinstance(v, list):
+            return v
+        return [v]
 
 
 class GoalInput(BaseModel):
@@ -119,3 +128,24 @@ class BenchExplainInput(BaseModel):
 
 class ReportPhaseInput(BaseModel):
     phase: str = Field(pattern="^(before|after)$")
+
+
+class LabStartInput(BaseModel):
+    risk_level: str = Field(default="medium", pattern="^(safe|medium)$")
+    run_seconds: int = Field(default=90, ge=30, le=180)
+    include_reboot: bool = True
+
+
+class LabRunInput(BaseModel):
+    phase: str = Field(pattern="^(baseline|test|warmup|synergy_off|synergy_on|validation|recheck)$")
+    tweak_id: Optional[str] = Field(default=None, max_length=50)
+    run: dict[str, Any]
+
+
+class LabCheckInput(BaseModel):
+    reason: str = Field(pattern="^(bios_xmp|bios_rebar|bios_dual|driver_update|manual)$")
+
+
+class LabEventInput(BaseModel):
+    type: str = Field(max_length=40)
+    data: Optional[dict[str, Any]] = None

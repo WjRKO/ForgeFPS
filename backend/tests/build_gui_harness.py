@@ -46,10 +46,11 @@ const MOCK_STATE = {
 window.fetch = function(url, opts) {
   const u = String(url);
   let body = { ok: true };
-  if (u.indexOf('/api/state') >= 0) body = MOCK_STATE;
+  let delay = 0;
+  if (u.indexOf('/api/state') >= 0) { body = MOCK_STATE; delay = 4000; }
   else if (u.indexOf('/api/log') >= 0) body = { logs: [], total: 0, applying: false };
   else if (u.indexOf('/api/client-error') >= 0) { try { window.__reported.push(JSON.parse(opts.body).msg); } catch(e){} }
-  return Promise.resolve({ json: () => Promise.resolve(body), ok: true, status: 200 });
+  return new Promise(res => setTimeout(() => res({ json: () => Promise.resolve(body), ok: true, status: 200 }), delay));
 };
 </script>
 """

@@ -12,6 +12,9 @@ import { useState } from "react";
 import { Sparkles, ArrowRight, Loader2, Clock, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
+import i18n from "@/i18n";
+
+const isEn = () => i18n.language?.startsWith("en");
 
 const TIER_COLOR = { pro: "#E5FF00", streamer: "#00E0FF" };
 
@@ -37,25 +40,28 @@ export default function TrialUpgradeBanner({ info }) {
       if (data?.checkout_url) window.location.href = data.checkout_url;
     } catch (e) {
       const detail = e?.response?.data?.detail;
-      toast.error(typeof detail === "string" ? detail : detail?.message || "Errore checkout");
+      toast.error(typeof detail === "string" ? detail : detail?.message || (isEn() ? "Checkout error" : "Errore checkout"));
       setLoading(null);
     }
   };
 
+  const en = isEn();
   const recCycle = sug.recommended_cycle;
   const altCycle = recCycle === "yearly" ? "monthly" : "yearly";
   const recPrice = recCycle === "yearly" ? sug.yearly_price : sug.monthly_price;
   const altPrice = recCycle === "yearly" ? sug.monthly_price : sug.yearly_price;
-  const recLabel = recCycle === "yearly" ? `€${recPrice}/anno` : `€${recPrice}/mese`;
-  const altLabel = recCycle === "yearly" ? `o mensile · €${altPrice}/mo` : `o annuale · €${altPrice}/anno (risparmi €${sug.save_amount})`;
+  const recLabel = recCycle === "yearly" ? `€${recPrice}/${en ? "year" : "anno"}` : `€${recPrice}/${en ? "month" : "mese"}`;
+  const altLabel = recCycle === "yearly"
+    ? (en ? `or monthly · €${altPrice}/mo` : `o mensile · €${altPrice}/mo`)
+    : (en ? `or yearly · €${altPrice}/year (save €${sug.save_amount})` : `o annuale · €${altPrice}/anno (risparmi €${sug.save_amount})`);
 
   const HeaderIcon = isExpired ? AlertTriangle : Clock;
   const headerColor = isExpired ? "#FF3B30" : color;
   const headerText = isExpired
-    ? `Scade fra ${days} giorn${days === 1 ? "o" : "i"} — riattiva ora`
+    ? (en ? `Expires in ${days} day${days === 1 ? "" : "s"} — reactivate now` : `Scade fra ${days} giorn${days === 1 ? "o" : "i"} — riattiva ora`)
     : days <= 3
-    ? `Trial scade fra ${days} giorn${days === 1 ? "o" : "i"}`
-    : `Trial: ${days} giorni rimasti`;
+    ? (en ? `Trial expires in ${days} day${days === 1 ? "" : "s"}` : `Trial scade fra ${days} giorn${days === 1 ? "o" : "i"}`)
+    : (en ? `Trial: ${days} days left` : `Trial: ${days} giorni rimasti`);
 
   return (
     <div
@@ -94,7 +100,7 @@ export default function TrialUpgradeBanner({ info }) {
           <Sparkles size={13} />
         )}
         <span>
-          {isExpired ? "Riattiva" : "Passa a"} {sug.tier_label} · {recLabel}
+          {isExpired ? (en ? "Reactivate" : "Riattiva") : (en ? "Upgrade to" : "Passa a")} {sug.tier_label} · {recLabel}
         </span>
       </button>
 

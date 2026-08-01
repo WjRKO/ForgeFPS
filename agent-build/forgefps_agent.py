@@ -78,7 +78,7 @@ _hide_console_if_silent(_args.uri)
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.8.0"
+AGENT_VERSION = "0.8.1"
 # v0.7.3+: rinominato da boostpc_backup.json → forgefps_backup.json.
 # Fallback lettura del vecchio nome per una release per non perdere il backup
 # degli utenti che aggiornano dalla v0.7.2 o precedenti.
@@ -1238,7 +1238,7 @@ def launch_silent_mode(mode: str) -> bool:
     silent avremmo un processo orfano - il backend impedisce comunque questa
     combinazione a livello di API (silent + monitor = rifiutato).
     """
-    if mode not in ("sync", "benchmark", "cleanup", "optimize", "apply-one", "restore-one", "restore"):
+    if mode not in ("sync", "benchmark", "cleanup", "autopilot", "optimize", "apply-one", "restore-one", "restore"):
         # Whitelist di mode adatte al lancio silent (non-interattive, terminano).
         print(f"[WARN] Mode '{mode}' non supporta il lancio silent. Uso GUI.")
         return False
@@ -1460,7 +1460,7 @@ if __name__ == "__main__":
     # (senza UAC per quelle che non modificano il sistema). Prima venivano
     # tutte silenziosamente convertite in 'optimize' -> l'utente cliccava
     # 'Avvia monitor' e vedeva partire il primo scan della GUI.
-    _PS_UI_MODES = ("monitor", "fullbench", "prematch", "booster", "bufferbloat")
+    _PS_UI_MODES = ("monitor", "fullbench", "prematch", "booster", "bufferbloat", "lab", "autopilot")
     if _args.mode in _PS_UI_MODES:
         launch_secure_gui(mode=_args.mode, allow_elevation=not _args.uri)
         if _args.uri:

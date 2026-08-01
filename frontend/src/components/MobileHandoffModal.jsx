@@ -3,6 +3,9 @@ import { QRCodeSVG } from "qrcode.react";
 import { X, Loader2, RefreshCw, Smartphone, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
+import i18n from "@/i18n";
+
+const isEn = () => i18n.language?.startsWith("en");
 
 /**
  * MobileHandoffModal — displays a magic-link QR code that the user scans
@@ -30,7 +33,7 @@ export default function MobileHandoffModal({ open, onClose }) {
       setState("ready");
     } catch (e) {
       setState("error");
-      setErrorMsg(e?.response?.data?.detail || "Errore nella generazione del link");
+      setErrorMsg(e?.response?.data?.detail || (isEn() ? "Error generating the link" : "Errore nella generazione del link"));
     }
   };
 
@@ -52,9 +55,9 @@ export default function MobileHandoffModal({ open, onClose }) {
         const { data } = await api.get(`/auth/magic-status/${encodeURIComponent(magicToken)}`);
         if (cancelled) return;
         if (data.used) {
-          setDeviceLabel(data.device_label || "Dispositivo");
+          setDeviceLabel(data.device_label || (isEn() ? "Device" : "Dispositivo"));
           setState("consumed");
-          toast.success(`Nuovo device connesso: ${data.device_label || "Dispositivo"}`);
+          toast.success(`${isEn() ? "New device connected" : "Nuovo device connesso"}: ${data.device_label || (isEn() ? "Device" : "Dispositivo")}`);
         }
       } catch { /* transient errors: keep polling */ }
     };
@@ -96,17 +99,17 @@ export default function MobileHandoffModal({ open, onClose }) {
           onClick={onClose}
           className="absolute top-3 right-3 text-zinc-500 hover:text-white"
           data-testid="mobile-handoff-close"
-          aria-label="Chiudi"
+          aria-label={isEn() ? "Close" : "Chiudi"}
         >
           <X size={18} />
         </button>
 
         <div className="text-[10px] font-mono uppercase tracking-widest text-[#E5FF00] mb-2 flex items-center gap-2">
-          <Smartphone size={12} /> // CONTINUA SUL TELEFONO
+          <Smartphone size={12} /> {isEn() ? "// CONTINUE ON YOUR PHONE" : "// CONTINUA SUL TELEFONO"}
         </div>
-        <h2 className="font-display font-black text-xl tracking-tight text-white mb-1">Apri la Dashboard sul mobile</h2>
+        <h2 className="font-display font-black text-xl tracking-tight text-white mb-1">{isEn() ? "Open the Dashboard on mobile" : "Apri la Dashboard sul mobile"}</h2>
         <p className="text-zinc-400 text-sm mb-5">
-          Scansiona il QR con la fotocamera del telefono. Ti collegherà automaticamente al tuo account, senza login.
+          {isEn() ? "Scan the QR with your phone camera. It will connect you to your account automatically, no login needed." : "Scansiona il QR con la fotocamera del telefono. Ti collegherà automaticamente al tuo account, senza login."}
         </p>
 
         <div className="flex justify-center items-center mb-5 min-h-[240px]">
@@ -119,7 +122,7 @@ export default function MobileHandoffModal({ open, onClose }) {
                 className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-[#E5FF00] hover:underline"
                 data-testid="mobile-handoff-retry"
               >
-                <RefreshCw size={11} /> Riprova
+                <RefreshCw size={11} /> {isEn() ? "Retry" : "Riprova"}
               </button>
             </div>
           )}
@@ -137,13 +140,13 @@ export default function MobileHandoffModal({ open, onClose }) {
           )}
           {state === "idle" && remaining === 0 && magicUrl && (
             <div className="text-center">
-              <div className="text-zinc-500 text-sm mb-3">Il QR è scaduto</div>
+              <div className="text-zinc-500 text-sm mb-3">{isEn() ? "The QR has expired" : "Il QR è scaduto"}</div>
               <button
                 onClick={generate}
                 className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-[#E5FF00] hover:underline"
                 data-testid="mobile-handoff-regenerate"
               >
-                <RefreshCw size={11} /> Genera nuovo QR
+                <RefreshCw size={11} /> {isEn() ? "Generate new QR" : "Genera nuovo QR"}
               </button>
             </div>
           )}
@@ -152,7 +155,7 @@ export default function MobileHandoffModal({ open, onClose }) {
         {state === "ready" && (
           <>
             <div className="flex items-center justify-between text-xs font-mono uppercase tracking-widest mb-3">
-              <span className="text-zinc-500">Scade tra</span>
+              <span className="text-zinc-500">{isEn() ? "Expires in" : "Scade tra"}</span>
               <span className={remaining < 60 ? "text-[#FF3B30]" : "text-[#00FF66]"} data-testid="mobile-handoff-countdown">
                 {mm}:{ss}
               </span>
@@ -162,16 +165,16 @@ export default function MobileHandoffModal({ open, onClose }) {
               className="w-full inline-flex items-center justify-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-zinc-500 hover:text-[#E5FF00] py-2 border-t border-[#1A1A24] transition-colors"
               data-testid="mobile-handoff-regenerate-active"
             >
-              <RefreshCw size={11} /> Rigenera
+              <RefreshCw size={11} /> {isEn() ? "Regenerate" : "Rigenera"}
             </button>
           </>
         )}
 
         <div className="mt-4 pt-4 border-t border-[#1A1A24] text-[10px] text-zinc-600 leading-relaxed">
-          <strong className="text-zinc-500">Sicurezza:</strong> il link scade in 5 minuti ed è a uso singolo.
-          Se qualcuno lo intercetta dopo l'uso, non funziona.
+          <strong className="text-zinc-500">{isEn() ? "Security:" : "Sicurezza:"}</strong> {isEn() ? "the link expires in 5 minutes and is single-use. If someone intercepts it after use, it won't work." : "il link scade in 5 minuti ed è a uso singolo. Se qualcuno lo intercetta dopo l'uso, non funziona."}
         </div>
       </div>
     </div>
   );
 }
+

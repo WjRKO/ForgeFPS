@@ -572,4 +572,5 @@ class TestReportSpecsHealthStartup:
         assert doc.get("health") is not None
         assert doc["health"]["gpu_driver_version"] == "551.23"
         assert isinstance(doc.get("startup"), list)
-        assert "Steam" in doc["startup"]
+        # v0.7.4+: startup normalizzato server-side a list[dict] con almeno {name}
+        assert "Steam" in [i.get("name") for i in doc["startup"] if isinstance(i, dict)]

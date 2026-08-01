@@ -11,6 +11,7 @@ import ObsOverlayPanel from "@/components/ObsOverlayPanel";
 import CurrentGameCard from "@/components/CurrentGameCard";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
 import MonitorPreflight from "@/components/MonitorPreflight";
+import GameplayDoctor from "@/components/GameplayDoctor";
 import MonitorLiveControl from "@/components/MonitorLiveControl";
 import BottleneckDetector from "@/components/BottleneckDetector";
 import PlanUpgradeBanner from "@/components/PlanUpgradeBanner";
@@ -403,6 +404,10 @@ export default function Live() {
 
       {/* ===== SESSION SUMMARY (full width, shareable) ===== */}
       {summary && <SessionSummary summary={summary} onReset={resetSession} />}
+
+      <div className="pb-24">
+        <GameplayDoctor />
+      </div>
 
       {/* ===== OBS Browser Overlay (Streamer only) ===== */}
       <div className="mb-6">

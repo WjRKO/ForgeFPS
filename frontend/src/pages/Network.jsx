@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import { Gauge, Wifi, Activity, ArrowDownToLine, ArrowUpToLine, Waves, AlertTriangle, ShieldCheck } from "lucide-react";
 import api from "@/lib/api";
 import { PageHeader, SkeletonCard } from "@/components/hud";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
 import OneClickLaunchButton from "@/components/OneClickLaunchButton";
+import PlanUpgradeBanner from "@/components/PlanUpgradeBanner";
 import TechTerm from "@/components/TechTerm";
+import { MissionContextStrip } from "@/components/MissionContextStrip";
 
 const GRADE_COLOR = {
   "A+": "#00FF66", "A": "#00FF66", "B": "#E5FF00", "C": "#FF9500", "D": "#FF6B00", "F": "#FF3B30",
@@ -52,6 +55,7 @@ export default function Network() {
   const [token, setToken] = useState("");
   const [res, setRes] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [locked, setLocked] = useState(false);
   const timer = useRef(null);
   const launchTs = useRef(null);
 
@@ -61,7 +65,10 @@ export default function Network() {
       try {
         const { data } = await api.get("/net-result");
         setRes(data.available ? data.result : null);
-      } catch (e) { console.error("load net-result failed", e); }
+      } catch (e) {
+        if (e?.response?.status === 402) { setLocked(true); clearInterval(timer.current); }
+        else console.error("load net-result failed", e);
+      }
       setLoading(false);
     };
     load();
@@ -81,9 +88,21 @@ export default function Network() {
     if (tips.length === 0) tips.push(t("network.tip_great"));
   }
 
+  if (locked) {
+    return (
+      <div data-testid="network-page">
+        <PageHeader eyebrow="// NETWORK" title={t("network.title")} subtitle={t("network.subtitle")} />
+        <PlanUpgradeBanner tier="pro" compact title={t("plan_banner.advtweaks.title")}
+          description={t("plan_banner.advtweaks.desc")} testid="network-locked" />
+      </div>
+    );
+  }
+
   return (
     <div data-testid="network-page">
       <PageHeader eyebrow="// NETWORK" title={t("network.title")} subtitle={t("network.subtitle")} />
+
+      <MissionContextStrip metrics={["net_tests"]} />
 
       {/* Run test */}
       <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 mb-6" data-testid="network-run">
@@ -94,7 +113,7 @@ export default function Network() {
         <div className="mb-4">
           <OneClickLaunchButton
             mode="bufferbloat"
-            label="Avvia test bufferbloat"
+            label={i18n.language?.startsWith("en") ? "Run bufferbloat test" : "Avvia test bufferbloat"}
             timeoutMs={90000}
             onLaunch={(ts) => { launchTs.current = ts; }}
             detectDone={async () => {

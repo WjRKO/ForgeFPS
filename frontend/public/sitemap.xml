@@ -1,18 +1,84 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://forgefps.dev/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="it" href="https://forgefps.dev/?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://forgefps.dev/?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://forgefps.dev/"/>
+  </url>
+  <url>
+    <loc>https://forgefps.dev/pricing</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="it" href="https://forgefps.dev/pricing?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://forgefps.dev/pricing?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://forgefps.dev/pricing"/>
+  </url>
+  <url>
+    <loc>https://forgefps.dev/guida</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="it" href="https://forgefps.dev/guida?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://forgefps.dev/guida?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://forgefps.dev/guida"/>
+  </url>
+  <url>
+    <loc>https://forgefps.dev/demo</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="it" href="https://forgefps.dev/demo?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://forgefps.dev/demo?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://forgefps.dev/demo"/>
+  </url>
+  <url>
+    <loc>https://forgefps.dev/changelog</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="it" href="https://forgefps.dev/changelog?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://forgefps.dev/changelog?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://forgefps.dev/changelog"/>
+  </url>
+  <url>
+    <loc>https://forgefps.dev/security</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+    <xhtml:link rel="alternate" hreflang="it" href="https://forgefps.dev/security?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://forgefps.dev/security?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://forgefps.dev/security"/>
+  </url>
+  <url>
+    <loc>https://forgefps.dev/privacy-telemetry</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.4</priority>
+    <xhtml:link rel="alternate" hreflang="it" href="https://forgefps.dev/privacy-telemetry?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://forgefps.dev/privacy-telemetry?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://forgefps.dev/privacy-telemetry"/>
+  </url>
+  <url>
+    <loc>https://forgefps.dev/terms</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.4</priority>
+    <xhtml:link rel="alternate" hreflang="it" href="https://forgefps.dev/terms?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://forgefps.dev/terms?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://forgefps.dev/terms"/>
   </url>
   <url>
     <loc>https://forgefps.dev/login</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="it" href="https://forgefps.dev/login?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://forgefps.dev/login?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://forgefps.dev/login"/>
   </url>
   <url>
     <loc>https://forgefps.dev/register</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="it" href="https://forgefps.dev/register?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://forgefps.dev/register?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://forgefps.dev/register"/>
   </url>
 </urlset>

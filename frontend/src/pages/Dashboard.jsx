@@ -13,6 +13,8 @@ import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import NextActionBanner from "@/components/NextActionBanner";
 import BottleneckDetector from "@/components/BottleneckDetector";
+import { ActiveMissionsCard } from "@/components/ActiveMissionsCard";
+import { AutoPilotCard } from "@/components/AutoPilotCard";
 import { PageHeader, EmptyState, HealthRing, Sparkline, HUDCard, Badge, SkeletonCard,
   stagger, item, BTN_CLASSES } from "@/components/hud";
 import { AGENT_EXE_URL, AGENT_EXE_VERSION, AGENT_RELEASES_URL } from "@/config/agent";
@@ -103,7 +105,7 @@ function PcHeroCard({ specs, health, t, en }) {
       </div>
 
       <div className="flex items-center gap-6 flex-wrap">
-        {score != null && <HealthRing score={score} size={128} label={health?.grade} />}
+        {score != null && <HealthRing score={score} size={128} label={health?.grade_key ? t(`mypcpage.health.grade.${health.grade_key}`, health?.grade) : health?.grade} />}
 
         <div className="flex-1 min-w-0 space-y-2">
           <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">
@@ -159,8 +161,9 @@ function BenchmarkCard({ bench, discord, t, onShare }) {
   const latest = bench?.latest;
   const history = (bench?.history || []).slice(0, 8).reverse();
   const series = history.map((h) => h?.after?.overall || h?.after?.score || 0).filter(Boolean);
+  const current = latest?.after?.overall || latest?.after?.score || 0;
 
-  if (!latest) {
+  if (!latest || !current) {
     return (
       <HUDCard testid="bench-empty-card">
         <EmptyState
@@ -181,7 +184,6 @@ function BenchmarkCard({ bench, discord, t, onShare }) {
     );
   }
 
-  const current = latest.after?.overall || latest.after?.score || 0;
   const prev = history.length > 1 ? (history[history.length - 2]?.after?.overall || 0) : 0;
   const delta = prev ? Math.round(((current - prev) / prev) * 100) : 0;
   const positive = delta >= 0;
@@ -229,65 +231,6 @@ function BenchmarkCard({ bench, discord, t, onShare }) {
           </div>
         )}
       </div>
-    </HUDCard>
-  );
-}
-
-function OnboardingChecklist({ steps, t }) {
-  const doneCount = steps.filter((s) => s.done).length;
-  const total = steps.length;
-  const allDone = doneCount === total;
-  const progress = Math.round((doneCount / total) * 100);
-
-  if (allDone) return null;
-
-  return (
-    <HUDCard testid="onboarding-checklist" className="gap-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Sparkles size={13} className="text-[#E5FF00]" />
-          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">
-            {t("dashboard.onboard_title")}
-          </span>
-        </div>
-        <span className="text-[10px] font-mono text-zinc-400">
-          {t("dashboard.onboard_done", { n: doneCount, tot: total })}
-        </span>
-      </div>
-
-      <div className="h-1 bg-[#1A1A24] overflow-hidden">
-        <motion.div
-          className="h-full bg-gradient-to-r from-[#E5FF00] to-[#00FF66]"
-          initial={{ width: 0 }}
-          animate={{ width: `${progress}%` }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          data-testid="onboarding-progress"
-        />
-      </div>
-
-      <ul className="space-y-1">
-        {steps.map((s) => (
-          <li key={s.id}>
-            <Link
-              to={s.to}
-              data-testid={`onboard-step-${s.id}`}
-              className={`flex items-center gap-2 py-1.5 px-2 -mx-2 border border-transparent hover:border-[#2A2A35] transition-colors ${
-                s.done ? "opacity-60" : ""
-              }`}
-            >
-              {s.done ? (
-                <CheckCircle2 size={14} className="text-[#00FF66] shrink-0" />
-              ) : (
-                <Circle size={14} className="text-zinc-600 shrink-0" />
-              )}
-              <span className={`text-xs ${s.done ? "line-through text-zinc-500" : "text-zinc-200"}`}>
-                {s.label}
-              </span>
-              {!s.done && <ArrowRight size={11} className="ml-auto text-zinc-600" />}
-            </Link>
-          </li>
-        ))}
-      </ul>
     </HUDCard>
   );
 }
@@ -632,6 +575,7 @@ export default function Dashboard() {
   const [bench, setBench] = useState(null);
   const [discord, setDiscord] = useState(null);
   const [notifs, setNotifs] = useState(null);
+  const [missions, setMissions] = useState(null);
 
   useEffect(() => {
     api.get("/stats").then(({ data }) => setStats(data)).catch(() => setStats({}));
@@ -641,6 +585,12 @@ export default function Dashboard() {
     api.get("/pc-benchmark").then(({ data }) => setBench(data?.latest ? data : null)).catch(() => setBench(null));
     api.get("/discord/status").then(({ data }) => setDiscord(data)).catch(() => setDiscord({ linked: false }));
     api.get("/notifications").then(({ data }) => setNotifs(data || [])).catch(() => setNotifs([]));
+    api.get("/missions").then(({ data }) => {
+      setMissions(data);
+      if (data.just_completed?.length) {
+        window.dispatchEvent(new CustomEvent("ff-mission-completed", { detail: data.just_completed }));
+      }
+    }).catch(() => setMissions(null));
   }, []);
 
   const shareBench = async () => {
@@ -672,17 +622,6 @@ export default function Dashboard() {
   const agentUpdateSeen =
     typeof window !== "undefined" && localStorage.getItem(AGENT_SEEN_KEY) === "1";
 
-  const onboardingSteps = useMemo(
-    () => [
-      { id: "connect", label: t("dashboard.onboard_step_connect"), done: hasSpecs, to: "/app/desktop" },
-      { id: "boost", label: t("dashboard.onboard_step_boost"), done: !!bench?.latest, to: "/app/desktop" },
-      { id: "track", label: t("dashboard.onboard_step_track"), done: (stats?.tracked_products || 0) > 0, to: "/app/tracker" },
-      { id: "discord", label: t("dashboard.onboard_step_discord"), done: !!discord?.linked, to: "/app/account" },
-      { id: "mfa", label: t("dashboard.onboard_step_mfa"), done: !!user?.mfa_enabled, to: "/app/account" },
-    ],
-    [hasSpecs, bench, stats, discord, user, t]
-  );
-
   const greeting = useMemo(() => {
     const name = user?.name || "Gamer";
     if (health?.score != null) {
@@ -701,7 +640,9 @@ export default function Dashboard() {
       {isBrandNew && <HeroEmpty t={t} />}
 
       {!isBrandNew && !specs?.data?.cpu && <NextActionBanner kind="no-hw" />}
-      {!isBrandNew && specs?.data?.cpu && !bench?.latest && <NextActionBanner kind="post-sync" />}
+      {!isBrandNew && specs?.data?.cpu && !bench?.latest
+        && !(missions?.active?.length || (missions?.chain && !missions.chain.done))
+        && <NextActionBanner kind="post-sync" />}
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-6 items-start">
         {/* LEFT: main content */}
@@ -711,6 +652,14 @@ export default function Dashboard() {
           animate="show"
           className="min-w-0 space-y-4"
         >
+          <motion.div variants={item}>
+            <AutoPilotCard />
+          </motion.div>
+
+          <motion.div variants={item}>
+            <ActiveMissionsCard data={missions} />
+          </motion.div>
+
           <motion.div variants={item} className="grid md:grid-cols-3 gap-4">
             <PcHeroCard specs={specs} health={health} t={t} en={en} />
             <BenchmarkCard bench={bench} discord={discord} t={t} onShare={shareBench} />
@@ -735,7 +684,6 @@ export default function Dashboard() {
 
         {/* RIGHT: sticky panel */}
         <aside className="lg:sticky lg:top-6 lg:self-start space-y-4" data-testid="dashboard-sticky">
-          <OnboardingChecklist steps={onboardingSteps} t={t} />
           <QuickActionsCard t={t} />
           <DiscordCard discord={discord} user={user} t={t} />
           {!agentUpdateSeen && <AgentCard t={t} />}
