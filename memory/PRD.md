@@ -1725,3 +1725,13 @@ Domanda utente: "ogni quanto si slogga un utente?" -> scoperto bug: access token
 - Pricing.jsx (IT+EN): Starter card "AI Advisor — 5 messaggi di benvenuto + crediti extra con missioni e trofei"; Pro card "50 messaggi/settimana" (era "chat illimitata") + riga "Diagnosi AI + Gameplay Doctor"; Streamer card "AI Advisor illimitata — nessun limite settimanale".
 - Tabella comparativa: riga "AI Advisor" con valori testuali ["5 msg + crediti da missioni", "50 msg/settimana", "Illimitata"] + nuova riga "Diagnosi AI + Gameplay Doctor" [no, sì, sì].
 - Verificato via screenshot IT+EN (card e tabella).
+
+## Aggiornamento 2026-08-01 (2) — Gating reale feature per piano (FATTO, test 17/17 BE + FE 100% iteration_52)
+- SCELTE UTENTE: Full Benchmark → Pro (era Streamer nel backend); Tracker 3 prodotti Free / 25 Pro (blocco solo NUOVI inserimenti, 402 tracker_limit); Storico salute 7gg Free / 90gg Pro (dati restano nel DB, risposta con limited_days:7); abbinamenti trofei→feature decisi dall'agent.
+- plan_gate.py: get_entitlements(db,user) → {adv_tweaks, history_90d, pdf_report, gpu_reference_full, full_benchmark, tracker_limit} (piano O trofeo); plan_402() helper. /api/subscriptions/status ora include entitlements.
+- pc.py: require_adv_tweaks dep → 402 adv_tweaks_required su net-result, prematch GET/PUT, booster GET/PUT/sessions; pc-benchmark/full → require_pro; PUT /alerts → Pro; health-history filtrato 7gg per Free; gpu-reference → reason plan_required se GPU fuori da FREE_GPU_MODELS (~20 modelli popolari) e senza catalogo completo.
+- products.py: track_product blocca oltre il limite piano (3/25) con 402 tracker_limit.
+- EARNED PREMIUM (milestones.py rewards): Tuning Solido(10 tweak)→adv_tweaks; Zen Mode(streak 7gg)→history_90d (sostituisce +1 slot profili); Overclock Master(50 tweak)→pdf_report; Speed Demon(secret)→gpu_reference_full. Legacy advanced_registry_tweaks onorato come adv_tweaks.
+- missions.py: net_check/boost_match esclusi da 'available' e w_net/w_boost dai weekly per chi non ha adv_tweaks (missioni non completabili).
+- FRONTEND: Network.jsx e Games.jsx → PlanUpgradeBanner compact (network-locked / booster-locked) su 402; FullBenchmarkReport tier streamer→pro; Report.jsx PDF con lucchetto+toast se non entitled (PNG resta free); HealthHistoryCard hint "ultimi 7 giorni" (health-history-limited); GpuReferenceCard branch plan_required (gpu-reference-locked + CTA pricing); api.js formatApiErrorDetail gestisce detail.message.
+- Test: /app/backend/tests/test_plan_gating.py (17/17), testing_agent iteration_52 100% BE+FE, regressione crediti AI OK. Note review non bloccanti: race teorica su count tracker, flash pdfOk iniziale.
