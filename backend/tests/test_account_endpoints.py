@@ -6,7 +6,7 @@ import requests
 import pytest
 
 def _read_frontend_env():
-    with open("/app/frontend/.env") as f:
+    with open("../frontend/.env") as f:
         for line in f:
             if line.startswith("REACT_APP_BACKEND_URL="):
                 return line.split("=", 1)[1].strip()
@@ -15,8 +15,8 @@ def _read_frontend_env():
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL") or _read_frontend_env()
 BASE_URL = BASE_URL.rstrip("/")
-ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASSWORD = "4zWK4o_xSw5prU-2b7w9dQ"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 
 
 def _register(session, email, password="pw123456", name="Throwaway"):

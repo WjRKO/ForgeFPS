@@ -16,7 +16,7 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 if not BASE_URL:
     # fallback to frontend/.env
     try:
-        with open("/app/frontend/.env") as fh:
+        with open("../frontend/.env") as fh:
             for line in fh:
                 if line.startswith("REACT_APP_BACKEND_URL="):
                     BASE_URL = line.split("=", 1)[1].strip().rstrip("/")
@@ -24,8 +24,8 @@ if not BASE_URL:
     except Exception:
         pass
 
-ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASS = "4zWK4o_xSw5prU-2b7w9dQ"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "")
 
 
 # --- sanity/auth ---

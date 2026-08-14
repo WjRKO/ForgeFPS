@@ -78,6 +78,13 @@ agenthub/agents/youtube/db
 
 memory/test_credentials.md
 
+# Output dell'agent di test (contenevano credenziali in chiaro)
+test_reports/
+
+# Infrastruttura della piattaforma di sviluppo, non serve all'app
+.emergent/
+.gitconfig
+
 # Mobile development
 android-sdk/frontend/node_modules/.cache/default-development/1.pack
 frontend/node_modules/.cache/default-development/1.pack

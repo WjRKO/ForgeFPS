@@ -16,10 +16,10 @@ import pytest
 import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/") or \
-    open("/app/frontend/.env").read().split("REACT_APP_BACKEND_URL=")[1].split("\n")[0].strip()
+    open("../frontend/.env").read().split("REACT_APP_BACKEND_URL=")[1].split("\n")[0].strip()
 
-ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASSWORD = "4zWK4o_xSw5prU-2b7w9dQ"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 
 
 # ---------- Fixtures ----------
@@ -132,7 +132,7 @@ def test_env_files_present_with_required_keys():
         be = f.read()
     assert re.search(r"^MONGO_URL=", be, re.M), "backend .env missing MONGO_URL"
     assert re.search(r"^DB_NAME=", be, re.M), "backend .env missing DB_NAME"
-    with open("/app/frontend/.env") as f:
+    with open("../frontend/.env") as f:
         fe = f.read()
     assert re.search(r"^REACT_APP_BACKEND_URL=", fe, re.M), "frontend .env missing REACT_APP_BACKEND_URL"
 

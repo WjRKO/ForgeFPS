@@ -13,10 +13,10 @@ import requests
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = f"{BASE_URL}/api"
 
-ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASSWORD = "4zWK4o_xSw5prU-2b7w9dQ"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 OLD_PASSWORD = "admin123"
-ALLOWED_ORIGIN = "https://gaming-nexus-199.preview.emergentagent.com"
+ALLOWED_ORIGIN = "http://localhost:8001"
 EVIL_ORIGIN = "https://evil.example.com"
 
 

@@ -1,6 +1,5 @@
 import os
 import logging
-from pathlib import Path
 
 from fastapi import FastAPI, Request
 from starlette.middleware.cors import CORSMiddleware
@@ -143,16 +142,6 @@ async def _ensure_indexes():
     await db.pc_specs.create_index("user_id")
 
 
-def _write_test_credentials():
-    email = os.environ.get("ADMIN_EMAIL", "")
-    password = os.environ.get("ADMIN_PASSWORD", "")
-    Path("/app/memory").mkdir(exist_ok=True)
-    Path("/app/memory/test_credentials.md").write_text(
-        f"# Test Credentials\n\n## Admin\n- Email: {email}\n- Password: {password}\n- Role: admin\n\n"
-        "## Auth Endpoints\n- POST /api/auth/register\n- POST /api/auth/login\n- GET /api/auth/me\n"
-        "- POST /api/auth/logout\n- POST /api/auth/refresh\n")
-
-
 async def scheduled_streak_reminders():
     """~19:00 IT (17:00 UTC): push a chi ha una streak attiva ma nessuna daily completata oggi."""
     from missions import _day_id, _yesterday_id
@@ -178,7 +167,6 @@ async def scheduled_streak_reminders():
 async def startup():
     await _ensure_indexes()
     await seed_admin(db)
-    _write_test_credentials()
     scheduler.add_job(scheduled_price_check, "interval", minutes=45, id="price_check", replace_existing=True)
     scheduler.add_job(scheduled_trial_reminders, "cron", hour=9, minute=0, id="trial_reminders", replace_existing=True)
     scheduler.add_job(scheduled_streak_reminders, "cron", hour=17, minute=0, id="streak_reminders", replace_existing=True)

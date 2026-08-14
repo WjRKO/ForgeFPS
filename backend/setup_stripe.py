@@ -1,15 +1,27 @@
 """setup_stripe.py — Provisiona catalog di prodotti/prezzi Stripe.
 Da eseguire una tantum (idempotente). Ri-lancialo se cambi prezzi in CATALOG."""
 import os
+from pathlib import Path
+
 import stripe
 from dotenv import load_dotenv
 
-load_dotenv("/app/backend/.env")
+# Il percorso del .env era fissato a /app/backend/.env (layout del container
+# Emergent). Ora si ricava dalla posizione di questo file, con override via
+# BACKEND_ENV_FILE, cosi' lo script funziona ovunque.
+load_dotenv(os.environ.get("BACKEND_ENV_FILE") or Path(__file__).resolve().parent / ".env")
 stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
+
+#: Chiave metadata con cui ritroviamo i prodotti gia' creati su Stripe.
+PRODUCT_KEY = "forgefps_product_id"
+#: Chiave storica, scritta quando il catalogo era gestito da Emergent. Serve
+#: solo in lettura: senza questo fallback un rilancio dello script non
+#: riconoscerebbe i prodotti live e ne creerebbe di duplicati.
+LEGACY_PRODUCT_KEY = "emergent_product_id"
 
 CATALOG = [
     {
-        "emergent_product_id": "framforge_pro",
+        "product_id": "framforge_pro",
         "name": "FrameForge Pro",
         "tax_code": "txcd_10103001",  # SaaS
         "prices": [
@@ -18,7 +30,7 @@ CATALOG = [
         ],
     },
     {
-        "emergent_product_id": "framforge_streamer",
+        "product_id": "framforge_streamer",
         "name": "FrameForge Streamer",
         "tax_code": "txcd_10103001",
         "prices": [
@@ -30,12 +42,14 @@ CATALOG = [
 
 
 def get_or_create_product(entry):
+    wanted = entry["product_id"]
     for p in stripe.Product.list(active=True).auto_paging_iter():
-        if p.to_dict().get("metadata", {}).get("emergent_product_id") == entry["emergent_product_id"]:
+        meta = p.to_dict().get("metadata", {})
+        if wanted in (meta.get(PRODUCT_KEY), meta.get(LEGACY_PRODUCT_KEY)):
             return p
     return stripe.Product.create(
         name=entry["name"], tax_code=entry.get("tax_code"),
-        metadata={"managed_by": "emergent", "emergent_product_id": entry["emergent_product_id"]},
+        metadata={"managed_by": "forgefps", PRODUCT_KEY: wanted},
     )
 
 

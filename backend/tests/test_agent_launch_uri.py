@@ -19,8 +19,8 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL") or os.environ.get(
     "BACKEND_URL", "http://localhost:8001"
 )
-ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASS = "4zWK4o_xSw5prU-2b7w9dQ"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "")
 
 
 @pytest.fixture(scope="module")

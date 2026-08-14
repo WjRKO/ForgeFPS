@@ -15,15 +15,15 @@ import pytest
 import requests
 
 def _load_frontend_env():
-    with open("/app/frontend/.env") as f:
+    with open("../frontend/.env") as f:
         for line in f:
             if line.startswith("REACT_APP_BACKEND_URL="):
                 return line.split("=", 1)[1].strip()
     raise RuntimeError("REACT_APP_BACKEND_URL not found")
 
 BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL") or _load_frontend_env()).rstrip("/")
-EMAIL = "admin@boostpc.io"
-PASSWORD = "4zWK4o_xSw5prU-2b7w9dQ"
+EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 
 UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"}
 

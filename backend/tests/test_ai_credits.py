@@ -8,16 +8,16 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 
 load_dotenv("/app/backend/.env")
-load_dotenv("/app/frontend/.env")
+load_dotenv("../frontend/.env")
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
 MONGO_URL = os.environ.get("MONGO_URL")
 DB_NAME = os.environ.get("DB_NAME")
 
-ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PWD = "4zWK4o_xSw5prU-2b7w9dQ"
-STARTER_EMAIL = "credits_test@frameforge.dev"
-STARTER_PWD = "Cr3d1ts!Test99"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+ADMIN_PWD = os.environ.get("ADMIN_PASSWORD", "")
+STARTER_EMAIL = os.environ.get("STARTER_EMAIL", os.environ.get("STARTER_EMAIL", "credits_test@frameforge.dev"))
+STARTER_PWD = os.environ.get("STARTER_PASSWORD", "")
 
 
 def _login(email, pwd):

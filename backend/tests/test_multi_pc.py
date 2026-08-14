@@ -6,12 +6,12 @@ import os
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://gaming-nexus-199.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8001").rstrip("/")
 
-ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASS = "4zWK4o_xSw5prU-2b7w9dQ"
-STARTER_EMAIL = "credits_test@frameforge.dev"
-STARTER_PASS = "Cr3d1ts!Test99"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "")
+STARTER_EMAIL = os.environ.get("STARTER_EMAIL", os.environ.get("STARTER_EMAIL", "credits_test@frameforge.dev"))
+STARTER_PASS = os.environ.get("STARTER_PASSWORD", "")
 
 
 def _login(email, pw):

@@ -20,7 +20,7 @@ from bson import ObjectId
 
 from database import db
 
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
 # Mappa lookup_key Stripe -> piano interno FrameForge

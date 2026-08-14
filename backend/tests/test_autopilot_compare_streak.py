@@ -9,7 +9,7 @@ def _load_backend_url():
     v = os.environ.get("REACT_APP_BACKEND_URL")
     if not v:
         try:
-            for line in open("/app/frontend/.env"):
+            for line in open("../frontend/.env"):
                 if line.startswith("REACT_APP_BACKEND_URL="):
                     return line.split("=", 1)[1].strip().rstrip("/")
         except Exception:
@@ -18,10 +18,10 @@ def _load_backend_url():
 
 
 BASE_URL = _load_backend_url()
-ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASSWORD = "4zWK4o_xSw5prU-2b7w9dQ"
-STARTER_EMAIL = "credits_test@frameforge.dev"
-STARTER_PASSWORD = "Cr3d1ts!Test99"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+STARTER_EMAIL = os.environ.get("STARTER_EMAIL", os.environ.get("STARTER_EMAIL", "credits_test@frameforge.dev"))
+STARTER_PASSWORD = os.environ.get("STARTER_PASSWORD", "")
 
 sys.path.insert(0, "/app/backend")
 

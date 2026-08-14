@@ -3,8 +3,8 @@ import os, requests, pytest
 from motor.motor_asyncio import AsyncIOMotorClient
 import asyncio
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL", "https://gaming-nexus-199.preview.emergentagent.com").rstrip("/")
-ADMIN = {"email": "admin@boostpc.io", "password": "4zWK4o_xSw5prU-2b7w9dQ"}
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8001").rstrip("/")
+ADMIN = {"email": os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"), "password": os.environ.get("ADMIN_PASSWORD", "")}
 
 
 @pytest.fixture(scope="module")

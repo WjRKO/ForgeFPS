@@ -19,7 +19,7 @@ from dotenv import dotenv_values
 
 # Load backend .env for MONGO_URL/DB_NAME/REACT_APP_BACKEND_URL fallback
 _backend_env = dotenv_values("/app/backend/.env")
-_frontend_env = dotenv_values("/app/frontend/.env")
+_frontend_env = dotenv_values("../frontend/.env")
 
 BACKEND_URL = os.environ.get("REACT_APP_BACKEND_URL") or _frontend_env.get("REACT_APP_BACKEND_URL")
 assert BACKEND_URL, "REACT_APP_BACKEND_URL missing"
@@ -29,8 +29,8 @@ API = f"{BASE_URL}/api"
 MONGO_URL = _backend_env.get("MONGO_URL") or os.environ.get("MONGO_URL")
 DB_NAME = _backend_env.get("DB_NAME") or os.environ.get("DB_NAME")
 
-ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASSWORD = "4zWK4o_xSw5prU-2b7w9dQ"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 
 CLEANUP_IDS = ["test-a", "test-b", "0.6.6", "0.6.7", "0.6.8", "0.6.10", "0.6.13", "0.6.14"]
 

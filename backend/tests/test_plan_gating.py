@@ -13,7 +13,7 @@ import requests
 from pymongo import MongoClient
 
 from dotenv import load_dotenv
-load_dotenv("/app/frontend/.env")
+load_dotenv("../frontend/.env")
 load_dotenv("/app/backend/.env")
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL missing"
@@ -22,10 +22,10 @@ API = f"{BASE_URL}/api"
 MONGO_URL = os.environ.get("MONGO_URL") or "mongodb://localhost:27017"
 DB_NAME = os.environ.get("DB_NAME") or "test_database"
 
-STARTER_EMAIL = "credits_test@frameforge.dev"
-STARTER_PASS = "Cr3d1ts!Test99"
-ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASS = "4zWK4o_xSw5prU-2b7w9dQ"
+STARTER_EMAIL = os.environ.get("STARTER_EMAIL", os.environ.get("STARTER_EMAIL", "credits_test@frameforge.dev"))
+STARTER_PASS = os.environ.get("STARTER_PASSWORD", "")
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "")
 
 
 def _login(session, email, password):

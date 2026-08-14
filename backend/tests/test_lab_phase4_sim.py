@@ -1,11 +1,12 @@
 """Sim E2E Lab fase 4: stutter score, latenza input, mini-lab di verifica (check), history/insights.
 Eseguire come script: python tests/test_lab_phase4_sim.py (NON via pytest)."""
+import os
 import sys
 import requests
 
-BASE = "https://gaming-nexus-199.preview.emergentagent.com"
-EMAIL = "admin@boostpc.io"
-PWD = "4zWK4o_xSw5prU-2b7w9dQ"
+BASE = "http://localhost:8001"
+EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+PWD = os.environ.get("ADMIN_PASSWORD", "")
 
 s = requests.Session()
 r = s.post(f"{BASE}/api/auth/login", json={"email": EMAIL, "password": PWD}, timeout=15)
