@@ -42,11 +42,24 @@ wheel e' un punto singolo di rottura esterno: se il CDN diventa irraggiungibile,
 
 ## 2. Cosa manca e non e' codice applicativo
 
-**Nel repository non esiste nessun file di deploy**: niente `Dockerfile`,
-`docker-compose.yml`, `Procfile` o equivalenti. Il confezionamento lo faceva la
-piattaforma. Va scritto prima di poter ospitare l'app altrove.
+I file di deploy ora ci sono (aggiunti dopo la prima stesura di questo
+documento):
 
-Servono tre pezzi:
+| File | A cosa serve |
+|---|---|
+| `backend/Dockerfile` | Immagine FastAPI, build multi-stage su Python 3.11, utente non privilegiato, healthcheck su `/health`. |
+| `frontend/Dockerfile` | Build React con craco, servita da nginx. |
+| `frontend/nginx.conf` | Fallback SPA, cache lunga sugli asset con hash, **nessuna cache** su `index.html` e `sw.js`. |
+| `docker-compose.yml` | Stack completo in locale (mongo + backend + frontend) per provare la migrazione. |
+| `.env.example` | Template delle variabili elencate al §3. |
+
+> **Non ancora eseguiti.** Sulla macchina dove sono stati scritti non erano
+> disponibili ne' Docker ne' Node, quindi sono stati verificati solo con
+> controlli statici (coerenza delle porte, file presenti nel contesto di build,
+> `.dockerignore` che non esclude cio' che serve, YAML valido). La prima
+> `docker compose up --build` va considerata il vero collaudo.
+
+Restano da scegliere tre pezzi di infrastruttura:
 
 - **Database.** MongoDB gestito. MongoDB Atlas e' la via piu' diretta: si crea
   il cluster, si migra con `mongodump`/`mongorestore`, si aggiorna `MONGO_URL`.
@@ -169,8 +182,9 @@ export REACT_APP_BACKEND_URL='http://localhost:8001'
 Ordine pensato per tenere l'app viva e poter tornare indietro fino all'ultimo.
 
 1. **Ruotare la password admin.** Indipendente da tutto il resto, da fare subito.
-2. **Scrivere i file di deploy** (Dockerfile backend, build frontend) e provarli
-   in locale contro un MongoDB di prova.
+2. **Collaudare i file di deploy** gia' presenti: `cp .env.example .env`,
+   riempirlo, poi `docker compose up --build`. E' il primo vero test delle
+   immagini, mai eseguite finora.
 3. **Creare il cluster MongoDB** gestito. Ancora nessun traffico reale.
 4. **Deployare il backend** sul nuovo host, su un dominio temporaneo, con le env
    var ricreate e `RELEASE_ANNOUNCER_ENABLED` **spento** (per non annunciare due
@@ -204,3 +218,14 @@ sistemarle prima o poi:
   pubblico da cui gli utenti scaricano un eseguibile.
 - Il file `=2.0.0` nella radice e' l'output di un `pip install` finito in
   redirezione su Windows.
+- **Il frontend non ha lockfile.** Ne' `yarn.lock` ne' `package-lock.json` sono
+  nel repository, quindi ogni build risolve da capo le versioni transitive: due
+  build a distanza di tempo possono produrre bundle diversi, e una release
+  rotta a monte entra senza preavviso. Conviene generare un lockfile, committarlo
+  e passare a `yarn install --frozen-lockfile` nel `frontend/Dockerfile`.
+- `backend/requirements.txt` e' un `pip freeze` completo dell'ambiente di
+  sviluppo: contiene strumenti che in produzione non servono (`black`, `flake8`,
+  `mypy`, `isort`, `pytest`, `pytest-xdist`) e pacchetti pesanti probabilmente
+  transitivi (`pandas`, `numpy`, `boto3`, `grpcio`, `huggingface_hub`). Separare
+  un `requirements-dev.txt` ridurrebbe parecchio tempo di build e dimensione
+  dell'immagine.

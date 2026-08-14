@@ -1,0 +1,17 @@
+node_modules/
+build/
+coverage/
+
+.env
+.env.*
+*.env
+
+.yarn/
+.pnp.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+Dockerfile
+.dockerignore
+# nginx.conf NON va escluso: lo stage runtime lo copia dal contesto di build.

@@ -1,0 +1,54 @@
+# Stack completo in locale, per provare la migrazione prima di toccare
+# qualsiasi hosting. NON e' una configurazione di produzione: MongoDB gira
+# senza autenticazione ed e' raggiungibile solo dalla rete interna di compose.
+#
+#   cp .env.example .env      # e riempilo
+#   docker compose up --build
+#
+# Frontend su http://localhost:3000, backend su http://localhost:8001.
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    # Una sola istanza: APScheduler vive nel processo e non ha lock
+    # distribuito. Con repliche, ogni notifica partirebbe piu' volte.
+    env_file: .env
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      DB_NAME: ${DB_NAME:-forgefps}
+      FRONTEND_URL: http://localhost:3000
+      CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8001:8001"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Compilata dentro il bundle: per cambiarla serve ricostruire
+        # l'immagine, non basta riavviare il container.
+        REACT_APP_BACKEND_URL: http://localhost:8001
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo-data:
