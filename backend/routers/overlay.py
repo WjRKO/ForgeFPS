@@ -31,6 +31,8 @@ from plan_gate import require_streamer
 logger = logging.getLogger("boostpc.overlay")
 
 
+from settings import get_api_base
+
 APP_ORIGIN = os.environ.get("APP_ORIGIN", "https://forgefps.dev")
 
 _ALLOWED_POSITIONS = {"top-left", "top-right", "bottom-left", "bottom-right"}
@@ -91,7 +93,7 @@ def build(get_current_user):
     def _config_response(doc: dict) -> dict:
         return {
             "token": doc["token"],
-            "url": f"{APP_ORIGIN}/api/overlay/{doc['token']}",
+            "url": f"{get_api_base(APP_ORIGIN)}/api/overlay/{doc['token']}",
             "position": doc.get("position", "top-right"),
             "theme": doc.get("theme", "neon"),
             "layout": doc.get("layout", "card"),

@@ -98,8 +98,8 @@ def _agent_backend_url() -> str:
     il launcher punterebbe alla porta del front-end e l'agent riceverebbe
     l'HTML della SPA al posto del JSON.
     """
-    return (os.environ.get("AGENT_BACKEND_URL")
-            or os.environ.get("FRONTEND_URL", "https://forgefps.dev")).rstrip("/")
+    from settings import get_api_base
+    return get_api_base(os.environ.get("FRONTEND_URL", "https://forgefps.dev"))
 
 
 def _render_launcher_bat(token: str, backend: str, standalone: bool) -> bytes:
