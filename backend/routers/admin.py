@@ -321,6 +321,10 @@ def build(get_current_user):
             eid = await send_payment_failed(to, name, "pro")
         else:
             raise HTTPException(status_code=400, detail="template non valido (welcome|trial_started|trial_ending|payment_success|payment_failed)")
-        return {"ok": bool(eid), "email_id": eid, "template": tpl, "to": to}
+        if not eid:
+            import email_service as _es
+            return {"ok": False, "email_id": None, "template": tpl, "to": to,
+                    "error": _es.LAST_ERROR or "invio non riuscito"}
+        return {"ok": True, "email_id": eid, "template": tpl, "to": to}
 
     return r

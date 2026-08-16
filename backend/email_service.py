@@ -26,15 +26,23 @@ load_dotenv()
 
 logger = logging.getLogger("boostpc.email")
 
-_API_KEY = os.environ.get("RESEND_API_KEY", "")
-SENDER = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
-REPLY_TO = os.environ.get("REPLY_TO_EMAIL", "support@forgefps.dev")
-APP_ORIGIN = os.environ.get("APP_ORIGIN", "https://forgefps.dev")
+# `os.environ.get(k, default)` applica il default solo se la chiave MANCA: in
+# .env queste righe esistono ma sono vuote, quindi senza `or` il mittente
+# diventava la stringa vuota e Resend rifiutava ogni invio con un "from" non valido.
+_API_KEY = (os.environ.get("RESEND_API_KEY") or "").strip()
+SENDER = (os.environ.get("SENDER_EMAIL") or "").strip() or "onboarding@resend.dev"
+REPLY_TO = (os.environ.get("REPLY_TO_EMAIL") or "").strip() or "forgefps.support@gmail.com"
+APP_ORIGIN = (os.environ.get("APP_ORIGIN") or "").strip() or "https://forgefps.dev"
 
 if _API_KEY:
     resend.api_key = _API_KEY
 else:
     logger.warning("RESEND_API_KEY not set — emails disabled")
+
+# Ultimo errore di invio. `send_email` e' fire-and-forget e non solleva: senza
+# questo, chi chiama vede solo `None` e non sa perche'. Serve allo strumento
+# admin per mostrare il motivo invece di un generico fallimento.
+LAST_ERROR: Optional[str] = None
 
 
 # --- CORE SEND FUNCTION ------------------------------------------------------
@@ -44,9 +52,12 @@ async def send_email(to: str, subject: str, html: str, tag: str = "generic") -> 
     Ritorna l'email_id di Resend, o None se disabilitato/errore.
     Fire-and-forget: NON solleva eccezioni (loggamo e continuiamo).
     """
+    global LAST_ERROR
     if not _API_KEY:
+        LAST_ERROR = "RESEND_API_KEY non configurata"
         logger.info("[email:%s] SKIPPED (no API key) to=%s subject=%r", tag, to, subject)
         return None
+    LAST_ERROR = None
 
     params = {
         "from": f"FrameForge <{SENDER}>",
@@ -62,6 +73,7 @@ async def send_email(to: str, subject: str, html: str, tag: str = "generic") -> 
         logger.info("[email:%s] SENT to=%s id=%s", tag, to, email_id)
         return email_id
     except Exception as e:
+        LAST_ERROR = str(e)
         logger.error("[email:%s] FAILED to=%s err=%s", tag, to, e)
         return None
 
