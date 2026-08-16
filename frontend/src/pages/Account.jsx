@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { User, KeyRound, SlidersHorizontal, ShieldAlert, Loader2, Server, Mail, Save, Trash2, ShieldCheck, QrCode, HelpCircle, MessageCircle, Check, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import api, { formatApiErrorDetail } from "@/lib/api";
+import api, { formatApiErrorDetail, API } from "@/lib/api";
 import i18n from "@/i18n";
 
 const Toggle = ({ on, onClick, testid }) => (
@@ -176,7 +176,10 @@ export default function Account() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo mount, i18n t() e' stabile durante il redirect
   }, []);
   const connectDiscord = () => {
-    window.location.href = `${window.location.origin}/api/discord/connect`;
+    // Deve puntare al backend, non all'origin corrente: in locale il front-end sta
+    // su un'altra porta e non inoltra '/api', quindi il bottone ricaricava la SPA
+    // invece di avviare l'OAuth. In produzione API ha lo stesso dominio.
+    window.location.href = `${API}/discord/connect`;
   };
   const disconnectDiscord = async () => {
     if (!window.confirm(t("account.discord_disconnect_confirm"))) return;
