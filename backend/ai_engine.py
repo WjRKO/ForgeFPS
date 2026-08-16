@@ -1,9 +1,12 @@
+import logging
 import json
 import re
 import uuid
 import asyncio
 
 from llm import get_provider
+
+logger = logging.getLogger("boostpc.ai_engine")
 
 AI_TIMEOUT = 45
 
@@ -84,8 +87,8 @@ async def stream_advisor(session_id: str, history: list, message: str, specs_tex
     if image_data_url and image_data_url.startswith("data:image/"):
         try:
             image_b64 = image_data_url.split(",", 1)[1]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("immagine allegata non decodificabile: %s", exc)
     async for delta in get_provider().stream(
         session_id=session_id, system=system, text=full, image_b64=image_b64 or None):
         yield delta
@@ -182,8 +185,8 @@ def _parse_json(text: str) -> dict:
         if m:
             try:
                 return json.loads(m.group(0))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("risposta del modello non e' JSON valido: %s", exc)
     raise ValueError("Impossibile generare la build, riprova.")
 
 

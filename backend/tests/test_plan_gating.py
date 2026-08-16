@@ -4,6 +4,12 @@ Covers: /api/subscriptions/status entitlements, 402 gates for advanced tweaks,
 tracker limit, health-history 7d limit, milestones catalog rewards,
 missions available filter, plan-required 402s.
 """
+from pathlib import Path as _P
+# Radice del repository calcolata dal file: i percorsi "/app/..." erano il
+# layout di un vecchio container e non esistono ne' in locale ne' nell'immagine
+# attuale, che monta il codice in /srv/app.
+_BACKEND_DIR = _P(__file__).resolve().parents[1]
+_REPO_ROOT = _BACKEND_DIR.parent
 import os
 import time
 from datetime import datetime, timezone, timedelta
@@ -14,7 +20,7 @@ from pymongo import MongoClient
 
 from dotenv import load_dotenv
 load_dotenv("../frontend/.env")
-load_dotenv("/app/backend/.env")
+load_dotenv(str(_BACKEND_DIR / ".env"))
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL missing"
 API = f"{BASE_URL}/api"

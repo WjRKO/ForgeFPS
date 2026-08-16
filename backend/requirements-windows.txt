@@ -1,3 +1,18 @@
+# Dipendenze per l'esecuzione NATIVA su Windows, senza Docker.
+# Generato da requirements.txt escludendo quattro pin che su questa macchina
+# non sono installabili. Rigenerare a mano se requirements.txt cambia.
+#
+#   emergentintegrations  non e' su PyPI: veniva da un indice privato Emergent
+#                         ormai non piu' raggiungibile. Importato solo dentro
+#                         llm/emergent.py, e in modo pigro: il backend parte
+#                         lo stesso, ma l'AI advisor risponde con errore.
+#   litellm               wheel su CDN Emergent, serve solo a emergentintegrations.
+#   jq / librt            transitive di litellm, senza wheel per Windows
+#                         (jq richiede autotools). Nessun import nel codice.
+#
+# Stesso problema si sarebbe presentato con `docker compose build`: non e'
+# una conseguenza dell'esecuzione nativa.
+
 aiohappyeyeballs==2.6.2
 aiohttp==3.14.1
 aiosignal==1.4.0
@@ -27,7 +42,6 @@ email-validator==2.3.0
 # ULTIMO AGGANCIO A EMERGENT: serve solo a llm/emergent.py. Quando si passa a
 # un altro provider (vedi llm/__init__.py), questa riga e il wheel `litellm`
 # piu' sotto vanno rimossi insieme.
-emergentintegrations==0.2.0
 execnet==2.1.2
 fastapi==0.110.1
 fastuuid==0.14.0
@@ -59,14 +73,11 @@ isort==8.0.1
 Jinja2==3.1.6
 jiter==0.16.0
 jmespath==1.1.0
-jq==1.11.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
-librt==0.12.0
 # Wheel ospitato sul CDN Emergent, dipendenza di emergentintegrations. Se quel
 # CDN diventa irraggiungibile, `pip install` fallisce: e' un single point of
 # failure esterno finche' resta il provider Emergent.
-litellm @ https://customer-assets.emergentagent.com/internal-asset/library/litellm-1.80.0-py3-none-any.whl#sha256=adf398c513273de9341f61822296c6b2145f7f2dc4a69daf3ac04829f5bde3f8
 lxml==6.1.1
 markdown-it-py==4.2.0
 MarkupSafe==3.0.3

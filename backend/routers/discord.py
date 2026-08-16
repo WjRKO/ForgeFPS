@@ -202,8 +202,8 @@ def build(get_current_user):
     ):
         try:
             await db.discord_oauth_states.create_index("expires_at", expireAfterSeconds=0)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("indice TTL su discord_oauth_states non creato: %s", exc)
         state_doc = await db.discord_oauth_states.find_one_and_delete(
             {"_id": state, "user_id": str(user["_id"])}
         )

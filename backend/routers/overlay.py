@@ -12,6 +12,8 @@ Gli endpoint pubblici sono no-auth (OBS Browser Source non porta cookies), ma
 il token stesso agisce da capability. Rotate = invalida il vecchio URL.
 """
 from __future__ import annotations
+
+import logging
 import os
 import re
 import secrets
@@ -25,6 +27,8 @@ from pydantic import BaseModel, Field
 
 from database import db
 from plan_gate import require_streamer
+
+logger = logging.getLogger("boostpc.overlay")
 
 
 APP_ORIGIN = os.environ.get("APP_ORIGIN", "https://forgefps.dev")
@@ -129,8 +133,8 @@ def build(get_current_user):
         try:
             from milestones import bump_counter
             await bump_counter(db, uid, "overlays_created", 1)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("contatore overlays_created non aggiornato: %s", exc)
         return _config_response(doc)
 
     @r.put("/config")
@@ -221,8 +225,8 @@ def build(get_current_user):
             net = await db.net_results.find_one(_tf, {"_id": 0, "result.idle_ms": 1})
             if net and net.get("result", {}).get("idle_ms") is not None:
                 ping_ms = int(net["result"]["idle_ms"])
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("ping non interpretabile: %s", exc)
         # Ultimo health score
         health = await db.health_history.find_one(_tf, {"_id": 0, "score": 1, "grade": 1}, sort=[("created_at", -1)])
         payload = {

@@ -1,4 +1,10 @@
 """Iteration 54: Auto-Pilot, Device Compare, Streak Reminder tests."""
+from pathlib import Path as _P
+# Radice del repository calcolata dal file: i percorsi "/app/..." erano il
+# layout di un vecchio container e non esistono ne' in locale ne' nell'immagine
+# attuale, che monta il codice in /srv/app.
+_BACKEND_DIR = _P(__file__).resolve().parents[1]
+_REPO_ROOT = _BACKEND_DIR.parent
 import os
 import sys
 import asyncio
@@ -23,7 +29,7 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 STARTER_EMAIL = os.environ.get("STARTER_EMAIL", os.environ.get("STARTER_EMAIL", "credits_test@frameforge.dev"))
 STARTER_PASSWORD = os.environ.get("STARTER_PASSWORD", "")
 
-sys.path.insert(0, "/app/backend")
+sys.path.insert(0, str(_BACKEND_DIR))
 
 
 def _login(email, password):
@@ -185,7 +191,7 @@ class TestUriModes:
 class TestStreakReminder:
     def test_scheduler_job_registered(self):
         # Ensure server.py has cron hour=17 for streak_reminders
-        src = open("/app/backend/server.py").read()
+        src = open(str(_BACKEND_DIR / "server.py")).read()
         assert "streak_reminders" in src
         assert "hour=17" in src
 
@@ -206,7 +212,7 @@ class TestStreakReminder:
             orig_daily = orig.get("daily", {}).copy()
 
             # Import helpers
-            sys.path.insert(0, "/app/backend")
+            sys.path.insert(0, str(_BACKEND_DIR))
             from missions import _yesterday_id, _day_id
             yday = _yesterday_id()
             today = _day_id()

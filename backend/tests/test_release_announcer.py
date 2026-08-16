@@ -7,6 +7,12 @@ NOTE: all async logic is run inside a single asyncio.run() to keep motor's clien
 bound to one event loop (avoids 'Event loop is closed' / 'different loop' issues
 with pytest-asyncio + pytest-xdist).
 """
+from pathlib import Path as _P
+# Radice del repository calcolata dal file: i percorsi "/app/..." erano il
+# layout di un vecchio container e non esistono ne' in locale ne' nell'immagine
+# attuale, che monta il codice in /srv/app.
+_BACKEND_DIR = _P(__file__).resolve().parents[1]
+_REPO_ROOT = _BACKEND_DIR.parent
 import asyncio
 import json
 import os
@@ -15,22 +21,25 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, "/app/backend")
+sys.path.insert(0, str(_BACKEND_DIR))
 
 os.environ["RELEASE_ANNOUNCER_ENABLED"] = "true"
 
-MANIFEST_PATH = Path("/app/data/releases.json")
+MANIFEST_PATH = Path(str(_REPO_ROOT / "data" / "releases.json"))
 NEW_VERSIONS = ["0.6.14", "0.6.13", "0.6.10", "0.6.8", "0.6.7", "0.6.6"]
 OLD_VERSIONS = ["0.6.5", "0.6.4", "0.6.3", "0.6.2", "0.6.1", "0.6.0"]
 
 
 # ---- Manifest tests (sync) ----
-def test_manifest_exists_and_has_12_versions():
+def test_manifest_exists_and_contains_known_versions():
     assert MANIFEST_PATH.exists()
     data = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     assert isinstance(data, list)
     versions = [r.get("version") for r in data]
-    assert len(versions) == 12, f"Expected 12 versions, got {len(versions)}: {versions}"
+    # Il manifest cresce a ogni release: fissare il numero esatto rendeva il test
+    # rosso al primo rilascio successivo. Cio' che conta e' che non si perda
+    # nessuna delle versioni gia' annunciate, verificato dal ciclo qui sotto.
+    assert len(versions) >= 12, f"Expected at least 12 versions, got {len(versions)}: {versions}"
     for v in NEW_VERSIONS + OLD_VERSIONS:
         assert v in versions, f"Missing version {v}"
 
@@ -56,8 +65,9 @@ def test_announcer_flow_end_to_end():
     4) announce_release_by_version('0.6.14', force=True) -> ok
     5) announce_release_by_version('9.9.9') -> not found
     """
+    import database
     import services.release_announcer as ra
-    from database import db
+    from motor.motor_asyncio import AsyncIOMotorClient
 
     calls = []
 
@@ -69,6 +79,18 @@ def test_announcer_flow_end_to_end():
     ra.post_release = fake_post
 
     async def flow():
+        # Il client motor si lega al loop in cui viene usato la prima volta.
+        # Quello creato all'import di database.py appartiene a un loop gia'
+        # chiuso da un asyncio.run() precedente, e qualsiasi query qui dentro
+        # fallirebbe con "Event loop is closed". Se ne crea uno dentro questo
+        # loop e lo si passa anche all'announcer, che tiene un riferimento suo.
+        from dotenv import dotenv_values
+        _env = dotenv_values(str(_BACKEND_DIR / ".env"))
+        db = AsyncIOMotorClient(os.environ.get("MONGO_URL") or _env.get("MONGO_URL"))[
+            os.environ.get("DB_NAME") or _env.get("DB_NAME")]
+        database.db = db
+        ra.db = db
+
         results = {}
         # Cleanup: only new versions
         await db.announced_releases.delete_many({"_id": {"$in": NEW_VERSIONS}})

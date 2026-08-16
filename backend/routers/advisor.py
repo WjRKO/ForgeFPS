@@ -1,3 +1,4 @@
+import logging
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -11,9 +12,21 @@ import ai_engine
 from database import db, now_iso
 from helpers import pc_context_text, compute_health
 from models import ChatMessageInput
+import hardware
+import fleet_evidence
 from plan_gate import require_pro
 
+logger = logging.getLogger("boostpc.advisor")
+
 AI_RATE_LIMIT_PER_HOUR = 100
+
+# Community insights: quanti doc pc_specs scansionare, quanti peer al massimo tenere,
+# e le soglie minime sotto le quali il campione non e' abbastanza per dire "gli utenti
+# come te" senza mentire.
+COMMUNITY_SPECS_SCAN_LIMIT = 3000
+COMMUNITY_MAX_PEERS = 500
+COMMUNITY_MIN_PEERS = 3
+COMMUNITY_MIN_APPLIERS = 2
 
 # ---------------- Gameplay Doctor (strati 1-2: firme frametime + correlatore) ----------------
 
@@ -225,8 +238,8 @@ async def _enrich_specs_for_ai(uid: str, specs: dict | None) -> dict:
         ).sort([("created_at", -1), ("timestamp", -1)]).limit(5).to_list(5)
         if hist:
             out["benchmark_history"] = hist
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("storico benchmark non allegato al contesto: %s", exc)
     # Tracker summary
     try:
         products = await db.products.find(
@@ -237,8 +250,8 @@ async def _enrich_specs_for_ai(uid: str, specs: dict | None) -> dict:
             for p in products if p.get("initial_price") is not None and p.get("current_price") is not None
         )
         out["tracker_summary"] = {"count": len(products), "total_saved": round(saved, 2)}
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("riepilogo tracker non allegato al contesto: %s", exc)
     return out
 
 
@@ -286,31 +299,90 @@ async def _get_user_profile(uid: str) -> dict:
 
 
 async def _community_insights(uid: str, specs: dict) -> list:
-    """Trova utenti con hardware simile che hanno applicato azioni e visto miglioramenti
-    di health/benchmark. Ritorna una lista di stringhe da iniettare nel prompt come few-shot."""
+    """Azioni piu' applicate dagli utenti con hardware SIMILE a quello dell'utente.
+
+    Ritorna una lista di stringhe da iniettare nel prompt come esempi few-shot.
+    "Simile" = stessa famiglia CPU **o** stessa famiglia GPU (vedi `hardware.is_similar`),
+    la stessa definizione usata da /api/benchmarks/fleet-percentile.
+
+    Lista vuota se l'hardware dell'utente non e' classificabile o se non ci sono
+    abbastanza utenti simili: meglio nessun contesto che un contesto falso.
+    """
     data = (specs or {}).get("data") or {}
-    cpu_key = (data.get("cpu") or "").split()[0:3]  # es. "AMD Ryzen 7"
-    gpu_key = (data.get("gpu") or "").split()[0:3]  # es. "NVIDIA RTX 3070"
-    if not cpu_key and not gpu_key:
+    cpu_fam = hardware.cpu_family(data.get("cpu"))
+    gpu_fam = hardware.gpu_family(data.get("gpu"))
+    if not cpu_fam and not gpu_fam:
         return []
     try:
-        # utenti con CPU famiglia simile (case-insensitive substring del primo brand)
-        cpu_prefix = " ".join(cpu_key[:2]) if cpu_key else ""
-        gpu_prefix = " ".join(gpu_key[:2]) if gpu_key else ""
-        query = {"user_id": {"$ne": uid}, "active": True}
-        docs = await db.applied_tweaks.find(query, {"_id": 0, "title": 1, "user_id": 1}).limit(500).to_list(500)
+        # 1. utenti con hardware simile (pc_specs ha un doc per device: dedup su user_id)
+        peers: set[str] = set()
+        cursor = db.pc_specs.find(
+            {"user_id": {"$ne": uid}},
+            {"_id": 0, "user_id": 1, "data.cpu": 1, "data.gpu": 1},
+        ).limit(COMMUNITY_SPECS_SCAN_LIMIT)
+        async for row in cursor:
+            peer_id = row.get("user_id")
+            if not peer_id or peer_id in peers:
+                continue
+            d = row.get("data") or {}
+            same_cpu = bool(cpu_fam) and hardware.cpu_family(d.get("cpu")) == cpu_fam
+            same_gpu = bool(gpu_fam) and hardware.gpu_family(d.get("gpu")) == gpu_fam
+            if same_cpu or same_gpu:
+                peers.add(peer_id)
+            if len(peers) >= COMMUNITY_MAX_PEERS:
+                break
+        if len(peers) < COMMUNITY_MIN_PEERS:
+            return []
+
+        # 2. tweak attivi di quegli utenti, contati per utenti DISTINTI
+        docs = await db.applied_tweaks.find(
+            {"user_id": {"$in": list(peers)}, "active": True},
+            {"_id": 0, "title": 1, "user_id": 1},
+        ).to_list(2000)
         if not docs:
             return []
-        # Aggrega per titolo
-        from collections import Counter
-        titles = Counter([d["title"] for d in docs])
-        top = titles.most_common(5)
+        by_title: dict[str, set] = {}
+        for d in docs:
+            title = (d.get("title") or "").strip()
+            if title:
+                by_title.setdefault(title, set()).add(d.get("user_id"))
+
+        top = sorted(by_title.items(), key=lambda kv: len(kv[1]), reverse=True)[:5]
+        basis = " / ".join(x for x in (cpu_fam, gpu_fam) if x)
         out = []
-        for title, count in top:
-            if count >= 2:
-                out.append(f"- '{title}' \u2192 gi\u00e0 applicato da {count} utenti con hardware simile")
+        for title, users in top:
+            if len(users) >= COMMUNITY_MIN_APPLIERS:
+                out.append(
+                    f"- '{title}' -> applicato da {len(users)} dei {len(peers)} utenti "
+                    f"con hardware simile ({basis})"
+                )
         return out[:5]
-    except Exception:
+    except Exception as exc:
+        logger.warning("community insights non calcolati per %s: %s", uid, exc)
+        return []
+
+
+async def _measured_evidence(specs: dict) -> list:
+    """Righe di contesto dall'aggregato del Laboratorio per l'hardware dell'utente.
+
+    Differenza rispetto a `_community_insights`: li' si conta chi ha *dichiarato*
+    di aver applicato un tweak (popolarita'), qui quante volte quel tweak e' stato
+    *misurato* e con che effetto (evidenza). E' l'unico dato duro che FrameForge
+    possiede, e finora non arrivava all'AI.
+    """
+    data = (specs or {}).get("data") or {}
+    if not data:
+        return []
+    try:
+        items = await fleet_evidence.load_for_specs(
+            db, data, hardware.vendor_class(data), hardware.fleet_key(data))
+        if not items:
+            return []
+        from lab_registry import TWEAKS
+        names = {t["tweak_id"]: t.get("name") or t["tweak_id"] for t in TWEAKS}
+        return fleet_evidence.format_lines(items, names)
+    except Exception as exc:
+        logger.warning("evidenza di flotta non calcolata: %s", exc)
         return []
 
 
@@ -470,8 +542,8 @@ def build(get_current_user):
             from milestones import bump_counter, track_daily_active
             await bump_counter(db, uid, "advisor_messages", 1)
             await track_daily_active(db, uid)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("contatore attivita' giornaliera non aggiornato: %s", exc)
         specs = await db.pc_specs.find_one({"user_id": uid}, {"_id": 0})
         specs = await _enrich_specs_for_ai(uid, specs)
         specs_text = pc_context_text(specs)
@@ -542,6 +614,7 @@ def build(get_current_user):
         # Fase 3: personalization + Fase 2: community
         profile = await _get_user_profile(uid)
         community = await _community_insights(uid, specs)
+        measured = await _measured_evidence(specs)
         extra_context = ""
         if profile["applied_tweaks"]:
             extra_context += "\n\n[TWEAK GIA' ATTIVI sul PC dell'utente - NON riproporli come nuove azioni]:\n"
@@ -552,6 +625,13 @@ def build(get_current_user):
                 f"- '{d['action_title']}'" + (f" (motivo: {d['comment'][:100]})" if d.get('comment') else "")
                 for d in profile["disliked"][:5]
             )
+        if measured:
+            extra_context += (
+                "\n\n[EVIDENZA MISURATA dal Laboratorio FrameForge su hardware simile - "
+                "dato sperimentale, ha priorita' sulla tua intuizione. Se un tweak risulta "
+                "quasi sempre scartato NON proporlo; se risulta mantenuto con effetto positivo "
+                "cita il numero di misure]:\n")
+            extra_context += "\n".join(measured)
         if community:
             extra_context += "\n\n[COMMUNITY - utenti con hardware simile hanno applicato queste azioni]:\n"
             extra_context += "\n".join(community)
@@ -867,8 +947,8 @@ def build(get_current_user):
             try:
                 from milestones import bump_counter
                 await bump_counter(db, uid, "tweaks_applied", 1)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("contatore tweaks_applied non aggiornato: %s", exc)
         return {"ok": True, "slug": slug, "active": bool(data.active)}
 
     # -------- Fase 1: Outcome tracking (delta benchmark dopo diagnosi) --------

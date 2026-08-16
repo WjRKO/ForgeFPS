@@ -1,4 +1,4 @@
-"""Release announcer: al boot legge /app/data/releases.json e posta sul canale
+"""Release announcer: al boot legge data/releases.json e posta sul canale
 Discord #changelog-automatico ogni release non ancora annunciata.
 
 Marca ogni release come "annunciata" in `announced_releases` (idempotente).
@@ -14,7 +14,12 @@ from services.discord_webhooks import post_release
 
 logger = logging.getLogger("boostpc.release_announcer")
 
-MANIFEST = Path("/app/data/releases.json")
+# Percorso risolto rispetto a questo file (backend/services/ -> radice del
+# repository), non piu' fisso su "/app": quello era il layout di un container
+# che non esiste piu' ne' in locale ne' nell'immagine attuale, che usa /srv/app.
+# RELEASES_MANIFEST resta come override esplicito per deploy con altro layout.
+MANIFEST = Path(os.environ.get("RELEASES_MANIFEST")
+                or Path(__file__).resolve().parents[2] / "data" / "releases.json")
 
 
 async def announce_new_releases() -> int:

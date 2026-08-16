@@ -8,6 +8,12 @@ Covers:
 - DB SIDE EFFECT: entry con source='admin_skip' e title contenente 'marked by admin'
 - INTEGRATION: announce_new_releases() skippa versioni gia' marcate e posta solo 0.6.14
 """
+from pathlib import Path as _P
+# Radice del repository calcolata dal file: i percorsi "/app/..." erano il
+# layout di un vecchio container e non esistono ne' in locale ne' nell'immagine
+# attuale, che monta il codice in /srv/app.
+_BACKEND_DIR = _P(__file__).resolve().parents[1]
+_REPO_ROOT = _BACKEND_DIR.parent
 import os
 import sys
 import uuid
@@ -18,7 +24,7 @@ from pathlib import Path
 from dotenv import dotenv_values
 
 # Load backend .env for MONGO_URL/DB_NAME/REACT_APP_BACKEND_URL fallback
-_backend_env = dotenv_values("/app/backend/.env")
+_backend_env = dotenv_values(str(_BACKEND_DIR / ".env"))
 _frontend_env = dotenv_values("../frontend/.env")
 
 BACKEND_URL = os.environ.get("REACT_APP_BACKEND_URL") or _frontend_env.get("REACT_APP_BACKEND_URL")
@@ -26,8 +32,12 @@ assert BACKEND_URL, "REACT_APP_BACKEND_URL missing"
 BASE_URL = BACKEND_URL.rstrip("/")
 API = f"{BASE_URL}/api"
 
-MONGO_URL = _backend_env.get("MONGO_URL") or os.environ.get("MONGO_URL")
-DB_NAME = _backend_env.get("DB_NAME") or os.environ.get("DB_NAME")
+# L'ambiente ha la precedenza sul file: con l'ordine inverso questo test
+# leggeva e ripuliva il database indicato in backend/.env (quello di lavoro)
+# mentre interrogava il server avviato su un altro database, e le asserzioni
+# non trovavano mai i documenti appena creati.
+MONGO_URL = os.environ.get("MONGO_URL") or _backend_env.get("MONGO_URL")
+DB_NAME = os.environ.get("DB_NAME") or _backend_env.get("DB_NAME")
 
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
@@ -162,7 +172,7 @@ def test_integration_announcer_skips_marked(admin_session, monkeypatch):
         posted_versions.append(version)
         return True
 
-    sys.path.insert(0, "/app/backend")
+    sys.path.insert(0, str(_BACKEND_DIR))
     from services import release_announcer as ra
     monkeypatch.setattr(ra, "post_release", fake_post_release)
     monkeypatch.setenv("RELEASE_ANNOUNCER_ENABLED", "true")

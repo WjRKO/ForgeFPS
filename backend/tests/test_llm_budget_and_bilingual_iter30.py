@@ -6,6 +6,12 @@
   '[CONTESTO PC DELL' / 'Utente:' / '[Nuovo messaggio]'.
 - SANITY: /api/auth/login, /api/auth/me still work.
 """
+from pathlib import Path as _P
+# Radice del repository calcolata dal file: i percorsi "/app/..." erano il
+# layout di un vecchio container e non esistono ne' in locale ne' nell'immagine
+# attuale, che monta il codice in /srv/app.
+_BACKEND_DIR = _P(__file__).resolve().parents[1]
+_REPO_ROOT = _BACKEND_DIR.parent
 import os
 import sys
 import asyncio
@@ -89,29 +95,31 @@ def test_startup_analyze_budget_exhausted_returns_402(session):
     assert "Universal Key" in detail
 
 
-# --- FIX-2: bilingual prompt build via monkeypatching build_chat ---
-class _FakeChat:
-    def __init__(self):
-        self.system = None
+# --- FIX-2: bilingual prompt build, intercettando il provider LLM ---
+# Il seam non e' piu' ai_engine.build_chat (rimossa quando il motore AI e' stato
+# spostato dietro llm/): oggi stream_advisor chiama get_provider().stream(), ed
+# e' quello che va sostituito per catturare il system prompt.
+class _FakeProvider:
+    def __init__(self, captured):
+        self._captured = captured
 
-    def stream_message(self, um):
+    def stream(self, *, session_id, system, text, image_b64=None):
+        self._captured["system"] = system
+
         async def _gen():
             if False:
-                yield None
+                yield ""
         return _gen()
 
 
 def test_stream_advisor_prompt_english_when_lang_en(monkeypatch):
-    sys.path.insert(0, "/app/backend")
+    sys.path.insert(0, str(_BACKEND_DIR))
     import ai_engine
 
     captured = {}
 
-    def fake_build_chat(session_id, system=ai_engine.ADVISOR_SYSTEM):
-        captured["system"] = system
-        return _FakeChat()
-
-    monkeypatch.setattr(ai_engine, "build_chat", fake_build_chat)
+    monkeypatch.setattr(ai_engine, "get_provider",
+                        lambda *a, **k: _FakeProvider(captured))
 
     async def run():
         gen = ai_engine.stream_advisor(
@@ -125,7 +133,7 @@ def test_stream_advisor_prompt_english_when_lang_en(monkeypatch):
         async for _ in gen:
             pass
 
-    asyncio.get_event_loop().run_until_complete(run())
+    asyncio.run(run())
     sys_msg = captured.get("system", "")
     print(f"[EN system snippet] ...{sys_msg[-500:]}")
     assert "[USER PC CONTEXT" in sys_msg, "English PC context header missing"
@@ -134,16 +142,13 @@ def test_stream_advisor_prompt_english_when_lang_en(monkeypatch):
 
 
 def test_stream_advisor_prompt_italian_when_lang_it(monkeypatch):
-    sys.path.insert(0, "/app/backend")
+    sys.path.insert(0, str(_BACKEND_DIR))
     import ai_engine
 
     captured = {}
 
-    def fake_build_chat(session_id, system=ai_engine.ADVISOR_SYSTEM):
-        captured["system"] = system
-        return _FakeChat()
-
-    monkeypatch.setattr(ai_engine, "build_chat", fake_build_chat)
+    monkeypatch.setattr(ai_engine, "get_provider",
+                        lambda *a, **k: _FakeProvider(captured))
 
     async def run():
         gen = ai_engine.stream_advisor(
@@ -156,7 +161,7 @@ def test_stream_advisor_prompt_italian_when_lang_it(monkeypatch):
         async for _ in gen:
             pass
 
-    asyncio.get_event_loop().run_until_complete(run())
+    asyncio.run(run())
     sys_msg = captured.get("system", "")
     print(f"[IT system snippet] ...{sys_msg[-500:]}")
     assert "[CONTESTO PC DELL'UTENTE" in sys_msg

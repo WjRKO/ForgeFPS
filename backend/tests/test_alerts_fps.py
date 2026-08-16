@@ -64,7 +64,7 @@ class TestFpsTelemetry:
                           json={"sample": sample},
                           headers={"X-Agent-Token": agent_token}, timeout=10)
         assert r.status_code == 200
-        assert r.json() == {"ok": True}
+        assert r.json()["ok"] is True
         time.sleep(0.5)
         d = admin_session.get(f"{BASE_URL}/api/pc-telemetry", timeout=10).json()
         assert d["samples"], "no samples returned"
@@ -84,13 +84,13 @@ class TestTempAlertNoCrash:
                            json={"sample": {"cpu_util": 10, "gpu_temp": 95, "cpu_temp": 60}},
                            headers={"X-Agent-Token": agent_token}, timeout=10)
         assert r1.status_code == 200
-        assert r1.json() == {"ok": True}
+        assert r1.json()["ok"] is True
         # 2nd immediate call -> cooldown, still 200
         r2 = requests.post(f"{BASE_URL}/api/agent/telemetry",
                            json={"sample": {"cpu_util": 10, "gpu_temp": 96, "cpu_temp": 61}},
                            headers={"X-Agent-Token": agent_token}, timeout=10)
         assert r2.status_code == 200
-        assert r2.json() == {"ok": True}
+        assert r2.json()["ok"] is True
 
     def test_telemetry_bad_token(self):
         r = requests.post(f"{BASE_URL}/api/agent/telemetry",

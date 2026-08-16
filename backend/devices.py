@@ -9,11 +9,15 @@ Limiti piano: Free 1 PC, Pro 3, Streamer illimitati.
 """
 from __future__ import annotations
 
+import logging
+
 import re
 from datetime import datetime, timezone
 
 from bson import ObjectId
 from fastapi import HTTPException
+
+logger = logging.getLogger("boostpc.devices")
 
 PER_PC_COLLECTIONS = ("pc_specs", "pc_telemetry", "health_history", "net_results", "benchmarks")
 DEVICE_ROLES = ("gaming", "streaming", "laptop", "other")
@@ -100,8 +104,8 @@ async def list_devices(db, uid: str) -> list[dict]:
             if ls.tzinfo is None:
                 ls = ls.replace(tzinfo=timezone.utc)
             online = (now - ls).total_seconds() < 300
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("last_seen non interpretabile, device dato per offline: %s", exc)
         h = await db.health_history.find_one(
             {"user_id": uid, "device_id": d["device_id"]}, sort=[("created_at", -1)])
         out.append({**d, "is_active": d["device_id"] == active, "online": online,

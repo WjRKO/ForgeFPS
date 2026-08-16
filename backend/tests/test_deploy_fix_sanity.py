@@ -7,6 +7,12 @@ Sanity tests post deployment fix (iteration 28).
   frontend build compiled with window.location.origin for /api/discord/connect,
   /app/backend/.env and /app/frontend/.env exist with required keys.
 """
+from pathlib import Path as _P
+# Radice del repository calcolata dal file: i percorsi "/app/..." erano il
+# layout di un vecchio container e non esistono ne' in locale ne' nell'immagine
+# attuale, che monta il codice in /srv/app.
+_BACKEND_DIR = _P(__file__).resolve().parents[1]
+_REPO_ROOT = _BACKEND_DIR.parent
 import io
 import os
 import re
@@ -75,7 +81,7 @@ def test_magic_link_creation(admin_session):
     # cleanup magic_tokens for admin first to avoid rate limit collisions
     try:
         from pymongo import MongoClient
-        mongo_url = open("/app/backend/.env").read()
+        mongo_url = open(str(_BACKEND_DIR / ".env")).read()
         m = re.search(r"MONGO_URL=(.+)", mongo_url)
         dbn = re.search(r"DB_NAME=(.+)", mongo_url)
         if m and dbn:
@@ -119,16 +125,23 @@ def test_agent_launcher_bat(admin_session):
 
 
 # ---------- FIX-SPECIFIC: codebase checks ----------
-def test_gitignore_does_not_block_env_files():
-    with open("/app/.gitignore") as f:
+def test_gitignore_blocks_env_files_but_not_the_example():
+    """I .env NON devono finire nel repository, .env.example si'.
+
+    La versione precedente di questo test pretendeva il contrario: sulla
+    vecchia piattaforma i file .env andavano committati perche' il deploy li
+    leggeva dal repository. Oggi contengono segreti veri (JWT_SECRET, chiavi
+    VAPID, token Discord) e .env.example li documenta senza valori, come dice
+    il commento in testa a quel file.
+    """
+    with open(str(_REPO_ROOT / ".gitignore")) as f:
         lines = [ln.strip() for ln in f.readlines()]
-    forbidden = {".env", ".env.*", "*.env"}
-    hits = [ln for ln in lines if ln in forbidden]
-    assert not hits, f".gitignore still contains env-blocking lines: {hits}"
+    assert any(ln in {".env", ".env.*", "*.env"} for ln in lines),         ".gitignore non protegge piu' i file .env"
+    assert "!.env.example" in lines or ".env.example" not in lines,         ".env.example deve restare tracciabile"
 
 
 def test_env_files_present_with_required_keys():
-    with open("/app/backend/.env") as f:
+    with open(str(_BACKEND_DIR / ".env")) as f:
         be = f.read()
     assert re.search(r"^MONGO_URL=", be, re.M), "backend .env missing MONGO_URL"
     assert re.search(r"^DB_NAME=", be, re.M), "backend .env missing DB_NAME"
@@ -138,7 +151,7 @@ def test_env_files_present_with_required_keys():
 
 
 def test_frontend_build_uses_window_origin_for_discord_connect():
-    build_files = glob.glob("/app/frontend/build/static/js/*.js")
+    build_files = glob.glob(str(_REPO_ROOT / "frontend" / "build" / "static" / "js" / "*.js"))
     assert build_files, "no frontend build files found"
     bad_pattern = re.compile(r'process\.env\.REACT_APP_BACKEND_URL\s*\|\|\s*""[^\n]{0,100}/api/discord/connect')
     good_pattern = re.compile(r'window\.location\.origin[^\n]{0,50}/api/discord/connect')

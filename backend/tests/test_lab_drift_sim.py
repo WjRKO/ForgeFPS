@@ -3,7 +3,10 @@ import os
 
 import requests
 
-BASE = "http://localhost:8001"
+# L'indirizzo del backend arriva SEMPRE dall'ambiente: quando era fisso su
+# localhost:8001 la suite colpiva l'istanza di lavoro anche lanciandola
+# contro un'altra porta, sporcando il database reale e bloccando l'admin.
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8001").rstrip("/")
 s = requests.Session()
 s.post(f"{BASE}/api/auth/login",
        json={"email": os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"),

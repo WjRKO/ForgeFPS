@@ -12,6 +12,7 @@ DEFAULT_PROVIDER = "emergent"
 
 #: nome -> (modulo, classe). Import pigro: si carica solo quello richiesto.
 _PROVIDERS: dict[str, tuple[str, str]] = {
+    "anthropic": (".anthropic", "AnthropicProvider"),
     "emergent": (".emergent", "EmergentProvider"),
 }
 

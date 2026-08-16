@@ -94,10 +94,7 @@ const CONTENT = {
 export default function Terms() {
   const lang = useLang();
   const c = CONTENT[lang];
-  usePageMeta({
-    title: `${c.title} · FrameForge`,
-    description: c.intro,
-  });
+  usePageMeta(`${c.title} · FrameForge`, c.intro);
   return (
     <div className="min-h-screen bg-[#050505] text-white">
       <MarketingNav />

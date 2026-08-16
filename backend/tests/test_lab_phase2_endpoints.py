@@ -1,4 +1,10 @@
 """Lab Phase 2 endpoint tests - registry filters, start with reboot toggle, agent script markers"""
+from pathlib import Path as _P
+# Radice del repository calcolata dal file: i percorsi "/app/..." erano il
+# layout di un vecchio container e non esistono ne' in locale ne' nell'immagine
+# attuale, che monta il codice in /srv/app.
+_BACKEND_DIR = _P(__file__).resolve().parents[1]
+_REPO_ROOT = _BACKEND_DIR.parent
 import os, requests, pytest
 from motor.motor_asyncio import AsyncIOMotorClient
 import asyncio
@@ -117,5 +123,5 @@ def test_cleanup_final(session):
     # load .env
     if not os.environ.get("MONGO_URL"):
         from dotenv import load_dotenv
-        load_dotenv("/app/backend/.env")
-    asyncio.get_event_loop().run_until_complete(_clean())
+        load_dotenv(str(_BACKEND_DIR / ".env"))
+    asyncio.run(_clean())

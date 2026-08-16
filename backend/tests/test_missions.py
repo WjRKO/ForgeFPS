@@ -6,11 +6,12 @@ dall'audit tra due scan) -> +XP nel pool tier.
 """
 import os
 import random
+import uuid
 import pytest
 import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL") or os.environ.get(
-    "BACKEND_URL", "http://localhost:8001")
+    "REACT_APP_BACKEND_URL", os.environ.get("BACKEND_URL", "http://localhost:8001"))
 
 _FILLER = [{"name": f"Svc{i}", "display": f"Filler {i}", "state": "Running",
             "start_mode": "Auto", "shared": True, "ram_mb": None,
@@ -20,7 +21,10 @@ _FILLER = [{"name": f"Svc{i}", "display": f"Filler {i}", "state": "Running",
 @pytest.fixture(scope="module")
 def ctx():
     s = requests.Session()
-    email = f"missions_test_{random.randint(10000, 99999)}@test.io"
+    # uuid e non random.randint: con 5 cifre le collisioni arrivano presto e
+    # la registrazione fallisce con "Email already registered", mandando in
+    # errore tutti i test del file.
+    email = f"missions_test_{uuid.uuid4().hex[:12]}@test.io"
     r = s.post(f"{BASE_URL}/api/auth/register",
                json={"email": email, "name": "MTest", "password": "Test_Pass_123!"}, timeout=15)
     assert r.status_code == 200, r.text
@@ -70,8 +74,12 @@ def test_chain_and_weekly_initial(ctx):
     assert d["chain"]["done"] is False
     wk = d["weekly"]
     assert wk["week_id"] and wk["expires_at"]
-    # utente senza specs.cpu -> fallback deterministico (niente chiamata AI)
-    assert {m["template"] for m in wk["missions"]} == {"w_bench", "w_net"}
+    # utente senza specs.cpu -> fallback deterministico (niente chiamata AI).
+    # _pick_weekly_fallback() propone w_net solo se l'utente ha adv_tweaks, cioe'
+    # un piano Pro: la registrazione non assegna nessun piano (il trial si avvia
+    # a parte, da /api/subscriptions), quindi per un utente appena creato la
+    # coppia corretta e' w_bench + w_scan.
+    assert {m["template"] for m in wk["missions"]} == {"w_bench", "w_scan"}
     assert all(m["progress"] == 0 and not m["completed_at"] for m in wk["missions"])
 
 

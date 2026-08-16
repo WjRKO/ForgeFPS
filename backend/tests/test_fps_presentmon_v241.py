@@ -83,7 +83,9 @@ class TestTelemetryFpsCs2:
                           json={"sample": sample},
                           headers={"X-Agent-Token": agent_token}, timeout=10)
         assert r.status_code == 200
-        assert r.json() == {"ok": True}
+        # L'endpoint restituisce anche "stop" (segnale di arresto del monitor):
+        # l'uguaglianza stretta si rompeva al primo campo aggiunto.
+        assert r.json()["ok"] is True
         time.sleep(0.5)
         d = admin_session.get(f"{BASE_URL}/api/pc-telemetry", timeout=10).json()
         assert d["samples"], "no samples returned"

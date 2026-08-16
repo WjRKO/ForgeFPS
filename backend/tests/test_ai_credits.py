@@ -1,5 +1,12 @@
 """Tests for AI Advisor credits system (Earned Premium model)."""
+from pathlib import Path as _P
+# Radice del repository calcolata dal file: i percorsi "/app/..." erano il
+# layout di un vecchio container e non esistono ne' in locale ne' nell'immagine
+# attuale, che monta il codice in /srv/app.
+_BACKEND_DIR = _P(__file__).resolve().parents[1]
+_REPO_ROOT = _BACKEND_DIR.parent
 import os
+from contextlib import asynccontextmanager
 import asyncio
 import requests
 import pytest
@@ -7,7 +14,7 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 
-load_dotenv("/app/backend/.env")
+load_dotenv(str(_BACKEND_DIR / ".env"))
 load_dotenv("../frontend/.env")
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
@@ -37,33 +44,44 @@ def starter_session():
     return _login(STARTER_EMAIL, STARTER_PWD)
 
 
+@asynccontextmanager
 async def _mongo():
+    """Client motor con chiusura garantita.
+
+    Prima il client veniva creato e mai chiuso: con asyncio.run() il loop si
+    chiude a fine chiamata e i task di background di motor finivano per girare
+    su un loop morto, con "RuntimeError: Event loop is closed" che spuntava in
+    un test successivo e a caso.
+    """
     c = AsyncIOMotorClient(MONGO_URL)
-    return c[DB_NAME]
+    try:
+        yield c[DB_NAME]
+    finally:
+        c.close()
 
 
 def _set_starter_credits(welcome, earned, earned_week=None):
     from datetime import datetime, timezone
     async def _run():
-        db = await _mongo()
-        u = await db.users.find_one({"email": STARTER_EMAIL})
-        assert u, "test user missing"
-        y, w, _d = datetime.now(timezone.utc).isocalendar()
-        wk = earned_week or f"{y}-W{w:02d}"
-        await db.users.update_one({"_id": u["_id"]}, {"$set": {
-            "ai_welcome_credits": int(welcome),
-            "ai_earned_credits": int(earned),
-            "ai_earned_week": wk,
-        }})
-        return str(u["_id"])
-    return asyncio.get_event_loop().run_until_complete(_run())
+        async with _mongo() as db:
+            u = await db.users.find_one({"email": STARTER_EMAIL})
+            assert u, "test user missing"
+            y, w, _d = datetime.now(timezone.utc).isocalendar()
+            wk = earned_week or f"{y}-W{w:02d}"
+            await db.users.update_one({"_id": u["_id"]}, {"$set": {
+                "ai_welcome_credits": int(welcome),
+                "ai_earned_credits": int(earned),
+                "ai_earned_week": wk,
+            }})
+            return str(u["_id"])
+    return asyncio.run(_run())
 
 
 def _get_starter_doc():
     async def _run():
-        db = await _mongo()
-        return await db.users.find_one({"email": STARTER_EMAIL})
-    return asyncio.get_event_loop().run_until_complete(_run())
+        async with _mongo() as db:
+            return await db.users.find_one({"email": STARTER_EMAIL})
+    return asyncio.run(_run())
 
 
 # ---- streamer (admin) unlimited ----
@@ -118,22 +136,22 @@ def test_mission_grants_earned_credits():
     """Simula mission award: chiama grant_credits direttamente."""
     async def _run():
         import sys
-        sys.path.insert(0, "/app/backend")
+        sys.path.insert(0, str(_BACKEND_DIR))
         from ai_credits import grant_credits, week_id
-        db = await _mongo()
-        u = await db.users.find_one({"email": STARTER_EMAIL})
-        uid = str(u["_id"])
-        await db.users.update_one({"_id": u["_id"]},
-                                  {"$set": {"ai_earned_credits": 0, "ai_earned_week": week_id()}})
-        await grant_credits(db, uid, 2)  # mission
-        u2 = await db.users.find_one({"_id": u["_id"]})
-        assert u2.get("ai_earned_credits") == 2, u2
-        assert u2.get("ai_earned_week") == week_id()
-        # trophy bronze +5
-        await grant_credits(db, uid, 5)
-        u3 = await db.users.find_one({"_id": u["_id"]})
-        assert u3.get("ai_earned_credits") == 7
-    asyncio.get_event_loop().run_until_complete(_run())
+        async with _mongo() as db:
+            u = await db.users.find_one({"email": STARTER_EMAIL})
+            uid = str(u["_id"])
+            await db.users.update_one({"_id": u["_id"]},
+                                      {"$set": {"ai_earned_credits": 0, "ai_earned_week": week_id()}})
+            await grant_credits(db, uid, 2)  # mission
+            u2 = await db.users.find_one({"_id": u["_id"]})
+            assert u2.get("ai_earned_credits") == 2, u2
+            assert u2.get("ai_earned_week") == week_id()
+            # trophy bronze +5
+            await grant_credits(db, uid, 5)
+            u3 = await db.users.find_one({"_id": u["_id"]})
+            assert u3.get("ai_earned_credits") == 7
+    asyncio.run(_run())
 
 
 # ---- diagnose still Pro-gated for starter ----

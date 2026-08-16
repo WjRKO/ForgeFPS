@@ -5,6 +5,9 @@ import pytest
 import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8001").rstrip("/")
+# Le pagine pubbliche le serve il front-end, non le API. In produzione stanno
+# sullo stesso dominio e BASE_URL bastava; in locale sono due porte diverse.
+WEB_URL = os.environ.get("FRONTEND_URL", BASE_URL).rstrip("/")
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
 ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "")
 
@@ -90,6 +93,6 @@ def test_security_headers_present():
 # -----------------------------
 @pytest.mark.parametrize("path", ["/", "/security", "/privacy-telemetry", "/changelog", "/pricing", "/demo", "/login", "/register"])
 def test_public_pages_load(path):
-    r = requests.get(f"{BASE_URL}{path}", timeout=15)
+    r = requests.get(f"{WEB_URL}{path}", timeout=15)
     assert r.status_code == 200, f"{path} => {r.status_code}"
     assert "<html" in r.text.lower() or "<!doctype" in r.text.lower()

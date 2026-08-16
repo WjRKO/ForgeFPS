@@ -37,6 +37,30 @@ def client():
     return s
 
 
+# --- Stato iniziale ----------------------------------------------------------
+# I test qui sotto verificano hardware e giochi "seeded": erano dati rimasti
+# nel database del vecchio ambiente, che nessuno ricreava. Su un database
+# pulito fallivano, e con loro tutti i test di build/upgrade che ci si appoggiano.
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _seed_specs_and_games(client):
+    r = client.get(f"{BASE_URL}/api/agent/token", timeout=30)
+    assert r.status_code == 200, r.text
+    token = r.json()["token"]
+    payload = {
+        "data": {"cpu": "Intel Core i7-12700K", "gpu": "NVIDIA GeForce RTX 3070 Ti",
+                 "ram": 32, "os": "Windows 11"},
+        "games": ["Counter-Strike 2", "Fortnite", "Cyberpunk 2077", "Valorant",
+                  "Call of Duty: Warzone"],
+        "health": None,
+    }
+    r2 = requests.post(f"{BASE_URL}/api/agent/report-specs",
+                       headers={"X-Agent-Token": token}, json=payload, timeout=30)
+    assert r2.status_code == 200, r2.text[:300]
+    yield
+
+
 # --- Sanity: hardware + games seeded ---
 def test_pc_specs_seeded(client):
     r = client.get(f"{BASE_URL}/api/pc-specs", timeout=30)
