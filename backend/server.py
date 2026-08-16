@@ -1,5 +1,6 @@
 import os
 import logging
+import uuid
 
 from fastapi import FastAPI, Request
 from starlette.middleware.cors import CORSMiddleware
@@ -340,6 +341,7 @@ async def scheduled_perf_watchdog():
             if note:
                 regressed += 1
                 await db.notifications.insert_one({
+                    "id": str(uuid.uuid4()),
                     "user_id": wd["user_id"], "type": "regression",
                     "title": note["title"], "body": note["body"], "link": note["link"],
                     "created_at": now_iso_str, "read": False})

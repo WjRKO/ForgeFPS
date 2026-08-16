@@ -29,8 +29,10 @@ export default function AdminToolsPanel() {
   const [marking, setMarking] = useState(false);
 
   useEffect(() => {
+    // L'endpoint risponde {days, series, total}: la docstring del backend parla di
+    // una lista, ma restituisce un oggetto. Si accettano entrambe le forme.
     api.get("/admin/signups-timeline?days=30")
-      .then(({ data }) => setPoints(Array.isArray(data) ? data : data?.points || []))
+      .then(({ data }) => setPoints(Array.isArray(data) ? data : (data?.series || data?.points || [])))
       .catch(() => setPoints([]));
   }, []);
 

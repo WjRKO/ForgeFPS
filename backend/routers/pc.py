@@ -1,4 +1,5 @@
 import logging
+import uuid
 import io
 import os
 import re
@@ -449,6 +450,7 @@ def build(get_current_user):
                         _d = int(_rec["fps_avg"]) - int(_prev["recap"]["fps_avg"])
                         _body += f" · {'+' if _d >= 0 else ''}{_d} FPS vs sessione precedente"
                     await db.notifications.insert_one({
+                        "id": str(uuid.uuid4()),
                         "user_id": uid, "type": "recap",
                         "title": f"Recap {_bs.get('game')} · {_mins} min",
                         "body": _body, "link": "/app/gaming",

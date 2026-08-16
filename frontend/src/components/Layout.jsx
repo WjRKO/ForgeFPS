@@ -139,10 +139,14 @@ function Notifications() {
             </div>
           )}
           {items.length === 0 && <div className="p-4 text-sm text-zinc-500">{t("notif.empty")}</div>}
-          {items.map((n) => {
+          {items.map((n, i) => {
+            // Attenzione: il tipo salvato per i cali di prezzo e' "drop", non
+            // "price_drop"; senza la mappatura finirebbero nell'etichetta generica.
+            const ALIAS = { drop: "price_drop" };
             const known = ["target", "price_drop", "recap", "regression", "broadcast",
                            "unlock", "badge", "access", "refresh", "fps_drop", "hitch"];
-            const label = t(`notif.${known.includes(n.type) ? n.type : "generic"}`);
+            const tipo = ALIAS[n.type] || n.type;
+            const label = t(`notif.${known.includes(tipo) ? tipo : "generic"}`);
             const text = n.body || n.message || "";
             const Row = (
               <>
@@ -166,11 +170,11 @@ function Notifications() {
             );
             const cls = `p-3 border-b border-[#1A1A24] text-sm block ${n.read ? "opacity-60" : ""}`;
             return n.link ? (
-              <Link key={n.id} to={n.link} onClick={() => { markOne(n.id); setOpen(false); }} className={`${cls} hover:bg-[#12121A]`}>
+              <Link key={n.id || `n-${i}`} to={n.link} onClick={() => { markOne(n.id); setOpen(false); }} className={`${cls} hover:bg-[#12121A]`}>
                 {Row}
               </Link>
             ) : (
-              <div key={n.id} className={cls}>{Row}</div>
+              <div key={n.id || `n-${i}`} className={cls}>{Row}</div>
             );
           })}
         </div>
