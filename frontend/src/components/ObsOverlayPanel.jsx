@@ -339,10 +339,14 @@ export default function ObsOverlayPanel() {
           {cfg?.token && (
             <iframe
               key={previewKey}
-              /* Usa origin corrente per la preview iframe (in dev/preview il token e'
-                 valido solo sul backend corrente; l'URL "copiabile" invece punta a
-                 APP_ORIGIN che e' il dominio production dello streamer). */
-              src={`${window.location.origin}/api/overlay/${cfg.token}`}
+              /* Stesso URL che si copia in OBS: unica fonte di verita'.
+                 Prima l'anteprima usava window.location.origin perche' `cfg.url`
+                 puntava ad APP_ORIGIN, che in locale e' la porta del front-end e
+                 restituisce l'HTML della SPA invece dell'overlay. Ora il backend
+                 costruisce `url` con AGENT_BACKEND_URL, quindi e' corretto sia in
+                 locale sia in produzione, e l'anteprima mostra davvero cio' che
+                 vedra' OBS. */
+              src={cfg.url || `${window.location.origin}/api/overlay/${cfg.token}`}
               title="OBS Overlay preview"
               className="absolute inset-0 w-full h-full"
               style={{ background: "transparent" }}
