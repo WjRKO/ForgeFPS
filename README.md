@@ -187,7 +187,16 @@ memory/             changelog, roadmap, product notes
 
 ## License
 
-Released under the [MIT License](LICENSE).
+Copyright (C) 2026 WjRKO (FrameForge).
+
+Released under the [GNU Affero General Public License v3.0 or later](LICENSE).
+
+You are free to use, study, modify and redistribute this software. If you run a
+modified version as a network service, section 13 of the license requires you to offer
+its users the corresponding source code of your modified version.
+
+Releases up to and including tag `v0.8.1` were published under the MIT License and
+remain available under those terms.
 
 ---
 

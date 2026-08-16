@@ -75,7 +75,7 @@ Dear Kaspersky team,
 
 your engine is flagging forgefps-agent.exe (SHA256 <SHA256>) as <NAME_OF_DETECTION>.
 The file is the console entry point of an open-source Windows optimizer whose complete
-source code is published under MIT license at https://github.com/WjRKO/ForgeFPS.
+source code is published under the AGPL-3.0 license at https://github.com/WjRKO/ForgeFPS.
 
 The executable is built with PyInstaller --onedir, no UPX, no obfuscation, and embeds
 standard version metadata (CompanyName=FrameForge, FileDescription=FrameForge Agent,
@@ -100,7 +100,7 @@ Portal: **https://www.bitdefender.com/consumer/support/answer/29358/** (form "Re
 ```
 forgefps-agent.exe (SHA256 <SHA256>) is flagged as <DETECTION_NAME> by Bitdefender.
 This is the entry point of FrameForge, an open-source PC optimizer released at
-https://github.com/WjRKO/ForgeFPS under MIT license.
+https://github.com/WjRKO/ForgeFPS under the AGPL-3.0 license.
 
 Build: PyInstaller --onedir, no UPX, version_info.txt with CompanyName=FrameForge and
 InternalName=forgefps-agent. The .exe reads local hardware inventory via WMI and applies
@@ -149,7 +149,7 @@ Hello ESET,
 please review the attached forgefps-agent.zip (unpacked SHA256 of .exe: <SHA256>)
 which ESET flags as <DETECTION_NAME>. This is the entry point of FrameForge, an
 open-source Windows optimizer whose full source code is available at
-https://github.com/WjRKO/ForgeFPS (MIT license).
+https://github.com/WjRKO/ForgeFPS (AGPL-3.0 license).
 
 The .exe is produced by PyInstaller --onedir, no UPX, no obfuscation. Version
 metadata embedded (CompanyName=FrameForge, InternalName=forgefps-agent). All

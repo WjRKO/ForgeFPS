@@ -23,7 +23,7 @@ Come fare (via web GitHub, senza git):
 1. Vai su **https://signpath.org/apply.html**
 2. Compila con:
    - **Project/Repository URL:** `https://github.com/WjRKO/ForgeFPS`
-   - **License:** `MIT`
+   - **License:** `AGPL-3.0-or-later`
    - **Download URL:** la tua pagina Releases GitHub
    - **Description:** "FrameForge Desktop Agent: open PC-optimization tool for gamers/streamers (PyInstaller .exe). Applies documented Windows tweaks with consent + backup, never touches Defender/Firewall."
 3. Invia (o manda a **oss-support@signpath.org**). Attendi approvazione (giorni → qualche settimana).
