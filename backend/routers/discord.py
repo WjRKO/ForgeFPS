@@ -35,7 +35,7 @@ def _env(name: str, default: str = "") -> str:
 def _redirect_uri_for(request) -> str:
     """Ritorna il redirect_uri da usare nel flow OAuth.
     Priorita': env var esplicita (per test/backend headless) -> host del request (auto-detect).
-    Forza https:// perche' dietro proxy Emergent il traffico interno arriva su http.
+    Forza https:// perche' dietro reverse proxy il traffico interno arriva su http.
     """
     env_uri = _env("DISCORD_REDIRECT_URI")
     if env_uri:
@@ -202,8 +202,8 @@ def build(get_current_user):
     ):
         try:
             await db.discord_oauth_states.create_index("expires_at", expireAfterSeconds=0)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("indice TTL su discord_oauth_states non creato: %s", exc)
         state_doc = await db.discord_oauth_states.find_one_and_delete(
             {"_id": state, "user_id": str(user["_id"])}
         )

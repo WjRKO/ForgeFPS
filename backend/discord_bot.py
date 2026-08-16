@@ -26,8 +26,8 @@ from pathlib import Path
 try:
     from dotenv import load_dotenv
     load_dotenv(Path(__file__).parent / ".env")
-except Exception:
-    pass
+except Exception as exc:
+    logger.debug(".env non caricato, si usano le variabili d'ambiente: %s", exc)
 
 import discord
 from discord import app_commands
@@ -789,8 +789,8 @@ async def on_member_join(member: discord.Member):
             f"Benvenuto in FrameForge! Collega il tuo account su {FRONTEND_URL}/app/account "
             f"con il pulsante *Collega Discord* per sbloccare i comandi bot e il ruolo Boosted PC."
         )
-    except discord.Forbidden:
-        pass
+    except discord.Forbidden as exc:
+        logger.debug("permessi Discord insufficienti: %s", exc)
     # se ha gia' l'account collegato -> assegna ruoli
     doc = await _find_user_by_discord_id(str(member.id))
     if ROLE_BOOSTED_ID and doc:

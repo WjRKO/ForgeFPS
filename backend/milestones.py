@@ -20,10 +20,13 @@ Reward types (server-side flags in user_progress.features):
 - badge:  solo cosmetico/condivisibile
 - slot:   incrementa un contatore di slot (es. profile_slots +1)
 """
-
 from __future__ import annotations
+import logging
+
 from datetime import datetime, timezone, date
 from typing import Any
+
+logger = logging.getLogger("boostpc.milestones")
 
 
 # ---------------- Catalogo (14 milestone) ----------------
@@ -326,8 +329,8 @@ async def _evaluate_and_unlock(db, user_id: str, progress: dict) -> list[str]:
         try:
             from ai_credits import grant_credits
             await grant_credits(db, user_id, ai_bonus)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("crediti AI del trofeo non assegnati a: %s", exc)
     return new_unlocks
 
 
@@ -450,8 +453,8 @@ async def check_beta_tester(db, user_id: str, user_created_at: str | None) -> li
         cutoff = datetime(2026, 3, 1, tzinfo=timezone.utc)
         if dt.replace(tzinfo=dt.tzinfo or timezone.utc) < cutoff:
             return await set_flag(db, user_id, "beta_tester_earned", True)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("flag beta_tester non impostato: %s", exc)
     return []
 
 

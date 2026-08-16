@@ -13,10 +13,10 @@ import requests
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = f"{BASE_URL}/api"
 
-ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASSWORD = "4zWK4o_xSw5prU-2b7w9dQ"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 OLD_PASSWORD = "admin123"
-ALLOWED_ORIGIN = "https://gaming-nexus-199.preview.emergentagent.com"
+ALLOWED_ORIGIN = os.environ.get("FRONTEND_URL", "http://localhost:8001").rstrip("/")
 EVIL_ORIGIN = "https://evil.example.com"
 
 
@@ -71,7 +71,10 @@ class TestAdminPassword:
 # ---------- (2) CORS restricted (tested against backend directly - preview ingress
 # strips/overrides CORS headers with '*' at the Cloudflare edge, which is not a
 # backend concern; production deployment uses the backend's own CORSMiddleware).
-LOCAL_API = "http://localhost:8001/api"
+# Come sopra: mai inchiodare la porta, altrimenti i test CORS interrogano
+# l'istanza di lavoro invece di quella sotto test.
+LOCAL_API = os.environ.get("REACT_APP_BACKEND_URL",
+                           "http://localhost:8001").rstrip("/") + "/api"
 
 
 class TestCORS:

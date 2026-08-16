@@ -6,12 +6,16 @@ Quota: Free 1 esecuzione/settimana, Pro/Streamer illimitato.
 """
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from database import db, now_iso
 from devices import resolve_device, get_active_device
 from ai_credits import week_start_iso
+
+logger = logging.getLogger("boostpc.autopilot")
 
 FREE_RUNS_PER_WEEK = 1
 
@@ -93,8 +97,8 @@ def build(get_current_user):
             try:
                 from milestones import bump_counter
                 await bump_counter(db, uid, "tweaks_applied", len(applied))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("contatore tweaks_applied non aggiornato: %s", exc)
         return {"ok": True, "applied": len(applied)}
 
     @r.post("/agent/restore-done")

@@ -24,6 +24,9 @@ distro==1.9.0
 dnspython==2.8.0
 ecdsa==0.19.2
 email-validator==2.3.0
+# ULTIMO AGGANCIO A EMERGENT: serve solo a llm/emergent.py. Quando si passa a
+# un altro provider (vedi llm/__init__.py), questa riga e il wheel `litellm`
+# piu' sotto vanno rimossi insieme.
 emergentintegrations==0.2.0
 execnet==2.1.2
 fastapi==0.110.1
@@ -60,6 +63,9 @@ jq==1.11.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 librt==0.12.0
+# Wheel ospitato sul CDN Emergent, dipendenza di emergentintegrations. Se quel
+# CDN diventa irraggiungibile, `pip install` fallisce: e' un single point of
+# failure esterno finche' resta il provider Emergent.
 litellm @ https://customer-assets.emergentagent.com/internal-asset/library/litellm-1.80.0-py3-none-any.whl#sha256=adf398c513273de9341f61822296c6b2145f7f2dc4a69daf3ac04829f5bde3f8
 lxml==6.1.1
 markdown-it-py==4.2.0
@@ -138,3 +144,6 @@ websockets==16.0
 yarl==1.24.2
 zipp==4.1.0
 resend==2.34.0
+
+# Motore AI: SDK ufficiale Anthropic, usato da llm/anthropic.py.
+anthropic==0.122.0

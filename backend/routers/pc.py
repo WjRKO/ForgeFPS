@@ -1,9 +1,11 @@
+import logging
 import io
 import os
 import re
 import hmac
 import time
 import hashlib
+import tempfile
 import zipfile
 from datetime import datetime, timezone, timedelta
 
@@ -22,6 +24,10 @@ from routers.profiles import resolve_tweak_ids, TWEAK_CATALOG, TEMPLATES
 from routers.advisor import _check_ai_rate_limit
 from plan_gate import require_pro, require_streamer, get_entitlements, plan_402
 from devices import resolve_device, device_filter
+from hardware import cpu_family as _cpu_family, gpu_family as _gpu_family
+from system_changes import build_change_events, analyze_trend, correlate
+
+logger = logging.getLogger("boostpc.pc")
 
 # GPU vs Reference: modelli disponibili nel piano Free (i piu' diffusi). Pro/trofeo = catalogo completo.
 FREE_GPU_MODELS = (
@@ -61,7 +67,12 @@ AGENT_ZIP_UPSTREAM = os.environ.get(
     # SHA256 zip: 408259a31729f2b4033171b384dd3c196079cc2890015c9187d7aeaf65c7eedb
     "https://github.com/WjRKO/ForgeFPS/releases/download/v.0.8.0/forgefps-agent.zip",
 )
-_AGENT_ZIP_CACHE_PATH = f"/tmp/forgefps-agent-cache-{hashlib.sha256(AGENT_ZIP_UPSTREAM.encode()).hexdigest()[:10]}.zip"
+# La directory temporanea va chiesta al sistema: con "/tmp" scritto a mano il
+# download dell'agent falliva con FileNotFoundError fuori da un container Linux.
+_AGENT_ZIP_CACHE_PATH = os.path.join(
+    tempfile.gettempdir(),
+    f"forgefps-agent-cache-{hashlib.sha256(AGENT_ZIP_UPSTREAM.encode()).hexdigest()[:10]}.zip",
+)
 
 
 def _extract_latest_version() -> str:
@@ -75,6 +86,19 @@ def _extract_latest_version() -> str:
 
 
 LATEST_AGENT_VERSION = _extract_latest_version()
+
+
+def _agent_backend_url() -> str:
+    """URL che l'agent desktop usa per chiamare le API (ci appende '/api/...').
+
+    In produzione front-end e API stanno sullo stesso dominio, quindi
+    FRONTEND_URL va bene ed e' il default storico. In locale invece sono due
+    porte diverse e il dev server non inoltra '/api': senza AGENT_BACKEND_URL
+    il launcher punterebbe alla porta del front-end e l'agent riceverebbe
+    l'HTML della SPA al posto del JSON.
+    """
+    return (os.environ.get("AGENT_BACKEND_URL")
+            or os.environ.get("FRONTEND_URL", "https://forgefps.dev")).rstrip("/")
 
 
 def _render_launcher_bat(token: str, backend: str, standalone: bool) -> bytes:
@@ -144,7 +168,7 @@ async def _ensure_agent_zip_cached() -> bytes:
 
 
 async def _build_agent_script(user_id: str, profile: str = "", agent_version: str = "") -> str:
-    backend = os.environ.get("FRONTEND_URL", "http://localhost:8001")
+    backend = _agent_backend_url()
     ids = await resolve_tweak_ids(db, user_id, profile) if profile else []
     profile_literal = ",".join("'" + i.replace("'", "") + "'" for i in ids)
     pm = await db.prematch_settings.find_one({"user_id": user_id}) or {}
@@ -195,7 +219,7 @@ def build(get_current_user):
         doppio click -> la GUI parte senza dover incollare il token ogni volta."""
         from fastapi.responses import Response as _Resp
         token = await get_or_create_agent_token(str(user["_id"]))
-        backend = os.environ.get("FRONTEND_URL", "https://forgefps.dev").rstrip("/")
+        backend = _agent_backend_url()
         body = _render_launcher_bat(token, backend, standalone=True)
         return _Resp(
             content=body,
@@ -214,7 +238,7 @@ def build(get_current_user):
         il token dell'utente autenticato: un solo download, un solo doppio click."""
         from fastapi.responses import Response as _Resp
         token = await get_or_create_agent_token(str(user["_id"]))
-        backend = os.environ.get("FRONTEND_URL", "https://forgefps.dev").rstrip("/")
+        backend = _agent_backend_url()
         base_zip = await _ensure_agent_zip_cached()
         bat_bytes = _render_launcher_bat(token, backend, standalone=False)
         buf = io.BytesIO(base_zip)
@@ -328,10 +352,12 @@ def build(get_current_user):
         if did:
             fields["device_id"] = did
         prev = None
-        if data.startup is not None or data.services_audit is not None:
+        if data.data is not None or data.startup is not None or data.services_audit is not None:
+            # `data` serve al diff di system_changes: pc_specs viene sovrascritto,
+            # quindi questo e' l'unico punto in cui esistono insieme vecchio e nuovo.
             prev = await db.pc_specs.find_one(
                 dflt,
-                {"_id": 0, "startup": 1, "services_audit": 1, "startup_done": 1, "services_done": 1})
+                {"_id": 0, "data": 1, "startup": 1, "services_audit": 1, "startup_done": 1, "services_done": 1})
         if data.data:
             fields["data"] = data.data
         if data.health is not None:
@@ -427,8 +453,21 @@ def build(get_current_user):
                         "title": f"Recap {_bs.get('game')} · {_mins} min",
                         "body": _body, "link": "/app/gaming",
                         "created_at": now_iso(), "read": False})
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("notifica non creata: %s", exc)
+        # Diff di sistema: solo se c'era gia' uno snapshot precedente (al primo sync
+        # non c'e' nulla da confrontare e ogni campo risulterebbe "cambiato").
+        if prev:
+            try:
+                events = build_change_events(prev, fields.get("data"), fields.get("startup"))
+                if events:
+                    ts = now_iso()
+                    await db.system_changes.insert_many([
+                        {**ev, "user_id": uid, **({"device_id": did} if did else {}), "created_at": ts}
+                        for ev in events
+                    ])
+            except Exception as exc:
+                logger.warning("system_changes non registrati per %s: %s", uid, exc)
         await db.pc_specs.update_one(dflt, {"$set": fields}, upsert=True)
         # v0.7.7 Milestones: track scan + health + daily active
         try:
@@ -449,8 +488,8 @@ def build(get_current_user):
                 _d = await db.pc_specs.find_one(dflt, {"services_done": 1, "startup_done": 1})
                 if len((_d or {}).get("services_done") or []) + len((_d or {}).get("startup_done") or []) >= 10:
                     await set_flag(db, uid, "surgeon_earned", True)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("flag surgeon_earned non impostato: %s", exc)
         return {"ok": True}
 
     @r.post("/agent/netresult")
@@ -558,43 +597,6 @@ def build(get_current_user):
             return int(v) if v is not None else None
         except Exception:
             return None
-
-    def _cpu_family(cpu_str: str | None) -> str | None:
-        s = (cpu_str or "").lower()
-        if not s:
-            return None
-        if "ultra" in s:
-            for t in ("9", "7", "5", "3"):
-                if f"ultra {t}" in s or f"ultra{t}" in s:
-                    return f"intel-ultra-{t}"
-        if "ryzen" in s or "amd" in s:
-            for t in ("9", "7", "5", "3"):
-                if f"ryzen {t}" in s or f"ryzen{t}" in s:
-                    return f"ryzen-{t}"
-        for t in ("i9", "i7", "i5", "i3"):
-            if t in s:
-                return f"intel-{t}"
-        return None
-
-    def _gpu_family(gpu_str: str | None) -> str | None:
-        s = (gpu_str or "").lower()
-        if not s:
-            return None
-        if "rtx" in s:
-            for gen in ("50", "40", "30", "20"):
-                if f"rtx {gen}" in s or f"rtx{gen}" in s:
-                    return f"rtx-{gen}"
-            return "rtx"
-        if "gtx" in s:
-            return "gtx"
-        if "arc" in s and "intel" in s:
-            return "intel-arc"
-        if "rx" in s:
-            for gen in ("9", "8", "7", "6", "5"):
-                if f"rx {gen}" in s or f"rx{gen}" in s:
-                    return f"radeon-rx-{gen}000"
-            return "radeon-rx"
-        return None
 
     def _percentile_rank(scores: list[int], my_score: int) -> int:
         """Return integer percentile 0..100. 90 => faster than 90% of the fleet."""
@@ -786,6 +788,95 @@ def build(get_current_user):
         return {"events": events, "days": days,
                 "by_day": [{"day": d, "count": c} for d, c in sorted(buckets.items())]}
 
+    # ---------- Watchdog: il boost ha tenuto? ----------
+
+    @r.get("/pc/watchdog")
+    async def pc_watchdog(user: dict = Depends(get_current_user)):
+        """Esito della verifica differita dell'ultimo intervento (Auto-Pilot / Lab).
+
+        La valutazione la fa il job schedulato `scheduled_perf_watchdog`: qui si
+        legge soltanto, cosi' la pagina non dipende dal momento in cui viene aperta.
+        """
+        uid = str(user["_id"])
+        doc = await db.perf_watchdogs.find_one(
+            {**(await device_filter(db, uid))}, {"_id": 0, "user_id": 0},
+            sort=[("created_at", -1)])
+        if not doc:
+            return {"available": False}
+        return {"available": True, "watchdog": doc}
+
+    # ---------- Cos'e' cambiato nel PC (system_changes) ----------
+
+    _CHANGES_MAX_DAYS = 180
+
+    @r.get("/pc/changes")
+    async def pc_changes(days: int = 30, user: dict = Depends(get_current_user)):
+        """Timeline dei cambiamenti di configurazione rilevati dai sync dell'agent."""
+        uid = str(user["_id"])
+        days = max(1, min(_CHANGES_MAX_DAYS, int(days or 30)))
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        rows = await db.system_changes.find(
+            {**(await device_filter(db, uid)), "created_at": {"$gte": cutoff}},
+            {"_id": 0, "user_id": 0},
+        ).sort("created_at", -1).to_list(200)
+        return {"changes": rows, "days": days, "count": len(rows)}
+
+    async def _perf_series(uid: str, cutoff: str) -> tuple[list[dict], str]:
+        """Serie di performance da correlare, in ordine di preferenza.
+
+        Il benchmark e' la misura piu' affidabile ma sporadica; l'health score
+        viene registrato a ogni sync, quindi copre le finestre in cui l'utente non
+        ha rifatto un benchmark.
+        """
+        bench = await db.benchmarks.find(
+            {"user_id": uid, "created_at": {"$gte": cutoff}}, {"_id": 0},
+        ).sort("created_at", 1).to_list(200)
+        pts = [{"at": b.get("created_at"), "value": _bench_overall(b) or _bench_score(b)} for b in bench]
+        pts = [p for p in pts if p["at"] and p["value"]]
+        if len(pts) >= 3:
+            return pts, "benchmark"
+        rows = await db.health_history.find(
+            {**(await device_filter(db, uid)), "created_at": {"$gte": cutoff}}, {"_id": 0},
+        ).sort("created_at", 1).to_list(500)
+        pts = [{"at": r.get("created_at"), "value": r.get("score")} for r in rows]
+        pts = [p for p in pts if p["at"] and p["value"]]
+        return pts, "health"
+
+    @r.get("/pc/what-changed")
+    async def pc_what_changed(days: int = 30, user: dict = Depends(get_current_user)):
+        """Incrocia l'andamento delle performance con i cambiamenti di configurazione.
+
+        Risponde alla domanda che oggi l'utente non puo' porre a nessuna schermata:
+        "il PC va peggio di due settimane fa, cosa e' cambiato?".
+        Non afferma causalita': elenca i sospetti nella finestra temporale giusta.
+        """
+        uid = str(user["_id"])
+        days = max(7, min(_CHANGES_MAX_DAYS, int(days or 30)))
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        series, metric = await _perf_series(uid, cutoff)
+        trend = analyze_trend(series)
+        changes = await db.system_changes.find(
+            {**(await device_filter(db, uid)), "created_at": {"$gte": cutoff}},
+            {"_id": 0, "user_id": 0},
+        ).sort("created_at", -1).to_list(200)
+
+        if not trend:
+            # Senza abbastanza misure non si parla di trend, ma la timeline dei
+            # cambiamenti resta utile da mostrare.
+            return {"available": False, "reason": "not_enough_samples", "metric": metric,
+                    "samples": len(series), "days": days, "changes": changes[:20]}
+
+        suspects = correlate(trend, changes)
+        return {
+            "available": True,
+            "metric": metric,
+            "days": days,
+            "trend": trend,
+            "suspects": suspects[:10],
+            "changes": changes[:20],
+        }
+
     async def _gather_snapshot(uid: str) -> dict:
         """Snapshot the current key performance metrics for a Before/After report."""
         snap = {"captured_at": now_iso(), "health_score": None, "health_grade": None,
@@ -866,8 +957,8 @@ def build(get_current_user):
             if _game_key:
                 from milestones import add_unique
                 await add_unique(db, rec["user_id"], "games_detected", str(_game_key))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("gioco rilevato non registrato: %s", exc)
         # Return stop signal: the agent's monitor loop reads this and exits cleanly
         # when the user clicks "Stop" on the web dashboard.
         ctrl = await db.monitor_control.find_one({"user_id": rec["user_id"]}, {"_id": 0}) or {}
@@ -941,8 +1032,8 @@ def build(get_current_user):
         for metric, body in to_send:
             try:
                 await push.send_push_to_user(db, uid, {"title": "🔥 Temperatura critica!", "body": body, "url": "/app/live"})
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("push di temperatura critica non inviata a %s: %s", uid, exc)
             await db.alert_settings.update_one({"user_id": uid}, {"$set": {"user_id": uid, f"last_{metric}_alert{suffix}": now_iso()}}, upsert=True)
 
     @r.get("/alerts")
@@ -1071,8 +1162,8 @@ def build(get_current_user):
                 age = (datetime.now(timezone.utc) - datetime.fromisoformat(cached["cached_at"])).days
                 if age < 7:
                     return cached
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("data della cache gioco non interpretabile: %s", exc)
         import httpx as _httpx
         try:
             async with _httpx.AsyncClient(timeout=8.0, follow_redirects=True) as c:
@@ -1103,8 +1194,8 @@ def build(get_current_user):
             info = {"appid": appid, "found": False, "error": str(e)[:200], "cached_at": now_iso()}
         try:
             await db.game_cache.update_one({"appid": appid}, {"$set": info}, upsert=True)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("cache del gioco non aggiornata: %s", exc)
         # strip mongo _id from returned dict
         info.pop("_id", None)
         return info
@@ -1135,8 +1226,8 @@ def build(get_current_user):
                 me = out.get("score") or 0
                 pct = round(sum(1 for s in scores if s <= me) / len(scores) * 100)
                 out["fleet"] = {"percentile": pct, "n": len(scores), "vendor": vend or "all"}
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("percentile flotta non calcolato: %s", exc)
         try:
             tel = await db.pc_telemetry.find_one(await device_filter(db, str(user["_id"])), {"samples": {"$slice": -300}})
             samples = (tel or {}).get("samples") or []
@@ -1151,8 +1242,8 @@ def build(get_current_user):
                 out["throttling"] = {"checked": True, "detected": len(ev) >= 5, "events": len(ev),
                                      "peak_clock": peak,
                                      "max_temp": max(((s.get("gpu_temp") or 0) for s in samples), default=0)}
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("analisi throttling non completata: %s", exc)
         return out
 
     @r.get("/health-history")
@@ -1309,8 +1400,8 @@ def build(get_current_user):
                     {"$set": {"agent_version": x_agent_version, "agent_version_at": now_iso()}},
                     upsert=True,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("versione agent non registrata: %s", exc)
         script = await _build_agent_script(rec["user_id"], profile, x_agent_version)
         # Prepend UTF-8 BOM: Windows PowerShell 5.1 legge i .ps1 senza BOM in ANSI (Windows-1252),
         # causando caratteri glitchati per emoji/UTF-8 (es. · … 📚 👤). Il BOM forza UTF-8.

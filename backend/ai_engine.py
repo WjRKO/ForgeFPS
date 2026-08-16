@@ -1,12 +1,13 @@
-import os
+import logging
 import json
 import re
 import uuid
 import asyncio
-from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone, ImageContent
 
-MODEL_PROVIDER = "anthropic"
-MODEL_NAME = "claude-sonnet-4-6"
+from llm import get_provider
+
+logger = logging.getLogger("boostpc.ai_engine")
+
 AI_TIMEOUT = 45
 
 ADVISOR_SYSTEM = (
@@ -38,18 +39,9 @@ async def explain_benchmark(specs_text: str, before: dict | None, after: dict, l
         "Scrivi: 1) se esiste un PRIMA, cosa e migliorato e di quanto (in percentuale); 2) il punto piu debole del "
         "sistema e la causa probabile; 3) 2-3 consigli concreti e sicuri per migliorarlo. " + lang_line
     )
-    chat = build_chat(f"bench-explain-{_uuid.uuid4()}", BENCH_SYSTEM)
-    text = await asyncio.wait_for(_collect(chat, prompt), timeout=AI_TIMEOUT)
+    text = await asyncio.wait_for(
+        _collect(f"bench-explain-{_uuid.uuid4()}", BENCH_SYSTEM, prompt), timeout=AI_TIMEOUT)
     return text.strip()
-
-
-def get_key() -> str:
-    return os.environ.get("EMERGENT_LLM_KEY", "")
-
-
-def build_chat(session_id: str, system: str = ADVISOR_SYSTEM) -> LlmChat:
-    return LlmChat(api_key=get_key(), session_id=session_id,
-                   system_message=system).with_model(MODEL_PROVIDER, MODEL_NAME)
 
 
 async def stream_advisor(session_id: str, history: list, message: str, specs_text: str = "", lang: str = "it", image_data_url: str = ""):
@@ -79,7 +71,6 @@ async def stream_advisor(session_id: str, history: list, message: str, specs_tex
                        "nel nome commerciale reale (es. MSI B550 Tomahawk) e verifica la compatibilità socket/chipset. "
                        "Quando suggerisci comandi Windows, forniscili in blocchi di codice PowerShell (```powershell ... ```) "
                        "così l'utente può copiarli. Usa Markdown: grassetto, elenchi, titoli.]\n" + specs_text)
-    chat = build_chat(session_id, system)
     # replay history into context
     context = ""
     if history:
@@ -92,18 +83,15 @@ async def stream_advisor(session_id: str, history: list, message: str, specs_tex
         full = f"{prev_hdr}\n{context}\n\n{new_hdr}\n{message}"
     else:
         full = message
-    kwargs = {"text": full}
+    image_b64 = ""
     if image_data_url and image_data_url.startswith("data:image/"):
         try:
-            b64 = image_data_url.split(",", 1)[1]
-            kwargs["file_contents"] = [ImageContent(image_base64=b64)]
-        except Exception:
-            pass
-    async for event in chat.stream_message(UserMessage(**kwargs)):
-        if isinstance(event, TextDelta):
-            yield event.content
-        elif isinstance(event, StreamDone):
-            break
+            image_b64 = image_data_url.split(",", 1)[1]
+        except Exception as exc:
+            logger.debug("immagine allegata non decodificabile: %s", exc)
+    async for delta in get_provider().stream(
+        session_id=session_id, system=system, text=full, image_b64=image_b64 or None):
+        yield delta
 
 
 async def generate_followups(history: list, lang: str = "it") -> list:
@@ -129,8 +117,7 @@ async def generate_followups(history: list, lang: str = "it") -> list:
             "Rispondi ESCLUSIVAMENTE con 3 righe, una per riga, senza numerazione, senza altro testo. Lingua: italiano."
         )
         prompt = f"Conversazione:\n{convo}\n\n3 follow-up:"
-    chat = build_chat(str(uuid.uuid4()), system)
-    text = await _collect(chat, prompt)
+    text = await _collect(str(uuid.uuid4()), system, prompt)
     lines = [ln.strip("-* \t") for ln in (text or "").strip().split("\n") if ln.strip()]
     return lines[:3]
 
@@ -146,8 +133,7 @@ async def one_shot_advisor(prompt: str, specs_text: str = "", lang: str = "it") 
             "\n\n[CONTESTO PC DELL'UTENTE - usa questi dati REALI per la diagnosi. "
             "Fai riferimento a valori concreti quando possibile.]\n" + specs_text
         )
-    chat = build_chat(str(uuid.uuid4()), system)
-    return await _collect(chat, prompt)
+    return await _collect(str(uuid.uuid4()), system, prompt)
 
 
 BUILD_SYSTEM = (
@@ -180,9 +166,9 @@ async def generate_build(budget: int, use_case: str, resolution: str, notes: str
         "}\n"
         "Usa prezzi realistici del mercato europeo. Categorie in inglese, testi in italiano."
     )
-    chat = build_chat(f"build-{budget}-{use_case}", BUILD_SYSTEM)
     try:
-        text = await asyncio.wait_for(_collect(chat, prompt), timeout=AI_TIMEOUT)
+        text = await asyncio.wait_for(
+            _collect(f"build-{budget}-{use_case}", BUILD_SYSTEM, prompt), timeout=AI_TIMEOUT)
     except asyncio.TimeoutError:
         raise ValueError("La generazione della build ha impiegato troppo tempo (timeout). Riprova.")
     return _parse_json(text)
@@ -199,25 +185,22 @@ def _parse_json(text: str) -> dict:
         if m:
             try:
                 return json.loads(m.group(0))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("risposta del modello non e' JSON valido: %s", exc)
     raise ValueError("Impossibile generare la build, riprova.")
 
 
-async def _collect(chat, prompt: str) -> str:
-    text = ""
-    async for event in chat.stream_message(UserMessage(text=prompt)):
-        if isinstance(event, TextDelta):
-            text += event.content
-        elif isinstance(event, StreamDone):
-            break
-    return text
+async def _collect(session_id: str, system: str, prompt: str) -> str:
+    """Consuma lo stream fino in fondo e restituisce il testo completo."""
+    parts = []
+    async for delta in get_provider().stream(session_id=session_id, system=system, text=prompt):
+        parts.append(delta)
+    return "".join(parts)
 
 
 async def _run_json(session_id: str, system: str, prompt: str) -> dict:
-    chat = build_chat(session_id, system)
     try:
-        text = await asyncio.wait_for(_collect(chat, prompt), timeout=AI_TIMEOUT)
+        text = await asyncio.wait_for(_collect(session_id, system, prompt), timeout=AI_TIMEOUT)
     except asyncio.TimeoutError:
         raise ValueError("La richiesta AI ha impiegato troppo tempo (timeout). Riprova.")
     return _parse_json(text)

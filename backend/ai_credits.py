@@ -8,11 +8,15 @@ Regole (scelte utente):
 - Streamer: illimitato.
 """
 from __future__ import annotations
+
+import logging
 from datetime import datetime, timezone, timedelta
 
 from bson import ObjectId
 
 from plan_gate import compute_effective_plan
+
+logger = logging.getLogger("boostpc.ai_credits")
 
 WELCOME_CREDITS = 5
 PRO_WEEKLY_LIMIT = 50
@@ -84,8 +88,8 @@ async def refund_credit(db, user: dict, bucket: str | None) -> None:
             await db.users.update_one(
                 {"_id": user["_id"], "ai_earned_week": week_id()},
                 {"$inc": {"ai_earned_credits": 1}})
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("rimborso del credito AI (bucket %s) non riuscito: %s", bucket, exc)
 
 
 async def grant_credits(db, uid: str, amount: int) -> None:
@@ -102,5 +106,5 @@ async def grant_credits(db, uid: str, amount: int) -> None:
             await db.users.update_one(
                 {"_id": oid},
                 {"$set": {"ai_earned_week": wk, "ai_earned_credits": int(amount)}})
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("crediti guadagnati non accreditati a %s: %s", uid, exc)

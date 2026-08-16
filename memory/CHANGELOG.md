@@ -1,6 +1,137 @@
 # FrameForge — Changelog
 
 
+## v0.7.7 (Backend + Web) — 2026-08-16 · Watchdog prestazioni + evidenza di flotta all'AI
+
+### Added — watchdog: il boost ha tenuto?
+Auto-Pilot e Laboratorio misuravano l'effetto **nell'istante** in cui applicavano i
+tweak. Nessuno tornava a controllare due giorni dopo: se un tweak peggiorava le cose
+l'utente non lo scopriva.
+
+- **`backend/watchdog.py`** (logica pura): `due_at`, `expired_at`, `evaluate`,
+  `notification_for`. Verdetti: `waiting` / `held` / `improved` / `regressed`.
+- **`server.scheduled_perf_watchdog`** — job giornaliero (06:15 UTC) che:
+  1. crea per **riconciliazione** un watchdog per ogni `autopilot_runs` concluso e ogni
+     `lab_sessions` completata degli ultimi 14 giorni che non ne ha uno (niente hook
+     dentro autopilot.py/lab.py: un solo punto da mantenere, e gli interventi conclusi
+     mentre il servizio era giu' non si perdono);
+  2. a 48h dall'intervento confronta la baseline con la **mediana** dei sync successivi.
+- Metrica = **health score**, non benchmark: il benchmark e' piu' fedele ma sporadico,
+  e aspettare che l'utente ne rifaccia uno spontaneamente significa non verificare mai.
+- Soglie: regressione a -8%, miglioramento a +5%, minimo 2 campioni post-intervento.
+  Un singolo sync a PC carico non fa scattare l'allarme (mediana, non media).
+- **Solo le regressioni notificano.** Una notifica "tutto bene" a ogni intervento
+  addestra a ignorare le notifiche, regressione inclusa.
+- Nuova collezione `perf_watchdogs`, indice **unico** su `(source, ref_id)` → idempotenza.
+- **`GET /api/pc/watchdog`** — stato dell'ultima verifica.
+- **`WhatChangedCard.jsx`** — banner in cima alla card (regredito / ha tenuto /
+  migliorato / verifica in corso), bilingue.
+
+### Added — l'evidenza misurata dal Laboratorio arriva all'Advisor
+`lab_fleet_stats` accumulava da tempo tested/kept/delta per ogni tweak, ma serviva
+**solo** a riordinare la coda del Lab. L'Advisor consigliava senza vederla, e poteva
+proporre un tweak gia' misurato e scartato decine di volte su quell'hardware.
+
+- **`backend/fleet_evidence.py`** — `pick_evidence` / `format_lines` / `load_for_specs`.
+  Le righe dichiarano sempre la numerosita' del campione ("misurato 22 volte ...,
+  scartato 86% delle volte, effetto medio -0.5% sugli FPS"): senza, l'AI presenta come
+  solido un dato che poggia su 3 misure.
+- **`routers/advisor.py::_measured_evidence`** — nuovo blocco `[EVIDENZA MISURATA]`
+  nel prompt di `/api/advisor/diagnose`, con istruzione esplicita di non proporre i
+  tweak che la flotta scarta.
+  Da non confondere con `_community_insights`, che conta chi ha *dichiarato* di aver
+  applicato un tweak (popolarita'); questo riporta quante volte e' stato *misurato*.
+- Soglia minima 3 misure: sotto, nessun contesto.
+
+### Changed — granularita' delle statistiche di flotta
+- Il Lab aggregava per vendor (`nvidia_amd`): una RTX 3050 e una RTX 5090 finivano
+  nello stesso gruppo. Ora ogni risultato viene scritto **due volte**, con `scope`
+  distinto: `vendor` (chiave storica, molti campioni) e `family`
+  (`ryzen-7|rtx-30`, piu' predittiva ma lenta a popolarsi).
+- `_fleet_blend` e l'Advisor preferiscono la famiglia quando ha >= 3 misure, altrimenti
+  ricadono sul vendor. **Mai sommati**: sono gli stessi test contati due volte.
+- `GET /api/lab/fleet-validation`: il totale globale ora filtra `scope != "family"`
+  (senza il filtro il conteggio sarebbe raddoppiato) e la fascia hardware dell'utente
+  usa la granularita' fine quando disponibile. Nuovo campo `hw_family` in risposta.
+- **Compatibilita'**: i documenti gia' in produzione non hanno `scope`; il filtro
+  `$ne: "family"` li comprende e continuano a essere incrementati, nessuna migrazione.
+
+### Changed — `backend/hardware.py`
+- Aggiunte `fleet_key()` (chiave fine) e `vendor_class()` (spostata da
+  `routers/lab.py::_hw_class`, che ora ne e' un alias). Advisor e Lab leggono lo
+  stesso aggregato con le stesse chiavi.
+
+### Testing
+- `backend/tests_unit/` sale a **81 test** (~1s): aggiunti `test_watchdog.py` e
+  `test_fleet_evidence.py`.
+- E2E su database e porta dedicati: regressione rilevata e notificata, boost che ha
+  tenuto senza notifica, intervento troppo recente lasciato `pending`, idempotenza del
+  job, evidenza di flotta con la famiglia che batte il vendor, `fleet-validation` non
+  gonfiato. Le 4 simulazioni del Lab (`test_lab_phase{1,2,4}_sim.py`, `drift_sim`)
+  passano e scrivono correttamente entrambi gli `scope`.
+
+### Note emerse dai test
+- Il testo dell'evidenza diceva "scartato nel 14% dei casi" dove 14% era il tasso di
+  **mantenimento**: la percentuale sbagliata sarebbe finita nel prompt e poi in bocca
+  all'AI. Ora il verbo e la percentuale sono coerenti.
+- I fallimenti di `test_lab_phase2_endpoints` su database vuoto dipendono dalle
+  `pc_specs` dell'admin (che governano `select_candidates`), non dal codice: con specs
+  realistiche 15/15 passano.
+
+
+## v0.7.6 (Backend + Web) — 2026-08-16 · "Cos'e' cambiato nel tuo PC" + fix community insights
+
+### Fixed — community insights aggregava utenti a caso
+- **`backend/routers/advisor.py::_community_insights`** calcolava `cpu_prefix` /
+  `gpu_prefix` e **non li usava nella query**: aggregava i tweak di *tutti* gli utenti,
+  mentre il prompt li presentava all'AI come "utenti con hardware simile". La diagnosi
+  e la chat costruivano quindi consigli su una premessa falsa.
+- Ora i peer vengono selezionati per famiglia CPU **o** GPU (stessa definizione di
+  `/api/benchmarks/fleet-percentile`), i tweak sono contati per **utenti distinti** e
+  il testo iniettato dichiara il campione reale ("applicato da 4 dei 12 utenti con
+  hardware simile (ryzen-7 / rtx-30)").
+- Soglie esplicite: sotto 3 peer o 2 applicatori non viene iniettato nulla — meglio
+  nessun contesto che un contesto inventato.
+
+### Added — `backend/hardware.py` (modulo condiviso)
+- `cpu_family()` / `gpu_family()` / `hardware_class()` / `is_similar()` estratte dalle
+  closure di `routers/pc.py`, che ora le importa. Unica definizione di "hardware simile"
+  per percentili di flotta, community insights e futura aggregazione dei tweak.
+
+### Added — system changes ("cos'e' cambiato nel tuo PC")
+- **`backend/system_changes.py`** (logica pura): `diff_specs`, `diff_startup`,
+  `build_change_events`, `analyze_trend`, `correlate`.
+- **`POST /api/agent/report-specs`** ora calcola il diff tra snapshot precedente e
+  nuovo e salva i soli delta nella nuova collezione **`system_changes`** (append-only).
+  Era l'unico punto del codice in cui vecchio e nuovo esistono insieme: `pc_specs`
+  viene sovrascritto a ogni sync e la storia delle configurazioni non esisteva.
+- Campi sorvegliati: driver GPU, velocita' RAM, ReBAR, CPU/GPU/RAM/moduli, build di
+  Windows, BIOS, scheda madre, refresh, risoluzione, GPU secondaria, socket + voci di
+  avvio aggiunte/rimosse. Ogni evento porta un `impact` (high/medium/low).
+- **`GET /api/pc/changes?days=`** — timeline dei cambiamenti.
+- **`GET /api/pc/what-changed?days=`** — incrocia l'andamento delle performance
+  (benchmark se ci sono >= 3 misure, altrimenti health score) con i cambiamenti nella
+  stessa finestra temporale. Baseline calcolata sulla **mediana** dei rilevamenti
+  precedenti, non sulla media: un singolo benchmark storto non genera falsi allarmi.
+- **`frontend/src/components/WhatChangedCard.jsx`** — card bilingue IT/EN montata in
+  `/app/pc`: headline del trend, "sospetti" nella finestra quando le performance calano,
+  timeline degli ultimi cambiamenti. Nessuna pretesa di causalita', dichiarata in UI.
+- Nuovi indici: `system_changes` su `(user_id, created_at)` e `(user_id, device_id, created_at)`.
+
+### Added — `backend/tests_unit/` (suite veloce, nuova)
+- 50 test **senza backend vivo, senza MongoDB, senza rete**: girano in ~1s
+  (`pytest tests_unit -q -p no:cacheprovider -c /dev/null`).
+  Complementari a `backend/tests/`, che restano integrazione seriale.
+- Coprono `hardware.py`, `system_changes.py` e la regressione di `_community_insights`
+  (con un fake motor minimale in `tests_unit/fake_db.py`).
+
+### Nota emersa dai test
+- La finestra di correlazione ha una tolleranza di 300s sul bordo destro: un sync scrive
+  prima il record di health e poi gli eventi di cambiamento, quindi senza tolleranza
+  il cambiamento risultava posteriore alla misura e veniva scartato **proprio nel caso
+  piu' comune**. Trovato dall'e2e, non dai test unit.
+
+
 ## v0.7.5c (Web + Backend) — 2026-02-22 · Subscriptions API + feature gating + trial banner
 
 ### Added — Subscriptions system (backend)

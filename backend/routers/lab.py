@@ -5,6 +5,7 @@ ed esegue le azioni; il backend persiste lo stato, calcola CV/delta/Welch e
 decide kept/rolled_back, auto-stop e report finale.
 Pipeline Fase 1: SNAPSHOT -> BASELINE (3 run, CV check) -> TEST_LOOP -> REPORT.
 """
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Header
@@ -13,6 +14,9 @@ from database import db, now_iso
 from models import LabStartInput, LabRunInput, LabEventInput, LabCheckInput
 from lab_registry import REGISTRY_VERSION, TWEAKS, select_candidates, bios_suggestions
 from lab_stats import mean, cv, significance, welch_ci, cohens_d, holm_adjust
+import hardware
+
+logger = logging.getLogger("boostpc.lab")
 
 FLEET_MIN_SAMPLES = 3
 
@@ -37,20 +41,26 @@ FPS_NEUTRAL_PCT = -0.5
 ACTIVE_STATUSES = ("waiting_agent", "snapshot", "baseline", "testing", "awaiting_reboot", "synergy", "validation", "aborting")
 
 
-def _hw_class(specs_data):
-    import re as _re
-    gpu = (specs_data or {}).get("gpu") or ""
-    cpu = (specs_data or {}).get("cpu") or ""
-    gv = "nvidia" if _re.search(r"nvidia|geforce|rtx|gtx", gpu, _re.I) else ("amd" if _re.search(r"amd|radeon|\brx\b", gpu, _re.I) else "other")
-    cv_ = "intel" if "intel" in cpu.lower() else ("amd" if _re.search(r"amd|ryzen", cpu, _re.I) else "other")
-    return f"{gv}_{cv_}"
+# Definizione unica in hardware.py: la usa anche l'Advisor per leggere lo stesso
+# aggregato di flotta con le stesse chiavi.
+_hw_class = hardware.vendor_class
 
 
-async def _fleet_blend(candidates, hw):
-    """Fase 3: fonde il prior statico con lo storico aggregato anonimo della fleet (hardware simile)."""
+async def _fleet_blend(candidates, hw, hw_family=None):
+    """Fase 3: fonde il prior statico con lo storico aggregato anonimo della fleet.
+
+    Due livelli di granularita': `hw_family` ('ryzen-7|rtx-30') e' piu' predittivo
+    ma si popola lentamente; `hw` e' il raggruppamento per vendor ('nvidia_amd'),
+    grossolano ma con molti piu' campioni. Si preferisce la famiglia quando ha
+    abbastanza test, altrimenti si ricade sul vendor.
+    """
     fleet = {}
-    async for d in db.lab_fleet_stats.find({"hw_class": hw}):
+    async for d in db.lab_fleet_stats.find({"hw_class": hw, "scope": {"$ne": "family"}}):
         fleet[d["tweak_id"]] = d
+    if hw_family:
+        async for d in db.lab_fleet_stats.find({"hw_class": hw_family, "scope": "family"}):
+            if int(d.get("tested") or 0) >= FLEET_MIN_SAMPLES:
+                fleet[d["tweak_id"]] = d
     used = 0
     for c in candidates:
         f = fleet.get(c["tweak_id"])
@@ -59,7 +69,8 @@ async def _fleet_blend(candidates, hw):
             w = min(0.7, f["tested"] / (f["tested"] + 10))
             c["prior"] = round((1 - w) * c["prior"] + w * rate, 3)
             c["fleet"] = {"tested": f["tested"], "kept": f["kept"],
-                          "avg_delta_pct": round((f.get("delta_sum") or 0) / f["tested"], 2)}
+                          "avg_delta_pct": round((f.get("delta_sum") or 0) / f["tested"], 2),
+                          "scope": f.get("scope") or "vendor"}
             used += 1
     candidates.sort(key=lambda c: (bool(c.get("requires_reboot")), -c["prior"]))
     return used
@@ -260,8 +271,8 @@ async def _save(sess):
         try:
             from milestones import bump_counter
             await bump_counter(db, sess.get("user_id"), "lab_experiments", 1)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("contatore lab_experiments non aggiornato: %s", exc)
     await db.lab_sessions.replace_one({"session_id": sess["session_id"]}, sess, upsert=True)
 
 
@@ -296,7 +307,8 @@ def build(get_current_user):
         if not candidates:
             raise HTTPException(status_code=400, detail="Nessun tweak candidato per questo livello di rischio/hardware.")
         hw = _hw_class(specs.get("data") or {})
-        fleet_used = await _fleet_blend(candidates, hw)
+        hw_family = hardware.fleet_key(specs.get("data") or {})
+        fleet_used = await _fleet_blend(candidates, hw, hw_family)
         sd = specs.get("data") or {}
         sess = {
             "session_id": str(uuid.uuid4()),
@@ -306,6 +318,7 @@ def build(get_current_user):
             "run_seconds": payload.run_seconds,
             "include_reboot": payload.include_reboot,
             "hw_class": hw,
+            "hw_family": hw_family,
             "specs_at": {"ram_speed_mhz": sd.get("ram_speed_mhz"), "ram_modules": sd.get("ram_modules"),
                          "gpu_driver": sd.get("gpu_driver_version") or sd.get("gpu_driver")},
             "bios_suggestions": bios_suggestions(specs.get("data") or {}),
@@ -357,9 +370,10 @@ def build(get_current_user):
         specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}) or {}
         candidates, skipped = select_candidates(specs.get("data") or {}, risk_level, include_reboot)
         hw = _hw_class(specs.get("data") or {})
-        await _fleet_blend(candidates, hw)
+        hw_family = hardware.fleet_key(specs.get("data") or {})
+        await _fleet_blend(candidates, hw, hw_family)
         return {"registry_version": REGISTRY_VERSION, "candidates": candidates, "skipped": skipped,
-                "hw_class": hw, "bios_suggestions": bios_suggestions(specs.get("data") or {})}
+                "hw_class": hw, "hw_family": hw_family, "bios_suggestions": bios_suggestions(specs.get("data") or {})}
 
     @r.post("/lab/check")
     async def lab_check(payload: LabCheckInput, user: dict = Depends(get_current_user)):
@@ -392,17 +406,32 @@ def build(get_current_user):
         """Tweak validati dalla flotta: aggregato anonimo globale + fascia hardware dell'utente."""
         specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}, {"data": 1})
         hw = _hw_class((specs or {}).get("data") or {})
+        hw_family = hardware.fleet_key((specs or {}).get("data") or {})
         names = {t["tweak_id"]: {"name": t.get("name"), "family": t.get("family")} for t in TWEAKS}
+
+        def _hw_block(d, scope):
+            tested = int(d.get("tested") or 0)
+            return {"tested": tested, "kept": int(d.get("kept") or 0),
+                    "success_pct": round(100 * int(d.get("kept") or 0) / tested),
+                    "avg_delta_pct": round(float(d.get("delta_sum") or 0.0) / tested, 1),
+                    "scope": scope}
+
         agg = {}
-        async for d in db.lab_fleet_stats.find({}):
+        # Il totale globale somma SOLO i documenti vendor: quelli di famiglia
+        # contano gli stessi test una seconda volta.
+        async for d in db.lab_fleet_stats.find({"scope": {"$ne": "family"}}):
             a = agg.setdefault(d["tweak_id"], {"tested": 0, "kept": 0, "delta_sum": 0.0, "hw": None})
             a["tested"] += int(d.get("tested") or 0)
             a["kept"] += int(d.get("kept") or 0)
             a["delta_sum"] += float(d.get("delta_sum") or 0.0)
             if d.get("hw_class") == hw and int(d.get("tested") or 0) > 0:
-                a["hw"] = {"tested": int(d["tested"]), "kept": int(d.get("kept") or 0),
-                           "success_pct": round(100 * int(d.get("kept") or 0) / int(d["tested"])),
-                           "avg_delta_pct": round(float(d.get("delta_sum") or 0.0) / int(d["tested"]), 1)}
+                a["hw"] = _hw_block(d, "vendor")
+        # La fascia hardware dell'utente usa la granularita' fine quando c'e'.
+        if hw_family:
+            async for d in db.lab_fleet_stats.find({"hw_class": hw_family, "scope": "family"}):
+                a = agg.get(d["tweak_id"])
+                if a and int(d.get("tested") or 0) >= FLEET_MIN_SAMPLES:
+                    a["hw"] = _hw_block(d, "family")
         items = []
         for tid, a in agg.items():
             if a["tested"] <= 0:
@@ -416,7 +445,7 @@ def build(get_current_user):
                 "hw": a["hw"],
             })
         items.sort(key=lambda x: (-(x["hw"] is not None), -x["success_pct"], -x["tested"]))
-        return {"hw_class": hw, "items": items,
+        return {"hw_class": hw, "hw_family": hw_family, "items": items,
                 "total_tests": sum(i["tested"] for i in items)}
 
     @r.get("/lab/history")
@@ -879,10 +908,19 @@ def build(get_current_user):
             "at": now_iso(),
         }
         sess["results"].append(result)
+        # Due documenti: vendor (storico, chiave grossolana) e famiglia (nuovo, fine).
+        # Sono separati da `scope` cosi' gli aggregati non li sommano fra loro.
         await db.lab_fleet_stats.update_one(
-            {"tweak_id": cur["tweak_id"], "hw_class": sess.get("hw_class", "other_other")},
-            {"$inc": {"tested": 1, "kept": 1 if kept else 0, "delta_sum": d}},
+            {"tweak_id": cur["tweak_id"], "hw_class": sess.get("hw_class", "other_other"),
+             "scope": {"$ne": "family"}},
+            {"$inc": {"tested": 1, "kept": 1 if kept else 0, "delta_sum": d},
+             "$setOnInsert": {"scope": "vendor"}},
             upsert=True)
+        if sess.get("hw_family"):
+            await db.lab_fleet_stats.update_one(
+                {"tweak_id": cur["tweak_id"], "hw_class": sess["hw_family"], "scope": "family"},
+                {"$inc": {"tested": 1, "kept": 1 if kept else 0, "delta_sum": d}},
+                upsert=True)
         if kept:
             sess["kept"].append(cur["tweak_id"])
             sess["baseline"]["stats"] = test_stats

@@ -10,6 +10,7 @@ Al completamento del pagamento:
     - users.trial_expires_at = None (piano paid, no scadenza — gestito da Stripe)
     - users.stripe_subscription_id salvato
 """
+import logging
 import os
 import stripe
 from datetime import datetime, timezone
@@ -20,7 +21,9 @@ from bson import ObjectId
 
 from database import db
 
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
+logger = logging.getLogger("boostpc.payments")
+
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
 # Mappa lookup_key Stripe -> piano interno FrameForge
@@ -96,8 +99,8 @@ def build(get_current_user):
                 if s.payment_status == "paid" or s.status == "complete":
                     await _apply_paid(session_id, s)
                     record = await db.payment_transactions.find_one({"session_id": session_id})
-            except stripe.error.StripeError:
-                pass
+            except stripe.error.StripeError as exc:
+                logger.warning("recupero sessione Stripe fallito: %s", exc)
         return {"session_id": record["session_id"], "status": record["status"], "payment_status": record["payment_status"]}
 
     @r.post("/stripe/webhook")
@@ -144,8 +147,8 @@ def build(get_current_user):
                             user_doc["email"], user_doc.get("name", ""),
                             (user_doc.get("plan") or "pro"),
                         ))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("email di pagamento fallito non inviata: %s", exc)
 
         return {"status": "ok"}
 
@@ -214,5 +217,5 @@ async def _apply_paid(session_id: str, session_obj):
                 user_doc["email"], user_doc.get("name", ""), plan,
                 tx.get("amount", 0), tx.get("currency", "eur"),
             ))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("email di conferma pagamento non inviata: %s", exc)

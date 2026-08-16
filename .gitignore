@@ -78,6 +78,13 @@ agenthub/agents/youtube/db
 
 memory/test_credentials.md
 
+# Output dell'agent di test (contenevano credenziali in chiaro)
+test_reports/
+
+# Infrastruttura della piattaforma di sviluppo, non serve all'app
+.emergent/
+.gitconfig
+
 # Mobile development
 android-sdk/frontend/node_modules/.cache/default-development/1.pack
 frontend/node_modules/.cache/default-development/1.pack
@@ -108,6 +115,8 @@ frontend/node_modules/.cache/default-development/30.pack
 .env
 .env.*
 *.env
+# Il template non contiene segreti e deve stare nel repository.
+!.env.example
 frontend/node_modules/.cache/default-development/17.pack
 frontend/node_modules/.cache/default-development/19.pack
 frontend/node_modules/.cache/default-development/20.pack

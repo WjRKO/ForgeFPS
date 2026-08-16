@@ -8,6 +8,7 @@ Endpoint:
 Stripe integration NON e' ancora agganciato — l'upgrade a `pro` paid
 avverra' quando integriamo il checkout webhook. Per ora esiste solo il trial.
 """
+import logging
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,6 +16,8 @@ from pydantic import BaseModel
 
 from database import db
 from plan_gate import compute_effective_plan, get_entitlements, TRIAL_DAYS
+
+logger = logging.getLogger("boostpc.subscriptions")
 
 
 # --- Upgrade suggestion (engagement-driven) ----------------------------------
@@ -143,8 +146,8 @@ def build(get_current_user):
             import asyncio as _aio
             from email_service import send_trial_started
             _aio.create_task(send_trial_started(user["email"], user.get("name", ""), wanted, TRIAL_DAYS, expires.isoformat()))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("email di inizio trial non inviata: %s", exc)
         return {
             "ok": True,
             "message": f"Trial {wanted} attivato! Hai {TRIAL_DAYS} giorni pieni di accesso.",

@@ -6,12 +6,12 @@ import os
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://gaming-nexus-199.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8001").rstrip("/")
 
-ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASS = "4zWK4o_xSw5prU-2b7w9dQ"
-STARTER_EMAIL = "credits_test@frameforge.dev"
-STARTER_PASS = "Cr3d1ts!Test99"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "")
+STARTER_EMAIL = os.environ.get("STARTER_EMAIL", os.environ.get("STARTER_EMAIL", "credits_test@frameforge.dev"))
+STARTER_PASS = os.environ.get("STARTER_PASSWORD", "")
 
 
 def _login(email, pw):
@@ -43,6 +43,40 @@ def starter_agent_token(starter_session):
     r = starter_session.get(f"{BASE_URL}/api/agent/token", timeout=15)
     assert r.status_code == 200
     return r.json()["token"]
+
+
+# ----- Stato iniziale --------------------------------------------------------
+# I test qui sotto davano per esistenti i device "gaming-rig"/"stream-box"
+# dell'admin e "casa-pc" dello starter: erano rimasti nel database del vecchio
+# ambiente e nessuno li ricreava. Su un database pulito l'intero file falliva a
+# catena. Questa fixture li ricostruisce dall'API, come farebbe l'agent.
+
+
+def _register_device(token, device_id, specs):
+    return requests.post(
+        f"{BASE_URL}/api/agent/report-specs",
+        headers={"X-Agent-Token": token, "X-Device": device_id},
+        json={"data": specs, "health": None},
+        timeout=20,
+    )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _seed_devices(admin_session, admin_agent_token, starter_session, starter_agent_token):
+    # Starter: limite 1 device, quindi prima si svuota e poi si registra casa-pc.
+    for d in starter_session.get(f"{BASE_URL}/api/devices", timeout=15).json()["devices"]:
+        starter_session.delete(f"{BASE_URL}/api/devices/{d['device_id']}", timeout=15)
+    _register_device(starter_agent_token, "casa-pc", {"cpu": "Ryzen 5 5600", "gpu": "GTX 1660"})
+
+    # Admin: due device con GPU diverse, perche' un test verifica che cambiando
+    # PC attivo cambino anche le specifiche restituite da /api/pc-specs.
+    for d in admin_session.get(f"{BASE_URL}/api/devices", timeout=15).json()["devices"]:
+        if d["device_id"] not in ("gaming-rig", "stream-box"):
+            admin_session.delete(f"{BASE_URL}/api/devices/{d['device_id']}", timeout=15)
+    _register_device(admin_agent_token, "gaming-rig", {"cpu": "Ryzen 7 5800X", "gpu": "RTX 3070"})
+    _register_device(admin_agent_token, "stream-box", {"cpu": "Intel i5-12400", "gpu": "RTX 3060"})
+    admin_session.post(f"{BASE_URL}/api/devices/gaming-rig/activate", timeout=15)
+    yield
 
 
 # ----- GET /api/devices ------------------------------------------------------

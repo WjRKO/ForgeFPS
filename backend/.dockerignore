@@ -1,0 +1,18 @@
+# Mai nell'immagine: contiene i segreti di produzione.
+.env
+.env.*
+*.env
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+venv/
+.venv/
+
+# I test parlano con un backend gia' in esecuzione: non servono a runtime.
+tests/
+
+Dockerfile
+.dockerignore

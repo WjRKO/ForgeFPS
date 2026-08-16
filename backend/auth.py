@@ -13,6 +13,8 @@ from fastapi import APIRouter, HTTPException, Request, Response, Depends
 from pydantic import BaseModel, EmailStr, Field
 from bson import ObjectId
 
+logger = logging.getLogger("boostpc.auth")
+
 _ph = PasswordHasher()
 
 JWT_ALGORITHM = "HS256"
@@ -213,8 +215,8 @@ def build_auth_router(db):
             import asyncio as _aio
             from email_service import send_welcome
             _aio.create_task(send_welcome(email, data.name or ""))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("email di benvenuto non inviata a %s: %s", uid, exc)
         return public_user(doc)
 
     @router.post("/login")
@@ -381,4 +383,21 @@ async def seed_admin(db):
                                    "name": "Admin", "role": "admin",
                                    "created_at": datetime.now(timezone.utc).isoformat()})
     elif not verify_password(password, existing["password_hash"]):
+        # La password nel DB non coincide con quella del .env: quasi sempre
+        # perche' l'admin l'ha cambiata dall'interfaccia. Prima questo ramo la
+        # riportava al valore del file a OGNI avvio, annullando in silenzio il
+        # cambio: sembrava che la nuova password "non venisse salvata".
+        #
+        # Ora il reset e' volontario. Se resti chiuso fuori: metti la password
+        # in ADMIN_PASSWORD, avvia una volta con ADMIN_PASSWORD_RESET=1, entra
+        # e togli la variabile.
+        if os.environ.get("ADMIN_PASSWORD_RESET", "").strip().lower() not in ("1", "true", "yes", "on"):
+            logging.info(
+                "seed_admin: la password di %s non coincide con ADMIN_PASSWORD ed e' "
+                "stata lasciata invariata. Per forzare il reset al valore del .env, "
+                "avvia con ADMIN_PASSWORD_RESET=1.", email)
+            return
+        logging.warning(
+            "seed_admin: ADMIN_PASSWORD_RESET attivo, la password di %s e' stata "
+            "riportata al valore di ADMIN_PASSWORD nel .env.", email)
         await db.users.update_one({"email": email}, {"$set": {"password_hash": hash_password(password)}})

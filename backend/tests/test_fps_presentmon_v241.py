@@ -5,9 +5,9 @@ import time
 import requests
 import pytest
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://gaming-nexus-199.preview.emergentagent.com").rstrip("/")
-ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASS = "4zWK4o_xSw5prU-2b7w9dQ"
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8001").rstrip("/")
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "")
 
 
 @pytest.fixture(scope="module")
@@ -83,7 +83,9 @@ class TestTelemetryFpsCs2:
                           json={"sample": sample},
                           headers={"X-Agent-Token": agent_token}, timeout=10)
         assert r.status_code == 200
-        assert r.json() == {"ok": True}
+        # L'endpoint restituisce anche "stop" (segnale di arresto del monitor):
+        # l'uguaglianza stretta si rompeva al primo campo aggiunto.
+        assert r.json()["ok"] is True
         time.sleep(0.5)
         d = admin_session.get(f"{BASE_URL}/api/pc-telemetry", timeout=10).json()
         assert d["samples"], "no samples returned"

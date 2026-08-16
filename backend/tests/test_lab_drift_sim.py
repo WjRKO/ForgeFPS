@@ -1,9 +1,16 @@
 """Mini-sim: path drift -> re-baseline del recheck A/B/A. Eseguire come script."""
+import os
+
 import requests
 
-BASE = "https://gaming-nexus-199.preview.emergentagent.com"
+# L'indirizzo del backend arriva SEMPRE dall'ambiente: quando era fisso su
+# localhost:8001 la suite colpiva l'istanza di lavoro anche lanciandola
+# contro un'altra porta, sporcando il database reale e bloccando l'admin.
+BASE = os.environ.get("REACT_APP_BACKEND_URL", "http://localhost:8001").rstrip("/")
 s = requests.Session()
-s.post(f"{BASE}/api/auth/login", json={"email": "admin@boostpc.io", "password": "4zWK4o_xSw5prU-2b7w9dQ"}, timeout=15)
+s.post(f"{BASE}/api/auth/login",
+       json={"email": os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"),
+             "password": os.environ.get("ADMIN_PASSWORD", "")}, timeout=15)
 tk = s.get(f"{BASE}/api/agent/token", timeout=15).json()["token"]
 H = {"X-Agent-Token": tk}
 nxt = lambda: requests.get(f"{BASE}/api/agent/lab/next", headers=H, timeout=15).json()

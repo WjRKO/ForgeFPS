@@ -2,16 +2,20 @@
 script anti-Defender fix (no WScript / no ComObject).
 """
 import os
+import shutil
 import subprocess
 import tempfile
 import requests
 import pytest
 
 BASE_URL = (os.environ.get("REACT_APP_BACKEND_URL")
-            or "https://gaming-nexus-199.preview.emergentagent.com").rstrip("/")
-ADMIN_EMAIL = "admin@boostpc.io"
-ADMIN_PASSWORD = "4zWK4o_xSw5prU-2b7w9dQ"
-PWSH = "/opt/pwsh/pwsh"
+            or "http://localhost:8001").rstrip("/")
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", os.environ.get("ADMIN_EMAIL", "admin@boostpc.io"))
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+# Percorso dell'eseguibile PowerShell: "/opt/pwsh/pwsh" era quello del vecchio
+# container Linux. Si cerca prima in PATH (pwsh 7, poi Windows PowerShell 5.1).
+PWSH = (os.environ.get("PWSH") or shutil.which("pwsh")
+        or shutil.which("powershell") or "/opt/pwsh/pwsh")
 
 
 @pytest.fixture(scope="module")
@@ -68,7 +72,10 @@ class TestAgentScriptAntiDefender:
 # --- PowerShell syntax check ---
 class TestPowerShellSyntax:
     def test_parse_no_errors(self, agent_script_text):
-        with tempfile.NamedTemporaryFile("w", suffix=".ps1", delete=False) as f:
+        # encoding esplicito: lo script inizia con il BOM UTF-8 e su Windows il
+        # default e' cp1252, che su quel carattere solleva UnicodeEncodeError.
+        with tempfile.NamedTemporaryFile("w", suffix=".ps1", delete=False,
+                                         encoding="utf-8") as f:
             f.write(agent_script_text)
             path = f.name
         cmd = [
