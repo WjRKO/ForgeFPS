@@ -39,8 +39,11 @@ export default function AdminToolsPanel() {
   const sendEmail = async () => {
     setSending(true);
     try {
-      await api.post("/admin/test-email", { template: tpl, ...(to.trim() ? { to: to.trim() } : {}) });
-      toast.success(c.email_ok);
+      const { data } = await api.post("/admin/test-email", { template: tpl, ...(to.trim() ? { to: to.trim() } : {}) });
+      // L'endpoint risponde 200 anche quando Resend rifiuta: l'esito reale sta in
+      // `ok`. Senza questo controllo l'admin vedeva "inviata" per email mai partite.
+      if (data?.ok) toast.success(c.email_ok, { description: data.email_id });
+      else toast.error(c.email_fail, { description: data?.error, duration: 12000 });
     } catch (e) {
       toast.error(e?.response?.data?.detail || c.email_fail);
     } finally { setSending(false); }
