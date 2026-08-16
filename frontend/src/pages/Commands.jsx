@@ -107,7 +107,7 @@ function CopyBtn({ text, testid }) {
     setCopied(true); toast.success(i18n.t("commands.copied")); setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <button onClick={copy} data-testid={testid}
+    <button onClick={copy} data-testid={testid} aria-label={i18n.t("a11y.copy")}
       className="shrink-0 flex items-center justify-center border border-[#2A2A35] px-3 hover:border-[#E5FF00] transition-colors">
       {copied ? <Check size={14} className="text-[#00FF66]" /> : <Copy size={14} />}
     </button>

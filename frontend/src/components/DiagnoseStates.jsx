@@ -75,7 +75,7 @@ export function DiagnoseErrorView({ error, isEn, onRetry, onDismiss }) {
           {isEn ? "Retry →" : "Riprova →"}
         </button>
       </div>
-      <button onClick={onDismiss} className="text-zinc-500 hover:text-white">
+      <button onClick={onDismiss} aria-label={isEn ? "Close" : "Chiudi"} className="text-zinc-500 hover:text-white">
         <X size={16} />
       </button>
     </div>

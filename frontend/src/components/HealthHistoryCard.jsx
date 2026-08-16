@@ -4,14 +4,6 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { LineChart as LineIcon } from "lucide-react";
 import api from "@/lib/api";
 
-const T = {
-  it: { title: "Storico salute & temperature", sub: "Andamento nel tempo di Health Score e temperature CPU/GPU.",
-        empty: "Servono almeno 2 sincronizzazioni dall'agent per mostrare l'andamento.", score: "Health Score", cpu: "Temp CPU", gpu: "Temp GPU",
-        limited: "Piano Free: ultimi 7 giorni · con Pro (o trofeo Zen Mode) vedi 90 giorni" },
-  en: { title: "Health & temperature history", sub: "Health Score and CPU/GPU temperatures over time.",
-        empty: "At least 2 agent syncs are needed to show the trend.", score: "Health Score", cpu: "CPU temp", gpu: "GPU temp",
-        limited: "Free plan: last 7 days · Pro (or Zen Mode trophy) unlocks 90 days" },
-};
 
 const fmtTime = (iso) => {
   try {
@@ -21,8 +13,8 @@ const fmtTime = (iso) => {
 };
 
 export default function HealthHistoryCard() {
-  const { i18n } = useTranslation();
-  const c = T[i18n.language && i18n.language.startsWith("en") ? "en" : "it"];
+  const { t, i18n } = useTranslation();
+  const c = t("healthhistory", { returnObjects: true });
   const [points, setPoints] = useState([]);
   const [limitedDays, setLimitedDays] = useState(null);
 

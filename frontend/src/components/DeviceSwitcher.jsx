@@ -5,14 +5,10 @@ import api from "@/lib/api";
 
 export const ROLE_ICONS = { gaming: Gamepad2, streaming: Video, laptop: Laptop, other: Monitor };
 
-const T = {
-  it: { title: "I tuoi PC", gaming: "Gaming", streaming: "Streaming", laptop: "Laptop", other: "Altro" },
-  en: { title: "Your PCs", gaming: "Gaming", streaming: "Streaming", laptop: "Laptop", other: "Other" },
-};
 
 export const DeviceSwitcher = () => {
-  const { i18n } = useTranslation();
-  const c = T[(i18n.language || "it").startsWith("en") ? "en" : "it"];
+  const { t, i18n } = useTranslation();
+  const c = t("deviceswitcher", { returnObjects: true });
   const [data, setData] = useState(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);

@@ -118,6 +118,7 @@ export default function FeedbackModal({ open, onClose }) {
         <button
           type="button"
           onClick={onClose}
+          aria-label={i18n.t("a11y.close")}
           className="absolute top-3 right-3 p-1.5 text-zinc-500 hover:text-white hover:bg-white/5 transition-colors"
           data-testid="feedback-close"
         >

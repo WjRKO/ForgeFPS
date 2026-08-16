@@ -81,11 +81,8 @@ export function useAutoSync({ enabled = true, onSynced } = {}) {
     (async () => {
       const u = await refresh();
       if (!u) return;
-      // Solo un log info per debug — nessun sync automatico.
-      const age = (Date.now() - new Date(u).getTime()) / (1000 * 60 * 60);
-      if (age >= STALE_HOURS) {
-        console.log(`[autosync] Stale by ${age.toFixed(1)}h — user can click the badge to sync.`);
-      }
+      // Nessun sync automatico: se i dati sono vecchi lo segnala il badge in pagina,
+      // che e' gia' il canale giusto verso l'utente.
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);

@@ -6,34 +6,10 @@ import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { useSilentLaunch } from "@/hooks/useSilentLaunch";
 
-const T = {
-  it: {
-    title: "Auto-Pilot", desc: "Un click: applico tutti i tweak sicuri non ancora attivi, misuro prima/dopo e ti mostro il guadagno.",
-    btn: "Avvia Auto-Pilot", running: "Auto-Pilot in corso sul tuo PC...", starting: "Avvio Auto-Pilot...",
-    done: "Auto-Pilot completato!", failed: "Auto-Pilot non risponde. Hai installato FrameForge?",
-    quota_free: "Gratis: 1 a settimana", quota_pro: "Illimitato",
-    locked: "Hai usato l'Auto-Pilot gratuito di questa settimana.", upgrade: "Passa a Pro",
-    report: "Ultimo rapporto", applied: "tweak applicati", health: "Health", none_needed: "Il PC era già ottimizzato: nessun tweak da applicare.",
-    restore_btn: "Ripristina tutto", restoring: "Ripristino in corso sul tuo PC...", restore_start: "Avvio ripristino...",
-    restored: "Backup ripristinato! Il PC è tornato com'era.", restore_failed: "Il ripristino non risponde. Hai installato FrameForge?",
-    reverted_badge: "Ripristinato",
-  },
-  en: {
-    title: "Auto-Pilot", desc: "One click: I apply every safe tweak not yet active, measure before/after and show you the gain.",
-    btn: "Start Auto-Pilot", running: "Auto-Pilot running on your PC...", starting: "Starting Auto-Pilot...",
-    done: "Auto-Pilot complete!", failed: "Auto-Pilot not responding. Is FrameForge installed?",
-    quota_free: "Free: 1 per week", quota_pro: "Unlimited",
-    locked: "You used this week's free Auto-Pilot run.", upgrade: "Go Pro",
-    report: "Last report", applied: "tweaks applied", health: "Health", none_needed: "PC was already optimized: no tweaks to apply.",
-    restore_btn: "Restore all", restoring: "Restoring on your PC...", restore_start: "Starting restore...",
-    restored: "Backup restored! Your PC is back to how it was.", restore_failed: "Restore not responding. Is FrameForge installed?",
-    reverted_badge: "Restored",
-  },
-};
 
 export const AutoPilotCard = () => {
-  const { i18n } = useTranslation();
-  const c = T[(i18n.language || "it").startsWith("en") ? "en" : "it"];
+  const { t, i18n } = useTranslation();
+  const c = t("autopilot", { returnObjects: true });
   const [status, setStatus] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const startedAtRef = useRef(null);

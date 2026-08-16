@@ -5,24 +5,10 @@ import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
 import { ROLE_ICONS } from "@/components/DeviceSwitcher";
 
-const T = {
-  it: {
-    title: "I miei PC", use: "Usa questo", active: "Attivo", never: "mai",
-    gaming: "Gaming", streaming: "Streaming", laptop: "Laptop", other: "Altro",
-    del_confirm: "Rimuovere questo PC e tutti i suoi dati (specs, salute, telemetria)?",
-    renamed: "PC aggiornato", deleted: "PC rimosso", last: "ultimo sync",
-  },
-  en: {
-    title: "My PCs", use: "Use this", active: "Active", never: "never",
-    gaming: "Gaming", streaming: "Streaming", laptop: "Laptop", other: "Other",
-    del_confirm: "Remove this PC and all its data (specs, health, telemetry)?",
-    renamed: "PC updated", deleted: "PC removed", last: "last sync",
-  },
-};
 
 export const DevicesPanel = () => {
-  const { i18n } = useTranslation();
-  const c = T[(i18n.language || "it").startsWith("en") ? "en" : "it"];
+  const { t, i18n } = useTranslation();
+  const c = t("devicespanel", { returnObjects: true });
   const [data, setData] = useState(null);
   const [editing, setEditing] = useState(null); // device_id in rename
   const [name, setName] = useState("");

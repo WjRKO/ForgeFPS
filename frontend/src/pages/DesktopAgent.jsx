@@ -112,7 +112,7 @@ function CmdRow({ label, cmd, testid, accent }) {
       <div className={`text-xs uppercase tracking-widest mb-1 ${accent || "text-zinc-500"}`}>{label}</div>
       <div className="flex items-stretch gap-2">
         <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-xs text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid={`${testid}-cmd`}>{cmd}</code>
-        <button data-testid={`${testid}-copy`} onClick={copy}
+        <button data-testid={`${testid}-copy`} onClick={copy} aria-label={i18n.t("a11y.copy")}
           className="shrink-0 flex items-center gap-1 border border-[#2A2A35] px-3 hover:border-[#E5FF00] transition-colors text-xs">
           {copied ? <Check size={14} className="text-[#00FF66]" /> : <Copy size={14} />}
         </button>

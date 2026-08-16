@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Loader2 } from "lucide-react";
 import { ConsentBanner } from "@/components/ConsentBanner";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 const Layout = lazy(() => import("@/components/Layout"));
 const Landing = lazy(() => import("@/pages/Landing"));
@@ -75,7 +76,8 @@ function App() {
         <BrowserRouter>
           <Toaster theme="dark" position="top-right" />
           <ConsentBanner />
-          <Suspense fallback={<Fallback />}>
+          <ErrorBoundary>
+            <Suspense fallback={<Fallback />}>
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/security" element={<Security />} />
@@ -119,7 +121,8 @@ function App() {
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </Suspense>
+            </Suspense>
+          </ErrorBoundary>
         </BrowserRouter>
       </AuthProvider>
     </div>

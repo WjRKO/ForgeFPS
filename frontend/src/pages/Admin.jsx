@@ -14,6 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 const isEn = () => i18n.language?.startsWith("en");
 import { PageHeader } from "@/components/hud";
 import PasswordResetsPanel from "@/components/PasswordResetsPanel";
+import AdminToolsPanel from "@/components/AdminToolsPanel";
 
 const PAGE_SIZE = 20;
 const DISCORD_COLOR = "#5865F2";
@@ -75,7 +76,7 @@ function GrantPlanModal({ open, onClose, user, onGranted }) {
             <h3 className="font-display font-black text-xl">{isEn() ? "Grant paid plan" : "Concedi piano paid"}</h3>
             <p className="text-xs text-zinc-500 mt-1">{isEn() ? "To" : "A"}: <span className="font-mono text-zinc-300">{user.email}</span></p>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200"><X size={18} /></button>
+          <button onClick={onClose} aria-label={i18n.t("a11y.close")} className="text-zinc-500 hover:text-zinc-200"><X size={18} /></button>
         </div>
         <div className="space-y-3 mb-5">
           <div>
@@ -145,7 +146,7 @@ function BroadcastModal({ open, onClose }) {
             <div className="text-xs uppercase tracking-[0.2em] text-[#E5FF00] mb-1">// broadcast in-app</div>
             <h3 className="font-display font-black text-xl">{isEn() ? "Send notification to everyone" : "Invia notifica a tutti"}</h3>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200" data-testid="broadcast-close"><X size={18} /></button>
+          <button onClick={onClose} aria-label={i18n.t("a11y.close")} className="text-zinc-500 hover:text-zinc-200" data-testid="broadcast-close"><X size={18} /></button>
         </div>
 
         <div className="space-y-3 mb-5">
@@ -496,6 +497,9 @@ export default function Admin() {
 
       {/* Password Resets Panel */}
       <PasswordResetsPanel />
+
+      {/* Registrazioni, email di prova, release annunciate */}
+      <AdminToolsPanel />
 
       {/* Broadcast Modal */}
       <BroadcastModal open={broadcastOpen} onClose={() => setBroadcastOpen(false)} />

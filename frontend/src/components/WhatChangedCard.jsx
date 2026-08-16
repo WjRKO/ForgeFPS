@@ -3,60 +3,6 @@ import { useTranslation } from "react-i18next";
 import { History, TrendingDown, TrendingUp, Minus, AlertTriangle, ShieldCheck, ShieldAlert, Hourglass } from "lucide-react";
 import api from "@/lib/api";
 
-const T = {
-  it: {
-    title: "Cos'è cambiato nel tuo PC",
-    sub: "Modifiche di configurazione rilevate dai sync, incrociate con l'andamento delle prestazioni.",
-    down: "Le prestazioni sono calate del {pct}%",
-    up: "Le prestazioni sono migliorate del {pct}%",
-    stable: "Prestazioni stabili",
-    vs: "rispetto alla mediana dei {n} rilevamenti precedenti",
-    metricBench: "punteggio benchmark",
-    metricHealth: "health score",
-    suspects: "Cambiamenti nella stessa finestra temporale",
-    disclaimer: "Nessuna prova di causalità: sono i sospetti nel periodo giusto, da cui partire.",
-    timeline: "Ultimi cambiamenti rilevati",
-    added: "aggiunti",
-    removed: "rimossi",
-    noTrend: "Servono almeno 3 rilevamenti per valutare un andamento.",
-    wdRegressed: "Il boost non ha tenuto",
-    wdRegressedBody: "Dopo l'ultimo {source} l'Health Score è passato da {from} a {to} ({pct}%). Puoi ripristinare il backup dei tweak dall'agent.",
-    wdHeld: "Il boost ha tenuto",
-    wdHeldBody: "A 48 ore dall'ultimo {source} le prestazioni sono stabili ({pct}%).",
-    wdImproved: "Le prestazioni sono ulteriormente migliorate",
-    wdImprovedBody: "Dopo l'ultimo {source}: {pct}% sull'Health Score.",
-    wdPending: "Verifica in corso",
-    wdPendingBody: "Ricontrolliamo l'effetto dell'ultimo {source} tra qualche giorno: continua a sincronizzare il PC.",
-    srcAutopilot: "Auto-Pilot",
-    srcLab: "Laboratorio",
-  },
-  en: {
-    title: "What changed on your PC",
-    sub: "Configuration changes detected across syncs, cross-referenced with your performance trend.",
-    down: "Performance dropped by {pct}%",
-    up: "Performance improved by {pct}%",
-    stable: "Performance is stable",
-    vs: "versus the median of the previous {n} readings",
-    metricBench: "benchmark score",
-    metricHealth: "health score",
-    suspects: "Changes within the same time window",
-    disclaimer: "No proof of causation: these are the suspects in the right window, a place to start.",
-    timeline: "Latest detected changes",
-    added: "added",
-    removed: "removed",
-    noTrend: "At least 3 readings are needed to assess a trend.",
-    wdRegressed: "The boost did not hold",
-    wdRegressedBody: "After the last {source} your Health Score went from {from} to {to} ({pct}%). You can restore the tweak backup from the agent.",
-    wdHeld: "The boost held",
-    wdHeldBody: "48 hours after the last {source}, performance is stable ({pct}%).",
-    wdImproved: "Performance improved further",
-    wdImprovedBody: "After the last {source}: {pct}% on the Health Score.",
-    wdPending: "Verification pending",
-    wdPendingBody: "We will re-check the effect of the last {source} in a few days: keep syncing your PC.",
-    srcAutopilot: "Auto-Pilot",
-    srcLab: "Lab",
-  },
-};
 
 const LABELS = {
   it: {
@@ -144,16 +90,29 @@ function WatchdogBanner({ wd, c }) {
 }
 
 export default function WhatChangedCard() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const lang = i18n.language && i18n.language.startsWith("en") ? "en" : "it";
-  const c = T[lang];
+  const c = t("whatchanged", { returnObjects: true });
   const [state, setState] = useState(null);
   const [wd, setWd] = useState(null);
+  const [all, setAll] = useState(null);      // cronologia completa, caricata a richiesta
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     api.get("/pc/what-changed").then(({ data }) => setState(data)).catch(() => {});
     api.get("/pc/watchdog").then(({ data }) => setWd(data.available ? data.watchdog : null)).catch(() => {});
   }, []);
+
+  const toggleAll = () => {
+    // La cronologia estesa si scarica solo quando serve: /pc/what-changed ne porta
+    // gia' abbastanza per il caso normale.
+    if (!showAll && all === null) {
+      api.get("/pc/changes?days=180")
+        .then(({ data }) => setAll(data.changes || []))
+        .catch(() => setAll([]));
+    }
+    setShowAll((v) => !v);
+  };
 
   if (!state) return null;
   const { trend, suspects = [], changes = [] } = state;
@@ -210,8 +169,22 @@ export default function WhatChangedCard() {
         <div data-testid="what-changed-timeline">
           <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-2">{c.timeline}</div>
           <ul className="space-y-1.5">
-            {changes.slice(0, 6).map((ch, i) => <ChangeRow key={`c-${i}`} change={ch} lang={lang} c={c} />)}
+            {(showAll && all ? all : changes.slice(0, 6)).map((ch, i) => (
+              <ChangeRow key={`c-${i}`} change={ch} lang={lang} c={c} />
+            ))}
           </ul>
+          {showAll && all && all.length === 0 && (
+            <p className="text-xs text-zinc-600 mt-2">{c.allEmpty}</p>
+          )}
+          {(changes.length > 6 || showAll || all === null) && (
+            <button
+              onClick={toggleAll}
+              data-testid="what-changed-toggle-all"
+              className="mt-3 text-[11px] uppercase tracking-wider text-zinc-500 hover:text-[#E5FF00] transition-colors"
+            >
+              {showAll ? c.showLess : c.showAll}
+            </button>
+          )}
         </div>
       )}
     </div>

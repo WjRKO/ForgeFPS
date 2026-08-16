@@ -4,20 +4,12 @@ import { Monitor, AlertTriangle } from "lucide-react";
 import api from "@/lib/api";
 import { ROLE_ICONS } from "@/components/DeviceSwitcher";
 
-const T = {
-  it: { title: "Confronto PC", suffering: "Sta soffrendo", health: "Health", cpu_t: "Temp CPU", gpu_t: "Temp GPU",
-        cpu_u: "CPU", gpu_u: "GPU", fps: "FPS medi", nd: "n/d", active: "Attivo",
-        gaming: "Gaming", streaming: "Streaming", laptop: "Laptop", other: "Altro" },
-  en: { title: "PC Comparison", suffering: "Struggling", health: "Health", cpu_t: "CPU temp", gpu_t: "GPU temp",
-        cpu_u: "CPU", gpu_u: "GPU", fps: "Avg FPS", nd: "n/a", active: "Active",
-        gaming: "Gaming", streaming: "Streaming", laptop: "Laptop", other: "Other" },
-};
 
 const scoreColor = (s) => (s == null ? "text-zinc-600" : s >= 80 ? "text-[#00FF66]" : s >= 60 ? "text-[#E5FF00]" : "text-[#FF3B30]");
 
 export const DeviceCompare = () => {
-  const { i18n } = useTranslation();
-  const c = T[(i18n.language || "it").startsWith("en") ? "en" : "it"];
+  const { t, i18n } = useTranslation();
+  const c = t("devicecompare", { returnObjects: true });
   const [devs, setDevs] = useState(null);
 
   useEffect(() => {

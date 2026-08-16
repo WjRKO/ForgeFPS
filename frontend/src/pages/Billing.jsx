@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { CreditCard, ExternalLink, Sparkles, ArrowRight, Loader2, Wallet, Zap, Crown } from "lucide-react";
+import { CreditCard, ExternalLink, Sparkles, ArrowRight, Loader2, Wallet, Zap, Crown, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import i18n from "@/i18n";
@@ -36,6 +36,8 @@ export default function Billing() {
   const { t } = useTranslation();
   const [info, setInfo] = useState(null);
   const [loadingPortal, setLoadingPortal] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [askCancel, setAskCancel] = useState(false);
 
   useEffect(() => {
     api.get("/subscriptions/status").then(({ data }) => setInfo(data)).catch(() => {});
@@ -55,6 +57,22 @@ export default function Billing() {
         toast.error(typeof detail === "string" ? detail : detail?.message || (isEn() ? "Error opening portal" : "Errore apertura portal"));
       }
     } finally { setLoadingPortal(false); }
+  };
+
+  // Chi e' in trial non ha un customer Stripe, quindi il portal gli risponde 400:
+  // senza questo l'unico modo per fermare il trial era aspettarne la scadenza.
+  const cancelTrial = async () => {
+    setCancelling(true);
+    try {
+      await api.post("/subscriptions/cancel-trial");
+      toast.success(isEn() ? "Trial cancelled. You are back on the Starter plan." : "Trial annullato. Sei tornato al piano Starter.");
+      setAskCancel(false);
+      const { data } = await api.get("/subscriptions/status");
+      setInfo(data);
+    } catch (e) {
+      const detail = e?.response?.data?.detail;
+      toast.error(typeof detail === "string" ? detail : detail?.message || (isEn() ? "Could not cancel the trial" : "Impossibile annullare il trial"));
+    } finally { setCancelling(false); }
   };
 
   if (!info) {
@@ -127,6 +145,56 @@ export default function Billing() {
           </div>
         )}
       </div>
+
+      {/* Annullamento trial */}
+      {isTrial && (
+        <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-6" data-testid="cancel-trial-card">
+          <div className="text-xs uppercase tracking-widest text-zinc-500 font-mono mb-3">{isEn() ? "// cancel trial" : "// annulla trial"}</div>
+          {askCancel ? (
+            <>
+              <p className="text-sm text-zinc-300 mb-4 leading-relaxed">
+                {isEn()
+                  ? "You will go back to the Starter plan immediately and lose access to Pro features. Your data is kept."
+                  : "Tornerai subito al piano Starter e perderai l'accesso alle funzioni Pro. I tuoi dati restano salvati."}
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={cancelTrial}
+                  disabled={cancelling}
+                  data-testid="cancel-trial-confirm"
+                  className="inline-flex items-center gap-2 border border-[#FF3B30]/50 text-[#FF3B30] px-5 py-2.5 text-sm hover:bg-[#FF3B30]/10 transition-colors disabled:opacity-50"
+                >
+                  {cancelling ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
+                  {isEn() ? "Yes, cancel the trial" : "Sì, annulla il trial"}
+                </button>
+                <button
+                  onClick={() => setAskCancel(false)}
+                  disabled={cancelling}
+                  data-testid="cancel-trial-back"
+                  className="border border-[#2A2A35] text-zinc-300 px-5 py-2.5 text-sm hover:border-[#E5FF00]/50 transition-colors disabled:opacity-50"
+                >
+                  {isEn() ? "Keep the trial" : "Mantieni il trial"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-zinc-500 mb-4 leading-relaxed">
+                {isEn()
+                  ? "You can stop the trial at any time. No card was ever required, so there is nothing to charge."
+                  : "Puoi fermare il trial quando vuoi. Non è mai stata richiesta una carta, quindi non c'è nulla da addebitare."}
+              </p>
+              <button
+                onClick={() => setAskCancel(true)}
+                data-testid="cancel-trial-btn"
+                className="text-sm text-zinc-400 underline underline-offset-4 hover:text-[#FF3B30] transition-colors"
+              >
+                {isEn() ? "Cancel the trial" : "Annulla il trial"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* CTA upgrade */}
       {(isStarter || isTrial || meta.isExpired) && (
