@@ -60,13 +60,13 @@ sign.bat
 ## C) SignPath Foundation — firma GRATIS per progetti open source (la più "pulita", ma più impegnativa)
 SignPath firma **solo artefatti costruiti automaticamente da GitHub Actions** dal sorgente pubblico (così garantiscono che il binario venga davvero dal codice). Quindi serve:
 - Repo **pubblico** con il **sorgente** (`forgefps_agent.py` + `version_info.txt`)
-- Una **licenza OSI** (MIT/Apache-2.0/GPL) nel repo
+- Una **licenza OSI** nel repo (qui: AGPL-3.0, approvata OSI e quindi accettata)
 - Un **workflow GitHub Actions** che builda l'exe (te l'ho già preparato)
 - Una **"Code signing policy"** pubblicata sulla home/README del progetto con la frase:
   *"Free code signing provided by SignPath.io, certificate by SignPath Foundation"*
 
 ### Passi
-1. **Metti il sorgente nel repo pubblico** (non solo l'.exe): copia `forgefps_agent.py`, `version_info.txt` e aggiungi un file `LICENSE` (es. MIT).
+1. **Metti il sorgente nel repo pubblico** (non solo l'.exe): copia `forgefps_agent.py`, `version_info.txt` e aggiungi un file `LICENSE` (qui: AGPL-3.0, gia' presente in `agent-build/LICENSE`).
 2. **Copia il workflow**: prendi `github-workflow-build-sign.yml` di questo kit e mettilo in `.github/workflows/build-sign.yml`.
 3. **Fai domanda** su **https://signpath.org/apply.html** (compila e invia a **oss-support@signpath.org**): indica repo URL, licenza, URL di download, descrizione.
 4. Ad approvazione ottenuta:

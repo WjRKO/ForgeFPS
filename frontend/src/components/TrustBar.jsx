@@ -7,7 +7,7 @@ const COPY = {
   it: {
     vt: "Scansione VirusTotal",
     sha: "SHA256 verificabile",
-    oss: "Open source · MIT",
+    oss: "Open source · AGPL-3.0",
     rev: "100% reversibile",
     norc: "Nessun codice remoto",
     local: "Local-first",
@@ -15,7 +15,7 @@ const COPY = {
   en: {
     vt: "VirusTotal scan",
     sha: "Verifiable SHA256",
-    oss: "Open source · MIT",
+    oss: "Open source · AGPL-3.0",
     rev: "100% reversible",
     norc: "No remote code",
     local: "Local-first",
