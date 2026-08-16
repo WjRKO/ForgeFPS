@@ -82,7 +82,8 @@ export default function NextActionBanner({ kind, custom, dismissKey, testid }) {
       <button onClick={dismiss}
         className="shrink-0 text-zinc-500 hover:text-zinc-200 transition-colors p-1"
         data-testid={`${testid || `nba-${kind || "custom"}`}-dismiss`}
-        title={t("nba.dismiss", { defaultValue: "Nascondi per 24h" })}>
+        title={t("nba.dismiss", { defaultValue: "Nascondi per 24h" })}
+        aria-label={t("nba.dismiss", { defaultValue: "Nascondi per 24h" })}>
         <X size={14} />
       </button>
     </div>

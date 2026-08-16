@@ -11,6 +11,7 @@ import api, { API } from "@/lib/api";
 import { PrimaryButton } from "@/components/hud";
 import { PageHeader } from "@/components/hud";
 import DiagnosePanel from "@/components/DiagnosePanel";
+import PlannedActionsCard from "@/components/PlannedActionsCard";
 
 function CodeBlock({ children }) {
   const [copied, setCopied] = useState(false);
@@ -257,6 +258,7 @@ export default function Advisor() {
       <CreditsBar quota={quota} t={t} />
 
       {planInfo?.is_pro && <DiagnosePanel hasSpecs={!!specs?.data?.cpu} />}
+      {planInfo?.is_pro && <PlannedActionsCard />}
 
       <div className="grid lg:grid-cols-[240px_1fr] gap-4">
         <div className="bg-[#0F0F12] border border-[#2A2A35] flex flex-col h-[70vh]">

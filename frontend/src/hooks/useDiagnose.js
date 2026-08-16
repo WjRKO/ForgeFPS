@@ -125,6 +125,9 @@ export function useDiagnose({ hasSpecs }) {
         source: "advisor_diagnose",
       });
       setSavedIds((s) => new Set([...s, action.title]));
+      // La card "Da fare piu' tardi" e' altrove nella pagina: l'evento le evita
+      // un polling e la tiene allineata senza ricaricare.
+      window.dispatchEvent(new CustomEvent("ff-planned-saved", { detail: data }));
       toast.success(t("diagnose.toast_saved"), { description: t("diagnose.toast_saved_desc") });
       return data;
     } catch {

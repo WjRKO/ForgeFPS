@@ -1,7 +1,7 @@
-import { NavLink, useNavigate, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Link, useNavigate, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal, TerminalSquare, Swords, Gauge, Menu, Settings, FileBarChart, Sparkles, MessageSquare, Trophy, FlaskConical } from "lucide-react";
+import { LayoutDashboard, MessageSquareCode, Cpu, LineChart, MonitorDown, LogOut, Bell, Zap, X, BellRing, BellOff, Activity, Rocket, Shield, Radio, Gamepad2, SlidersHorizontal, TerminalSquare, Swords, Gauge, Menu, Settings, FileBarChart, Sparkles, MessageSquare, Trophy, FlaskConical, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -71,6 +71,13 @@ function Notifications() {
 
   const markAll = async () => { await api.post("/notifications/read-all"); load(); };
 
+  // Prima si poteva solo azzerare tutto: una notifica letta si portava dietro
+  // tutte le altre non ancora viste.
+  const markOne = async (id) => {
+    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    try { await api.post(`/notifications/${id}/read`); } catch { load(); }
+  };
+
   const togglePush = async () => {
     setPushBusy(true);
     try {
@@ -132,13 +139,40 @@ function Notifications() {
             </div>
           )}
           {items.length === 0 && <div className="p-4 text-sm text-zinc-500">{t("notif.empty")}</div>}
-          {items.map((n) => (
-            <div key={n.id} className={`p-3 border-b border-[#1A1A24] text-sm ${n.read ? "opacity-60" : ""}`}>
-              <div className="text-[#00FF66] text-xs font-bold uppercase mb-1">{n.type === "target" ? t("notif.target") : t("notif.price_drop")}</div>
-              <div className="text-zinc-200 truncate">{n.title}</div>
-              <div className="text-zinc-400 text-xs mt-1">{n.message} {n.currency}</div>
-            </div>
-          ))}
+          {items.map((n) => {
+            const known = ["target", "price_drop", "recap", "regression", "broadcast",
+                           "unlock", "badge", "access", "refresh", "fps_drop", "hitch"];
+            const label = t(`notif.${known.includes(n.type) ? n.type : "generic"}`);
+            const text = n.body || n.message || "";
+            const Row = (
+              <>
+                <div className="flex items-start justify-between gap-2">
+                  <div className={`text-xs font-bold uppercase mb-1 ${n.type === "regression" ? "text-[#FF3B30]" : "text-[#00FF66]"}`}>{label}</div>
+                  {!n.read && (
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); markOne(n.id); }}
+                      title={t("notif.mark_one_read")}
+                      aria-label={t("notif.mark_one_read")}
+                      data-testid="mark-one-read-btn"
+                      className="shrink-0 text-zinc-600 hover:text-[#E5FF00] transition-colors"
+                    >
+                      <Check size={13} />
+                    </button>
+                  )}
+                </div>
+                <div className="text-zinc-200 truncate">{n.title}</div>
+                {text && <div className="text-zinc-400 text-xs mt-1">{text} {n.currency || ""}</div>}
+              </>
+            );
+            const cls = `p-3 border-b border-[#1A1A24] text-sm block ${n.read ? "opacity-60" : ""}`;
+            return n.link ? (
+              <Link key={n.id} to={n.link} onClick={() => { markOne(n.id); setOpen(false); }} className={`${cls} hover:bg-[#12121A]`}>
+                {Row}
+              </Link>
+            ) : (
+              <div key={n.id} className={cls}>{Row}</div>
+            );
+          })}
         </div>
       )}
     </div>

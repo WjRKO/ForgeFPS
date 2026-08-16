@@ -335,6 +335,7 @@ function ActiveMissionRow({ m, en, t, busy, onAbandon }) {
               onClick={onAbandon}
               disabled={busy === m.code}
               data-testid={`mission-abandon-${m.code}`}
+              aria-label={t("a11y.abandon_mission")}
               title={t("missions.abandon", "Abbandona")}
               className="ml-auto text-zinc-600 hover:text-[#FF3B30] transition-colors disabled:opacity-40"
             >

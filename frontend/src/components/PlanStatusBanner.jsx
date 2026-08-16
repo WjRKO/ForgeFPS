@@ -81,7 +81,7 @@ export default function PlanStatusBanner() {
             className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 transition-colors ${urgent ? "bg-[#FFA500] text-black hover:bg-[#FFB933]" : "bg-[#E5FF00] text-black hover:bg-[#D4EE00]"}`}>
             {en ? "See plans" : "Vedi piani"} <ArrowRight size={11} />
           </Link>
-          <button onClick={dismiss} className="p-1 text-zinc-500 hover:text-zinc-200 transition-colors" data-testid="plan-banner-dismiss" title={en ? "Dismiss" : "Chiudi"}>
+          <button onClick={dismiss} className="p-1 text-zinc-500 hover:text-zinc-200 transition-colors" data-testid="plan-banner-dismiss" title={en ? "Dismiss" : "Chiudi"} aria-label={en ? "Dismiss" : "Chiudi"}>
             <X size={14} />
           </button>
         </div>
@@ -107,7 +107,7 @@ export default function PlanStatusBanner() {
             className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-[#FF3B30] text-white hover:bg-[#FF5544] transition-colors">
             {en ? "Reactivate" : "Riattiva"} <ArrowRight size={11} />
           </Link>
-          <button onClick={dismiss} className="p-1 text-zinc-500 hover:text-zinc-200 transition-colors" data-testid="plan-banner-dismiss-expired">
+          <button onClick={dismiss} className="p-1 text-zinc-500 hover:text-zinc-200 transition-colors" data-testid="plan-banner-dismiss-expired" aria-label={en ? "Dismiss" : "Chiudi"}>
             <X size={14} />
           </button>
         </div>

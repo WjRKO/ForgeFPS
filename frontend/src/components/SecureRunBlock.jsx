@@ -16,7 +16,7 @@ const CopyLine = ({ cmd, color, testid }) => {
   return (
     <div className="flex items-stretch gap-2">
       <code className={`flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-xs overflow-x-auto whitespace-nowrap ${color || "text-[#00FF66]"}`} data-testid={testid}>{cmd}</code>
-      <button onClick={copy} data-testid={`${testid}-copy`} className="shrink-0 flex items-center border border-[#2A2A35] px-3 hover:border-[#E5FF00] transition-colors text-xs">
+      <button onClick={copy} data-testid={`${testid}-copy`} aria-label={i18n.t("a11y.copy")} className="shrink-0 flex items-center border border-[#2A2A35] px-3 hover:border-[#E5FF00] transition-colors text-xs">
         {c ? <Check size={14} className="text-[#00FF66]" /> : <Copy size={14} />}
       </button>
     </div>

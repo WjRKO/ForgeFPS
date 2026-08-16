@@ -5,48 +5,10 @@ import { toast } from "sonner";
 import { User, KeyRound, SlidersHorizontal, ShieldAlert, Loader2, Server, Mail, Save, Trash2, ShieldCheck, QrCode, HelpCircle, MessageCircle, Check, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api, { formatApiErrorDetail } from "@/lib/api";
-
-const T = {
-  it: {
-    eyebrow: "// account & sicurezza", title: "Account e sicurezza",
-    profile: "Profilo", name: "Nome", email: "Email", save: "Salva", saved: "Salvato",
-    pwd: "Cambia password", current: "Password attuale", newp: "Nuova password", change: "Aggiorna password", pwd_ok: "Password aggiornata",
-    mfa_title: "Autenticazione a due fattori (2FA)", mfa_on: "Attiva", mfa_off: "Non attiva",
-    mfa_desc_off: "Aggiungi un secondo livello di sicurezza con un'app authenticator (Google Authenticator, Authy...).",
-    mfa_desc_on: "Il tuo account è protetto con 2FA. Al login ti verrà chiesto un codice.",
-    mfa_enable: "Attiva 2FA", mfa_disable: "Disattiva 2FA", mfa_scan: "Scansiona il QR con la tua app authenticator, poi inserisci il codice a 6 cifre.",
-    mfa_secret: "Oppure inserisci manualmente questa chiave:", mfa_code_ph: "Codice a 6 cifre", mfa_confirm: "Conferma e attiva",
-    mfa_recovery_title: "Codici di recupero", mfa_recovery_desc: "Salvali in un posto sicuro: ti servono se perdi l'accesso all'app. Non verranno più mostrati.",
-    mfa_done: "Ho salvato i codici", mfa_enabled_ok: "2FA attivata", mfa_disabled_ok: "2FA disattivata",
-    mfa_disable_hint: "Inserisci un codice della tua app authenticator (o un codice di recupero) per disattivare la 2FA.",
-    prefs: "Preferenze", local_only: "Modalità LOCAL ONLY", local_only_d: "Usa FrameForge senza inviare dati al cloud (analisi e ottimizzazioni restano in locale).",
-    email_alerts: "Avvisi email", email_alerts_d: "Ricevi email quando un prezzo tracciato cala (in arrivo).",
-    language: "Lingua", prefs_ok: "Preferenze salvate",
-    danger: "Zona pericolosa", delete_t: "Elimina account", delete_d: "Elimina definitivamente il tuo account e tutti i dati (PC, prodotti, build, chat). Irreversibile.",
-    delete_btn: "Elimina il mio account", delete_confirm: "Conferma con la password", delete_do: "Elimina definitivamente", delete_ok: "Account eliminato", cancel: "Annulla",
-  },
-  en: {
-    eyebrow: "// account & security", title: "Account & security",
-    profile: "Profile", name: "Name", email: "Email", save: "Save", saved: "Saved",
-    pwd: "Change password", current: "Current password", newp: "New password", change: "Update password", pwd_ok: "Password updated",
-    mfa_title: "Two-factor authentication (2FA)", mfa_on: "Enabled", mfa_off: "Disabled",
-    mfa_desc_off: "Add a second layer of security with an authenticator app (Google Authenticator, Authy...).",
-    mfa_desc_on: "Your account is protected with 2FA. You'll be asked for a code at login.",
-    mfa_enable: "Enable 2FA", mfa_disable: "Disable 2FA", mfa_scan: "Scan the QR with your authenticator app, then enter the 6-digit code.",
-    mfa_secret: "Or enter this key manually:", mfa_code_ph: "6-digit code", mfa_confirm: "Confirm & enable",
-    mfa_recovery_title: "Recovery codes", mfa_recovery_desc: "Store them somewhere safe: you'll need them if you lose access to your app. They won't be shown again.",
-    mfa_done: "I saved the codes", mfa_enabled_ok: "2FA enabled", mfa_disabled_ok: "2FA disabled",
-    mfa_disable_hint: "Enter a code from your authenticator app (or a recovery code) to disable 2FA.",
-    prefs: "Preferences", local_only: "LOCAL ONLY mode", local_only_d: "Use FrameForge without sending data to the cloud (analysis and optimizations stay local).",
-    email_alerts: "Email alerts", email_alerts_d: "Get an email when a tracked price drops (coming soon).",
-    language: "Language", prefs_ok: "Preferences saved",
-    danger: "Danger zone", delete_t: "Delete account", delete_d: "Permanently delete your account and all data (PC, products, builds, chat). Irreversible.",
-    delete_btn: "Delete my account", delete_confirm: "Confirm with your password", delete_do: "Delete permanently", delete_ok: "Account deleted", cancel: "Cancel",
-  },
-};
+import i18n from "@/i18n";
 
 const Toggle = ({ on, onClick, testid }) => (
-  <button type="button" onClick={onClick} data-testid={testid}
+  <button type="button" onClick={onClick} data-testid={testid} aria-label={i18n.t("a11y.toggle")}
     className={`w-11 h-6 border transition-colors shrink-0 ${on ? "bg-[#E5FF00] border-[#E5FF00]" : "bg-black border-[#2A2A35]"}`}>
     <span className={`block w-5 h-5 bg-black transition-transform ${on ? "translate-x-5 bg-black" : "translate-x-0 bg-zinc-600"}`} />
   </button>
@@ -170,7 +132,7 @@ export default function Account() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const lang = (i18n.language || "it").startsWith("en") ? "en" : "it";
-  const c = T[lang];
+  const c = t("accountpage", { returnObjects: true });
 
   const [name, setName] = useState(user?.name || "");
   const [cur, setCur] = useState(""); const [np, setNp] = useState("");

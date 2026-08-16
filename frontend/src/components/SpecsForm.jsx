@@ -50,7 +50,7 @@ export default function SpecsForm({ initial = {}, onSaved, onCancel }) {
             className="flex items-center gap-2 border border-[#2A2A35] px-3 py-1.5 text-xs hover:border-[#E5FF00] transition-colors">
             <ScanLine size={14} className="text-[#E5FF00]" /> {t("specs.detect")}
           </button>
-          {onCancel && <button onClick={onCancel} className="text-zinc-500 hover:text-white" data-testid="specs-cancel-btn"><X size={16} /></button>}
+          {onCancel && <button onClick={onCancel} aria-label={t("a11y.close")} className="text-zinc-500 hover:text-white" data-testid="specs-cancel-btn"><X size={16} /></button>}
         </div>
       </div>
 

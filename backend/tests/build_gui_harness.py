@@ -1,4 +1,4 @@
-"""Genera /app/frontend/public/gui_test.html: la GUI locale dell'agent (estratta da
+"""Genera backend/tests/out/gui_test.html: la GUI locale dell'agent (estratta da
 ps_agent.py) con API mockate, incluso un tweak CORROTTO per verificare che il render
 non si svuoti mai (bug: griglia vuota all'avvio). Uso: python3 build_gui_harness.py"""
 from pathlib import Path as _P
@@ -64,6 +64,10 @@ window.fetch = function(url, opts) {
 anchor = "<script>\n(function(){"
 assert anchor in html, "anchor script non trovato"
 html = html.replace(anchor, MOCK + anchor, 1)
-out = str(_REPO_ROOT / "frontend" / "public" / "gui_test.html")
-open(out, "w").write(html)
+# Non in frontend/public/: quella cartella finisce integralmente nella build di
+# produzione, e l'harness veniva pubblicato su internet come pagina raggiungibile.
+_OUT_DIR = _P(__file__).resolve().parent / "out"
+_OUT_DIR.mkdir(exist_ok=True)
+out = str(_OUT_DIR / "gui_test.html")
+open(out, "w", encoding="utf-8").write(html)
 print("harness scritto:", out, len(html))

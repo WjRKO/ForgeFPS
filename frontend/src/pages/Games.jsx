@@ -256,7 +256,7 @@ export default function Games() {
         <div className="bg-[#0F0F12] border border-[#2A2A35] p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs uppercase tracking-widest text-zinc-500 flex items-center gap-2"><Swords size={14} className="text-[#E5FF00]" /> {t("games.detected")} ({games.length})</div>
-            <button onClick={refresh} data-testid="games-refresh" className="text-zinc-500 hover:text-[#E5FF00] transition-colors"><RefreshCw size={14} className={refreshing ? "animate-spin" : ""} /></button>
+            <button onClick={refresh} data-testid="games-refresh" aria-label={t("a11y.refresh")} className="text-zinc-500 hover:text-[#E5FF00] transition-colors"><RefreshCw size={14} className={refreshing ? "animate-spin" : ""} /></button>
           </div>
 
           {games.length === 0 ? (

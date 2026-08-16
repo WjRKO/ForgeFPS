@@ -177,7 +177,7 @@ export default function Tracker() {
             <input data-testid="search-input" value={query} onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && search()} placeholder={t("tracker.search_ph")}
               className="flex-1 bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 text-sm" />
-            <button data-testid="search-btn" onClick={search} disabled={searching}
+            <button data-testid="search-btn" onClick={search} disabled={searching} aria-label={t("a11y.search")}
               className="bg-[#E5FF00] text-black px-4 font-bold hover:bg-[#D4EC00] transition-colors disabled:opacity-60 flex items-center gap-1 btn-volt">
               {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
             </button>

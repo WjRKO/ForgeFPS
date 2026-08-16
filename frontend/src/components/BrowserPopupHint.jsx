@@ -43,6 +43,7 @@ export default function BrowserPopupHint({ testid = "browser-popup-hint" }) {
         type="button"
         onClick={dismiss}
         data-testid={`${testid}-dismiss`}
+        aria-label={t("a11y.dismiss")}
         className="shrink-0 text-zinc-500 hover:text-zinc-200 transition-colors"
         title={t("popup_hint.dismiss", { defaultValue: "Ho capito" })}
       >
