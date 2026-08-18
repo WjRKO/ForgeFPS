@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FrameForge — Performance Lab demo</title>
+<meta name="description" content="Interactive demo: watch FrameForge measure a baseline, apply one tweak at a time, verify it statistically and roll back whatever does not hold up.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23E5FF00'/><text x='16' y='23' font-size='20' text-anchor='middle'>%E2%9A%A1</text></svg>">
+<style>
+:root{
+  --void:#050505; --surface:#0F0F12; --panel:#141419;
+  --line:#22222C; --line-soft:#17171F;
+  --volt:#E5FF00; --matrix:#00FF66; --info:#00E0FF; --alert:#FF3B30; --warn:#FF6B00;
+  --ink:#FAFAFA; --ink-2:#A1A1AA; --ink-3:#8B8B96;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono","Segoe UI Mono","SF Mono",Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--void); color:var(--ink); font-family:var(--sans);
+  font-size:16px; line-height:1.55; padding:0 20px 80px; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto}
+h1,h2,h3{font-weight:900;letter-spacing:-.03em;text-transform:uppercase;margin:0;text-wrap:balance}
+h1{font-size:clamp(28px,5vw,44px);line-height:1.03}
+h2{font-size:clamp(18px,2.6vw,23px)}
+p{margin:0;max-width:66ch}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.label{font-family:var(--mono);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:var(--ink-3)}
+.note{font-size:13px;color:var(--ink-3);line-height:1.55}
+a{color:var(--volt);text-decoration:none;border-bottom:1px solid rgba(229,255,0,.32)}
+a:hover{border-bottom-color:var(--volt)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--volt);outline-offset:3px}
+
+/* ---------- masthead ---------- */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;padding:20px 0;border-bottom:1px solid var(--line)}
+.mark{display:flex;align-items:center;gap:10px}
+.glyph{width:28px;height:28px;background:var(--volt);color:#000;display:grid;place-items:center;font-size:16px;flex:none}
+.wordmark{font-weight:900;letter-spacing:-.05em;font-size:18px;text-transform:uppercase}
+.wordmark span{color:var(--volt)}
+.spacer{margin-left:auto}
+.lang{display:flex;gap:4px}
+.lang button{
+  font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.12em;
+  background:transparent;color:var(--ink-3);border:1px solid var(--line);
+  padding:9px 11px;min-height:44px;min-width:44px;cursor:pointer
+}
+.lang button:hover{color:var(--ink);border-color:var(--ink-3)}
+.lang button[aria-pressed="true"]{background:var(--volt);color:#000;border-color:var(--volt)}
+
+.intro{padding:44px 0 30px;display:flex;flex-direction:column;gap:18px}
+.intro h1 em{font-style:normal;color:var(--volt)}
+.intro .sub{font-size:16px;color:var(--ink-2);max-width:60ch}
+.intro .sub b{color:var(--ink)}
+.sim{
+  display:inline-flex;align-items:center;gap:9px;align-self:flex-start;
+  border:1px solid var(--line);background:var(--surface);padding:8px 13px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)
+}
+.sim b{color:var(--warn);font-weight:700}
+
+/* ---------- console ---------- */
+.console{border:1px solid var(--line);background:var(--surface)}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 16px;border-bottom:1px solid var(--line);background:#0A0A0C}
+.dot{width:8px;height:8px;background:var(--ink-3);flex:none}
+.dot.on{background:var(--matrix)}
+.bar .rig{font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.bar .st{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3)}
+.stage{padding:22px 16px;min-height:340px;display:flex;flex-direction:column;gap:20px}
+@media(min-width:640px){.stage{padding:26px}}
+
+/* ---------- buttons ---------- */
+.btn{
+  font-family:var(--sans);font-weight:800;font-size:15px;letter-spacing:-.01em;
+  background:var(--volt);color:#000;border:0;padding:14px 22px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:9px;min-height:48px;
+}
+.btn:hover{background:#D4EC00}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.ghost:hover{border-color:var(--volt);color:var(--volt);background:transparent}
+a.btn{border-bottom:0}
+.actions{display:flex;flex-wrap:wrap;gap:10px}
+
+/* ---------- metric grid ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.cell{background:var(--panel);padding:14px 16px;display:flex;flex-direction:column;gap:5px}
+.cell .k{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+.cell .v{font-size:26px;font-weight:900;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1.05}
+.cell .v small{font-size:13px;font-weight:700;color:var(--ink-3);margin-left:3px}
+
+/* ---------- checklist ---------- */
+.checks{display:flex;flex-direction:column;border:1px solid var(--line)}
+.chk{display:flex;align-items:center;gap:11px;padding:11px 15px;border-bottom:1px solid var(--line-soft);background:var(--panel);font-size:14px}
+.chk:last-child{border-bottom:0}
+.chk i{width:17px;height:17px;flex:none;display:grid;place-items:center;font-style:normal;font-size:11px;font-weight:900;font-family:var(--mono)}
+.chk.ok i{background:rgba(0,255,102,.14);color:var(--matrix)}
+.chk.no i{background:rgba(255,107,0,.16);color:var(--warn)}
+.chk.no{color:var(--ink-2)}
+
+/* ---------- lab ---------- */
+.trial{border:1px solid var(--line);background:var(--panel)}
+.trial+.trial{margin-top:10px}
+.trial-h{display:flex;flex-wrap:wrap;align-items:center;gap:9px 14px;padding:13px 15px;border-bottom:1px solid var(--line-soft)}
+.trial-h .n{font-family:var(--mono);font-size:12px;color:var(--volt);font-weight:700}
+.trial-h .t{font-weight:700;font-size:15px;flex:1;min-width:150px}
+.badge{font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;padding:5px 9px;border:1px solid;white-space:nowrap}
+.badge.run{color:var(--info);border-color:rgba(0,224,255,.4)}
+.badge.acc{color:var(--matrix);border-color:rgba(0,255,102,.42);background:rgba(0,255,102,.07)}
+.badge.rej{color:var(--alert);border-color:rgba(255,59,48,.45);background:rgba(255,59,48,.08)}
+.trial-b{padding:14px 15px;display:flex;flex-direction:column;gap:12px}
+.runsWrap{display:flex;flex-direction:column;gap:8px}
+.runs{display:flex;flex-wrap:wrap;gap:5px}
+.run{width:20px;height:26px;background:var(--line-soft);border:1px solid var(--line)}
+.run.a{background:rgba(0,224,255,.5);border-color:rgba(0,224,255,.6)}
+.run.b{background:rgba(229,255,0,.55);border-color:rgba(229,255,0,.65)}
+.stats{display:flex;flex-wrap:wrap;gap:8px 26px;font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
+.stats div span{color:var(--ink-3);font-size:11px;letter-spacing:.12em;text-transform:uppercase;display:block;margin-bottom:2px}
+.verdict{font-size:13.5px;line-height:1.5;color:var(--ink-2);border-left:2px solid var(--line);padding-left:12px}
+.verdict.acc{border-left-color:var(--matrix)}
+.verdict.rej{border-left-color:var(--alert)}
+.verdict b{color:var(--ink)}
+
+/* ---------- outcome ---------- */
+.result{display:flex;flex-direction:column;gap:16px}
+.tblwrap{overflow-x:auto}
+.ba{width:100%;border-collapse:collapse;font-size:14px;border:1px solid var(--line);min-width:420px}
+.ba th,.ba td{padding:11px 14px;border-bottom:1px solid var(--line-soft);text-align:right;font-variant-numeric:tabular-nums;background:var(--panel);white-space:nowrap}
+.ba th:first-child,.ba td:first-child{text-align:left}
+.ba thead th{font-family:var(--mono);font-size:10.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3);font-weight:400;background:#0A0A0C}
+.ba tr:last-child td{border-bottom:0}
+.ba .d{color:var(--matrix);font-weight:700}
+.wd{border:1px solid rgba(0,224,255,.3);background:rgba(0,224,255,.05);padding:13px 15px;font-size:13.5px;color:var(--ink-2);line-height:1.5}
+.wd b{color:var(--info)}
+.log{font-family:var(--mono);font-size:12.5px;line-height:1.85;color:var(--ink-2);max-height:190px;overflow-y:auto;border:1px solid var(--line);background:#0A0A0C;padding:13px 15px}
+.log b{color:var(--matrix);font-weight:400}
+
+.after{margin-top:44px;padding-top:34px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:20px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.col{background:var(--panel);padding:19px;display:flex;flex-direction:column;gap:9px}
+.col h3{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--volt)}
+.col p{font-size:14px;color:var(--ink-2);line-height:1.5}
+.foot{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:12px 22px;align-items:baseline}
+
+.fade{animation:fade .32s ease both}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="mark">
+      <div class="glyph" aria-hidden="true">⚡</div>
+      <div class="wordmark">Frame<span>Forge</span></div>
+    </div>
+    <div class="label spacer" id="kicker">Demo · Performance Lab</div>
+    <div class="lang" id="lang">
+      <button type="button" data-l="en" aria-pressed="false">EN</button>
+      <button type="button" data-l="it" aria-pressed="false">IT</button>
+    </div>
+  </header>
+
+  <section class="intro">
+    <h1 id="h1"></h1>
+    <p class="sub" id="sub"></p>
+    <div class="sim"><b>◆</b> <span id="simtext"></span></div>
+  </section>
+
+  <div class="console">
+    <div class="bar">
+      <span class="dot" id="dot"></span>
+      <span class="rig" id="rig"></span>
+      <span class="st" id="st"></span>
+    </div>
+    <div class="stage" id="stage"></div>
+  </div>
+
+  <section class="after">
+    <h2 id="afterTitle"></h2>
+    <div class="cols" id="cols"></div>
+    <p class="note" id="afterNote"></p>
+    <div class="actions">
+      <a class="btn" href="https://github.com/WjRKO/ForgeFPS" id="lnkCode"></a>
+      <a class="btn ghost" href="https://github.com/WjRKO/ForgeFPS/releases" id="lnkGet"></a>
+      <a class="btn ghost" href="https://discord.gg/KU3m9YFFnm">Discord</a>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="label">FrameForge · AGPL-3.0</span>
+    <span class="note spacer" id="disclaimer"></span>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============================ copy ============================ */
+  var COPY = {
+    en: {
+      html:"en", kicker:"Demo · Performance Lab",
+      h1a:"Every booster promises FPS.", h1b:"This one shows you the proof.",
+      sub:"FrameForge measures a baseline, applies <b>one tweak at a time</b>, re-measures with repeated runs and keeps only what passes a statistical test. Whatever fails gets rolled back. Hit the button and watch it happen.",
+      sim:"Simulation with sample data — no install, no real readings",
+      noPc:"No PC connected", waiting:"Idle", scanning:"Scanning", diagnosed:"Diagnosis ready",
+      running:"Lab running", finished:"Session complete",
+      step1:"Step 1 of 3", step2:"Step 2 of 3 · Diagnosis", step3:"Step 3 of 3 · Verification",
+      connect:"Connect a PC",
+      connectBody:"In the real thing the desktop agent reads your hardware. Here we use a sample machine: <b style='color:var(--ink-2)'>Ryzen 7 5800X3D · RTX 3070 Ti · 32 GB DDR4</b>.",
+      startScan:"▶ Run the scan", startLab:"▶ Run the Performance Lab",
+      scanLines:[
+        "Detecting hardware…",
+        "CPU  Ryzen 7 5800X3D · 8C/16T · 42 °C",
+        "GPU  RTX 3070 Ti · driver 551.23 · 61 °C",
+        "RAM  32 GB DDR4-3600 · 2 modules",
+        "Reading sensors (LibreHardwareMonitor)…",
+        "Baseline benchmark · 12 runs…",
+        "DPC latency, IOPS, frame-time jitter captured",
+        "<b>Health Score computed: 71/100</b>"
+      ],
+      cells:[["Health Score","71","/100"],["Avg FPS","96.2",""],["Input lag","24","ms"],["Bufferbloat","C",""]],
+      checks:[["Ultimate power plan",false],["Game Mode on",true],["HAGS enabled",false],["GPU drivers up to date",true],["Startup apps reduced",false]],
+      afterChecks:"Three items are off. A traditional booster would apply them all at once and declare victory. The Performance Lab tries them <b style='color:var(--ink)'>one at a time</b>.",
+      runsLabel:"Runs · baseline then post-tweak",
+      sBase:"Baseline", sAfter:"After", sDelta:"Delta", sSd:"Std dev", sP:"Welch p", fps:"fps",
+      inProgress:"Running", kept:"✓ Confirmed", dropped:"✕ Rolled back",
+      keptPre:"<b>Kept.</b> ", dropPre:"<b>Dropped and restored.</b> ",
+      trials:[
+        {name:"Ultimate Performance power plan", why:"Clean, repeatable gain across every run."},
+        {name:"HAGS — hardware-accelerated GPU scheduling", why:"Improves frame-time jitter too, not just the average."},
+        {name:"Disable Game DVR", why:"Difference sits inside the noise floor: <b>p = 0.41</b>, far past the threshold. Change reverted, system restored to its previous state."},
+        {name:"NVIDIA Reflex On+Boost", why:"Input lag from <b>24 ms to 11 ms</b> on top of the FPS gain."}
+      ],
+      outcome:"Outcome", outcomeTitle:"3 of 4 tweaks passed verification",
+      thMetric:"Metric", thBefore:"Before", thAfter:"After", thDelta:"Delta",
+      rows:[["Avg FPS","96.2","111.3","+15.1"],["Input lag","24 ms","11 ms","−13 ms"],["Health Score","71","86","+15"],["Tweaks applied","0","3","1 rolled back"]],
+      watchdog:"<b>Watchdog scheduled.</b> In 48 hours FrameForge re-measures on its own and tells you if the gain did not hold — so a tweak that degrades over time does not sit there unnoticed.",
+      punchline:"Notice the point: disabling Game DVR is one of the most repeated tips in online guides. On this machine it made <b style='color:var(--ink)'>no measurable difference</b>, so it was rolled back instead of being counted as a win.",
+      replay:"↺ Replay", tryIt:"Try it on your PC",
+      afterTitle:"What you just saw",
+      cols:[
+        ["The problem","Session-to-session variance is larger than almost any real gain. A tool that measures once cannot tell an improvement from noise."],
+        ["The answer","Repeated runs, Welch's t-test, Holm correction for multiple comparisons. A tweak ships only if the gain is statistically significant."],
+        ["The safety net","Backup before every change, automatic rollback of whatever fails, 48-hour re-check by the watchdog. All reversible in one click."]
+      ],
+      afterNote:"The full app adds live telemetry, an AI advisor that knows your real hardware, a build generator, upgrade analysis and a multi-store price tracker. Interface in English and Italian.",
+      lnkCode:"See the code", lnkGet:"Get the agent",
+      disclaimer:"Numbers on this page are illustrative and exist to show the method, not to claim performance."
+    },
+    it: {
+      html:"it", kicker:"Demo · Performance Lab",
+      h1a:"Ogni “booster” promette FPS.", h1b:"Questo ti mostra la prova.",
+      sub:"FrameForge misura una baseline, applica <b>un tweak alla volta</b>, ri-misura con run ripetute e tiene solo ciò che supera un test statistico. Quello che non regge viene annullato. Premi il pulsante e guardalo succedere.",
+      sim:"Simulazione con dati di esempio — nessuna installazione, nessun dato reale",
+      noPc:"Nessun PC collegato", waiting:"In attesa", scanning:"Scansione in corso", diagnosed:"Diagnosi pronta",
+      running:"Laboratorio in esecuzione", finished:"Sessione completata",
+      step1:"Passo 1 di 3", step2:"Passo 2 di 3 · Diagnosi", step3:"Passo 3 di 3 · Verifica",
+      connect:"Collega un PC",
+      connectBody:"In quella vera è l'agent desktop a leggere l'hardware. Qui usiamo una macchina di esempio: <b style='color:var(--ink-2)'>Ryzen 7 5800X3D · RTX 3070 Ti · 32 GB DDR4</b>.",
+      startScan:"▶ Avvia la scansione", startLab:"▶ Avvia il Performance Lab",
+      scanLines:[
+        "Rilevamento hardware…",
+        "CPU  Ryzen 7 5800X3D · 8C/16T · 42 °C",
+        "GPU  RTX 3070 Ti · driver 551.23 · 61 °C",
+        "RAM  32 GB DDR4-3600 · 2 moduli",
+        "Lettura sensori (LibreHardwareMonitor)…",
+        "Benchmark baseline · 12 run…",
+        "Latenza DPC, IOPS, jitter frame time acquisiti",
+        "<b>Health Score calcolato: 71/100</b>"
+      ],
+      cells:[["Health Score","71","/100"],["FPS medi","96.2",""],["Input lag","24","ms"],["Bufferbloat","C",""]],
+      checks:[["Piano energetico Ultimate",false],["Game Mode attivo",true],["HAGS attivo",false],["Driver GPU aggiornati",true],["App all'avvio ridotte",false]],
+      afterChecks:"Tre voci non sono a posto. Un booster tradizionale le applicherebbe tutte insieme e dichiarerebbe il successo. Il Performance Lab le prova <b style='color:var(--ink)'>una alla volta</b>.",
+      runsLabel:"Run · baseline poi post-tweak",
+      sBase:"Baseline", sAfter:"Dopo", sDelta:"Delta", sSd:"Dev. std", sP:"Welch p", fps:"fps",
+      inProgress:"In corso", kept:"✓ Confermato", dropped:"✕ Annullato",
+      keptPre:"<b>Tenuto.</b> ", dropPre:"<b>Scartato e ripristinato.</b> ",
+      trials:[
+        {name:"Piano energetico Ultimate Performance", why:"Guadagno netto e ripetibile su tutte le run."},
+        {name:"HAGS — GPU scheduling accelerato", why:"Migliora anche il jitter dei frame time, non solo la media."},
+        {name:"Disattivazione Game DVR", why:"Differenza dentro il rumore di fondo: <b>p = 0.41</b>, ben oltre la soglia. Modifica annullata, sistema riportato allo stato precedente."},
+        {name:"NVIDIA Reflex On+Boost", why:"Input lag da <b>24 ms a 11 ms</b> oltre al guadagno in FPS."}
+      ],
+      outcome:"Esito", outcomeTitle:"3 tweak su 4 hanno superato la verifica",
+      thMetric:"Metrica", thBefore:"Prima", thAfter:"Dopo", thDelta:"Delta",
+      rows:[["FPS medi","96.2","111.3","+15.1"],["Input lag","24 ms","11 ms","−13 ms"],["Health Score","71","86","+15"],["Tweak applicati","0","3","1 annullato"]],
+      watchdog:"<b>Watchdog programmato.</b> Tra 48 ore FrameForge ri-misura da solo e ti avvisa se il guadagno non ha retto — così un tweak che peggiora le cose col tempo non resta lì inosservato.",
+      punchline:"Nota il punto: la disattivazione del Game DVR è uno dei consigli più ripetuti nelle guide online. Su questa macchina <b style='color:var(--ink)'>non ha fatto differenza misurabile</b>, quindi è stata annullata invece di essere contata come vittoria.",
+      replay:"↺ Ripeti la demo", tryIt:"Provalo sul tuo PC",
+      afterTitle:"Cosa hai appena visto",
+      cols:[
+        ["Il problema","La varianza tra una sessione e l'altra è più grande di quasi ogni guadagno reale. Un tool che misura una volta sola non può distinguere un miglioramento dal rumore."],
+        ["La risposta","Run ripetute, test t di Welch, correzione di Holm per i confronti multipli. Un tweak entra in produzione solo se il guadagno è statisticamente significativo."],
+        ["La rete di sicurezza","Backup prima di ogni modifica, rollback automatico di ciò che fallisce, ricontrollo a 48 ore dal watchdog. Tutto reversibile a un clic."]
+      ],
+      afterNote:"L'app completa aggiunge telemetria live, un advisor AI che conosce il tuo hardware reale, generatore di build, analisi degli upgrade e price tracker multi-store. Interfaccia in italiano e inglese.",
+      lnkCode:"Guarda il codice", lnkGet:"Scarica l'agent",
+      disclaimer:"I numeri di questa pagina sono di esempio e servono a illustrare il metodo, non a dichiarare prestazioni."
+    }
+  };
+
+  /* Measurements are shared across languages: only the wording is translated. */
+  var STATS = [
+    { base:96.2,  after:101.4, sd:2.1, p:0.0008, ok:true  },
+    { base:101.4, after:106.1, sd:2.4, p:0.0041, ok:true  },
+    { base:106.1, after:106.8, sd:3.8, p:0.4100, ok:false },
+    { base:106.1, after:111.3, sd:1.9, p:0.0002, ok:true  }
+  ];
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var stage = document.getElementById("stage");
+  var dot   = document.getElementById("dot");
+  var rig   = document.getElementById("rig");
+  var st    = document.getElementById("st");
+
+  var lang = (navigator.language || "en").toLowerCase().indexOf("it") === 0 ? "it" : "en";
+  var c = COPY[lang];
+  var token = 0;          // invalida le sequenze in corso quando si cambia lingua
+  var connected = false;
+
+  function el(tag, cls, html){
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
+    return n;
+  }
+  function wait(ms){
+    // Il ritmo fra i passi racconta il metodo: resta anche con
+    // prefers-reduced-motion, dove si spengono le animazioni, non la cadenza.
+    return new Promise(function(r){ setTimeout(r, ms); });
+  }
+  function status(text, live){ st.textContent = text; dot.className = live ? "dot on" : "dot"; }
+
+  /* ============================ chrome ============================ */
+  function paintStatic(){
+    document.documentElement.lang = c.html;
+    document.getElementById("kicker").textContent = c.kicker;
+    document.getElementById("h1").innerHTML = c.h1a + "<br><em>" + c.h1b + "</em>";
+    document.getElementById("sub").innerHTML = c.sub;
+    document.getElementById("simtext").textContent = c.sim;
+    document.getElementById("afterTitle").textContent = c.afterTitle;
+    document.getElementById("afterNote").textContent = c.afterNote;
+    document.getElementById("lnkCode").textContent = c.lnkCode;
+    document.getElementById("lnkGet").textContent = c.lnkGet;
+    document.getElementById("disclaimer").textContent = c.disclaimer;
+    rig.textContent = connected ? "Ryzen 7 5800X3D · RTX 3070 Ti · 32 GB" : c.noPc;
+
+    var cols = document.getElementById("cols");
+    cols.innerHTML = "";
+    c.cols.forEach(function(x){
+      var d = el("div","col");
+      d.appendChild(el("h3", null, x[0]));
+      d.appendChild(el("p", null, x[1]));
+      cols.appendChild(d);
+    });
+
+    [].forEach.call(document.querySelectorAll("#lang button"), function(b){
+      b.setAttribute("aria-pressed", String(b.dataset.l === lang));
+    });
+  }
+
+  document.getElementById("lang").addEventListener("click", function(e){
+    var b = e.target.closest("button");
+    if (!b || b.dataset.l === lang) return;
+    lang = b.dataset.l; c = COPY[lang];
+    token++; connected = false;      // ferma ogni sequenza in volo e riparte pulito
+    paintStatic();
+    screenIdle();
+  });
+
+  /* ============================ 1 · idle ============================ */
+  function screenIdle(){
+    stage.innerHTML = "";
+    var box = el("div","fade");
+    box.style.cssText = "display:flex;flex-direction:column;gap:18px;align-items:flex-start;justify-content:center;flex:1";
+    box.appendChild(el("div","label", c.step1));
+    box.appendChild(el("h2", null, c.connect));
+    box.appendChild(el("p","note", c.connectBody));
+    var b = el("button","btn", c.startScan);
+    b.onclick = runScan;
+    box.appendChild(b);
+    stage.appendChild(box);
+    status(c.waiting, false);
+  }
+
+  /* ============================ 2 · scan ============================ */
+  function runScan(){
+    var mine = ++token;
+    stage.innerHTML = "";
+    status(c.scanning, true);
+    connected = true;
+    rig.textContent = "Ryzen 7 5800X3D · RTX 3070 Ti · 32 GB";
+
+    var log = el("div","log fade");
+    stage.appendChild(log);
+
+    (function step(i){
+      if (mine !== token) return;
+      if (i >= c.scanLines.length) return wait(320).then(function(){ if (mine === token) screenScanned(); });
+      log.insertAdjacentHTML("beforeend", "<div>› " + c.scanLines[i] + "</div>");
+      log.scrollTop = log.scrollHeight;
+      return wait(i === 5 ? 900 : 420).then(function(){ step(i + 1); });
+    })(0);
+  }
+
+  function screenScanned(){
+    stage.innerHTML = "";
+    status(c.diagnosed, true);
+    var box = el("div","fade");
+    box.style.cssText = "display:flex;flex-direction:column;gap:18px";
+    box.appendChild(el("div","label", c.step2));
+
+    var g = el("div","grid");
+    c.cells.forEach(function(m){
+      var cell = el("div","cell");
+      cell.appendChild(el("div","k", m[0]));
+      cell.appendChild(el("div","v", m[1] + (m[2] ? "<small>" + m[2] + "</small>" : "")));
+      g.appendChild(cell);
+    });
+    box.appendChild(g);
+
+    var ck = el("div","checks");
+    c.checks.forEach(function(x){
+      ck.appendChild(el("div","chk " + (x[1] ? "ok" : "no"),
+        "<i>" + (x[1] ? "✓" : "!") + "</i><span>" + x[0] + "</span>"));
+    });
+    box.appendChild(ck);
+    box.appendChild(el("p","note", c.afterChecks));
+
+    var a = el("div","actions");
+    var b = el("button","btn", c.startLab);
+    b.onclick = runLab;
+    a.appendChild(b);
+    box.appendChild(a);
+    stage.appendChild(box);
+  }
+
+  /* ============================ 3 · lab ============================ */
+  function runLab(){
+    var mine = ++token;
+    stage.innerHTML = "";
+    status(c.running, true);
+    var box = el("div","fade");
+    box.style.cssText = "display:flex;flex-direction:column;gap:14px";
+    box.appendChild(el("div","label", c.step3));
+    var list = el("div");
+    box.appendChild(list);
+    stage.appendChild(box);
+
+    (function next(i){
+      if (mine !== token) return;
+      if (i >= STATS.length) return wait(420).then(function(){ if (mine === token) screenDone(); });
+      runTrial(list, STATS[i], c.trials[i], i + 1, mine).then(function(){ next(i + 1); });
+    })(0);
+  }
+
+  function runTrial(list, s, txt, n, mine){
+    var card = el("div","trial fade");
+    var head = el("div","trial-h");
+    head.appendChild(el("span","n", n < 10 ? "0" + n : String(n)));
+    head.appendChild(el("span","t", txt.name));
+    var badge = el("span","badge run", c.inProgress);
+    head.appendChild(badge);
+    card.appendChild(head);
+
+    var body = el("div","trial-b");
+    var wrap = el("div","runsWrap");
+    wrap.appendChild(el("div","label", c.runsLabel));
+    var runs = el("div","runs");
+    wrap.appendChild(runs);
+    body.appendChild(wrap);
+    card.appendChild(body);
+    list.appendChild(card);
+
+    var boxes = [];
+    for (var k = 0; k < 16; k++){ var r = el("div","run"); runs.appendChild(r); boxes.push(r); }
+
+    function paint(k){ boxes[k].className = "run " + (k < 8 ? "a" : "b"); }
+
+    function finish(){
+      if (mine !== token) return Promise.resolve();
+      return wait(260).then(function(){
+        if (mine !== token) return;
+        var delta = s.after - s.base;
+        body.appendChild(el("div","stats",
+          "<div><span>" + c.sBase  + "</span>" + s.base.toFixed(1)  + " " + c.fps + "</div>" +
+          "<div><span>" + c.sAfter + "</span>" + s.after.toFixed(1) + " " + c.fps + "</div>" +
+          "<div><span>" + c.sDelta + "</span>" + (delta >= 0 ? "+" : "") + delta.toFixed(1) + " " + c.fps + "</div>" +
+          "<div><span>" + c.sSd    + "</span>±" + s.sd.toFixed(1) + "</div>" +
+          "<div><span>" + c.sP     + "</span>" + s.p.toFixed(4) + "</div>"));
+
+        badge.className = "badge " + (s.ok ? "acc" : "rej");
+        badge.textContent = s.ok ? c.kept : c.dropped;
+
+        body.appendChild(el("div","verdict " + (s.ok ? "acc" : "rej"),
+          (s.ok ? c.keptPre : c.dropPre) + txt.why));
+        return wait(560);
+      });
+    }
+
+    if (reduce){
+      boxes.forEach(function(_, k){ paint(k); });
+      return wait(500).then(finish);
+    }
+    return (function fill(k){
+      if (mine !== token) return Promise.resolve();
+      if (k >= boxes.length) return finish();
+      paint(k);
+      return wait(55).then(function(){ return fill(k + 1); });
+    })(0);
+  }
+
+  /* ============================ 4 · outcome ============================ */
+  function screenDone(){
+    stage.innerHTML = "";
+    status(c.finished, true);
+    var box = el("div","result fade");
+    box.appendChild(el("div","label", c.outcome));
+    box.appendChild(el("h2", null, c.outcomeTitle));
+
+    var rows = c.rows.map(function(r){
+      return "<tr><td>" + r[0] + "</td><td>" + r[1] + "</td><td>" + r[2] + "</td><td class='d'>" + r[3] + "</td></tr>";
+    }).join("");
+    var tw = el("div","tblwrap");
+    tw.appendChild(el("table","ba",
+      "<thead><tr><th>" + c.thMetric + "</th><th>" + c.thBefore + "</th><th>" + c.thAfter + "</th><th>" + c.thDelta + "</th></tr></thead>" +
+      "<tbody>" + rows + "</tbody>"));
+    box.appendChild(tw);
+
+    box.appendChild(el("div","wd", c.watchdog));
+    box.appendChild(el("p","note", c.punchline));
+
+    var a = el("div","actions");
+    var again = el("button","btn ghost", c.replay);
+    again.onclick = function(){ token++; connected = false; rig.textContent = c.noPc; screenIdle(); };
+    a.appendChild(again);
+    var real = el("a","btn", c.tryIt);
+    real.href = "https://github.com/WjRKO/ForgeFPS/releases";
+    a.appendChild(real);
+    box.appendChild(a);
+    stage.appendChild(box);
+  }
+
+  paintStatic();
+  screenIdle();
+})();
+</script>
+</body>
+</html>

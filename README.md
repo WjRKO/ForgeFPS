@@ -15,6 +15,10 @@ runs, checks statistical significance, and rolls back anything that does not hol
 Results are aggregated anonymously across similar hardware, so recommendations improve
 as the fleet grows.
 
+**▶ [Try the interactive demo](https://wjrko.github.io/ForgeFPS/)** — no install, no account.
+Watch the lab measure a baseline, apply four tweaks one at a time, and roll back the one
+that fails its significance test. Runs entirely in the browser with sample data.
+
 ---
 
 ## Features
