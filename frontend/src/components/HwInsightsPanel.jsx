@@ -47,7 +47,7 @@ export const HwInsightsPanel = () => {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-zinc-100">{t(`hwins.i.${i.id}.title`, i.params)}</span>
-                    <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 ${s.badge}`}>{t(`hwins.sev.${i.severity}`)}</span>
+                    <span className={`text-[11px] font-bold uppercase px-1.5 py-0.5 ${s.badge}`}>{t(`hwins.sev.${i.severity}`)}</span>
                   </div>
                   <div className="text-xs text-zinc-500 mt-1">{t(`hwins.i.${i.id}.desc`, i.params)}</div>
                   <div className="text-xs text-[#00FF66] mt-1">→ {t(`hwins.i.${i.id}.fix`, i.params)}</div>

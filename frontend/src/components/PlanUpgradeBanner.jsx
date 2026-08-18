@@ -82,7 +82,7 @@ export default function PlanUpgradeBanner({
 
       <div className="relative">
         <div
-          className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-mono mb-3"
+          className="flex items-center gap-2 text-[11px] uppercase tracking-widest font-mono mb-3"
           style={{ color: cfg.accent }}
           data-testid={`${testid}-eyebrow`}
         >

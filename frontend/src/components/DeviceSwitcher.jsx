@@ -47,7 +47,7 @@ export const DeviceSwitcher = () => {
       </button>
       {open && (
         <div className="absolute right-0 mt-1 w-64 bg-[#0F0F12] border border-[#2A2A35] shadow-xl z-50" data-testid="device-switcher-menu">
-          <div className="px-3 py-2 text-[9px] font-mono uppercase tracking-widest text-zinc-600 border-b border-[#1A1A24]">
+          <div className="px-3 py-2 text-[11px] font-mono uppercase tracking-widest text-zinc-600 border-b border-[#1A1A24]">
             {c.title} · {data.devices.length}
           </div>
           {data.devices.map((d) => {
@@ -58,7 +58,7 @@ export const DeviceSwitcher = () => {
                 <I size={14} className={d.is_active ? "text-[#E5FF00]" : "text-zinc-500"} />
                 <span className="flex-1 min-w-0">
                   <span className="block text-xs text-zinc-200 truncate">{d.name}</span>
-                  <span className="block text-[10px] text-zinc-600">
+                  <span className="block text-[11px] text-zinc-600">
                     {c[d.role] || d.role}{d.health_score != null ? ` · Health ${d.health_score}` : ""}
                   </span>
                 </span>

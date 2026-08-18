@@ -19,7 +19,7 @@ function Timeline({ timeline, onEvent, t }) {
   const pts = fps.map((p) => `${x(p.m).toFixed(1)},${y(p.fps).toFixed(1)}`).join(" ");
   return (
     <div data-testid="gd-timeline">
-      <div className="text-[10px] uppercase tracking-widest text-zinc-600 font-mono mb-1">{t("live.gd_timeline")} · FPS</div>
+      <div className="text-[11px] uppercase tracking-widest text-zinc-600 font-mono mb-1">{t("live.gd_timeline")} · FPS</div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-24 bg-black/40 border border-[#1A1A24]">
         <polyline points={pts} fill="none" stroke="#E5FF00" strokeWidth="1.5" opacity="0.85" />
         {(timeline?.events || []).map((e, i) => (
@@ -46,9 +46,9 @@ function Issue({ issue, t, expanded, onToggle, onApply }) {
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {typeof issue.impact_pct === "number" && (
-              <span className="text-[10px] font-mono text-zinc-500">{issue.impact_pct}% {t("live.gd_of_session")}</span>
+              <span className="text-[11px] font-mono text-zinc-500">{issue.impact_pct}% {t("live.gd_of_session")}</span>
             )}
-            <span className={`text-[10px] uppercase tracking-widest border px-1.5 py-0.5 ${CONF[issue.confidence] || CONF.medium}`} data-testid="gd-confidence">
+            <span className={`text-[11px] uppercase tracking-widest border px-1.5 py-0.5 ${CONF[issue.confidence] || CONF.medium}`} data-testid="gd-confidence">
               {t("live.gd_conf")} {issue.confidence}
             </span>
             <ChevronDown size={14} className={`text-zinc-500 transition-transform ${expanded ? "rotate-180" : ""}`} />
@@ -56,7 +56,7 @@ function Issue({ issue, t, expanded, onToggle, onApply }) {
         </div>
         <p className="text-xs text-zinc-300">{issue.simple_text}</p>
         {issue.pattern && issue.occurrences ? (
-          <p className="text-[10px] font-mono text-zinc-600 mt-1">{issue.occurrences}x · pattern: {issue.pattern}</p>
+          <p className="text-[11px] font-mono text-zinc-600 mt-1">{issue.occurrences}x · pattern: {issue.pattern}</p>
         ) : null}
       </button>
       {expanded && (
@@ -85,7 +85,7 @@ function Issue({ issue, t, expanded, onToggle, onApply }) {
           </button>
         )}
         {issue.fix?.impact_estimate && (
-          <span className="text-[10px] text-[#00FF87]/70 font-mono">{issue.fix.impact_estimate}</span>
+          <span className="text-[11px] text-[#00FF87]/70 font-mono">{issue.fix.impact_estimate}</span>
         )}
       </div>
     </div>
@@ -171,7 +171,7 @@ export default function GameplayDoctor() {
     <div className="border border-[#1A1A24] bg-[#0E0E12]" data-testid="gameplay-doctor">
       <div className="flex items-center justify-between gap-3 p-4 border-b border-[#1A1A24]">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.25em] text-[#E5FF00] font-mono">// Gameplay Doctor</div>
+          <div className="text-[11px] uppercase tracking-[0.25em] text-[#E5FF00] font-mono">// Gameplay Doctor</div>
           <div className="text-sm font-bold text-zinc-100 mt-0.5 flex items-center gap-2">
             <Stethoscope size={15} className="text-[#E5FF00]" /> {t("live.gd_title")}
           </div>
@@ -201,7 +201,7 @@ export default function GameplayDoctor() {
               {typeof rep.score === "number" && (
                 <div className="text-center shrink-0" data-testid="gd-score">
                   <div className={`font-display font-black text-4xl leading-none ${HEALTH[rep.health] || "text-zinc-100"}`}>{rep.score}</div>
-                  <div className="text-[9px] uppercase tracking-widest text-zinc-600 mt-1">{t("live.gd_score")}</div>
+                  <div className="text-[11px] uppercase tracking-widest text-zinc-600 mt-1">{t("live.gd_score")}</div>
                 </div>
               )}
               <div className="flex-1 space-y-1 text-sm">

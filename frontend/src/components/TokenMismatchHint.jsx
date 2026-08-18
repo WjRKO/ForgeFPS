@@ -113,9 +113,9 @@ export default function TokenMismatchHint() {
               </li>
               <li>
                 {en ? (
-                  <>Double-click <strong>forgefps-launcher.bat</strong>. The exe will start with the current account's token and overwrite the old one in <code className="text-[#00E0FF] bg-black px-1 text-[10px]">%APPDATA%\FrameForge\token.dat</code>.</>
+                  <>Double-click <strong>forgefps-launcher.bat</strong>. The exe will start with the current account's token and overwrite the old one in <code className="text-[#00E0FF] bg-black px-1 text-[11px]">%APPDATA%\FrameForge\token.dat</code>.</>
                 ) : (
-                  <>Doppio click su <strong>forgefps-launcher.bat</strong>. L'exe si avvia con il token dell'account attuale e sovrascrive quello vecchio in <code className="text-[#00E0FF] bg-black px-1 text-[10px]">%APPDATA%\FrameForge\token.dat</code>.</>
+                  <>Doppio click su <strong>forgefps-launcher.bat</strong>. L'exe si avvia con il token dell'account attuale e sovrascrive quello vecchio in <code className="text-[#00E0FF] bg-black px-1 text-[11px]">%APPDATA%\FrameForge\token.dat</code>.</>
                 )}
               </li>
               <li>

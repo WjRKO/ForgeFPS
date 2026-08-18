@@ -76,7 +76,7 @@ function ProductCard({ p, t, editing, editTitle, setEditTitle, startEdit, saveTi
 
       {progress != null && (
         <div className="mt-2">
-          <div className="flex justify-between text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-1">
+          <div className="flex justify-between text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-1">
             <span>{t("tracker.target")} {p.target_price}€</span><span>{Math.round(progress)}% {t("tracker.to_target")}</span>
           </div>
           <div className="h-1.5 bg-black border border-[#1A1A24]">

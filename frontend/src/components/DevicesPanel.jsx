@@ -35,8 +35,8 @@ export const DevicesPanel = () => {
     <div className="border border-[#2A2A35] bg-[#0F0F12] hud-tick mb-6" data-testid="devices-panel">
       <div className="p-4 border-b border-[#2A2A35] flex items-center gap-2">
         <Monitor size={14} className="text-[#E5FF00]" />
-        <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">{c.title}</span>
-        <span className="text-[10px] font-mono text-zinc-600">{data.devices.length}/{data.limit}</span>
+        <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">{c.title}</span>
+        <span className="text-[11px] font-mono text-zinc-600">{data.devices.length}/{data.limit}</span>
       </div>
       <div className="divide-y divide-[#1A1A24]">
         {data.devices.map((d) => {
@@ -58,7 +58,7 @@ export const DevicesPanel = () => {
                     {d.name} <Pencil size={11} className="text-zinc-600" />
                   </button>
                 )}
-                <div className="text-[10px] text-zinc-600 font-mono">
+                <div className="text-[11px] text-zinc-600 font-mono">
                   <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${d.online ? "bg-[#00FF66]" : "bg-zinc-600"}`} />
                   {c.last}: {d.last_seen ? new Date(d.last_seen).toLocaleString() : c.never}
                   {d.health_score != null && ` · Health ${d.health_score}`}
@@ -70,12 +70,12 @@ export const DevicesPanel = () => {
                 {["gaming", "streaming", "laptop", "other"].map((r) => <option key={r} value={r}>{c[r]}</option>)}
               </select>
               {d.is_active ? (
-                <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#E5FF00] border border-[#E5FF00]/40 bg-[#E5FF00]/10 px-2 py-1.5" data-testid={`device-active-${d.device_id}`}>
+                <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-[#E5FF00] border border-[#E5FF00]/40 bg-[#E5FF00]/10 px-2 py-1.5" data-testid={`device-active-${d.device_id}`}>
                   <Check size={11} /> {c.active}
                 </span>
               ) : (
                 <button onClick={() => activate(d.device_id)} data-testid={`device-activate-${d.device_id}`}
-                  className="text-[10px] font-bold uppercase tracking-widest border border-[#2A2A35] text-zinc-400 px-2 py-1.5 hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors">
+                  className="text-[11px] font-bold uppercase tracking-widest border border-[#2A2A35] text-zinc-400 px-2 py-1.5 hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors">
                   {c.use}
                 </button>
               )}

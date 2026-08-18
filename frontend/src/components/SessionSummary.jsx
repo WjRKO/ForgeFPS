@@ -12,7 +12,7 @@ const fmtDuration = (sec) => {
 function Metric({ icon: Icon, label, value, unit, accent, big, testid }) {
   return (
     <div className="bg-black/60 border border-[#1A1A24] px-4 py-3" data-testid={testid}>
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-zinc-500 mb-1">
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-zinc-500 mb-1">
         <Icon size={12} className={accent} /> {label}
       </div>
       <div className={`font-display font-black ${big ? "text-4xl" : "text-2xl"} leading-none`}>
@@ -80,8 +80,8 @@ export const SessionSummary = ({ summary, onReset }) => {
             <span className="font-display font-black text-lg tracking-tight">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
           </div>
           <div className="text-right">
-            <div className="text-[10px] uppercase tracking-[0.25em] text-[#E5FF00]">{t("live.session_recap")}</div>
-            <div className="text-[10px] text-zinc-500">{now.toLocaleDateString()} · {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+            <div className="text-[11px] uppercase tracking-[0.25em] text-[#E5FF00]">{t("live.session_recap")}</div>
+            <div className="text-[11px] text-zinc-500">{now.toLocaleDateString()} · {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
           </div>
         </div>
 
@@ -109,7 +109,7 @@ export const SessionSummary = ({ summary, onReset }) => {
           </div>
         )}
 
-        <div className="mt-5 pt-3 border-t border-[#1A1A24] flex items-center justify-between text-[10px] text-zinc-600">
+        <div className="mt-5 pt-3 border-t border-[#1A1A24] flex items-center justify-between text-[11px] text-zinc-600">
           <span>frameforge · AI performance for gamers & streamers</span>
           <span>{summary.samples} {t("live.session_samples")}</span>
         </div>

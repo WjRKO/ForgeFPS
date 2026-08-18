@@ -30,7 +30,7 @@ export function FooterCommunity({ t }) {
       icon: MessagesSquare,
       label: t("landing.footer_discord"),
       extra: discord.enabled && discord.presence_count > 0 ? (
-        <span className="inline-flex items-center gap-1 ml-2 text-[10px] font-mono text-[#00FF66]" data-testid="discord-online-badge">
+        <span className="inline-flex items-center gap-1 ml-2 text-[11px] font-mono text-[#00FF66]" data-testid="discord-online-badge">
           <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66] animate-pulse" />
           {discord.presence_count} {t("landing.footer_discord_online")}
         </span>
@@ -47,7 +47,7 @@ export function FooterCommunity({ t }) {
       <div className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">
         {t("landing.footer_community")}
       </div>
-      <ul className="space-y-2 text-sm text-zinc-400">
+      <ul className="space-y-0.5 text-sm text-zinc-400">
         {items.map((it) => {
           const isMail = it.href.startsWith("mailto:");
           const onMailClick = async (e) => {
@@ -71,7 +71,7 @@ export function FooterCommunity({ t }) {
                 rel="noreferrer"
                 onClick={onMailClick}
                 data-testid={it.testid}
-                className="inline-flex items-center gap-2 hover:text-[#E5FF00] transition-colors"
+                className="inline-flex items-center gap-2 py-2.5 hover:text-[#E5FF00] transition-colors"
               >
                 <it.icon size={13} className="text-zinc-500" />
                 <span>{it.label}</span>
@@ -93,27 +93,27 @@ export function FooterLegal({ t }) {
     <div className="max-w-6xl mx-auto mt-10 pt-6 border-t border-[#1A1A24] flex flex-col md:flex-row items-center justify-between gap-3 text-xs font-mono">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-zinc-500">
         <span>{t("landing.footer_copyright")}</span>
-        <span className="text-zinc-700">·</span>
+        <span className="text-zinc-600" aria-hidden="true">·</span>
         <a
           href="/privacy-telemetry#cookies"
           data-testid="footer-cookies"
-          className="hover:text-[#E5FF00] transition-colors"
+          className="inline-block py-3 hover:text-[#E5FF00] transition-colors"
         >
           {t("landing.footer_legal_cookies")}
         </a>
-        <span className="text-zinc-700">·</span>
+        <span className="text-zinc-600" aria-hidden="true">·</span>
         <a
           href="/terms"
           data-testid="footer-terms"
-          className="hover:text-[#E5FF00] transition-colors"
+          className="inline-block py-3 hover:text-[#E5FF00] transition-colors"
         >
           {t("landing.footer_legal_terms")}
         </a>
-        <span className="text-zinc-700">·</span>
+        <span className="text-zinc-600" aria-hidden="true">·</span>
         <a
           href="/privacy-telemetry"
           data-testid="footer-privacy"
-          className="hover:text-[#E5FF00] transition-colors"
+          className="inline-block py-3 hover:text-[#E5FF00] transition-colors"
         >
           {t("landing.footer_legal_privacy")}
         </a>

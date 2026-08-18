@@ -51,7 +51,7 @@ export default function AgentPreview({ label = "Anteprima GUI live" }) {
     >
       <div className="absolute top-2 left-2 z-20 flex items-center gap-1.5 bg-black/70 border border-[#00E0FF]/40 px-2 py-0.5">
         <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66] animate-pulse" />
-        <span className="text-[9px] font-mono uppercase tracking-widest text-[#00E0FF]">
+        <span className="text-[11px] font-mono uppercase tracking-widest text-[#00E0FF]">
           {label}
         </span>
       </div>
@@ -112,7 +112,7 @@ function MockGui() {
         <span className="w-2 h-2 rounded-full bg-[#ff5f57]" />
         <span className="w-2 h-2 rounded-full bg-[#febc2e]" />
         <span className="w-2 h-2 rounded-full bg-[#28c840]" />
-        <span className="ml-2 text-[9px] font-mono text-zinc-500">
+        <span className="ml-2 text-[11px] font-mono text-zinc-500">
           FrameForge Agent — Ottimizzazione
         </span>
       </div>
@@ -123,7 +123,7 @@ function MockGui() {
           {["Gaming", "Latenza", "Rete", "Sistema"].map((tab, i) => (
             <div
               key={tab}
-              className={`text-[9px] font-mono px-1.5 py-1 border ${
+              className={`text-[11px] font-mono px-1.5 py-1 border ${
                 i === 0
                   ? "border-[#E5FF00]/60 bg-[#E5FF00]/10 text-[#E5FF00]"
                   : "border-[#1A1A24] text-zinc-500"
@@ -143,7 +143,7 @@ function MockGui() {
               style={{ animationDelay: `${tw.delay}s` }}
             >
               <tw.icon size={9} className="text-[#00E0FF] shrink-0" />
-              <span className="text-[9px] text-zinc-300 flex-1 truncate">
+              <span className="text-[11px] text-zinc-300 flex-1 truncate">
                 {tw.label}
               </span>
               <span

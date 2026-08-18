@@ -62,7 +62,7 @@ const MfaCard = ({ c }) => {
   return (
     <Card icon={ShieldCheck} title={c.mfa_title} accent="#00FF66" testid="account-mfa">
       <div className="flex items-center gap-2 mb-3">
-        <span className={`text-[10px] font-mono uppercase tracking-widest px-2 py-1 border ${enabled ? "text-[#00FF66] border-[#00FF66]/40 bg-[#00FF66]/10" : "text-zinc-500 border-[#2A2A35]"}`} data-testid="mfa-badge">
+        <span className={`text-[11px] font-mono uppercase tracking-widest px-2 py-1 border ${enabled ? "text-[#00FF66] border-[#00FF66]/40 bg-[#00FF66]/10" : "text-zinc-500 border-[#2A2A35]"}`} data-testid="mfa-badge">
           {enabled ? c.mfa_on : c.mfa_off}
         </span>
       </div>

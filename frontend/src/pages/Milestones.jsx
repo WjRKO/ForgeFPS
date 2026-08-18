@@ -209,9 +209,9 @@ function MissionsTab({ t, lang }) {
               <div key={m.code} className="flex items-center gap-3 bg-[#0F0F12] border border-[#1A1A24] px-4 py-2.5" data-testid={`mission-completed-${m.code}`}>
                 <CheckCircle2 size={14} className="text-[#00FF66] shrink-0" />
                 <span className="text-sm text-zinc-300 flex-1 truncate">{en ? m.name_en : m.name_it}</span>
-                <span className="text-[10px] font-mono text-[#00FF66]">+{m.xp} XP</span>
+                <span className="text-[11px] font-mono text-[#00FF66]">+{m.xp} XP</span>
                 {m.completed_at && (
-                  <span className="text-[10px] font-mono text-zinc-600">{new Date(m.completed_at).toLocaleDateString(en ? "en-US" : "it-IT")}</span>
+                  <span className="text-[11px] font-mono text-zinc-600">{new Date(m.completed_at).toLocaleDateString(en ? "en-US" : "it-IT")}</span>
                 )}
               </div>
             ))}
@@ -226,7 +226,7 @@ function SectionLabel({ icon: Icon, text }) {
   return (
     <div className="flex items-center gap-2 mb-3">
       <Icon size={13} className="text-[#E5FF00]" />
-      <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">{text}</span>
+      <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">{text}</span>
     </div>
   );
 }
@@ -245,11 +245,11 @@ function ChainStepRow({ s, en }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-zinc-600">#{s.order}</span>
+          <span className="text-[11px] font-mono text-zinc-600">#{s.order}</span>
           <span className={`text-sm font-semibold ${done ? "text-zinc-500 line-through" : "text-zinc-100"}`}>
             {en ? s.name_en : s.name_it}
           </span>
-          <span className="text-[10px] font-mono text-[#E5FF00]">+{s.xp} XP</span>
+          <span className="text-[11px] font-mono text-[#E5FF00]">+{s.xp} XP</span>
         </div>
         {!done && <div className="text-xs text-zinc-500 mt-0.5">{en ? s.desc_en : s.desc_it}</div>}
         {s.status === "active" && s.target > 1 && (
@@ -257,13 +257,13 @@ function ChainStepRow({ s, en }) {
             <div className="flex-1 h-1 bg-[#0A0A0C] border border-[#2A2A35] overflow-hidden">
               <div className="h-full bg-[#E5FF00]" style={{ width: `${pct}%` }} />
             </div>
-            <span className="text-[10px] font-mono text-zinc-500">{s.progress}/{s.target}</span>
+            <span className="text-[11px] font-mono text-zinc-500">{s.progress}/{s.target}</span>
           </div>
         )}
       </div>
       {s.status === "active" && (
         <Link to={s.link} data-testid={`chain-go-${s.code}`}
-          className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-black bg-[#E5FF00] hover:bg-[#D4EC00] px-3 py-1.5 transition-colors shrink-0">
+          className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-black bg-[#E5FF00] hover:bg-[#D4EC00] px-3 py-1.5 transition-colors shrink-0">
           {en ? s.cta_en : s.cta_it} <ArrowRight size={11} />
         </Link>
       )}
@@ -292,7 +292,7 @@ function WeeklyMissionCard({ m, en, t, variant = "weekly" }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className={`text-sm font-semibold ${done ? "text-zinc-500 line-through" : ""}`}>{en ? m.name_en : m.name_it}</span>
-            <span className="text-[10px] font-mono text-[#E5FF00]">+{m.xp} XP</span>
+            <span className="text-[11px] font-mono text-[#E5FF00]">+{m.xp} XP</span>
           </div>
           <div className="text-xs text-zinc-500 mt-1">{en ? m.desc_en : m.desc_it}</div>
           {why && (
@@ -305,9 +305,9 @@ function WeeklyMissionCard({ m, en, t, variant = "weekly" }) {
               <div className="flex-1 h-1.5 bg-[#0A0A0C] border border-[#2A2A35] overflow-hidden">
                 <div className={`h-full ${barCls}`} style={{ width: `${pct}%` }} />
               </div>
-              <span className="text-[10px] font-mono text-zinc-400 tabular-nums">{m.progress}/{m.target}</span>
+              <span className="text-[11px] font-mono text-zinc-400 tabular-nums">{m.progress}/{m.target}</span>
               <Link to={m.link} data-testid={`${variant}-go-${m.template}`}
-                className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-black px-3 py-1.5 transition-colors ${goCls}`}>
+                className={`flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-black px-3 py-1.5 transition-colors ${goCls}`}>
                 {en ? m.cta_en : m.cta_it} <ArrowRight size={11} />
               </Link>
             </div>
@@ -330,7 +330,7 @@ function ActiveMissionRow({ m, en, t, busy, onAbandon }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-display font-black text-base">{en ? m.name_en : m.name_it}</span>
-            <span className="text-[10px] font-mono text-[#E5FF00]">+{m.xp} XP</span>
+            <span className="text-[11px] font-mono text-[#E5FF00]">+{m.xp} XP</span>
             <button
               onClick={onAbandon}
               disabled={busy === m.code}
@@ -347,11 +347,11 @@ function ActiveMissionRow({ m, en, t, busy, onAbandon }) {
             <div className="flex-1 h-1.5 bg-[#0A0A0C] border border-[#2A2A35] overflow-hidden">
               <div className="h-full bg-[#E5FF00] transition-all duration-500" style={{ width: `${pct}%` }} />
             </div>
-            <span className="text-[10px] font-mono text-zinc-400 tabular-nums">{m.progress}/{m.target}</span>
+            <span className="text-[11px] font-mono text-zinc-400 tabular-nums">{m.progress}/{m.target}</span>
             <Link
               to={m.link}
               data-testid={`mission-go-${m.code}`}
-              className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-black bg-[#E5FF00] hover:bg-[#D4EC00] px-3 py-1.5 transition-colors"
+              className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-black bg-[#E5FF00] hover:bg-[#D4EC00] px-3 py-1.5 transition-colors"
             >
               {en ? m.cta_en : m.cta_it} <ArrowRight size={11} />
             </Link>
@@ -373,14 +373,14 @@ function AvailableMissionCard({ m, en, t, busy, slotsFull, onActivate }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-sm">{en ? m.name_en : m.name_it}</span>
-            <span className="text-[10px] font-mono text-[#E5FF00]">+{m.xp} XP</span>
+            <span className="text-[11px] font-mono text-[#E5FF00]">+{m.xp} XP</span>
           </div>
           <div className="text-xs text-zinc-500 mt-1 leading-snug">{en ? m.desc_en : m.desc_it}</div>
           <button
             onClick={onActivate}
             disabled={busy === m.code || slotsFull}
             data-testid={`mission-activate-${m.code}`}
-            className="mt-3 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 border border-[#E5FF00]/50 text-[#E5FF00] hover:bg-[#E5FF00] hover:text-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="mt-3 text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 border border-[#E5FF00]/50 text-[#E5FF00] hover:bg-[#E5FF00] hover:text-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {slotsFull ? t("missions.slots_full", "Slot pieni") : t("missions.activate", "Attiva")}
           </button>
@@ -475,7 +475,7 @@ function TrophiesTab({ t, lang }) {
 
       {/* Vantaggi tier */}
       <div className="border border-[#2A2A35] bg-[#0F0F12] p-4 mb-6" data-testid="tier-perks-panel">
-        <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">
+        <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">
           {t("missions.perks_title", "Vantaggi tier")}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -486,7 +486,7 @@ function TrophiesTab({ t, lang }) {
             return (
               <div key={p.tier} data-testid={`tier-perk-${p.tier}`}
                 className={`border p-3 ${isCurrent ? `${meta.ring} ${meta.bg}` : reached ? "border-[#2A2A35]" : "border-[#1A1A24] opacity-50"}`}>
-                <div className={`text-[10px] font-black uppercase tracking-widest ${meta.color} flex items-center gap-1.5`}>
+                <div className={`text-[11px] font-black uppercase tracking-widest ${meta.color} flex items-center gap-1.5`}>
                   {reached ? <CheckCircle2 size={11} /> : <Lock size={10} />}
                   {p.tier}
                   {isCurrent && <span className="ml-auto text-[8px] text-zinc-400 normal-case tracking-normal">{t("missions.perks_current", "il tuo tier")}</span>}
@@ -586,9 +586,9 @@ function MilestoneCard({ m, lang, t }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <span className={`text-[9px] font-black uppercase tracking-widest ${tierMeta.color}`}>{m.tier}</span>
-            <span className="text-zinc-700 text-[9px]">•</span>
-            <span className="text-[9px] font-mono text-zinc-500">+{m.xp} XP</span>
+            <span className={`text-[11px] font-black uppercase tracking-widest ${tierMeta.color}`}>{m.tier}</span>
+            <span className="text-zinc-700 text-[11px]">•</span>
+            <span className="text-[11px] font-mono text-zinc-500">+{m.xp} XP</span>
             {m.secret && (
               <span className="text-[8px] font-black uppercase tracking-widest px-1 py-0.5 border border-[#B26BFF]/50 text-[#B26BFF]" data-testid={`milestone-${m.code}-secret`}>
                 {lang === "en" ? "Secret" : "Segreto"}
@@ -602,16 +602,16 @@ function MilestoneCard({ m, lang, t }) {
           <div className="text-xs text-zinc-500 mt-1 leading-snug">{desc}</div>
           {rarity && (
             <div className="mt-2 flex items-center gap-1.5">
-              <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 border ${rarity.cls}`} data-testid={`milestone-${m.code}-rarity`}>
+              <span className={`text-[11px] font-bold uppercase tracking-widest px-1.5 py-0.5 border ${rarity.cls}`} data-testid={`milestone-${m.code}-rarity`}>
                 {lang === "en" ? rarity.en : rarity.it}
               </span>
-              <span className="text-[9px] font-mono text-zinc-600">
+              <span className="text-[11px] font-mono text-zinc-600">
                 {m.rarity_pct}% {lang === "en" ? "of players" : "dei giocatori"}
               </span>
             </div>
           )}
           {rewardLabel && (
-            <div className="mt-2 text-[10px] uppercase tracking-widest text-[#E5FF00] font-bold">
+            <div className="mt-2 text-[11px] uppercase tracking-widest text-[#E5FF00] font-bold">
               🎁 {rewardLabel}
             </div>
           )}
@@ -620,7 +620,7 @@ function MilestoneCard({ m, lang, t }) {
               <div className="mt-2.5 h-1 bg-[#0A0A0C] overflow-hidden">
                 <div className={`h-full ${tierMeta.color.replace("text-", "bg-")}`} style={{ width: `${progressPct}%` }} />
               </div>
-              <div className="text-[10px] font-mono text-zinc-500 mt-1">
+              <div className="text-[11px] font-mono text-zinc-500 mt-1">
                 {m.progress} / {m.threshold}
               </div>
             </>

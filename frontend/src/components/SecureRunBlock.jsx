@@ -31,9 +31,9 @@ export const SecureRunBlock = ({ token, mode, profile, testid = "secure-run" }) 
   const run = `powershell -ExecutionPolicy Bypass -File "$HOME\\Downloads\\forgefps.ps1" -Token ${tk} -Mode ${mode}`;
   return (
     <div className="space-y-1.5" data-testid={testid}>
-      <div className="text-[10px] uppercase tracking-widest text-zinc-500">{en ? "1) Download (does not run)" : "1) Scarica (non esegue)"}</div>
+      <div className="text-[11px] uppercase tracking-widest text-zinc-500">{en ? "1) Download (does not run)" : "1) Scarica (non esegue)"}</div>
       <CopyLine cmd={dl} testid={`${testid}-dl`} color="text-[#00FF66]" />
-      <div className="text-[10px] uppercase tracking-widest text-zinc-500 pt-1">{en ? "2) Run local file" : "2) Esegui il file locale"}</div>
+      <div className="text-[11px] uppercase tracking-widest text-zinc-500 pt-1">{en ? "2) Run local file" : "2) Esegui il file locale"}</div>
       <CopyLine cmd={run} testid={`${testid}-run`} color="text-[#E5FF00]" />
       <Link to="/app/desktop" className="inline-flex items-center gap-1.5 text-[11px] text-[#00E0FF] hover:underline pt-1">
         <ShieldCheck size={12} /> {en ? "Verify integrity (SHA256) & full guide" : "Verifica integrità (SHA256) e guida completa"}

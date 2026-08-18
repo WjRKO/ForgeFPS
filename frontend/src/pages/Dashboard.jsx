@@ -86,11 +86,11 @@ function PcHeroCard({ specs, health, t, en }) {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2">
           <Gauge size={16} className="text-[#E5FF00]" />
-          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">
+          <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
             {t("dashboard.pc_title")}
           </span>
           {health?.updated_at && (
-            <span className="text-[10px] text-zinc-600 font-mono">
+            <span className="text-[11px] text-zinc-600 font-mono">
               · {t("dashboard.pc_updated")} {relTime(health.updated_at, en)}
             </span>
           )}
@@ -108,7 +108,7 @@ function PcHeroCard({ specs, health, t, en }) {
         {score != null && <HealthRing score={score} size={128} label={health?.grade_key ? t(`mypcpage.health.grade.${health.grade_key}`, health?.grade) : health?.grade} />}
 
         <div className="flex-1 min-w-0 space-y-2">
-          <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">
+          <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">
             {t("dashboard.pc_hw")}
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -119,7 +119,7 @@ function PcHeroCard({ specs, health, t, en }) {
                 data-testid={`pc-badge-${b.label.toLowerCase()}`}
               >
                 <b.icon size={11} className="text-[#00E0FF]" />
-                <span className="text-zinc-500 font-mono text-[10px]">{b.label}</span>
+                <span className="text-zinc-500 font-mono text-[11px]">{b.label}</span>
                 <span className="truncate max-w-[160px]">{b.value}</span>
               </span>
             ))}
@@ -193,7 +193,7 @@ function BenchmarkCard({ bench, discord, t, onShare }) {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <TrendingUp size={14} className="text-[#00FF66]" />
-          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">
+          <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
             {t("dashboard.bench_title")}
           </span>
         </div>
@@ -201,7 +201,7 @@ function BenchmarkCard({ bench, discord, t, onShare }) {
           <button
             onClick={onShare}
             data-testid="bench-share-btn"
-            className="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-widest text-[#5865F2] hover:underline"
+            className="inline-flex items-center gap-1 text-[11px] font-mono uppercase tracking-widest text-[#5865F2] hover:underline"
           >
             <Share2 size={11} /> {t("dashboard.bench_share")}
           </button>
@@ -248,7 +248,7 @@ function QuickActionsCard({ t }) {
     <HUDCard testid="quick-actions-card">
       <div className="flex items-center gap-2 mb-3">
         <Zap size={13} className="text-[#E5FF00]" />
-        <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">
+        <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
           {t("dashboard.actions_title")}
         </span>
       </div>
@@ -276,7 +276,7 @@ function DiscordCard({ discord, user, t }) {
     <HUDCard testid="discord-card" className="gap-3">
       <div className="flex items-center gap-2">
         <MessagesSquare size={13} className="text-[#5865F2]" />
-        <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">
+        <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
           {t("dashboard.discord_title")}
         </span>
       </div>
@@ -303,7 +303,7 @@ function DiscordCard({ discord, user, t }) {
               <div className="text-xs font-semibold truncate">
                 {discord.username || user?.discord_username || t("dashboard.discord_linked")}
               </div>
-              <div className="text-[10px] text-[#00FF66] font-mono">✓ {t("dashboard.discord_linked")}</div>
+              <div className="text-[11px] text-[#00FF66] font-mono">✓ {t("dashboard.discord_linked")}</div>
             </div>
           </div>
           <a
@@ -342,13 +342,13 @@ function AgentCard({ t }) {
     <HUDCard testid="agent-card" className="gap-3 border-[#00E0FF]/40 bg-gradient-to-br from-[#00E0FF]/10 to-transparent">
       <div className="flex items-center gap-2">
         <MonitorDown size={13} className="text-[#00E0FF]" />
-        <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">
+        <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
           {t("dashboard.agent_title")}
         </span>
-        {!seen && <span className="ml-auto text-[9px] font-mono uppercase text-[#00E0FF] border border-[#00E0FF]/40 px-1">NEW</span>}
+        {!seen && <span className="ml-auto text-[11px] font-mono uppercase text-[#00E0FF] border border-[#00E0FF]/40 px-1">NEW</span>}
       </div>
       <div>
-        <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">
+        <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">
           {t("dashboard.agent_latest")}
         </div>
         <div className="text-lg font-display font-black tracking-tight text-white">{AGENT_EXE_VERSION}</div>
@@ -368,7 +368,7 @@ function AgentCard({ t }) {
         target="_blank"
         rel="noreferrer"
         data-testid="agent-view-releases"
-        className="text-center text-[10px] font-mono text-zinc-500 hover:text-[#00E0FF]"
+        className="text-center text-[11px] font-mono text-zinc-500 hover:text-[#00E0FF]"
       >
         {t("dashboard.agent_view")} →
       </a>
@@ -422,7 +422,7 @@ function ActivityFeed({ notifs, bench, agentUpdateSeen, t, en }) {
     <HUDCard testid="activity-feed">
       <div className="flex items-center gap-2 mb-3">
         <Activity size={13} className="text-[#00E0FF]" />
-        <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">
+        <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
           {t("dashboard.feed_title")}
         </span>
       </div>
@@ -440,9 +440,9 @@ function ActivityFeed({ notifs, bench, agentUpdateSeen, t, en }) {
                 <e.icon size={14} className={`${e.color} shrink-0`} />
                 <div className="min-w-0 flex-1">
                   <div className="text-xs text-zinc-200 truncate">{e.label}</div>
-                  <div className="text-[10px] text-zinc-500 font-mono">{e.detail}</div>
+                  <div className="text-[11px] text-zinc-500 font-mono">{e.detail}</div>
                 </div>
-                <span className="text-[10px] font-mono text-zinc-600">{relTime(e.at, en)}</span>
+                <span className="text-[11px] font-mono text-zinc-600">{relTime(e.at, en)}</span>
               </Link>
             </li>
           ))}
@@ -458,11 +458,11 @@ function RecentProductsCard({ products, t }) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <LineChart size={13} className="text-[#E5FF00]" />
-          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">
+          <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
             {t("dashboard.recent")}
           </span>
         </div>
-        <Link to="/app/tracker" className="text-[10px] font-mono uppercase text-[#E5FF00] hover:underline">
+        <Link to="/app/tracker" className="text-[11px] font-mono uppercase text-[#E5FF00] hover:underline">
           {t("dashboard.see_all")} →
         </Link>
       </div>
@@ -497,7 +497,7 @@ function RecentProductsCard({ products, t }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs truncate text-zinc-200">{p.title}</div>
-                  <div className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">
+                  <div className="text-[11px] text-zinc-500 font-mono uppercase tracking-widest">
                     {p.store || p.platform || "—"}
                   </div>
                 </div>
@@ -527,7 +527,7 @@ function HeroEmpty({ t }) {
       <div className="max-w-2xl">
         <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-[#E5FF00]/10 border border-[#E5FF00]/30 mb-4">
           <Sparkles size={12} className="text-[#E5FF00]" />
-          <span className="text-[10px] font-mono uppercase tracking-widest text-[#E5FF00]">
+          <span className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00]">
             {t("dashboard.eyebrow")}
           </span>
         </div>

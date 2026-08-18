@@ -23,7 +23,7 @@ function CodeBlock({ children }) {
   return (
     <div className="relative my-2 group/code" data-testid="ai-code-block">
       <button onClick={copy} data-testid="ai-code-copy"
-        className="absolute top-2 right-2 flex items-center gap-1 border border-[#2A2A35] bg-[#0F0F12] px-2 py-1 text-[10px] text-zinc-400 hover:border-[#E5FF00] hover:text-white transition-colors">
+        className="absolute top-2 right-2 flex items-center gap-1 border border-[#2A2A35] bg-[#0F0F12] px-2 py-1 text-[11px] text-zinc-400 hover:border-[#E5FF00] hover:text-white transition-colors">
         {copied ? <Check size={12} className="text-[#00FF66]" /> : <Copy size={12} />} {copied ? i18n.t("advisor.copied") : i18n.t("advisor.copy_code")}
       </button>
       <pre className="bg-black border border-[#2A2A35] p-3 pr-16 overflow-x-auto text-xs text-[#00FF66] leading-relaxed">

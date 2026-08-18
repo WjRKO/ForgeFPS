@@ -123,7 +123,7 @@ export default function GpuReferenceCard() {
           </h3>
         </div>
         {ref?.class && (
-          <span className={`text-[10px] font-mono uppercase tracking-widest px-2 py-1 border ${colors.border} ${colors.text}`} data-testid="gpu-ref-class">
+          <span className={`text-[11px] font-mono uppercase tracking-widest px-2 py-1 border ${colors.border} ${colors.text}`} data-testid="gpu-ref-class">
             {ref.class}
           </span>
         )}
@@ -133,19 +133,19 @@ export default function GpuReferenceCard() {
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-xs">
             <div className="bg-black/40 border border-[#2A2A35] p-2">
-              <div className="text-zinc-500 text-[10px] uppercase">{en ? "PassMark G3D" : "PassMark G3D"}</div>
+              <div className="text-zinc-500 text-[11px] uppercase">{en ? "PassMark G3D" : "PassMark G3D"}</div>
               <div className="text-zinc-100 font-bold text-sm mt-0.5" data-testid="gpu-ref-g3d">{ref.g3d?.toLocaleString() || "n/d"}</div>
             </div>
             <div className="bg-black/40 border border-[#2A2A35] p-2">
-              <div className="text-zinc-500 text-[10px] uppercase">3DMark Time Spy</div>
+              <div className="text-zinc-500 text-[11px] uppercase">3DMark Time Spy</div>
               <div className="text-zinc-100 font-bold text-sm mt-0.5">{ref.timespy?.toLocaleString() || "n/d"}</div>
             </div>
             <div className="bg-black/40 border border-[#2A2A35] p-2">
-              <div className="text-zinc-500 text-[10px] uppercase">VRAM</div>
+              <div className="text-zinc-500 text-[11px] uppercase">VRAM</div>
               <div className="text-zinc-100 font-bold text-sm mt-0.5">{ref.vram_gb ? `${ref.vram_gb} GB` : "n/d"}</div>
             </div>
             <div className="bg-black/40 border border-[#2A2A35] p-2">
-              <div className="text-zinc-500 text-[10px] uppercase">TDP</div>
+              <div className="text-zinc-500 text-[11px] uppercase">TDP</div>
               <div className="text-zinc-100 font-bold text-sm mt-0.5">{ref.tdp_w ? `${ref.tdp_w} W` : "n/d"}</div>
             </div>
           </div>
@@ -190,7 +190,7 @@ export default function GpuReferenceCard() {
             ? (en ? "Starting…" : "Avvio…")
             : (en ? "Run Full Benchmark (~3 min)" : "Avvia Full Benchmark (~3 min)")}
         </button>
-        <span className="text-[10px] text-zinc-500 max-w-md">
+        <span className="text-[11px] text-zinc-500 max-w-md">
           <Cpu size={10} className="inline mr-1" />
           {en
             ? "Multi-thread CPU + RAM hierarchy + Disk multi-QD + thermal trace. Chiudi giochi & app pesanti prima."

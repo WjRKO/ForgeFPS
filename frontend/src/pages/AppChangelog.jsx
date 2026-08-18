@@ -25,7 +25,7 @@ function ChangeItem({ change, en }) {
   return (
     <li className="flex items-start gap-3 py-2" data-testid={`changelog-change-${change.type}`}>
       <span
-        className="shrink-0 mt-0.5 inline-flex items-center gap-1 px-2 py-0.5 border text-[9px] font-mono uppercase tracking-widest"
+        className="shrink-0 mt-0.5 inline-flex items-center gap-1 px-2 py-0.5 border text-[11px] font-mono uppercase tracking-widest"
         style={{ borderColor: `${meta.color}55`, color: meta.color }}
       >
         <Icon size={10} /> {en ? meta.label_en : meta.label_it}
@@ -39,7 +39,7 @@ function ReleaseCard({ release, isLatest, en }) {
   return (
     <article className="border border-[#1A1A24] bg-[#0F0F12] p-6 relative" data-testid={`changelog-release-${release.version}`}>
       {isLatest && (
-        <span className="absolute -top-2.5 right-4 bg-[#E5FF00] text-black text-[10px] font-mono uppercase tracking-widest px-2 py-0.5">
+        <span className="absolute -top-2.5 right-4 bg-[#E5FF00] text-black text-[11px] font-mono uppercase tracking-widest px-2 py-0.5">
           {en ? "LATEST" : "ULTIMA"}
         </span>
       )}
@@ -55,7 +55,7 @@ function ReleaseCard({ release, isLatest, en }) {
 
       {release.highlights?.length > 0 && (
         <div className="mb-4">
-          <div className="text-[10px] font-mono uppercase tracking-widest text-[#E5FF00] mb-2">// {en ? "highlights" : "in evidenza"}</div>
+          <div className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] mb-2">// {en ? "highlights" : "in evidenza"}</div>
           <ul className="space-y-1">
             {release.highlights.map((h) => (
               <li key={h} className="text-sm text-zinc-200 flex items-start gap-2">
@@ -68,7 +68,7 @@ function ReleaseCard({ release, isLatest, en }) {
 
       {release.changes?.length > 0 && (
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-1">// {en ? "all changes" : "tutte le modifiche"}</div>
+          <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-1">// {en ? "all changes" : "tutte le modifiche"}</div>
           <ul className="divide-y divide-[#1A1A24]">
             {release.changes.map((c, i) => <ChangeItem key={`${release.version}-${i}`} change={c} en={en} />)}
           </ul>

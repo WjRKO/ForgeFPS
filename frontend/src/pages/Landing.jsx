@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { AreaChart, Area, LineChart, Line, ReferenceLine, ResponsiveContainer } from "recharts";
 import { useTranslation } from "react-i18next";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { MarketingNav } from "@/components/MarketingChrome";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { DemoScan } from "@/components/DemoScan";
 import { TrustBar } from "@/components/TrustBar";
@@ -76,15 +76,15 @@ function HeroMockup() {
         <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 relative overflow-hidden">
           <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-[#E5FF00] via-transparent to-transparent" />
           <div className="flex items-center justify-between mb-4">
-            <span className="text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-500">// live telemetry</span>
-            <span className="flex items-center gap-1.5 text-[10px] font-mono text-[#00FF66]"><span className="w-1.5 h-1.5 bg-[#00FF66] rounded-full animate-pulse" /> ONLINE</span>
+            <span className="text-[11px] font-mono tracking-[0.2em] uppercase text-zinc-500">// live telemetry</span>
+            <span className="flex items-center gap-1.5 text-[11px] font-mono text-[#00FF66]"><span className="w-1.5 h-1.5 bg-[#00FF66] rounded-full animate-pulse" /> ONLINE</span>
           </div>
           <div className="flex items-center gap-5">
             <div className="relative shrink-0" style={{ width: 120, height: 120 }}>
               <HealthRing />
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="font-display font-black text-3xl text-[#00FF66]">92</span>
-                <span className="text-[9px] uppercase tracking-widest text-zinc-500">Health</span>
+                <span className="text-[11px] uppercase tracking-widest text-zinc-500">Health</span>
               </div>
             </div>
             <div className="flex-1 grid grid-cols-2 gap-2">
@@ -95,14 +95,14 @@ function HeroMockup() {
                 { l: "PING", v: "12ms", c: "#00FF66", i: Zap },
               ].map((s) => (
                 <div key={s.l} className="bg-black border border-[#1A1A24] p-2">
-                  <div className="flex items-center gap-1 text-[9px] uppercase tracking-widest text-zinc-500"><s.i size={10} style={{ color: s.c }} /> {s.l}</div>
+                  <div className="flex items-center gap-1 text-[11px] uppercase tracking-widest text-zinc-500"><s.i size={10} style={{ color: s.c }} /> {s.l}</div>
                   <div className="font-display font-bold text-sm mt-0.5" style={{ color: s.c }}>{s.v}</div>
                 </div>
               ))}
             </div>
           </div>
           <div className="mt-4">
-            <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-1">
+            <div className="flex items-center justify-between text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-1">
               <span>FPS · Cyberpunk 2077</span><span className="text-[#00FF66]">+58%</span>
             </div>
             <div className="h-16">
@@ -124,7 +124,7 @@ function HeroMockup() {
         <motion.div
           animate={{ y: [0, 8, 0] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
           className="absolute -bottom-5 -left-5 bg-[#E5FF00] text-black px-4 py-2 hidden sm:block shadow-[0_8px_30px_rgba(229,255,0,0.25)]">
-          <div className="text-[10px] font-mono uppercase tracking-widest">tweaks applied</div>
+          <div className="text-[11px] font-mono uppercase tracking-widest">tweaks applied</div>
           <div className="font-display font-black text-lg leading-none">35 / 35</div>
         </motion.div>
       </motion.div>
@@ -148,7 +148,7 @@ function AdvisorChat() {
           </div>
         </motion.div>
       ))}
-      <div className="flex items-center gap-1 text-[10px] font-mono text-[#00E0FF] pl-1">
+      <div className="flex items-center gap-1 text-[11px] font-mono text-[#00E0FF] pl-1">
         <span className="w-1.5 h-1.5 bg-[#00E0FF] rounded-full animate-pulse" /> AI Advisor
       </div>
     </div>
@@ -162,7 +162,7 @@ function HealthMockup() {
         <HealthRing score={88} size={110} />
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="font-display font-black text-2xl text-[#00FF66]">88</span>
-          <span className="text-[9px] uppercase tracking-widest text-zinc-500">Good</span>
+          <span className="text-[11px] uppercase tracking-widest text-zinc-500">Good</span>
         </div>
       </div>
       <div className="flex-1 space-y-2">
@@ -183,7 +183,7 @@ function BuildMockup() {
   return (
     <div className="bg-[#0F0F12] border border-[#1A1A24] p-4">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[10px] font-mono tracking-[0.2em] uppercase text-zinc-500">// build · €1500</span>
+        <span className="text-[11px] font-mono tracking-[0.2em] uppercase text-zinc-500">// build · €1500</span>
         <span className="text-[#E5FF00] font-display font-black text-sm">~180 FPS</span>
       </div>
       <div className="space-y-1.5">
@@ -191,7 +191,7 @@ function BuildMockup() {
           <motion.div key={k} {...fadeUp} transition={{ delay: i * 0.12, ease: EASE }}
             className="flex items-center gap-3 bg-black border border-[#1A1A24] px-3 py-2">
             <Check size={14} className="text-[#00FF66] shrink-0" />
-            <span className="text-[10px] uppercase tracking-widest text-zinc-500 w-10">{k}</span>
+            <span className="text-[11px] uppercase tracking-widest text-zinc-500 w-10">{k}</span>
             <span className="text-sm text-zinc-100">{v}</span>
           </motion.div>
         ))}
@@ -219,7 +219,7 @@ function PriceMockup() {
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-600">target €620 · reached</div>
+      <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-600">target €620 · reached</div>
     </div>
   );
 }
@@ -231,7 +231,7 @@ function TerminalMockup() {
         <span className="w-2.5 h-2.5 rounded-full bg-[#FF3B30]" />
         <span className="w-2.5 h-2.5 rounded-full bg-[#E5FF00]" />
         <span className="w-2.5 h-2.5 rounded-full bg-[#00FF66]" />
-        <span className="ml-2 text-[10px] font-mono text-zinc-600">PowerShell</span>
+        <span className="ml-2 text-[11px] font-mono text-zinc-600">PowerShell</span>
       </div>
       <div className="p-4 font-mono text-xs leading-relaxed">
         <div className="text-zinc-500">PS C:\Users\Streamer&gt; <span className="text-[#00FF66]">.\forgefps-setup.exe --verify</span></div>
@@ -305,26 +305,7 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-[#050505] text-zinc-100 overflow-x-hidden">
-      {/* NAV */}
-      <header className="fixed top-0 w-full z-50 bg-[#050505]/80 backdrop-blur-xl border-b border-[#1A1A24]">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[#E5FF00] flex items-center justify-center"><Zap size={18} className="text-black" /></div>
-            <span className="font-display font-black tracking-tighter text-lg">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
-          </div>
-          <nav className="hidden md:flex items-center gap-1">
-            <Link to="/security" data-testid="nav-security" className="text-xs font-mono uppercase tracking-widest px-3 py-2 text-zinc-400 hover:text-white transition-colors">{t("landing.nav_security")}</Link>
-            <Link to="/privacy-telemetry" data-testid="nav-privacy" className="text-xs font-mono uppercase tracking-widest px-3 py-2 text-zinc-400 hover:text-white transition-colors">{t("landing.nav_privacy")}</Link>
-            <Link to="/changelog" data-testid="nav-changelog" className="text-xs font-mono uppercase tracking-widest px-3 py-2 text-zinc-400 hover:text-white transition-colors">{t("landing.nav_changelog")}</Link>
-            <Link to="/pricing" data-testid="nav-pricing" className="text-xs font-mono uppercase tracking-widest px-3 py-2 text-zinc-400 hover:text-white transition-colors">{t("landing.nav_pricing")}</Link>
-          </nav>
-          <div className="flex items-center gap-3">
-            <LanguageSwitcher />
-            <Link to="/login" data-testid="nav-login-link" className="text-sm text-zinc-400 hover:text-white transition-colors px-3 py-2 hidden sm:block">{t("landing.login")}</Link>
-            <Link to="/register" data-testid="nav-register-link" className="text-sm bg-[#E5FF00] text-black font-bold px-4 py-2 hover:bg-[#D4EC00] transition-colors btn-volt">{t("landing.start")}</Link>
-          </div>
-        </div>
-      </header>
+      <MarketingNav />
 
       {/* HERO */}
       <section className="relative pt-32 pb-20 px-6 overflow-hidden">
@@ -335,7 +316,7 @@ export default function Landing() {
             <div className="inline-flex items-center gap-2 border border-[#2A2A35] bg-black/40 px-3 py-1 mb-6 text-xs font-mono uppercase tracking-widest text-[#E5FF00]">
               <Gauge size={14} /> {t("landing.badge")}
             </div>
-            <h1 className="font-display font-black text-4xl sm:text-5xl lg:text-6xl tracking-tighter leading-[0.95] mb-6">
+            <h1 className="font-display font-black text-4xl sm:text-5xl lg:text-6xl tracking-tighter leading-[1.05] sm:leading-[0.95] mb-6">
               {t("landing.hero1")}<br /><span className="text-[#E5FF00]">{t("landing.hero2")}</span>
             </h1>
             <p className="text-zinc-400 text-base sm:text-lg max-w-xl mb-8 leading-relaxed">{t("landing.hero_sub")}</p>
@@ -393,7 +374,7 @@ export default function Landing() {
               className="group bg-[#0F0F12] border border-[#1A1A24] border-l-2 border-l-transparent hover:border-l-[#E5FF00] hover:-translate-y-1 transition-all duration-300 p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="w-11 h-11 border border-[#2A2A35] flex items-center justify-center text-[#E5FF00]"><s.i size={20} className="icon-pop" /></div>
-                <span className="font-display font-black text-4xl text-[#1A1A24] group-hover:text-[#2A2A35] transition-colors">0{i + 1}</span>
+                <span className="font-display font-black text-4xl text-[#E5FF00]/40 group-hover:text-[#E5FF00]/70 transition-colors">0{i + 1}</span>
               </div>
               <h3 className="font-display font-bold text-lg mb-2">{s.t}</h3>
               <p className="text-zinc-500 text-sm leading-relaxed">{s.d}</p>
@@ -442,20 +423,20 @@ export default function Landing() {
           </div>
           <div>
             <div className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">{t("landing.footer_product")}</div>
-            <ul className="space-y-2 text-sm text-zinc-400">
-              <li><Link to="/security" className="hover:text-[#E5FF00] transition-colors">{t("landing.nav_security")}</Link></li>
-              <li><Link to="/privacy-telemetry" className="hover:text-[#E5FF00] transition-colors">{t("landing.nav_privacy")}</Link></li>
-              <li><Link to="/guida" className="hover:text-[#E5FF00] transition-colors">{t("landing.nav_guide")}</Link></li>
-              <li><Link to="/changelog" className="hover:text-[#E5FF00] transition-colors">{t("landing.nav_changelog")}</Link></li>
-              <li><Link to="/pricing" className="hover:text-[#E5FF00] transition-colors">{t("landing.nav_pricing")}</Link></li>
+            <ul className="space-y-0.5 text-sm text-zinc-400">
+              <li><Link to="/security" className="inline-block py-2.5 hover:text-[#E5FF00] transition-colors">{t("landing.nav_security")}</Link></li>
+              <li><Link to="/privacy-telemetry" className="inline-block py-2.5 hover:text-[#E5FF00] transition-colors">{t("landing.nav_privacy")}</Link></li>
+              <li><Link to="/guida" className="inline-block py-2.5 hover:text-[#E5FF00] transition-colors">{t("landing.nav_guide")}</Link></li>
+              <li><Link to="/changelog" className="inline-block py-2.5 hover:text-[#E5FF00] transition-colors">{t("landing.nav_changelog")}</Link></li>
+              <li><Link to="/pricing" className="inline-block py-2.5 hover:text-[#E5FF00] transition-colors">{t("landing.nav_pricing")}</Link></li>
             </ul>
           </div>
           <FooterCommunity t={t} />
           <div>
             <div className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">{t("landing.footer_account")}</div>
-            <ul className="space-y-2 text-sm text-zinc-400">
-              <li><Link to="/login" className="hover:text-[#E5FF00] transition-colors">{t("landing.login")}</Link></li>
-              <li><Link to="/register" className="hover:text-[#E5FF00] transition-colors">{t("landing.start")}</Link></li>
+            <ul className="space-y-0.5 text-sm text-zinc-400">
+              <li><Link to="/login" className="inline-block py-2.5 hover:text-[#E5FF00] transition-colors">{t("landing.login")}</Link></li>
+              <li><Link to="/register" className="inline-block py-2.5 hover:text-[#E5FF00] transition-colors">{t("landing.start")}</Link></li>
             </ul>
             <div className="flex items-center gap-2 mt-5 text-xs text-[#00FF66]"><ShieldCheck size={13} /> {t("landing.footer_status")}</div>
           </div>

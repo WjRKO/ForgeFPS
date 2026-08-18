@@ -223,12 +223,12 @@ function CmdRow({ item, onAsk }) {
     <div className="p-4 border-b border-[#1A1A24] last:border-0" data-testid={`cmd-${item.cmd.slice(0, 24)}`}>
       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
         {item.admin && (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#FF3B30] border border-[#FF3B30]/40 bg-[#FF3B30]/10 px-1.5 py-0.5" data-testid="admin-badge">
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-[#FF3B30] border border-[#FF3B30]/40 bg-[#FF3B30]/10 px-1.5 py-0.5" data-testid="admin-badge">
             <ShieldAlert size={11} /> {t("commands.requires_admin")}
           </span>
         )}
         {item.warn && (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#E5FF00] border border-[#E5FF00]/40 bg-[#E5FF00]/10 px-1.5 py-0.5" data-testid="warn-badge">
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-[#E5FF00] border border-[#E5FF00]/40 bg-[#E5FF00]/10 px-1.5 py-0.5" data-testid="warn-badge">
             <AlertTriangle size={11} /> {t("commands.advanced")}
           </span>
         )}
@@ -351,7 +351,7 @@ export default function Commands() {
                     <cat.icon size={16} style={{ color: cat.color }} className="icon-pop" />
                     <span className="text-sm font-bold text-zinc-100">{cat.id === "gpu" ? `${t("commands.cat.gpu")} (${GPU_CMD[gpuBrand]?.label})` : t(`commands.cat.${cat.id}`)}</span>
                   </span>
-                  <span className="text-[10px] font-mono text-zinc-500">{cat.items.length}</span>
+                  <span className="text-[11px] font-mono text-zinc-500">{cat.items.length}</span>
                 </div>
                 <div>{cat.items.map((it) => <CmdRow key={it.cmd || it.label} item={it} onAsk={askAI} />)}</div>
               </div>
@@ -363,7 +363,7 @@ export default function Commands() {
         <aside className="lg:sticky lg:top-6 lg:self-start space-y-4" data-testid="commands-panel">
           {/* Search */}
           <div className="bg-[#0F0F12] border border-[#2A2A35] p-4">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-[#E5FF00] mb-2 flex items-center gap-1.5">
+            <div className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] mb-2 flex items-center gap-1.5">
               <Search size={11} /> {t("commands.search_label")}
             </div>
             <div className="relative">
@@ -376,14 +376,14 @@ export default function Commands() {
                 </button>
               )}
             </div>
-            <div className="mt-2 text-[10px] font-mono text-zinc-500">
+            <div className="mt-2 text-[11px] font-mono text-zinc-500">
               <span className="text-[#E5FF00]">{totalVisible}</span> / {totalAll} {t("commands.commands_visible")}
             </div>
           </div>
 
           {/* Filters */}
           <div className="bg-[#0F0F12] border border-[#2A2A35] p-4">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5">
+            <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5">
               <Filter size={11} /> {t("commands.filters_label")}
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -393,7 +393,7 @@ export default function Commands() {
             </div>
             {hasFilter && (
               <button onClick={clearFilters} data-testid="commands-clear-all"
-                className="mt-3 text-[10px] font-mono uppercase tracking-widest text-zinc-500 hover:text-[#E5FF00] transition-colors">
+                className="mt-3 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-[#E5FF00] transition-colors">
                 {t("commands.clear_filters")} →
               </button>
             )}
@@ -402,7 +402,7 @@ export default function Commands() {
           {/* Hardware detected */}
           {(data.cpu || data.gpu || data.ram) && (
             <div className="bg-[#0F0F12] border border-[#2A2A35] p-4" data-testid="commands-hw">
-              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5">
+              <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5">
                 <Cpu size={11} /> {t("commands.hw_label")}
               </div>
               <div className="space-y-1 text-[11px] text-zinc-400">
@@ -415,7 +415,7 @@ export default function Commands() {
 
           {/* Categories nav */}
           <div className="bg-[#0F0F12] border border-[#2A2A35] p-4">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{t("commands.jump_to")}</div>
+            <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{t("commands.jump_to")}</div>
             <div className="space-y-1">
               {cats.map((cat) => (
                 <a key={cat.id} href={`#cmd-cat-${cat.id}`} data-testid={`cmd-jump-${cat.id}`}
@@ -439,7 +439,7 @@ function FilterChip({ label, color, active, onClick, testid }) {
   return (
     <button onClick={onClick} data-testid={testid}
       style={{ borderColor: active ? color : "#2A2A35", color: active ? "#000" : color, backgroundColor: active ? color : "transparent" }}
-      className="text-[10px] font-bold uppercase tracking-widest border px-2 py-1 transition-colors hover:opacity-90">
+      className="text-[11px] font-bold uppercase tracking-widest border px-2 py-1 transition-colors hover:opacity-90">
       {label}
     </button>
   );

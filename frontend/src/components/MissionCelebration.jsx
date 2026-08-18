@@ -47,7 +47,7 @@ export const MissionCelebration = () => {
               <Swords size={22} />
             </div>
             <div>
-              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-[#E5FF00]">
+              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.3em] text-[#E5FF00]">
                 <span className="w-2 h-2 bg-[#00FF66] rounded-full animate-pulse" />
                 {t("missions.celebrate", "Missione completata")}
               </div>

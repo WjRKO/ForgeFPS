@@ -38,7 +38,7 @@ export default function AuthMobile() {
         {state === "loading" && (
           <>
             <Loader2 size={40} className="text-[#E5FF00] animate-spin mx-auto mb-4" />
-            <div className="text-[10px] font-mono uppercase tracking-widest text-[#E5FF00] mb-2">{isEn() ? "// MOBILE AUTHENTICATION" : "// AUTENTICAZIONE MOBILE"}</div>
+            <div className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] mb-2">{isEn() ? "// MOBILE AUTHENTICATION" : "// AUTENTICAZIONE MOBILE"}</div>
             <h1 className="font-display font-black text-2xl tracking-tight mb-2">{isEn() ? "Connecting you..." : "Ti sto collegando..."}</h1>
             <p className="text-zinc-400 text-sm">{isEn() ? "Verifying the magic link. You'll be on the Dashboard in a moment." : "Verifica del magic link in corso. Tra un istante sarai sulla Dashboard."}</p>
           </>
@@ -46,7 +46,7 @@ export default function AuthMobile() {
         {state === "error" && (
           <>
             <ShieldAlert size={40} className="text-[#FF3B30] mx-auto mb-4" />
-            <div className="text-[10px] font-mono uppercase tracking-widest text-[#FF3B30] mb-2">{isEn() ? "// INVALID LINK" : "// LINK NON VALIDO"}</div>
+            <div className="text-[11px] font-mono uppercase tracking-widest text-[#FF3B30] mb-2">{isEn() ? "// INVALID LINK" : "// LINK NON VALIDO"}</div>
             <h1 className="font-display font-black text-2xl tracking-tight mb-2">{isEn() ? "Unable to sign in" : "Impossibile accedere"}</h1>
             <p className="text-zinc-400 text-sm mb-6" data-testid="auth-mobile-error">{errorMsg}</p>
             <p className="text-zinc-500 text-xs">

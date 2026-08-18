@@ -31,15 +31,15 @@ export const MissionContextStrip = ({ metrics = [] }) => {
   return (
     <div className="flex items-center gap-3 border border-[#E5FF00]/40 bg-[#E5FF00]/[0.05] px-4 py-2.5 mb-5" data-testid="mission-context-strip">
       <Swords size={14} className="text-[#E5FF00] shrink-0" />
-      <span className="text-[10px] font-black uppercase tracking-widest text-[#E5FF00] shrink-0">
+      <span className="text-[11px] font-black uppercase tracking-widest text-[#E5FF00] shrink-0">
         {t("missions.strip_label", "Missione attiva")}
       </span>
       <span className="text-sm text-zinc-200 truncate">{en ? mission.name_en : mission.name_it}</span>
       <div className="hidden sm:block flex-1 max-w-[140px] h-1.5 bg-[#0A0A0C] border border-[#2A2A35] overflow-hidden ml-auto">
         <div className="h-full bg-[#E5FF00]" style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-[10px] font-mono text-zinc-400 tabular-nums shrink-0">{mission.progress}/{mission.target}</span>
-      <span className="text-[10px] font-mono text-[#E5FF00] shrink-0">+{mission.xp} XP</span>
+      <span className="text-[11px] font-mono text-zinc-400 tabular-nums shrink-0">{mission.progress}/{mission.target}</span>
+      <span className="text-[11px] font-mono text-[#E5FF00] shrink-0">+{mission.xp} XP</span>
       <Link to="/app/milestones" data-testid="mission-strip-link" className="text-zinc-500 hover:text-[#E5FF00] transition-colors shrink-0">
         <ArrowRight size={13} />
       </Link>

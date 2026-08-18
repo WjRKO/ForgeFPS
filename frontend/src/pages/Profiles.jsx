@@ -13,7 +13,7 @@ function ProfileCard({ p, catalog, token, onDelete }) {
         <div className="flex items-center gap-2">
           <Gamepad2 size={18} className="text-[#E5FF00]" />
           <h3 className="font-display font-bold text-base">{p.game_name}</h3>
-          {p.template && <span className="text-[10px] uppercase tracking-widest border border-[#2A2A35] px-1.5 py-0.5 text-zinc-500">{p.preset_label || "Preset"}</span>}
+          {p.template && <span className="text-[11px] uppercase tracking-widest border border-[#2A2A35] px-1.5 py-0.5 text-zinc-500">{p.preset_label || "Preset"}</span>}
         </div>
         {!p.template && (
           <button data-testid={`delete-profile-${p.id}`} onClick={() => onDelete(p.id)} className="text-zinc-600 hover:text-[#FF3B30] transition-colors"><Trash2 size={16} /></button>

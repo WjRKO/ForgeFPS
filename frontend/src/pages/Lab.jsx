@@ -40,7 +40,7 @@ const StatusPill = ({ status }) => {
     completed: ["bg-[#00FF66]/15 text-[#00FF66]", T("Completata", "Completed")],
   };
   const [cls, label] = map[status] || map.waiting_agent;
-  return <span data-testid="lab-status-pill" className={`px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold ${cls}`}>{label}</span>;
+  return <span data-testid="lab-status-pill" className={`px-2.5 py-1 text-[11px] uppercase tracking-widest font-bold ${cls}`}>{label}</span>;
 };
 
 const Stepper = ({ status }) => {
@@ -49,7 +49,7 @@ const Stepper = ({ status }) => {
     <div className="flex items-center gap-1 flex-wrap" data-testid="lab-stepper">
       {PHASES.map((p, i) => (
         <div key={p.id} className="flex items-center gap-1">
-          <div className={`px-2.5 py-1 text-[10px] uppercase tracking-widest border ${i < idx ? "border-[#00FF66]/40 text-[#00FF66]" : i === idx ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/10" : "border-[#2A2A35] text-zinc-600"}`}>
+          <div className={`px-2.5 py-1 text-[11px] uppercase tracking-widest border ${i < idx ? "border-[#00FF66]/40 text-[#00FF66]" : i === idx ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/10" : "border-[#2A2A35] text-zinc-600"}`}>
             {i + 1}. {isEn() ? p.en : p.it}
           </div>
           {i < PHASES.length - 1 && <div className={`w-4 h-px ${i < idx ? "bg-[#00FF66]/40" : "bg-[#2A2A35]"}`} />}
@@ -61,9 +61,9 @@ const Stepper = ({ status }) => {
 
 const DecisionBadge = ({ decision }) =>
   decision === "kept" ? (
-    <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest font-bold text-[#00FF66]"><CheckCircle2 size={12} /> {T("Mantenuto", "Kept")}</span>
+    <span className="inline-flex items-center gap-1 text-[11px] uppercase tracking-widest font-bold text-[#00FF66]"><CheckCircle2 size={12} /> {T("Mantenuto", "Kept")}</span>
   ) : (
-    <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest font-bold text-orange-400"><RotateCcw size={12} /> Rollback</span>
+    <span className="inline-flex items-center gap-1 text-[11px] uppercase tracking-widest font-bold text-orange-400"><RotateCcw size={12} /> Rollback</span>
   );
 
 function FleetValidationCard() {
@@ -80,7 +80,7 @@ function FleetValidationCard() {
           <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2">
             <Users size={13} className="text-[#00E0FF]" /> {T("Validati dalla flotta", "Fleet-validated")}
           </div>
-          <span className="text-[10px] font-mono text-zinc-500">
+          <span className="text-[11px] font-mono text-zinc-500">
             {data.total_tests} {T("test anonimi", "anonymous tests")} · {T("fascia hw", "hw class")}: <span className="text-zinc-300">{data.hw_class}</span>
           </span>
         </div>
@@ -106,7 +106,7 @@ function FleetValidationCard() {
                 <div className="mt-1.5 h-1 bg-[#0A0A0C] border border-[#1A1A24] overflow-hidden">
                   <div className={`h-full ${it.success_pct >= 60 ? "bg-[#00FF66]" : it.success_pct >= 40 ? "bg-[#E5FF00]" : "bg-zinc-600"}`} style={{ width: `${it.success_pct}%` }} />
                 </div>
-                <div className="mt-1.5 flex items-center gap-2 text-[10px] font-mono text-zinc-500">
+                <div className="mt-1.5 flex items-center gap-2 text-[11px] font-mono text-zinc-500">
                   <span>{it.tested} test</span>
                   <span>·</span>
                   <span>{it.avg_delta_pct >= 0 ? "+" : ""}{it.avg_delta_pct}% FPS {T("medio", "avg")}</span>
@@ -186,7 +186,7 @@ function SetupCard({ registry, onStart, starting }) {
           )}
           {(preview?.candidates || []).some((c) => c.fleet?.tested >= 3) && (
             <div className="mt-2 space-y-1" data-testid="lab-evidence-list">
-              <div className="text-[10px] uppercase tracking-widest text-zinc-500">{T("Evidenza misurata dalla community", "Community-measured evidence")}</div>
+              <div className="text-[11px] uppercase tracking-widest text-zinc-500">{T("Evidenza misurata dalla community", "Community-measured evidence")}</div>
               {(preview.candidates || []).filter((c) => c.fleet?.tested >= 3).slice(0, 5).map((c) => (
                 <div key={c.tweak_id} className="flex items-center justify-between gap-2 border border-[#1F1F28] bg-black/30 px-2.5 py-1.5" data-testid={`lab-evidence-${c.tweak_id}`}>
                   <span className="text-zinc-300 truncate">{c.name || c.tweak_id}</span>
@@ -218,7 +218,7 @@ function ConnectCard({ token, onDetect }) {
           <span>{T("Il Lab richiede PowerShell come AMMINISTRATORE (tweak di sistema + punto di ripristino). Con l'agent installato verrà chiesta la conferma UAC.", "The Lab requires ADMINISTRATOR PowerShell (system tweaks + restore point). With the installed agent you'll get a UAC prompt.")}</span>
         </div>
         <OneClickLaunchButton mode="lab" label={T("Avvia il Lab con 1 click", "Start the Lab with 1 click")} testid="lab-launch" detectDone={onDetect} timeoutMs={90000} />
-        <div className="text-[10px] uppercase tracking-widest text-zinc-600 pt-1">{T("Oppure metodo manuale sicuro:", "Or secure manual method:")}</div>
+        <div className="text-[11px] uppercase tracking-widest text-zinc-600 pt-1">{T("Oppure metodo manuale sicuro:", "Or secure manual method:")}</div>
         <SecureRunBlock token={token} mode="lab" testid="lab-run-cmd" />
       </div>
     </HUDCard>
@@ -270,7 +270,7 @@ function ValidationBlock({ validation }) {
   if (!validation) return null;
   return (
     <div className={`border p-3 text-xs ${validation.discrepancy ? "border-amber-500/40 bg-amber-500/5" : "border-[#00E0FF]/30 bg-[#00E0FF]/5"}`} data-testid="lab-validation-block">
-      <div className="uppercase tracking-widest text-[10px] text-zinc-500 mb-1">{T("Validazione in gioco reale", "Real-game validation")} · {Math.round((validation.duration_s || 0) / 60)} min</div>
+      <div className="uppercase tracking-widest text-[11px] text-zinc-500 mb-1">{T("Validazione in gioco reale", "Real-game validation")} · {Math.round((validation.duration_s || 0) / 60)} min</div>
       <div className="text-zinc-300">
         {T("Guadagno reale", "Real gain")}: <b className={validation.real_gain_pct > 0 ? "text-[#00FF66]" : "text-zinc-300"}>{validation.real_gain_pct}%</b>
         <span className="text-zinc-500"> · {T("previsto dal benchmark", "predicted by benchmark")}: {validation.predicted_gain_pct}%</span>
@@ -292,11 +292,11 @@ function BaselineCard({ session }) {
         <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5"><Activity size={12} /> Baseline</div>
         {b0 ? (
           <div className="flex items-end gap-4">
-            <div><div className="text-2xl font-black text-white tabular-nums">{b0.fps_avg}</div><div className="text-[10px] text-zinc-500 uppercase">FPS avg</div></div>
-            <div><div className="text-lg font-bold text-zinc-300 tabular-nums">{b0.fps_p1}</div><div className="text-[10px] text-zinc-500 uppercase">1% low</div></div>
-            <div><div className="text-lg font-bold text-zinc-300 tabular-nums">{b0.cv_pct}%</div><div className="text-[10px] text-zinc-500 uppercase">CV</div></div>
+            <div><div className="text-2xl font-black text-white tabular-nums">{b0.fps_avg}</div><div className="text-[11px] text-zinc-500 uppercase">FPS avg</div></div>
+            <div><div className="text-lg font-bold text-zinc-300 tabular-nums">{b0.fps_p1}</div><div className="text-[11px] text-zinc-500 uppercase">1% low</div></div>
+            <div><div className="text-lg font-bold text-zinc-300 tabular-nums">{b0.cv_pct}%</div><div className="text-[11px] text-zinc-500 uppercase">CV</div></div>
             {stats && stats.fps_avg !== b0.fps_avg && (
-              <div><div className="text-lg font-bold text-[#00FF66] tabular-nums">{stats.fps_avg}</div><div className="text-[10px] text-zinc-500 uppercase">{T("attuale", "current")}</div></div>
+              <div><div className="text-lg font-bold text-[#00FF66] tabular-nums">{stats.fps_avg}</div><div className="text-[11px] text-zinc-500 uppercase">{T("attuale", "current")}</div></div>
             )}
           </div>
         ) : (
@@ -322,7 +322,7 @@ function Timeline({ session }) {
           <div key={r.test_id} className="flex items-center justify-between gap-2 border border-[#2A2A35] bg-black/30 px-3 py-2" data-testid={`lab-result-${r.tweak_id}`}>
             <div className="min-w-0">
               <div className="text-xs text-white truncate">{names[r.tweak_id] || r.tweak_id}</div>
-              <div className="text-[10px] text-zinc-500">{r.reason}</div>
+              <div className="text-[11px] text-zinc-500">{r.reason}</div>
             </div>
             <div className="flex items-center gap-3 shrink-0">
               <span className={`text-sm font-bold tabular-nums ${(r.delta?.fps_avg_pct || 0) > 0 ? "text-[#00FF66]" : "text-zinc-400"}`}>
@@ -335,13 +335,13 @@ function Timeline({ session }) {
         {cur && (
           <div className="flex items-center justify-between gap-2 border border-[#E5FF00]/40 bg-[#E5FF00]/5 px-3 py-2" data-testid="lab-current-tweak">
             <div className="text-xs text-[#E5FF00]">{names[cur.tweak_id] || cur.tweak_id}</div>
-            <div className="text-[10px] text-zinc-400">{cur.applied ? T(`run ${(cur.runs || []).length}/3 in corso...`, `run ${(cur.runs || []).length}/3 running...`) : T("applicazione...", "applying...")}</div>
+            <div className="text-[11px] text-zinc-400">{cur.applied ? T(`run ${(cur.runs || []).length}/3 in corso...`, `run ${(cur.runs || []).length}/3 running...`) : T("applicazione...", "applying...")}</div>
           </div>
         )}
         {queue.map((tid) => (
           <div key={tid} className="flex items-center justify-between gap-2 border border-[#2A2A35]/60 px-3 py-1.5 opacity-50">
             <div className="text-xs text-zinc-500">{names[tid] || tid}</div>
-            <div className="text-[10px] text-zinc-600">{T("in coda", "queued")}</div>
+            <div className="text-[11px] text-zinc-600">{T("in coda", "queued")}</div>
           </div>
         ))}
       </div>
@@ -370,12 +370,12 @@ function BiosSuggestions({ items }) {
   if (!items || items.length === 0) return null;
   return (
     <div className="space-y-1.5" data-testid="lab-report-bios">
-      <div className="text-[10px] uppercase tracking-widest text-zinc-500 flex items-center gap-1.5"><Wrench size={11} /> {T("Prossimo livello: BIOS (manuale, guidato)", "Next level: BIOS (manual, guided)")}</div>
+      <div className="text-[11px] uppercase tracking-widest text-zinc-500 flex items-center gap-1.5"><Wrench size={11} /> {T("Prossimo livello: BIOS (manuale, guidato)", "Next level: BIOS (manual, guided)")}</div>
       {items.map((b) => (
         <details key={b.id} className="border border-[#2A2A35] bg-black/30 px-3 py-2" data-testid={`lab-bios-${b.id}`}>
           <summary className="cursor-pointer text-xs text-white flex items-center justify-between gap-2">
             <span>{b.title}</span>
-            <span className="text-[10px] text-[#00FF66] shrink-0">{b.expected_gain}</span>
+            <span className="text-[11px] text-[#00FF66] shrink-0">{b.expected_gain}</span>
           </summary>
           <div className="text-[11px] text-zinc-400 mt-2">{b.why}</div>
           <ol className="text-[11px] text-zinc-300 mt-1.5 space-y-0.5 list-decimal list-inside">
@@ -409,7 +409,7 @@ function InsightsCard({ onCheck, busy }) {
   return (
     <HUDCard testid="lab-insights-card">
       <div className="p-4 space-y-2.5">
-        <div className="text-[10px] uppercase tracking-widest text-zinc-500">{T("Verifiche consigliate", "Suggested checks")}</div>
+        <div className="text-[11px] uppercase tracking-widest text-zinc-500">{T("Verifiche consigliate", "Suggested checks")}</div>
         {data.items.map((it) => {
           const m = META[it.id];
           if (!m) return null;
@@ -421,7 +421,7 @@ function InsightsCard({ onCheck, busy }) {
                 <div className="text-[11px] text-zinc-500 mt-0.5">{T(m.descIt, m.descEn)}</div>
               </div>
               <button onClick={() => onCheck(it.id)} disabled={busy} data-testid={`lab-check-start-${it.id}`}
-                className="shrink-0 border border-[#00E0FF]/40 text-[#00E0FF] uppercase tracking-widest text-[10px] px-3 py-1.5 hover:bg-[#00E0FF]/10 transition-colors disabled:opacity-50">
+                className="shrink-0 border border-[#00E0FF]/40 text-[#00E0FF] uppercase tracking-widest text-[11px] px-3 py-1.5 hover:bg-[#00E0FF]/10 transition-colors disabled:opacity-50">
                 {T(m.btnIt, m.btnEn)}
               </button>
             </div>
@@ -439,19 +439,19 @@ function HistoryCard() {
   return (
     <HUDCard testid="lab-history-card">
       <div className="p-4 space-y-2">
-        <div className="text-[10px] uppercase tracking-widest text-zinc-500 flex items-center gap-1.5"><History size={11} /> {T("Storico sessioni", "Session history")}</div>
+        <div className="text-[11px] uppercase tracking-widest text-zinc-500 flex items-center gap-1.5"><History size={11} /> {T("Storico sessioni", "Session history")}</div>
         {rows.map((s) => (
           <div key={s.session_id} className="flex items-center justify-between gap-3 border border-[#1F1F28] bg-black/30 px-3 py-2" data-testid={`lab-history-row-${s.session_id}`}>
             <div className="flex items-center gap-2 min-w-0">
-              <span className={`text-[9px] uppercase tracking-widest font-bold px-1.5 py-0.5 shrink-0 ${s.kind === "check" ? "bg-[#00E0FF]/15 text-[#00E0FF]" : "bg-[#E5FF00]/15 text-[#E5FF00]"}`}>{s.kind === "check" ? "CHECK" : "LAB"}</span>
+              <span className={`text-[11px] uppercase tracking-widest font-bold px-1.5 py-0.5 shrink-0 ${s.kind === "check" ? "bg-[#00E0FF]/15 text-[#00E0FF]" : "bg-[#E5FF00]/15 text-[#E5FF00]"}`}>{s.kind === "check" ? "CHECK" : "LAB"}</span>
               <span className="text-[11px] text-zinc-400 shrink-0">{(s.started_at || "").slice(0, 10)}</span>
               <span className="text-xs text-white truncate">{s.game || "—"}</span>
-              {s.kind === "check" && s.check_reason && <span className="text-[10px] text-zinc-500 truncate">{checkLabel(s.check_reason)}</span>}
+              {s.kind === "check" && s.check_reason && <span className="text-[11px] text-zinc-500 truncate">{checkLabel(s.check_reason)}</span>}
             </div>
             <div className="flex items-center gap-3 shrink-0 text-[11px] tabular-nums">
               {s.baseline_fps != null && <span className="text-zinc-500">{s.baseline_fps} → {s.final_fps} FPS</span>}
               <span className={`font-bold ${(s.total_gain_pct || 0) > 0 ? "text-[#00FF66]" : s.regression ? "text-red-400" : "text-zinc-400"}`}>{(s.total_gain_pct || 0) > 0 ? "+" : ""}{s.total_gain_pct}%</span>
-              {s.regression && <span className="text-[9px] uppercase font-bold text-red-400">{T("Regressione", "Regression")}</span>}
+              {s.regression && <span className="text-[11px] uppercase font-bold text-red-400">{T("Regressione", "Regression")}</span>}
             </div>
           </div>
         ))}
@@ -484,8 +484,8 @@ function CheckResultCard({ report, onNew }) {
           {report.game && <span className="text-[11px] text-zinc-500">{report.game}</span>}
         </div>
         <div className="flex items-end gap-6 flex-wrap">
-          <div><div className="text-3xl font-black text-white tabular-nums">{report.baseline?.fps_avg} → {report.final?.fps_avg}</div><div className="text-[10px] text-zinc-500 uppercase">FPS avg</div></div>
-          <div><div className={`text-3xl font-black tabular-nums ${(gain || 0) > 0 ? "text-[#00FF66]" : report.regression ? "text-red-400" : "text-zinc-400"}`} data-testid="lab-check-gain">{(gain || 0) > 0 ? "+" : ""}{gain}%</div><div className="text-[10px] text-zinc-500 uppercase">{T("vs riferimento", "vs reference")}</div></div>
+          <div><div className="text-3xl font-black text-white tabular-nums">{report.baseline?.fps_avg} → {report.final?.fps_avg}</div><div className="text-[11px] text-zinc-500 uppercase">FPS avg</div></div>
+          <div><div className={`text-3xl font-black tabular-nums ${(gain || 0) > 0 ? "text-[#00FF66]" : report.regression ? "text-red-400" : "text-zinc-400"}`} data-testid="lab-check-gain">{(gain || 0) > 0 ? "+" : ""}{gain}%</div><div className="text-[11px] text-zinc-500 uppercase">{T("vs riferimento", "vs reference")}</div></div>
         </div>
         {report.regression ? (
           <div className="border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-xs text-red-300" data-testid="lab-check-regression">
@@ -511,7 +511,7 @@ function ShareCard({ report, innerRef }) {
       <div ref={innerRef} style={{ width: 620 }} className="bg-[#0A0A0D] border border-[#2A2A35] p-8 font-sans">
         <div className="flex items-center justify-between mb-5">
           <div className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#E5FF00]">FRAMEFORGE LAB</div>
-          <div className="text-[10px] font-mono text-zinc-500">{T("REPORT VERIFICATO STATISTICAMENTE", "STATISTICALLY VERIFIED REPORT")}</div>
+          <div className="text-[11px] font-mono text-zinc-500">{T("REPORT VERIFICATO STATISTICAMENTE", "STATISTICALLY VERIFIED REPORT")}</div>
         </div>
         <div className="text-zinc-400 text-xs mb-1">{report.game || "PC Gaming"}</div>
         <div className="flex items-end gap-5 mb-5">
@@ -537,7 +537,7 @@ function ShareCard({ report, innerRef }) {
           </div>
         )}
         <div className="flex items-center justify-between border-t border-[#1F1F28] pt-3">
-          <div className="text-[10px] text-zinc-500">{T(`${report.tweaks_tested} tweak testati · baseline ×3 · Welch t-test · rollback automatico`, `${report.tweaks_tested} tweaks tested · baseline ×3 · Welch t-test · auto rollback`)}</div>
+          <div className="text-[11px] text-zinc-500">{T(`${report.tweaks_tested} tweak testati · baseline ×3 · Welch t-test · rollback automatico`, `${report.tweaks_tested} tweaks tested · baseline ×3 · Welch t-test · auto rollback`)}</div>
           <div className="text-[11px] font-mono text-[#E5FF00]">forgefps.dev</div>
         </div>
       </div>
@@ -579,17 +579,17 @@ function ReportCard({ report, onNew }) {
           <div className="flex items-center gap-3">
             {report.game && <span className="text-[11px] text-zinc-500">{report.game}</span>}
             <button onClick={share} disabled={sharing} data-testid="lab-share-btn"
-              className="inline-flex items-center gap-1.5 border border-[#E5FF00]/40 text-[#E5FF00] uppercase tracking-widest text-[10px] px-3 py-1.5 hover:bg-[#E5FF00]/10 transition-colors disabled:opacity-50">
+              className="inline-flex items-center gap-1.5 border border-[#E5FF00]/40 text-[#E5FF00] uppercase tracking-widest text-[11px] px-3 py-1.5 hover:bg-[#E5FF00]/10 transition-colors disabled:opacity-50">
               <Share2 size={12} /> {sharing ? T("Genero...", "Generating...") : T("Condividi", "Share")}
             </button>
           </div>
         </div>
         <div className="flex items-end gap-6 flex-wrap">
-          <div><div className="text-3xl font-black text-white tabular-nums">{report.baseline?.fps_avg} → {report.final?.fps_avg}</div><div className="text-[10px] text-zinc-500 uppercase">FPS avg</div></div>
-          <div><div className={`text-3xl font-black tabular-nums ${(gain || 0) > 0 ? "text-[#00FF66]" : "text-zinc-400"}`} data-testid="lab-report-gain">{(gain || 0) > 0 ? "+" : ""}{gain}%</div><div className="text-[10px] text-zinc-500 uppercase">{T("Guadagno totale", "Total gain")}</div></div>
-          <div><div className="text-xl font-bold text-zinc-300 tabular-nums">{report.baseline?.fps_p1} → {report.final?.fps_p1}</div><div className="text-[10px] text-zinc-500 uppercase">1% low</div></div>
-          {report.total_latency_delta_ms != null && <div><div className={`text-xl font-bold tabular-nums ${report.total_latency_delta_ms < 0 ? "text-[#00E0FF]" : "text-zinc-300"}`} data-testid="lab-report-latency">{report.total_latency_delta_ms > 0 ? "+" : ""}{report.total_latency_delta_ms} ms</div><div className="text-[10px] text-zinc-500 uppercase">Input lag</div></div>}
-          {report.total_duration_min != null && <div><div className="text-xl font-bold text-zinc-300 tabular-nums">{report.total_duration_min} min</div><div className="text-[10px] text-zinc-500 uppercase">{T("Durata", "Duration")}</div></div>}
+          <div><div className="text-3xl font-black text-white tabular-nums">{report.baseline?.fps_avg} → {report.final?.fps_avg}</div><div className="text-[11px] text-zinc-500 uppercase">FPS avg</div></div>
+          <div><div className={`text-3xl font-black tabular-nums ${(gain || 0) > 0 ? "text-[#00FF66]" : "text-zinc-400"}`} data-testid="lab-report-gain">{(gain || 0) > 0 ? "+" : ""}{gain}%</div><div className="text-[11px] text-zinc-500 uppercase">{T("Guadagno totale", "Total gain")}</div></div>
+          <div><div className="text-xl font-bold text-zinc-300 tabular-nums">{report.baseline?.fps_p1} → {report.final?.fps_p1}</div><div className="text-[11px] text-zinc-500 uppercase">1% low</div></div>
+          {report.total_latency_delta_ms != null && <div><div className={`text-xl font-bold tabular-nums ${report.total_latency_delta_ms < 0 ? "text-[#00E0FF]" : "text-zinc-300"}`} data-testid="lab-report-latency">{report.total_latency_delta_ms > 0 ? "+" : ""}{report.total_latency_delta_ms} ms</div><div className="text-[11px] text-zinc-500 uppercase">Input lag</div></div>}
+          {report.total_duration_min != null && <div><div className="text-xl font-bold text-zinc-300 tabular-nums">{report.total_duration_min} min</div><div className="text-[11px] text-zinc-500 uppercase">{T("Durata", "Duration")}</div></div>}
         </div>
         {report.performance_index && (
           <div className="flex gap-4 text-[11px] text-zinc-400 border-t border-[#2A2A35] pt-3">
@@ -604,7 +604,7 @@ function ReportCard({ report, onNew }) {
             <div key={i} className="flex items-center justify-between gap-2 border border-[#2A2A35] bg-black/30 px-3 py-2" data-testid={`lab-report-step-${s.tweak_id}`}>
               <div className="min-w-0">
                 <div className="text-xs text-white truncate">{s.tweak}</div>
-                <div className="text-[10px] text-zinc-500">
+                <div className="text-[11px] text-zinc-500">
                   {s.reason} · p={s.p_value}
                   {s.ci_pct && <span className="text-zinc-600"> · IC95 {s.ci_pct[0] > 0 ? "+" : ""}{s.ci_pct[0]}/{s.ci_pct[1] > 0 ? "+" : ""}{s.ci_pct[1]}%</span>}
                   {s.decision === "kept" && s.holm_ok === false && <span className="text-amber-500/90"> · {T("non confermato dopo correzione Holm", "not confirmed after Holm correction")}</span>}
@@ -612,8 +612,8 @@ function ReportCard({ report, onNew }) {
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <span className="text-[11px] text-zinc-400 tabular-nums">{s.before} → {s.after}</span>
-                {s.p1_delta_pct != null && <span className="text-[10px] text-zinc-500 tabular-nums">1% low {s.p1_delta_pct > 0 ? "+" : ""}{s.p1_delta_pct}%</span>}
-                {s.latency_delta_ms != null && <span className={`text-[10px] tabular-nums ${s.latency_delta_ms < 0 ? "text-[#00E0FF]" : "text-zinc-500"}`}>{s.latency_delta_ms > 0 ? "+" : ""}{s.latency_delta_ms}ms lat</span>}
+                {s.p1_delta_pct != null && <span className="text-[11px] text-zinc-500 tabular-nums">1% low {s.p1_delta_pct > 0 ? "+" : ""}{s.p1_delta_pct}%</span>}
+                {s.latency_delta_ms != null && <span className={`text-[11px] tabular-nums ${s.latency_delta_ms < 0 ? "text-[#00E0FF]" : "text-zinc-500"}`}>{s.latency_delta_ms > 0 ? "+" : ""}{s.latency_delta_ms}ms lat</span>}
                 <span className={`text-sm font-bold tabular-nums ${(s.delta_pct || 0) > 0 ? "text-[#00FF66]" : "text-zinc-400"}`}>{(s.delta_pct || 0) > 0 ? "+" : ""}{s.delta_pct}%</span>
                 <DecisionBadge decision={s.decision} />
               </div>
@@ -632,7 +632,7 @@ function ReportCard({ report, onNew }) {
         )}
         {(report.synergies_found || []).length > 0 && (
           <div className="space-y-1.5">
-            <div className="text-[10px] uppercase tracking-widest text-zinc-500">{T("Sinergie verificate", "Verified synergies")}</div>
+            <div className="text-[11px] uppercase tracking-widest text-zinc-500">{T("Sinergie verificate", "Verified synergies")}</div>
             {report.synergies_found.map((s, i) => (
               <div key={i} className="flex items-center justify-between gap-2 border border-[#2A2A35] bg-black/30 px-3 py-2" data-testid={`lab-report-synergy-${i}`}>
                 <div className="text-xs text-white">{s.pair?.join(" + ")}</div>

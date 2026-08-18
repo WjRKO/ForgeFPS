@@ -37,12 +37,12 @@ export default function DiagnoseHeader({ t, result, createdAt, collapsed, outcom
         aria-label={collapseLabel}
       >
         <div className="flex items-center gap-2 flex-wrap mb-1">
-          <div className="text-[10px] font-mono uppercase tracking-widest text-[#00E0FF]">
+          <div className="text-[11px] font-mono uppercase tracking-widest text-[#00E0FF]">
             {t("diagnose.header_prefix")} · {(result.actions || []).length} {t("diagnose.header_actions")}
           </div>
           {createdAt && (
             <span
-              className="text-[10px] font-mono text-zinc-500"
+              className="text-[11px] font-mono text-zinc-500"
               data-testid="diagnose-timestamp"
               title={new Date(createdAt).toLocaleString()}
             >
@@ -50,7 +50,7 @@ export default function DiagnoseHeader({ t, result, createdAt, collapsed, outcom
             </span>
           )}
           {collapsed && (
-            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 border border-[#2A2A35] px-1.5 py-0.5">
+            <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 border border-[#2A2A35] px-1.5 py-0.5">
               {t("diagnose.collapsed_badge")}
             </span>
           )}
@@ -60,7 +60,7 @@ export default function DiagnoseHeader({ t, result, createdAt, collapsed, outcom
         </p>
         {outcome?.available && outcome.delta !== 0 && (
           <div
-            className={`mt-2 inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest border px-2 py-0.5 ${
+            className={`mt-2 inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest border px-2 py-0.5 ${
               outcome.delta > 0
                 ? "border-[#00FF66]/40 bg-[#00FF66]/10 text-[#00FF66]"
                 : "border-[#FF3B30]/40 bg-[#FF3B30]/10 text-[#FF3B30]"

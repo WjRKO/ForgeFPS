@@ -64,7 +64,7 @@ export const AutoPilotCard = () => {
         <div className="flex-1 min-w-[220px]">
           <div className="flex items-center gap-2">
             <span className="text-sm font-black uppercase tracking-widest">{c.title}</span>
-            <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 border border-[#2A2A35] px-1.5 py-0.5" data-testid="autopilot-quota">
+            <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 border border-[#2A2A35] px-1.5 py-0.5" data-testid="autopilot-quota">
               {status?.limit == null ? c.quota_pro : `${c.quota_free} · ${status.remaining}/${status.limit}`}
             </span>
           </div>
@@ -74,7 +74,7 @@ export const AutoPilotCard = () => {
           <div className="flex items-center gap-2" data-testid="autopilot-locked">
             <span className="flex items-center gap-1.5 text-[11px] text-zinc-500"><Lock size={12} /> {c.locked}</span>
             <Link to="/pricing" data-testid="autopilot-upgrade-link"
-              className="text-[10px] font-bold uppercase tracking-widest border border-[#E5FF00]/40 text-[#E5FF00] px-3 py-2 hover:bg-[#E5FF00]/10 transition-colors">
+              className="text-[11px] font-bold uppercase tracking-widest border border-[#E5FF00]/40 text-[#E5FF00] px-3 py-2 hover:bg-[#E5FF00]/10 transition-colors">
               {c.upgrade}
             </Link>
           </div>
@@ -89,11 +89,11 @@ export const AutoPilotCard = () => {
       {latest && (
         <div className="mt-4 border-t border-[#2A2A35] pt-3">
           <button onClick={() => setShowReport((s) => !s)} data-testid="autopilot-report-toggle"
-            className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors">
+            className="flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors">
             {c.report} · {new Date(latest.completed_at).toLocaleString()} {showReport ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
           </button>
           {latest.status === "reverted" && (
-            <span className="ml-3 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-zinc-400 border border-[#2A2A35] px-1.5 py-0.5" data-testid="autopilot-reverted-badge">
+            <span className="ml-3 inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-zinc-400 border border-[#2A2A35] px-1.5 py-0.5" data-testid="autopilot-reverted-badge">
               <Undo2 size={9} /> {c.reverted_badge}
             </span>
           )}
@@ -101,7 +101,7 @@ export const AutoPilotCard = () => {
             <div className="mt-3 flex flex-wrap gap-6 text-sm" data-testid="autopilot-report">
               <div>
                 <div className="text-2xl font-black text-[#E5FF00]">{(latest.applied || []).length}</div>
-                <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">{c.applied}</div>
+                <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">{c.applied}</div>
               </div>
               {latest.before?.score != null && latest.after?.score != null && (
                 <div>
@@ -115,7 +115,7 @@ export const AutoPilotCard = () => {
                       </span>
                     )}
                   </div>
-                  <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">{c.health}</div>
+                  <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">{c.health}</div>
                 </div>
               )}
               {(latest.applied || []).length === 0 && (
@@ -124,15 +124,15 @@ export const AutoPilotCard = () => {
               {(latest.applied || []).length > 0 && (
                 <div className="flex-1 min-w-[200px] flex flex-wrap gap-1 items-center">
                   {latest.applied.slice(0, 10).map((id) => (
-                    <span key={id} className="text-[9px] font-mono border border-[#2A2A35] text-zinc-500 px-1.5 py-0.5">{id}</span>
+                    <span key={id} className="text-[11px] font-mono border border-[#2A2A35] text-zinc-500 px-1.5 py-0.5">{id}</span>
                   ))}
-                  {latest.applied.length > 10 && <span className="text-[9px] text-zinc-600">+{latest.applied.length - 10}</span>}
+                  {latest.applied.length > 10 && <span className="text-[11px] text-zinc-600">+{latest.applied.length - 10}</span>}
                 </div>
               )}
               {latest.status === "done" && (latest.applied || []).length > 0 && (
                 <button onClick={() => restorer.launch()} disabled={restorer.running || launcher.running}
                   data-testid="autopilot-restore-btn"
-                  className="self-center flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest border border-[#2A2A35] text-zinc-400 px-3 py-2 hover:border-[#FF9F1C] hover:text-[#FF9F1C] transition-colors disabled:opacity-50">
+                  className="self-center flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest border border-[#2A2A35] text-zinc-400 px-3 py-2 hover:border-[#FF9F1C] hover:text-[#FF9F1C] transition-colors disabled:opacity-50">
                   {restorer.running ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />} {c.restore_btn}
                 </button>
               )}

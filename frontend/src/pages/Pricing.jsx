@@ -303,7 +303,7 @@ function PricingCard({ tier, annual, c, onCta, isLogged, lang }) {
       className={`relative flex flex-col bg-[#0F0F12] p-7 transition-transform hover:-translate-y-1 ${isBest ? "border-2 border-[#E5FF00] shadow-[0_0_40px_-10px_#E5FF0055]" : "border border-[#2A2A35]"}`}
     >
       {isBest && (
-        <span className="absolute -top-3 left-7 bg-[#E5FF00] text-black text-[10px] font-mono uppercase tracking-widest px-2 py-1 flex items-center gap-1">
+        <span className="absolute -top-3 left-7 bg-[#E5FF00] text-black text-[11px] font-mono uppercase tracking-widest px-2 py-1 flex items-center gap-1">
           <Sparkles size={11} /> {c.best_badge}
         </span>
       )}

@@ -214,7 +214,7 @@ function CpuTempReasonHint({ checks }) {
             <div className="text-xs uppercase tracking-widest mb-1 font-mono" style={{ color }}>// {cpuCheck.reason}</div>
             <div className="text-sm font-semibold text-zinc-100 mb-1" data-testid="cpu-temp-reason-title">{info.title}</div>
             <p className="text-xs text-zinc-400 leading-relaxed mb-3">{info.body}</p>
-            <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1.5">{info.fix_label}</div>
+            <div className="text-[11px] uppercase tracking-widest text-zinc-500 mb-1.5">{info.fix_label}</div>
             <ol className="text-xs text-zinc-300 space-y-1 list-decimal pl-4">
               {info.steps.map((s, i) => (<li key={i}>{s}</li>))}
             </ol>
@@ -468,7 +468,7 @@ export default function MyPc() {
                   <div className="text-xs uppercase tracking-widest text-zinc-500">{specLabel(t, k)}</div>
                   {cVal != null && (
                     <span
-                      className={`text-[9px] font-mono font-bold px-1.5 py-0.5 border ${badgeCls}`}
+                      className={`text-[11px] font-mono font-bold px-1.5 py-0.5 border ${badgeCls}`}
                       title={t("mypcpage.hw_sources_tooltip", "Numero di fonti indipendenti (WMI + Registry + nvidia-smi) che hanno confermato questo componente")}
                       data-testid={`hw-conf-${k}`}
                     >
@@ -518,7 +518,7 @@ export default function MyPc() {
             {shown.map((s, i) => (
               <div key={`${s.name}-${i}`} className={`flex items-center gap-3 px-3 py-2 border-b border-[#1A1A24] ${s.enabled === false ? "opacity-50" : ""}`} data-testid={`startup-detected-${i}`}>
                 {s.enabled !== null && s.enabled !== undefined && (
-                  <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 shrink-0 ${s.enabled === false ? "bg-zinc-700/40 text-zinc-400" : "bg-[#00FF66]/15 text-[#00FF66]"}`}>
+                  <span className={`text-[11px] font-bold uppercase tracking-widest px-1.5 py-0.5 shrink-0 ${s.enabled === false ? "bg-zinc-700/40 text-zinc-400" : "bg-[#00FF66]/15 text-[#00FF66]"}`}>
                     {s.enabled === false ? t("mypcpage.startup_off") : t("mypcpage.startup_on")}
                   </span>
                 )}
@@ -613,7 +613,7 @@ function ServicesCard({ t, lang }) {
                 <div className="text-[11px] text-[#00E0FF] mt-0.5">→ {t("mypcpage.services_how", { name: it.display })}</div>
               )}
             </div>
-            <span className="text-[10px] text-zinc-600 shrink-0 uppercase">{it.state === "Running" ? t("mypcpage.startup_on") : t("mypcpage.startup_off")} · {it.start_mode}</span>
+            <span className="text-[11px] text-zinc-600 shrink-0 uppercase">{it.state === "Running" ? t("mypcpage.startup_on") : t("mypcpage.startup_off")} · {it.start_mode}</span>
           </div>
         );
       })}

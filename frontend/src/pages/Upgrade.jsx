@@ -81,7 +81,7 @@ export default function Upgrade() {
 
   const GameChips = ({ testPrefix }) => games.length > 0 && (
     <div className="mb-4">
-      <div className="text-[10px] uppercase tracking-widest text-zinc-600 mb-1.5">{t("upgrade.games_quick")}</div>
+      <div className="text-[11px] uppercase tracking-widest text-zinc-600 mb-1.5">{t("upgrade.games_quick")}</div>
       <div className="flex flex-wrap gap-1.5">
         {games.slice(0, 10).map((g) => (
           <button key={g} data-testid={`${testPrefix}-chip-${g}`} type="button" onClick={() => setGame(g)}
@@ -99,7 +99,7 @@ export default function Upgrade() {
 
       {specs && (sv(specs.cpu) || sv(specs.gpu)) && (
         <div className="bg-[#0F0F12] border border-[#1A1A24] px-4 py-3 mb-4 flex flex-wrap items-center gap-x-6 gap-y-1.5" data-testid="hw-header">
-          <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-600">{t("upgrade.hw_title")}</span>
+          <span className="text-[11px] uppercase tracking-[0.2em] text-zinc-600">{t("upgrade.hw_title")}</span>
           {sv(specs.cpu) && <span className="flex items-center gap-1.5 font-mono text-xs text-zinc-300"><Cpu size={13} className="text-[#E5FF00]" />{sv(specs.cpu)}</span>}
           {sv(specs.gpu) && <span className="flex items-center gap-1.5 font-mono text-xs text-zinc-300"><Gauge size={13} className="text-[#00E0FF]" />{sv(specs.gpu)}</span>}
           {specs.ram != null && <span className="font-mono text-xs text-zinc-300">RAM {typeof specs.ram === "number" ? `${specs.ram} GB` : sv(specs.ram)}</span>}
@@ -209,7 +209,7 @@ export default function Upgrade() {
                         </div>
                       ))}
                     </div>
-                    <div className="flex items-center gap-4 mt-2 text-[10px] uppercase tracking-widest text-zinc-600">
+                    <div className="flex items-center gap-4 mt-2 text-[11px] uppercase tracking-widest text-zinc-600">
                       <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-1.5 bg-zinc-600" /> {t("upgrade.ba_before")}</span>
                       <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-1.5 bg-[#00FF66]" /> {t("upgrade.ba_after")}</span>
                     </div>

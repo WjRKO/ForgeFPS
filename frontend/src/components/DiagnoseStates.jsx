@@ -20,7 +20,7 @@ export function DiagnoseIdleCTA({ onRun, isEn, t }) {
           <Stethoscope size={24} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#E5FF00] mb-1">
+          <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#E5FF00] mb-1">
             // AI COACH · KILLER FEATURE
           </div>
           <h3 className="font-display font-black text-xl tracking-tighter text-white mb-0.5">

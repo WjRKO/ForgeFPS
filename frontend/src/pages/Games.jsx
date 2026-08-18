@@ -185,7 +185,7 @@ export default function Games() {
               <div className="flex items-center justify-between mb-2">
                 <div className="text-xs uppercase tracking-widest text-zinc-500">{t("games.booster_close")}</div>
                 <button onClick={loadRunningApps} data-testid="booster-refresh-running"
-                  className="text-[10px] text-zinc-500 hover:text-[#00E0FF] transition-colors inline-flex items-center gap-1">
+                  className="text-[11px] text-zinc-500 hover:text-[#00E0FF] transition-colors inline-flex items-center gap-1">
                   <RefreshCw size={11} /> {t("games.refresh_short") || "aggiorna"}
                 </button>
               </div>
@@ -215,13 +215,13 @@ export default function Games() {
                           <input type="checkbox" checked={checked} onChange={() => toggleBoostApp(proc)}
                             className="accent-[#00E0FF] w-4 h-4" />
                           <span className="flex-1 truncate">{label}</span>
-                          <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500">{proc}</span>
+                          <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">{proc}</span>
                         </label>
                       );
                     })}
                   </div>
                   {boostCloseApps.size > 0 && (
-                    <div className="text-[10px] text-zinc-500 mb-1" data-testid="booster-selected-count">
+                    <div className="text-[11px] text-zinc-500 mb-1" data-testid="booster-selected-count">
                       {(t("games.booster_will_close", { count: boostCloseApps.size }) || `Al prossimo boost chiuderemo ${boostCloseApps.size} app.`)}
                     </div>
                   )}

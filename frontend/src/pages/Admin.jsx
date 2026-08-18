@@ -95,7 +95,7 @@ function GrantPlanModal({ open, onClose, user, onGranted }) {
               <input type="number" min={0} max={120} value={months} onChange={(e) => setMonths(e.target.value)}
                 className="w-full bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none"
                 data-testid="grant-plan-months" />
-              <div className="text-[10px] text-zinc-600 mt-1 font-mono">
+              <div className="text-[11px] text-zinc-600 mt-1 font-mono">
                 {Number(months) === 0 ? (isEn() ? "Perpetual plan (no expiry)" : "Piano perpetuo (senza scadenza)")
                  : `${isEn() ? "Expires" : "Scade il"} ${new Date(Date.now() + Number(months) * 30 * 86400000).toLocaleDateString(isEn() ? "en-US" : "it-IT")}`}
               </div>
@@ -163,7 +163,7 @@ function BroadcastModal({ open, onClose }) {
               placeholder={isEn() ? "Details in 1-2 lines. Max 500 characters." : "Dettagli in 1-2 righe. Massimo 500 caratteri."}
               className="w-full bg-black border border-[#2A2A35] px-3 py-2 text-sm focus:border-[#E5FF00] outline-none resize-none"
               data-testid="broadcast-body" />
-            <div className="text-[10px] text-zinc-600 text-right mt-0.5">{body.length}/500</div>
+            <div className="text-[11px] text-zinc-600 text-right mt-0.5">{body.length}/500</div>
           </div>
           <div>
             <label className="text-xs uppercase tracking-widest text-zinc-500 block mb-1">{isEn() ? "CTA link (optional)" : "Link CTA (facoltativo)"}</label>

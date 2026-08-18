@@ -119,7 +119,7 @@ export default function PasswordResetsPanel() {
                     </td>
                     <td className="py-2 px-3 text-zinc-500 font-mono text-xs">{it.ip || "—"}</td>
                     <td className="py-2 px-3">
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 border ${sty.border} ${sty.bg} ${sty.text}`}>
+                      <span className={`text-[11px] font-bold uppercase px-2 py-0.5 border ${sty.border} ${sty.bg} ${sty.text}`}>
                         {isEn() ? sty.label_en : sty.label}
                       </span>
                     </td>

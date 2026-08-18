@@ -126,7 +126,7 @@ export default function FeedbackModal({ open, onClose }) {
         </button>
 
         <div className="p-6 border-b border-[#1A1A24]">
-          <div className="text-[10px] font-mono uppercase tracking-widest text-[#E5FF00] mb-1">// {en ? "we listen" : "ti ascoltiamo"}</div>
+          <div className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] mb-1">// {en ? "we listen" : "ti ascoltiamo"}</div>
           <h2 className="font-display font-black text-2xl tracking-tighter text-white">
             {en ? "Send feedback" : "Invia feedback"}
           </h2>
@@ -139,7 +139,7 @@ export default function FeedbackModal({ open, onClose }) {
 
         <div className="p-6 space-y-4">
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">
+            <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2">
               {en ? "type" : "tipo"}
             </div>
             <div className="grid grid-cols-3 gap-2">
@@ -168,10 +168,10 @@ export default function FeedbackModal({ open, onClose }) {
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">
+              <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">
                 {en ? "your message" : "il tuo messaggio"}
               </div>
-              <div className={`text-[10px] font-mono ${message.length > MAX_MSG * 0.9 ? "text-[#FF3B30]" : "text-zinc-600"}`}>
+              <div className={`text-[11px] font-mono ${message.length > MAX_MSG * 0.9 ? "text-[#FF3B30]" : "text-zinc-600"}`}>
                 {message.length}/{MAX_MSG}
               </div>
             </div>
@@ -189,7 +189,7 @@ export default function FeedbackModal({ open, onClose }) {
           </div>
 
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">
+            <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2">
               {en ? "screenshot (optional)" : "screenshot (opzionale)"}
             </div>
             {screenshot ? (
@@ -197,7 +197,7 @@ export default function FeedbackModal({ open, onClose }) {
                 <img src={screenshot} alt="preview" className="w-14 h-14 object-cover border border-[#2A2A35]" />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-zinc-300 truncate">{screenshotName}</div>
-                  <div className="text-[10px] text-zinc-600 font-mono">{Math.round(screenshot.length / 1024)} KB</div>
+                  <div className="text-[11px] text-zinc-600 font-mono">{Math.round(screenshot.length / 1024)} KB</div>
                 </div>
                 <button
                   type="button"
@@ -217,7 +217,7 @@ export default function FeedbackModal({ open, onClose }) {
                 <span className="text-xs text-zinc-400">
                   {en ? "Click to attach a screenshot" : "Clicca per allegare uno screenshot"}
                 </span>
-                <span className="text-[10px] text-zinc-600 font-mono">PNG · JPG · max 1.5 MB</span>
+                <span className="text-[11px] text-zinc-600 font-mono">PNG · JPG · max 1.5 MB</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -231,7 +231,7 @@ export default function FeedbackModal({ open, onClose }) {
         </div>
 
         <div className="p-6 border-t border-[#1A1A24] flex items-center justify-between gap-3">
-          <div className="text-[10px] text-zinc-600 font-mono">
+          <div className="text-[11px] text-zinc-600 font-mono">
             {en ? `page: ${location.pathname}` : `pagina: ${location.pathname}`}
           </div>
           <button
