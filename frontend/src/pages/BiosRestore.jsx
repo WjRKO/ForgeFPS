@@ -262,12 +262,12 @@ export default function BiosRestore() {
               </div>
 
               <div id="bios-safe" className="bg-[#0F0F12] border border-[#00FF66]/30 p-5 scroll-mt-24">
-                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#00FF66]"><ShieldCheck size={16} /> {t("bios.safe_title")} <span className="text-[10px] font-mono text-zinc-500 ml-auto">{safe.length}</span></div>
+                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#00FF66]"><ShieldCheck size={16} /> {t("bios.safe_title")} <span className="text-[11px] font-mono text-zinc-500 ml-auto">{safe.length}</span></div>
                 <div className="border border-[#1A1A24]">{safe.map((it, i) => <Row key={it.id} item={it} tone="safe" i={i} section="bios" onAsk={askAI} />)}</div>
               </div>
 
               <div id="bios-caution" className="bg-[#0F0F12] border border-[#E5FF00]/30 p-5 scroll-mt-24">
-                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#E5FF00]"><AlertTriangle size={16} /> {t("bios.caution_title")} <span className="text-[10px] font-mono text-zinc-500 ml-auto">{caution.length}</span></div>
+                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#E5FF00]"><AlertTriangle size={16} /> {t("bios.caution_title")} <span className="text-[11px] font-mono text-zinc-500 ml-auto">{caution.length}</span></div>
                 <div className="border border-[#1A1A24]">{caution.map((it, i) => <Row key={it.id} item={it} tone="caution" i={i} section="bios" onAsk={askAI} />)}</div>
               </div>
 
@@ -279,7 +279,7 @@ export default function BiosRestore() {
           ) : (
             <>
               <div id="restore-safe" className="bg-[#0F0F12] border border-[#00FF66]/30 p-5 scroll-mt-24">
-                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#00FF66]"><ShieldCheck size={16} /> {t("bios.restore_safe")} <span className="text-[10px] font-mono text-zinc-500 ml-auto">{restoreSafe.length}</span></div>
+                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#00FF66]"><ShieldCheck size={16} /> {t("bios.restore_safe")} <span className="text-[11px] font-mono text-zinc-500 ml-auto">{restoreSafe.length}</span></div>
                 <div className="border border-[#1A1A24]">{restoreSafe.map((it, i) => <Row key={it.id} item={it} tone="safe" i={i} section="restore" onAsk={askAIRestore} />)}</div>
                 <div className="mt-4">
                   <div className="text-xs text-zinc-500 mb-2">{t("bios.restore_cmd_hint")}</div>
@@ -288,7 +288,7 @@ export default function BiosRestore() {
               </div>
 
               <div id="restore-caution" className="bg-[#0F0F12] border border-[#E5FF00]/30 p-5 scroll-mt-24">
-                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#E5FF00]"><AlertTriangle size={16} /> {t("bios.caution_title")} <span className="text-[10px] font-mono text-zinc-500 ml-auto">{restoreCaution.length}</span></div>
+                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#E5FF00]"><AlertTriangle size={16} /> {t("bios.caution_title")} <span className="text-[11px] font-mono text-zinc-500 ml-auto">{restoreCaution.length}</span></div>
                 <div className="border border-[#1A1A24]">{restoreCaution.map((it, i) => <Row key={it.id} item={it} tone="caution" i={i} section="restore" onAsk={askAIRestore} />)}</div>
               </div>
 
@@ -304,7 +304,7 @@ export default function BiosRestore() {
         <aside className="lg:sticky lg:top-6 lg:self-start space-y-4" data-testid="bios-panel">
           {/* Tabs BIOS / Restore */}
           <div className="bg-[#0F0F12] border border-[#2A2A35] p-4">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{t("bios.mode_label")}</div>
+            <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{t("bios.mode_label")}</div>
             <div className="grid grid-cols-2 gap-1.5">
               <button data-testid="tab-bios" onClick={() => setTab("bios")}
                 className={`inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-bold transition-colors ${tab === "bios" ? "bg-[#E5FF00] text-black" : "border border-[#2A2A35] text-zinc-400 hover:border-[#E5FF00]"}`}>
@@ -320,7 +320,7 @@ export default function BiosRestore() {
           {/* Hardware detected */}
           {hasHw && (
             <div className="bg-[#0F0F12] border border-[#00E0FF]/30 p-4" data-testid="bios-hw">
-              <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-[#00E0FF] mb-2">
+              <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-[#00E0FF] mb-2">
                 <Cpu size={11} /> {t("bios.hw_detected")}
               </div>
               <div className="space-y-1 text-[11px]">
@@ -333,7 +333,7 @@ export default function BiosRestore() {
 
           {/* Jump-to sections */}
           <div className="bg-[#0F0F12] border border-[#2A2A35] p-4">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{t("bios.jump_to")}</div>
+            <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{t("bios.jump_to")}</div>
             <div className="space-y-1">
               {tab === "bios" ? (
                 <>

@@ -95,7 +95,7 @@ export default function PrivacyTelemetry() {
             <div key={tier.t} className="bg-[#0F0F12] border border-[#1A1A24] p-6" data-testid={`tier-${tier.t.toLowerCase()}`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="w-10 h-10 border border-[#2A2A35] flex items-center justify-center text-[#E5FF00]"><tier.icon size={18} /></div>
-                <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 border border-[#1A1A24] px-2 py-1">[ {tier.tag} ]</span>
+                <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 border border-[#1A1A24] px-2 py-1">[ {tier.tag} ]</span>
               </div>
               <h3 className="font-display font-bold text-lg mb-3">{tier.t}</h3>
               <ul className="space-y-2">

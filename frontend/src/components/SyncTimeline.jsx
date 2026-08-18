@@ -81,7 +81,7 @@ export default function SyncTimeline({ days = 7 }) {
               }}
               title={`${c.date.toLocaleDateString(lang, { weekday: "short", day: "2-digit", month: "short" })} — ${c.count} sync`}
             />
-            <div className="text-[10px] text-zinc-600 text-center mt-1 uppercase">
+            <div className="text-[11px] text-zinc-600 text-center mt-1 uppercase">
               {c.date.toLocaleDateString(lang, { weekday: "narrow" })}
             </div>
           </div>

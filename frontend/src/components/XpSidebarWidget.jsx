@@ -74,7 +74,7 @@ export function XpSidebarWidget() {
           <Trophy size={13} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className={`text-[10px] font-black uppercase tracking-widest ${col.text}`} data-testid="xp-widget-tier">
+          <div className={`text-[11px] font-black uppercase tracking-widest ${col.text}`} data-testid="xp-widget-tier">
             {tier}
           </div>
           <div className="text-xs text-zinc-300 font-mono tabular-nums" data-testid="xp-widget-xp">
@@ -91,7 +91,7 @@ export function XpSidebarWidget() {
         />
       </div>
       {!isMax && (
-        <div className="text-[9px] font-mono text-zinc-600 mt-1">
+        <div className="text-[11px] font-mono text-zinc-600 mt-1">
           {next - data.xp} XP {t("milestones.to_next", "al prossimo tier")}
         </div>
       )}

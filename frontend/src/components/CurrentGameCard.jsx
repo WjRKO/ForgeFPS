@@ -65,7 +65,7 @@ export default function CurrentGameCard({ appid, gameName, source, exe, fullscre
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap text-[10px] uppercase tracking-widest text-zinc-500">
+          <div className="flex items-center gap-2 flex-wrap text-[11px] uppercase tracking-widest text-zinc-500">
             <span className="flex items-center gap-1 text-[#00FF66]">
               <Radio size={11} className="animate-pulse" />
               {t("live.game_now_playing", "Ora in gioco")}

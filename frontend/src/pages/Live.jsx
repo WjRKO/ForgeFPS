@@ -51,7 +51,7 @@ function BentoCard({ icon: Icon, label, main, mainUnit, mainClass = "", rows = [
   const ghost = main == null;
   return (
     <div className="bg-[#0F0F12] border border-[#1A1A24] p-4 h-full flex flex-col rounded-none" data-testid={testid}>
-      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2">
+      <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">
         <Icon size={13} /> {label}
       </div>
       <div className={`font-mono tabular-nums font-black text-4xl lg:text-5xl leading-none ${ghost ? "text-zinc-800" : mainClass || "text-zinc-100"}`}>
@@ -62,7 +62,7 @@ function BentoCard({ icon: Icon, label, main, mainUnit, mainClass = "", rows = [
         <div className="mt-3 pt-2 border-t border-[#1A1A24] space-y-1">
           {rows.map((r) => (
             <div key={r.label} className="flex items-baseline justify-between text-xs" data-testid={r.testid}>
-              <span className="text-zinc-600 uppercase tracking-wider text-[10px]">{r.label}</span>
+              <span className="text-zinc-600 uppercase tracking-wider text-[11px]">{r.label}</span>
               <span className={`font-mono tabular-nums ${r.value == null ? "text-zinc-800" : r.cls || "text-zinc-300"}`}>
                 {r.value ?? "--"}<span className="text-zinc-600 ml-0.5">{r.value != null ? r.unit : ""}</span>
               </span>
@@ -80,7 +80,7 @@ function PrecisionCell({ icon: Icon, label, value, unit, cls, testid }) {
     <div className="bg-[#0F0F12] border border-[#1A1A24] p-3 rounded-none flex items-center gap-3" data-testid={testid}>
       <Icon size={16} className="text-zinc-600 shrink-0" />
       <div className="flex-1 min-w-0">
-        <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{label}</div>
+        <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-500">{label}</div>
         <div className={`font-mono tabular-nums text-base font-black leading-tight ${value == null ? "text-zinc-800" : cls || "text-zinc-100"}`}>
           {value ?? "--"}<span className="text-xs ml-1 font-normal text-zinc-500">{value != null ? unit : ""}</span>
         </div>
@@ -165,7 +165,7 @@ function TelemetryCharts({ chart, waitingText, t }) {
 function AlertSettings({ alerts, setAlerts, onSave, t }) {
   return (
     <div className="bg-[#0F0F12] border border-[#1A1A24] p-4 rounded-none" data-testid="alert-settings">
-      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3">
+      <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-3">
         <Bell size={13} className="text-[#FF3B30]" /> {t("live.alert_title")}
       </div>
       <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer mb-3" data-testid="alert-enabled">
@@ -174,12 +174,12 @@ function AlertSettings({ alerts, setAlerts, onSave, t }) {
       </label>
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">{t("live.cpu_threshold")}</div>
+          <div className="text-[11px] uppercase tracking-wider text-zinc-600 mb-1">{t("live.cpu_threshold")}</div>
           <input type="number" data-testid="alert-cpu-max" value={alerts.cpu_max} onChange={(e) => setAlerts({ ...alerts, cpu_max: parseInt(e.target.value) || 0 })}
             className="w-full bg-black border border-[#2A2A35] px-3 py-2 text-sm font-mono focus:border-[#E5FF00] outline-none rounded-none" />
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">{t("live.gpu_threshold")}</div>
+          <div className="text-[11px] uppercase tracking-wider text-zinc-600 mb-1">{t("live.gpu_threshold")}</div>
           <input type="number" data-testid="alert-gpu-max" value={alerts.gpu_max} onChange={(e) => setAlerts({ ...alerts, gpu_max: parseInt(e.target.value) || 0 })}
             className="w-full bg-black border border-[#2A2A35] px-3 py-2 text-sm font-mono focus:border-[#E5FF00] outline-none rounded-none" />
         </div>

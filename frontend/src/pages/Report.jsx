@@ -465,13 +465,13 @@ export default function Report() {
             <span className="font-display font-black text-xl tracking-tight">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
           </div>
           <div className="text-right">
-            <div className="text-[10px] uppercase tracking-[0.25em] text-[#E5FF00]">{c.report_title}</div>
-            <div className="text-[10px] text-zinc-500">{now.toLocaleDateString()} · {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+            <div className="text-[11px] uppercase tracking-[0.25em] text-[#E5FF00]">{c.report_title}</div>
+            <div className="text-[11px] text-zinc-500">{now.toLocaleDateString()} · {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
           </div>
         </div>
 
         {/* Header row */}
-        <div className="grid grid-cols-[1.4fr_1fr_auto_1fr_1fr] items-center gap-3 px-3 pb-2 text-[10px] uppercase tracking-widest text-zinc-500">
+        <div className="grid grid-cols-[1.4fr_1fr_auto_1fr_1fr] items-center gap-3 px-3 pb-2 text-[11px] uppercase tracking-widest text-zinc-500">
           <div>Metric</div>
           <div className="text-center text-[#00E0FF]">{c.before}</div>
           <div />
@@ -510,7 +510,7 @@ export default function Report() {
           {!before && !after && <span className="italic">{c.tip_before}</span>}
         </div>
 
-        <div className="mt-5 pt-3 border-t border-[#1A1A24] flex items-center justify-between text-[10px] text-zinc-600">
+        <div className="mt-5 pt-3 border-t border-[#1A1A24] flex items-center justify-between text-[11px] text-zinc-600">
           <span className="flex items-center gap-1"><Activity size={11} /> {c.footer}</span>
           <span>{before?.captured_at ? new Date(before.captured_at).toLocaleDateString() : ""}</span>
         </div>

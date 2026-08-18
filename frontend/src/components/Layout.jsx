@@ -109,7 +109,7 @@ function Notifications() {
         className="relative p-2 border border-[#2A2A35] hover:border-[#E5FF00] transition-colors">
         <Bell size={18} />
         {unread > 0 && (
-          <span data-testid="notif-count" className="absolute -top-1 -right-1 bg-[#E5FF00] text-black text-[10px] font-bold px-1.5 rounded-sm">
+          <span data-testid="notif-count" className="absolute -top-1 -right-1 bg-[#E5FF00] text-black text-[11px] font-bold px-1.5 rounded-sm">
             {unread}
           </span>
         )}
@@ -229,7 +229,7 @@ export default function Layout() {
             return (
               <div key={gi} className={group.section ? "pt-3" : ""}>
                 {group.section && (
-                  <div className="px-3 pb-1.5 text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-bold">{t(group.section)}</div>
+                  <div className="px-3 pb-1.5 text-[11px] uppercase tracking-[0.2em] text-zinc-600 font-bold">{t(group.section)}</div>
                 )}
                 {items.map((n) => {
                   if (n.action === "feedback") {
@@ -256,7 +256,7 @@ export default function Layout() {
                       <span className="flex-1">{t(n.label)}</span>
                       {badgeCount > 0 && (
                         <span
-                          className="min-w-[18px] h-[18px] px-1.5 flex items-center justify-center bg-[#FF3B30] text-white text-[10px] font-bold rounded-full"
+                          className="min-w-[18px] h-[18px] px-1.5 flex items-center justify-center bg-[#FF3B30] text-white text-[11px] font-bold rounded-full"
                           data-testid={`nav-${n.id}-badge`}
                         >
                           {badgeCount > 9 ? "9+" : badgeCount}

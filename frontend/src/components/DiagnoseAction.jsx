@@ -41,9 +41,9 @@ export default function DiagnoseAction({ t, index, action, isActive, isSaved, fe
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <h4 className={`font-display font-black text-base tracking-tight ${isActive ? "text-zinc-400 line-through" : "text-white"}`}>{action.title}</h4>
             {isActive ? (
-              <span className="text-[10px] font-mono uppercase tracking-widest text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-1.5">{t("diagnose.already_active")}</span>
+              <span className="text-[11px] font-mono uppercase tracking-widest text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-1.5">{t("diagnose.already_active")}</span>
             ) : (
-              <span className={`text-[10px] font-mono uppercase tracking-widest ${diff.color}`}>{diffLabel}</span>
+              <span className={`text-[11px] font-mono uppercase tracking-widest ${diff.color}`}>{diffLabel}</span>
             )}
           </div>
           {!isActive && action.impact && (

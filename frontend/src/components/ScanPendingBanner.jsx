@@ -57,7 +57,7 @@ export default function ScanPendingBanner({ en }) {
           <Loader2 size={18} className="text-[#E5FF00] animate-spin" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-mono uppercase tracking-widest text-[#E5FF00] mb-1">
+          <div className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] mb-1">
             {en ? "// first scan · waiting..." : "// primo scan · in attesa..."}
           </div>
           <h2 className="font-display font-black text-2xl tracking-tighter text-zinc-100 mb-1">

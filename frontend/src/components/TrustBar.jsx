@@ -43,7 +43,7 @@ export const TrustBar = ({ className = "" }) => {
             {it.href && <ExternalLink size={11} className="text-zinc-600 group-hover:text-zinc-300 transition-colors" />}
           </>
         );
-        const base = "group inline-flex items-center gap-2 bg-[#0F0F12] border border-[#2A2A35] px-3.5 py-2 text-xs font-medium hover:border-[#E5FF00]/50 transition-colors";
+        const base = "group inline-flex items-center gap-2 bg-[#0F0F12] border border-[#2A2A35] px-3.5 py-3 text-xs font-medium hover:border-[#E5FF00]/50 transition-colors";
         if (it.to) {
           return (
             <Link key={it.testid} to={it.to} data-testid={it.testid} className={base}>

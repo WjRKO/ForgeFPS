@@ -68,7 +68,7 @@ export default function NextActionBanner({ kind, custom, dismissKey, testid }) {
       data-testid={testid || `nba-${kind || "custom"}`}>
       <div className="shrink-0"><Icon size={20} style={{ color: cfg.accent }} /></div>
       <div className="flex-1 text-sm text-zinc-300 leading-relaxed">
-        <span className="text-[10px] uppercase tracking-[0.2em] font-mono mr-2" style={{ color: cfg.accent }}>
+        <span className="text-[11px] uppercase tracking-[0.2em] font-mono mr-2" style={{ color: cfg.accent }}>
           {t("nba.next", { defaultValue: "prossima mossa" })}
         </span>
         {cfg.text}

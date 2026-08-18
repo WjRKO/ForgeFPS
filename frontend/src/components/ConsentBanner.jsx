@@ -48,19 +48,20 @@ export const ConsentBanner = () => {
               </div>
               <div>
                 <div className="font-display font-bold text-sm text-zinc-100">{c.title}</div>
-                <p className="text-xs text-zinc-400 leading-relaxed mt-1">
-                  {c.body}{" "}
-                  <Link to="/privacy-telemetry" data-testid="consent-more" className="text-[#E5FF00] hover:underline">{c.more}</Link>
-                </p>
+                <p className="text-xs text-zinc-400 leading-relaxed mt-1">{c.body}</p>
+                <Link to="/privacy-telemetry" data-testid="consent-more"
+                  className="inline-flex items-center py-3 text-xs font-medium text-[#E5FF00] hover:underline">
+                  {c.more}
+                </Link>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button data-testid="consent-reject" onClick={() => choose(false)}
-                className="px-4 py-2 text-sm font-semibold border border-[#2A2A35] text-zinc-300 hover:border-[#FF3B30]/50 hover:text-white transition-colors">
+                className="px-4 py-2.5 text-sm font-semibold border border-[#2A2A35] text-zinc-300 hover:border-[#FF3B30]/50 hover:text-white transition-colors">
                 {c.reject}
               </button>
               <button data-testid="consent-accept" onClick={() => choose(true)}
-                className="px-5 py-2 text-sm font-bold bg-[#E5FF00] text-black hover:bg-[#D4EC00] transition-colors btn-volt">
+                className="px-5 py-2.5 text-sm font-bold bg-[#E5FF00] text-black hover:bg-[#D4EC00] transition-colors btn-volt">
                 {c.accept}
               </button>
             </div>

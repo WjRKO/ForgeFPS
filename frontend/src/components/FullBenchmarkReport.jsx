@@ -38,7 +38,7 @@ function DeltaBadge({ delta, positive = "up" }) {
   const color = isImprovement ? "text-[#00FF66]" : "text-[#FF9500]";
   const Icon = delta > 0 ? TrendingUp : TrendingDown;
   return (
-    <span className={`inline-flex items-center gap-0.5 text-[10px] ${color} font-mono`}>
+    <span className={`inline-flex items-center gap-0.5 text-[11px] ${color} font-mono`}>
       <Icon size={10} /> {delta > 0 ? "+" : ""}{delta.toFixed(1)}%
     </span>
   );
@@ -60,7 +60,7 @@ function StatRow({ label, value, sub, deltaProps, testid }) {
     <div className="flex items-baseline justify-between border-b border-[#2A2A35]/40 py-2 last:border-b-0" data-testid={testid}>
       <div>
         <div className="text-xs text-zinc-400">{label}</div>
-        {sub && <div className="text-[10px] text-zinc-600">{sub}</div>}
+        {sub && <div className="text-[11px] text-zinc-600">{sub}</div>}
       </div>
       <div className="text-right">
         <div className="font-display font-bold text-lg text-white">{value}</div>
@@ -150,7 +150,7 @@ export default function FullBenchmarkReport() {
             testid="fullbench-launch"
           />
         </div>
-        <p className="text-[10px] text-zinc-600 mt-4 font-mono uppercase tracking-widest">
+        <p className="text-[11px] text-zinc-600 mt-4 font-mono uppercase tracking-widest">
           richiede FrameForge Agent installato
         </p>
       </div>
@@ -168,7 +168,7 @@ export default function FullBenchmarkReport() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0F0F12] border border-[#2A2A35] p-4">
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono">Ultimo Full Benchmark</div>
+          <div className="text-[11px] uppercase tracking-widest text-zinc-500 font-mono">Ultimo Full Benchmark</div>
           <div className="text-lg font-bold text-white" data-testid="fullbench-ran-at">{ranAt}</div>
           <div className="text-xs text-zinc-500">Durata: {f.duration_s || "--"}s · v{f.version}</div>
         </div>
@@ -276,7 +276,7 @@ export default function FullBenchmarkReport() {
         <Card title={`Storico Full Benchmark (ultimi ${state.history.length})`} icon={TrendingUp} accent="text-[#00E0FF]" testid="fullbench-history">
           <div className="overflow-x-auto -mx-2 px-2">
             <table className="w-full text-xs">
-              <thead className="text-zinc-500 uppercase tracking-widest text-[10px]">
+              <thead className="text-zinc-500 uppercase tracking-widest text-[11px]">
                 <tr className="border-b border-[#2A2A35]">
                   <th className="text-left py-2">Data</th>
                   <th className="text-right py-2">CPU burst</th>

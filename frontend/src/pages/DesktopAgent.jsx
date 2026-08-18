@@ -284,7 +284,7 @@ export default function DesktopAgent() {
               <span className="flex items-center gap-2.5">
                 <ShieldCheck size={16} className="text-[#E5FF00]" />
                 <span className="text-sm font-semibold text-zinc-200">{s.secure_title}</span>
-                <span className="text-[10px] font-mono uppercase tracking-widest text-[#E5FF00] border border-[#E5FF00]/40 px-1.5 py-0.5">.ps1</span>
+                <span className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] border border-[#E5FF00]/40 px-1.5 py-0.5">.ps1</span>
               </span>
               <ChevronDown size={18} className={`text-zinc-500 transition-transform ${advOpen ? "rotate-180" : ""}`} />
             </button>
@@ -344,11 +344,11 @@ export default function DesktopAgent() {
             <div className="flex items-center gap-2 mb-3">
               <div className="w-10 h-10 border border-[#00E0FF]/40 flex items-center justify-center shrink-0"><MonitorDown size={20} className="text-[#00E0FF]" /></div>
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-mono uppercase tracking-widest text-[#00E0FF]">FrameForge Agent</div>
+                <div className="text-[11px] font-mono uppercase tracking-widest text-[#00E0FF]">FrameForge Agent</div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-white">{AGENT_EXE_VERSION}</span>
-                  <span className="text-[10px] text-zinc-500">·</span>
-                  <span className="text-[10px] text-zinc-500 font-mono">{AGENT_EXE_DATE}</span>
+                  <span className="text-[11px] text-zinc-500">·</span>
+                  <span className="text-[11px] text-zinc-500 font-mono">{AGENT_EXE_DATE}</span>
                 </div>
               </div>
             </div>
@@ -361,7 +361,7 @@ export default function DesktopAgent() {
               className="flex items-center justify-center gap-2 bg-[#00E0FF] text-black font-bold py-3 text-sm uppercase tracking-wide hover:bg-[#33e8ff] transition-colors w-full">
               <Download size={16} /> {s.exe_btn}
             </button>
-            <p className="mt-1.5 text-[10px] text-zinc-500 leading-relaxed px-1" data-testid="exe-personalized-hint">{s.exe_personalized_hint}</p>
+            <p className="mt-1.5 text-[11px] text-zinc-500 leading-relaxed px-1" data-testid="exe-personalized-hint">{s.exe_personalized_hint}</p>
 
             <a href={AGENT_RELEASES_URL} target="_blank" rel="noreferrer" data-testid="exe-releases-link"
               className="mt-2 flex items-center justify-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-[#00E0FF] transition-colors">
@@ -369,10 +369,10 @@ export default function DesktopAgent() {
             </a>
 
             <div className="mt-4 pt-3 border-t border-[#2A2A35]">
-              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-1.5 flex items-center gap-1.5">
+              <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-1.5 flex items-center gap-1.5">
                 <FileCheck2 size={11} className="text-[#00FF66]" /> {s.exe_sha}
               </div>
-              <code className="block text-[10px] text-zinc-400 font-mono break-all leading-relaxed" data-testid="exe-sha256">{AGENT_EXE_SHA256}</code>
+              <code className="block text-[11px] text-zinc-400 font-mono break-all leading-relaxed" data-testid="exe-sha256">{AGENT_EXE_SHA256}</code>
               <a href={`https://www.virustotal.com/gui/file/${AGENT_EXE_SHA256}`} target="_blank" rel="noreferrer" data-testid="exe-virustotal"
                 className="inline-flex items-center gap-1 mt-1.5 text-[11px] text-[#00FF66] hover:underline">
                 <ShieldCheck size={12} /> {s.exe_vt} <ExternalLink size={9} />
@@ -380,7 +380,7 @@ export default function DesktopAgent() {
             </div>
 
             <div className="mt-4 pt-3 border-t border-[#2A2A35]">
-              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-1.5">{s.exe_run}</div>
+              <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-1.5">{s.exe_run}</div>
               <CmdRow label="" cmd={exeCmd} testid="exe-run" accent="text-[#E5FF00]" />
             </div>
 

@@ -38,7 +38,7 @@ export const SecureInstaller = ({ compact }) => {
   const c = COPY[lang];
   return (
     <div className="bg-[#0F0F12] border border-[#2A2A35] p-6" data-testid="secure-installer">
-      <div className="text-[10px] font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-2">{c.eyebrow}</div>
+      <div className="text-[11px] font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-2">{c.eyebrow}</div>
       <h3 className="font-display font-black text-2xl tracking-tight mb-2">{c.title}</h3>
       <p className="text-zinc-400 text-sm mb-5 max-w-md">{c.sub}</p>
 

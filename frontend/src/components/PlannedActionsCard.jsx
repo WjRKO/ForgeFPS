@@ -90,7 +90,7 @@ export default function PlannedActionsCard() {
                 )}
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   {a.difficulty && (
-                    <span className={`text-[10px] uppercase tracking-wider border px-1.5 py-0.5 ${DIFFICULTY_STYLE[a.difficulty] || "text-zinc-500 border-[#2A2A35]"}`}>
+                    <span className={`text-[11px] uppercase tracking-wider border px-1.5 py-0.5 ${DIFFICULTY_STYLE[a.difficulty] || "text-zinc-500 border-[#2A2A35]"}`}>
                       {label(a.difficulty)}
                     </span>
                   )}

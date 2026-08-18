@@ -281,7 +281,7 @@ export default function Benchmark() {
           data-testid="tab-full-bench"
           className={`px-4 py-2 text-xs uppercase tracking-widest font-mono transition-colors border-b-2 ${tab === "full" ? "text-[#00E0FF] border-[#00E0FF]" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}
         >
-          Full Benchmark <span className="text-[#00E0FF] text-[9px] ml-1">v2</span>
+          Full Benchmark <span className="text-[#00E0FF] text-[11px] ml-1">v2</span>
         </button>
       </div>
 

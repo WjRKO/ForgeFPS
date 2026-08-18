@@ -104,7 +104,7 @@ export default function MobileHandoffModal({ open, onClose }) {
           <X size={18} />
         </button>
 
-        <div className="text-[10px] font-mono uppercase tracking-widest text-[#E5FF00] mb-2 flex items-center gap-2">
+        <div className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] mb-2 flex items-center gap-2">
           <Smartphone size={12} /> {isEn() ? "// CONTINUE ON YOUR PHONE" : "// CONTINUA SUL TELEFONO"}
         </div>
         <h2 className="font-display font-black text-xl tracking-tight text-white mb-1">{isEn() ? "Open the Dashboard on mobile" : "Apri la Dashboard sul mobile"}</h2>
@@ -162,7 +162,7 @@ export default function MobileHandoffModal({ open, onClose }) {
             </div>
             <button
               onClick={generate}
-              className="w-full inline-flex items-center justify-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-zinc-500 hover:text-[#E5FF00] py-2 border-t border-[#1A1A24] transition-colors"
+              className="w-full inline-flex items-center justify-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-[#E5FF00] py-2 border-t border-[#1A1A24] transition-colors"
               data-testid="mobile-handoff-regenerate-active"
             >
               <RefreshCw size={11} /> {isEn() ? "Regenerate" : "Rigenera"}
@@ -170,7 +170,7 @@ export default function MobileHandoffModal({ open, onClose }) {
           </>
         )}
 
-        <div className="mt-4 pt-4 border-t border-[#1A1A24] text-[10px] text-zinc-600 leading-relaxed">
+        <div className="mt-4 pt-4 border-t border-[#1A1A24] text-[11px] text-zinc-600 leading-relaxed">
           <strong className="text-zinc-500">{isEn() ? "Security:" : "Sicurezza:"}</strong> {isEn() ? "the link expires in 5 minutes and is single-use. If someone intercepts it after use, it won't work." : "il link scade in 5 minuti ed è a uso singolo. Se qualcuno lo intercetta dopo l'uso, non funziona."}
         </div>
       </div>

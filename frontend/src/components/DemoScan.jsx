@@ -101,7 +101,7 @@ export const DemoScan = () => {
 
   const HwCell = ({ icon: Icon, label, value, color }) => (
     <div className="bg-black border border-[#1A1A24] p-3" data-testid={`demo-hw-${label.toLowerCase()}`}>
-      <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-zinc-500"><Icon size={11} className={color} /> {label}</div>
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-zinc-500"><Icon size={11} className={color} /> {label}</div>
       <div className="font-display font-bold text-sm mt-1 truncate">{value || c.unknown}</div>
     </div>
   );
@@ -112,11 +112,11 @@ export const DemoScan = () => {
         <span className="w-2.5 h-2.5 rounded-full bg-[#FF3B30]" />
         <span className="w-2.5 h-2.5 rounded-full bg-[#E5FF00]" />
         <span className="w-2.5 h-2.5 rounded-full bg-[#00FF66]" />
-        <span className="ml-2 text-[10px] font-mono uppercase tracking-widest text-zinc-500">forgefps://scan</span>
+        <span className="ml-2 text-[11px] font-mono uppercase tracking-widest text-zinc-500">forgefps://scan</span>
       </div>
 
       <div className="p-6">
-        <div className="text-[10px] font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-2">{c.eyebrow}</div>
+        <div className="text-[11px] font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-2">{c.eyebrow}</div>
         <h3 className="font-display font-black text-2xl tracking-tight mb-2">{c.title}</h3>
         <p className="text-sm text-zinc-500 mb-5 leading-relaxed">{c.sub}</p>
 
@@ -146,7 +146,7 @@ export const DemoScan = () => {
           {state === "done" && (
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} data-testid="demo-scan-results">
               {/* Real hardware */}
-              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{c.hw}</div>
+              <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{c.hw}</div>
               <div className="grid grid-cols-2 gap-2 mb-5">
                 <HwCell icon={MonitorPlay} label="GPU" value={specs?.gpu} color="text-[#00E0FF]" />
                 <HwCell icon={Cpu} label="CPU" value={specs?.cpu_threads ? `${specs.cpu_threads} ${lang === "en" ? "threads" : "thread"}` : ""} color="text-[#00FF66]" />
@@ -155,23 +155,23 @@ export const DemoScan = () => {
               </div>
 
               {/* Real network */}
-              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{c.net}</div>
+              <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{c.net}</div>
               {net ? (
                 <div className="grid grid-cols-4 gap-2 mb-5" data-testid="demo-net-result">
                   <div className="bg-black border border-[#1A1A24] p-3 text-center">
-                    <div className="text-[9px] uppercase tracking-widest text-zinc-500 flex items-center justify-center gap-1"><Gauge size={10} /> {c.bloat}</div>
+                    <div className="text-[11px] uppercase tracking-widest text-zinc-500 flex items-center justify-center gap-1"><Gauge size={10} /> {c.bloat}</div>
                     <div className={`font-display font-black text-2xl mt-1 ${gradeColor(net.grade)}`}>{net.grade || "--"}</div>
                   </div>
                   <div className="bg-black border border-[#1A1A24] p-3 text-center">
-                    <div className="text-[9px] uppercase tracking-widest text-zinc-500">{c.idle}</div>
+                    <div className="text-[11px] uppercase tracking-widest text-zinc-500">{c.idle}</div>
                     <div className="font-display font-black text-lg mt-1 text-zinc-100">{net.idleMs}<span className="text-xs text-zinc-500">ms</span></div>
                   </div>
                   <div className="bg-black border border-[#1A1A24] p-3 text-center">
-                    <div className="text-[9px] uppercase tracking-widest text-zinc-500">{c.load}</div>
+                    <div className="text-[11px] uppercase tracking-widest text-zinc-500">{c.load}</div>
                     <div className="font-display font-black text-lg mt-1 text-zinc-100">{net.loadedMs ?? "--"}<span className="text-xs text-zinc-500">ms</span></div>
                   </div>
                   <div className="bg-black border border-[#1A1A24] p-3 text-center">
-                    <div className="text-[9px] uppercase tracking-widest text-zinc-500 flex items-center justify-center gap-1"><Wifi size={10} /> {c.down}</div>
+                    <div className="text-[11px] uppercase tracking-widest text-zinc-500 flex items-center justify-center gap-1"><Wifi size={10} /> {c.down}</div>
                     <div className="font-display font-black text-lg mt-1 text-zinc-100">{net.downloadMbps ?? "--"}<span className="text-xs text-zinc-500"> Mb</span></div>
                   </div>
                 </div>
@@ -180,7 +180,7 @@ export const DemoScan = () => {
               )}
 
               {/* Rule-based advice */}
-              <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{c.advice}</div>
+              <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{c.advice}</div>
               <div className="space-y-2 mb-4">
                 {advice.map((p, i) => (
                   <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }}

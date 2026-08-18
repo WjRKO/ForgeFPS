@@ -73,7 +73,7 @@ export default function TrialUpgradeBanner({ info }) {
       <div className="flex items-center gap-2 mb-2">
         <HeaderIcon size={13} style={{ color: headerColor }} className="shrink-0" />
         <div
-          className="text-[10px] uppercase tracking-widest font-bold flex-1"
+          className="text-[11px] uppercase tracking-widest font-bold flex-1"
           style={{ color: headerColor }}
           data-testid="banner-countdown"
         >

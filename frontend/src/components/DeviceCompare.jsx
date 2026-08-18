@@ -32,7 +32,7 @@ export const DeviceCompare = () => {
       <div className={`text-lg font-black tabular-nums ${warn ? "text-[#FF9F1C]" : "text-zinc-200"}`}>
         {value != null ? `${value}${unit}` : c.nd}
       </div>
-      <div className="text-[9px] font-mono uppercase tracking-widest text-zinc-600">{label}</div>
+      <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-600">{label}</div>
     </div>
   );
 
@@ -40,7 +40,7 @@ export const DeviceCompare = () => {
     <div className="border border-[#2A2A35] bg-[#0F0F12] hud-tick mb-6" data-testid="device-compare">
       <div className="p-4 border-b border-[#2A2A35] flex items-center gap-2">
         <Monitor size={14} className="text-[#00E0FF]" />
-        <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">{c.title}</span>
+        <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">{c.title}</span>
       </div>
       <div className={`grid grid-cols-1 ${devs.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2"} divide-y md:divide-y-0 md:divide-x divide-[#1A1A24]`}>
         {devs.map((d) => {
@@ -52,9 +52,9 @@ export const DeviceCompare = () => {
                 <I size={15} className={d.is_active ? "text-[#E5FF00]" : "text-zinc-500"} />
                 <span className="text-sm font-bold truncate">{d.name}</span>
                 <span className={`w-1.5 h-1.5 rounded-full ${d.online ? "bg-[#00FF66]" : "bg-zinc-600"}`} />
-                <span className="text-[9px] font-mono uppercase text-zinc-600">{c[d.role] || d.role}</span>
+                <span className="text-[11px] font-mono uppercase text-zinc-600">{c[d.role] || d.role}</span>
                 {isSuffering && (
-                  <span className="ml-auto flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-[#FF3B30] border border-[#FF3B30]/40 bg-[#FF3B30]/10 px-1.5 py-0.5" data-testid={`compare-suffering-${d.device_id}`}>
+                  <span className="ml-auto flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-[#FF3B30] border border-[#FF3B30]/40 bg-[#FF3B30]/10 px-1.5 py-0.5" data-testid={`compare-suffering-${d.device_id}`}>
                     <AlertTriangle size={9} /> {c.suffering}
                   </span>
                 )}
@@ -72,7 +72,7 @@ export const DeviceCompare = () => {
                 <Stat label={`${c.cpu_u} %`} value={d.live?.cpu_util} unit="%" />
                 <Stat label={`${c.gpu_u} %`} value={d.live?.gpu_util} unit="%" />
               </div>
-              <div className="text-[10px] font-mono text-zinc-600 space-y-0.5">
+              <div className="text-[11px] font-mono text-zinc-600 space-y-0.5">
                 {d.specs?.cpu && <div className="truncate">{d.specs.cpu}</div>}
                 {d.specs?.gpu && <div className="truncate">{d.specs.gpu}</div>}
                 {d.specs?.ram_gb && <div>{d.specs.ram_gb} GB RAM</div>}

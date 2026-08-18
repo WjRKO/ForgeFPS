@@ -65,7 +65,7 @@ function PlanBadge({ info }) {
         <Gift size={13} className={urgent ? "text-[#FFA500]" : "text-[#E5FF00]"} />
         <div className="min-w-0 text-xs">
           <div className={`uppercase tracking-widest font-bold ${urgent ? "text-[#FFA500]" : "text-[#E5FF00]"}`}>{tier} · trial</div>
-          <div className="text-zinc-400 text-[10px] font-mono">{days} giorn{days === 1 ? "o" : "i"} rimasti</div>
+          <div className="text-zinc-400 text-[11px] font-mono">{days} giorn{days === 1 ? "o" : "i"} rimasti</div>
         </div>
       </div>
     );
@@ -76,7 +76,7 @@ function PlanBadge({ info }) {
         <AlertTriangle size={13} className="text-[#FF3B30]" />
         <div className="min-w-0 text-xs">
           <div className="uppercase tracking-widest font-bold text-[#FF3B30]">Scaduto</div>
-          <div className="text-zinc-400 text-[10px] font-mono">Riattiva entro {grace}gg</div>
+          <div className="text-zinc-400 text-[11px] font-mono">Riattiva entro {grace}gg</div>
         </div>
       </div>
     );
@@ -170,7 +170,7 @@ export default function ProfileMenu() {
                 <div className="text-[11px] text-zinc-500 font-mono truncate">{user.email}</div>
               </div>
               {user.role === "admin" && (
-                <span className="bg-[#E5FF00]/20 text-[#E5FF00] text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5" title="Admin">
+                <span className="bg-[#E5FF00]/20 text-[#E5FF00] text-[11px] font-bold uppercase tracking-widest px-1.5 py-0.5" title="Admin">
                   <ShieldIcon size={10} className="inline" />
                 </span>
               )}
@@ -193,7 +193,7 @@ export default function ProfileMenu() {
                 <DISCORD_ICON size={15} className="text-[#5865F2] shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs">Discord ✓ linkato</div>
-                  {discord.username && <div className="text-[10px] text-zinc-500 truncate">@{discord.username}</div>}
+                  {discord.username && <div className="text-[11px] text-zinc-500 truncate">@{discord.username}</div>}
                 </div>
               </div>
             ) : (

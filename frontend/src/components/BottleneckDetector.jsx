@@ -97,7 +97,7 @@ export default function BottleneckDetector({ compact = false }) {
         <div className="shrink-0 mt-1"><Icon size={26} style={{ color: p.color }} /></div>
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-[10px] uppercase tracking-[0.2em]" style={{ color: p.color }}>{t("bottleneck.eyebrow", { defaultValue: "// bottleneck detector · live" })}</span>
+            <span className="text-[11px] uppercase tracking-[0.2em]" style={{ color: p.color }}>{t("bottleneck.eyebrow", { defaultValue: "// bottleneck detector · live" })}</span>
           </div>
           <div className="font-display font-black text-xl leading-tight" style={{ color: p.color }}>{c.title}</div>
           <p className="text-sm text-zinc-400 mt-1 leading-relaxed">{c.hint}</p>

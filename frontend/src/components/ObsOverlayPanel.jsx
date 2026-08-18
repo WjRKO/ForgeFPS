@@ -194,7 +194,7 @@ export default function ObsOverlayPanel() {
       <div className="grid md:grid-cols-2 gap-4">
         {/* Position */}
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Position" : "Posizione"}</div>
+          <div className="text-[11px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Position" : "Posizione"}</div>
           <div className="grid grid-cols-2 gap-1">
             {POSITIONS.map((p) => (
               <button
@@ -211,7 +211,7 @@ export default function ObsOverlayPanel() {
         {/* Multi-PC: sorgente dati dell'overlay */}
         {devices.length >= 2 && (
           <div data-testid="overlay-source-section">
-            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Data source (Multi-PC)" : "Sorgente dati (Multi-PC)"}</div>
+            <div className="text-[11px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Data source (Multi-PC)" : "Sorgente dati (Multi-PC)"}</div>
             <div className="grid grid-cols-1 gap-1">
               <button onClick={() => updateCfg({ source_device: "" })} data-testid="overlay-source-active"
                 className={`text-xs px-3 py-2 border text-left transition-colors ${!cfg?.source_device ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/5" : "border-[#2A2A35] text-zinc-400 hover:border-zinc-600"}`}>
@@ -229,7 +229,7 @@ export default function ObsOverlayPanel() {
         )}
         {/* Theme */}
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Theme" : "Tema"}</div>
+          <div className="text-[11px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Theme" : "Tema"}</div>
           <div className="grid grid-cols-3 gap-1">
             {THEMES.map((th) => (
               <button
@@ -249,7 +249,7 @@ export default function ObsOverlayPanel() {
       {/* Layout / Size / Accent */}
       <div className="grid md:grid-cols-3 gap-4">
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">Layout</div>
+          <div className="text-[11px] uppercase tracking-widest text-zinc-500 font-mono mb-2">Layout</div>
           <div className="grid grid-cols-2 gap-1">
             {LAYOUTS.map((l) => (
               <button
@@ -264,7 +264,7 @@ export default function ObsOverlayPanel() {
           </div>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Size" : "Dimensione"}</div>
+          <div className="text-[11px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Size" : "Dimensione"}</div>
           <div className="grid grid-cols-3 gap-1">
             {SIZES.map((s) => (
               <button
@@ -279,7 +279,7 @@ export default function ObsOverlayPanel() {
           </div>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Brand color" : "Colore brand"}</div>
+          <div className="text-[11px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Brand color" : "Colore brand"}</div>
           <div className="flex items-center gap-2">
             <input
               type="color"
@@ -294,7 +294,7 @@ export default function ObsOverlayPanel() {
               <button
                 onClick={() => updateCfg({ accent: "" })}
                 data-testid="overlay-accent-reset"
-                className="text-[10px] uppercase tracking-widest text-zinc-500 border border-[#2A2A35] px-2 py-1.5 hover:border-zinc-500 transition-colors"
+                className="text-[11px] uppercase tracking-widest text-zinc-500 border border-[#2A2A35] px-2 py-1.5 hover:border-zinc-500 transition-colors"
               >
                 Reset
               </button>
@@ -305,7 +305,7 @@ export default function ObsOverlayPanel() {
 
       {/* Metric toggles */}
       <div>
-        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Shown metrics" : "Metriche mostrate"}</div>
+        <div className="text-[11px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Shown metrics" : "Metriche mostrate"}</div>
         <div className="flex flex-wrap gap-2">
           {METRIC_TOGGLES.map((m) => {
             const active = !!cfg?.[m.key];
@@ -325,7 +325,7 @@ export default function ObsOverlayPanel() {
 
       {/* Live preview */}
       <div>
-        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Live preview" : "Anteprima live"}</div>
+        <div className="text-[11px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Live preview" : "Anteprima live"}</div>
         <div
           className="relative border border-[#2A2A35] overflow-hidden"
           style={{
@@ -354,7 +354,7 @@ export default function ObsOverlayPanel() {
             />
           )}
         </div>
-        <div className="text-[10px] text-zinc-600 mt-1 font-mono">
+        <div className="text-[11px] text-zinc-600 mt-1 font-mono">
           {isEn() ? "The checkerboard background indicates transparency — you won't see it in OBS." : "Lo sfondo a scacchiera indica la trasparenza — in OBS non lo vedrai."}
         </div>
       </div>

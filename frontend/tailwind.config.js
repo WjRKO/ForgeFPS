@@ -13,6 +13,12 @@ module.exports = {
         sm: 'calc(var(--radius) - 4px)'
       },
       colors: {
+        // Tier di testo "muted" resi accessibili su fondo #050505 (WCAG AA).
+        // zinc-500 di default (#71717A) era 3.96:1, zinc-600 (#52525B) 2.48:1.
+        zinc: {
+          500: '#8B8B96', // 6.05:1 — descrizioni, eyebrow
+          600: '#7C7C88', // 4.95:1 — note legali, testo terziario
+        },
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         card: {

@@ -42,7 +42,7 @@ export const PostGameRecap = () => {
       <div className="border border-[#2A2A35] bg-[#0F0F12]">
         <div className="p-4 border-b border-[#2A2A35] flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">
+            <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
               {en ? "Last session" : "Ultima sessione"}
             </span>
             <span className="font-display font-black text-lg">{latest.game}</span>
@@ -73,7 +73,7 @@ export const PostGameRecap = () => {
               <div className="mt-4 flex items-center gap-2 flex-wrap">
                 <Zap size={12} className="text-[#E5FF00]" />
                 {(latest.actions || []).map((a, i) => (
-                  <span key={i} className="text-[10px] font-mono uppercase tracking-widest px-2 py-0.5 border border-[#2A2A35] text-zinc-400">{a}</span>
+                  <span key={i} className="text-[11px] font-mono uppercase tracking-widest px-2 py-0.5 border border-[#2A2A35] text-zinc-400">{a}</span>
                 ))}
               </div>
             )}
@@ -90,7 +90,7 @@ export const PostGameRecap = () => {
       {/* Storico compatto */}
       {rows.length > 1 && (
         <div className="border border-[#2A2A35] bg-[#0F0F12]" data-testid="recap-history">
-          <div className="p-3 border-b border-[#1A1A24] text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2">
+          <div className="p-3 border-b border-[#1A1A24] text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2">
             <Activity size={12} /> {en ? "Previous sessions" : "Sessioni precedenti"}
           </div>
           <div className="divide-y divide-[#1A1A24]">
@@ -106,7 +106,7 @@ export const PostGameRecap = () => {
                 {s.recap?.gpu_temp_max ? (
                   <span className="text-[11px] font-mono text-zinc-400 flex items-center gap-1"><Thermometer size={10} />{s.recap.gpu_temp_max}°</span>
                 ) : null}
-                <span className="text-[10px] font-mono text-zinc-600 hidden sm:block">{new Date(s.created_at).toLocaleDateString(en ? "en-US" : "it-IT")}</span>
+                <span className="text-[11px] font-mono text-zinc-600 hidden sm:block">{new Date(s.created_at).toLocaleDateString(en ? "en-US" : "it-IT")}</span>
               </div>
             ))}
           </div>
@@ -119,11 +119,11 @@ export const PostGameRecap = () => {
 function Stat({ label, value, sub, accent, big, testid }) {
   return (
     <div className="border border-[#1A1A24] bg-black/30 p-3" data-testid={testid}>
-      <div className="text-[9px] font-mono uppercase tracking-[0.2em] text-zinc-500">{label}</div>
+      <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">{label}</div>
       <div className={`font-mono font-black tabular-nums ${big ? "text-3xl" : "text-2xl"}`} style={accent ? { color: accent } : undefined}>
         {value}
       </div>
-      {sub && <div className="text-[10px] font-mono text-zinc-500 mt-0.5">{sub}</div>}
+      {sub && <div className="text-[11px] font-mono text-zinc-500 mt-0.5">{sub}</div>}
     </div>
   );
 }

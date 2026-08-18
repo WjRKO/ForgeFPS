@@ -101,7 +101,7 @@ const LockedBtn = ({ children, testid }) => {
       <button disabled className="flex items-center gap-2 bg-[#1A1A24] text-zinc-500 font-bold px-4 py-2 text-sm cursor-not-allowed">
         <Lock size={14} /> {children}
       </button>
-      <span className="absolute -top-8 left-0 whitespace-nowrap text-[10px] bg-black border border-[#2A2A35] text-zinc-400 px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">{c.locked}</span>
+      <span className="absolute -top-8 left-0 whitespace-nowrap text-[11px] bg-black border border-[#2A2A35] text-zinc-400 px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">{c.locked}</span>
     </div>
   );
 };
@@ -133,7 +133,7 @@ export default function DemoApp() {
       </div>
 
       <div className="max-w-6xl mx-auto px-6 pt-36 pb-16">
-        <div className="text-[10px] font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-2">{c.eyebrow}</div>
+        <div className="text-[11px] font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-2">{c.eyebrow}</div>
         <h1 className="font-display font-black text-3xl sm:text-4xl tracking-tighter">{c.title}</h1>
         <p className="text-zinc-500 text-sm mt-2 max-w-2xl">{c.sub}</p>
 
@@ -151,7 +151,7 @@ export default function DemoApp() {
           {tab === "dash" && (
             <div className="grid lg:grid-cols-3 gap-5" data-testid="demo-dash">
               <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 flex flex-col items-center justify-center">
-                <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-4">{c.health}</div>
+                <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-4">{c.health}</div>
                 <HealthRing score={87} label={c.healthSub} />
               </div>
               <div className="lg:col-span-2 grid grid-cols-2 gap-4">
@@ -161,7 +161,7 @@ export default function DemoApp() {
                 <Stat icon={Gamepad2} label={c.stat.fps} value="144" unit="" accent="text-[#00FF66]" />
               </div>
               <div className="lg:col-span-3 bg-[#0F0F12] border border-[#2A2A35] p-5">
-                <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-3">{c.checklist}</div>
+                <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-3">{c.checklist}</div>
                 <div className="grid sm:grid-cols-2 gap-2">
                   {c.checks.map((ck, i) => (
                     <div key={i} className="flex items-center gap-2 text-sm">
@@ -185,7 +185,7 @@ export default function DemoApp() {
                 <Stat icon={Thermometer} label={lang === "en" ? "GPU temp" : "Temp GPU"} value="67" unit="°C" accent="text-[#FF6B00]" />
               </div>
               <div className="bg-[#0F0F12] border border-[#2A2A35] p-5">
-                <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-4">{c.chartTitle}</div>
+                <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-4">{c.chartTitle}</div>
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={CHART}>
                     <CartesianGrid stroke="#1A1A24" strokeDasharray="3 3" />
@@ -203,7 +203,7 @@ export default function DemoApp() {
 
           {tab === "advisor" && (
             <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 max-w-2xl" data-testid="demo-advisor">
-              <div className="inline-flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-[#E5FF00] border border-[#E5FF00]/30 px-2 py-1 mb-5">
+              <div className="inline-flex items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] border border-[#E5FF00]/30 px-2 py-1 mb-5">
                 <Sparkles size={11} /> {c.advisorCtx}
               </div>
               <div className="flex justify-end mb-4">
@@ -240,7 +240,7 @@ export default function DemoApp() {
                     <span className="text-right"><span className="inline-flex items-center gap-1 text-[#00FF66] text-sm font-bold"><TrendingUp size={13} /> {m.d}</span></span>
                   </div>
                 ))}
-                <div className="flex justify-between text-[10px] font-mono uppercase tracking-widest text-zinc-600 px-4">
+                <div className="flex justify-between text-[11px] font-mono uppercase tracking-widest text-zinc-600 px-4">
                   <span /> <span>{c.before}</span> <span>{c.after}</span> <span />
                 </div>
               </div>

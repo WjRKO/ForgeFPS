@@ -118,7 +118,7 @@ export default function BuildGenerator() {
 
       {/* Preset one-click */}
       <div className="mb-4">
-        <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-bold mb-2">{t("build.presets_title")}</div>
+        <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-600 font-bold mb-2">{t("build.presets_title")}</div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {PRESETS.map((p, i) => {
             const def = PRESET_DEFS[i] || {};

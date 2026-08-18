@@ -35,7 +35,7 @@ const BADGE = {
 };
 export function Badge({ tone = "neutral", icon: Icon, children, testid }) {
   return (
-    <span data-testid={testid} className={`inline-flex items-center gap-1 px-2 py-0.5 border font-mono text-[10px] uppercase tracking-widest ${BADGE[tone]}`}>
+    <span data-testid={testid} className={`inline-flex items-center gap-1 px-2 py-0.5 border font-mono text-[11px] uppercase tracking-widest ${BADGE[tone]}`}>
       {Icon && <Icon size={11} />}{children}
     </span>
   );
@@ -130,7 +130,7 @@ export function HealthRing({ score = 0, size = 128, label }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="font-display font-black text-4xl tracking-tighter" style={{ color }}>{score}</span>
-        {label && <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">{label}</span>}
+        {label && <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">{label}</span>}
       </div>
     </div>
   );

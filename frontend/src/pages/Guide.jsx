@@ -231,7 +231,7 @@ function CopyBtn({ text, lang }) {
   };
   return (
     <button onClick={doCopy} data-testid="guide-copy-btn"
-      className={`ml-2 inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest px-2 py-1 border transition-colors ${ok ? "border-[#00FF66] text-[#00FF66]" : "border-[#2A2A35] text-zinc-400 hover:border-[#E5FF00] hover:text-[#E5FF00]"}`}>
+      className={`ml-2 inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest px-2 py-1 border transition-colors ${ok ? "border-[#00FF66] text-[#00FF66]" : "border-[#2A2A35] text-zinc-400 hover:border-[#E5FF00] hover:text-[#E5FF00]"}`}>
       {ok ? <Check size={12} /> : <Copy size={12} />} {ok ? c.copied : c.copy}
     </button>
   );
@@ -248,7 +248,7 @@ function GuideCard({ g, lang, idx }) {
           <Icon size={22} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-0.5">GUIDA {String(idx + 1).padStart(2, "0")}</div>
+          <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-0.5">GUIDA {String(idx + 1).padStart(2, "0")}</div>
           <h2 className="font-display font-black text-2xl sm:text-3xl tracking-tight text-white">{g_t.title}</h2>
         </div>
         <div className="hidden sm:inline-flex items-center gap-1.5 border border-[#2A2A35] px-2.5 py-1 text-[11px] font-mono text-zinc-400">
@@ -263,7 +263,7 @@ function GuideCard({ g, lang, idx }) {
             <div className="shrink-0 w-8 h-8 border border-[#2A2A35] flex items-center justify-center font-mono text-sm text-[#E5FF00]">{i + 1}</div>
             <div className="flex-1 min-w-0 pt-1">
               <div className="flex items-center gap-2 mb-1.5">
-                <span className={`inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 ${s.where === "web" ? "text-[#00E0FF] border border-[#00E0FF]/40" : "text-[#E5FF00] border border-[#E5FF00]/40"}`}>
+                <span className={`inline-flex items-center gap-1 text-[11px] font-mono uppercase tracking-widest px-1.5 py-0.5 ${s.where === "web" ? "text-[#00E0FF] border border-[#00E0FF]/40" : "text-[#E5FF00] border border-[#E5FF00]/40"}`}>
                   {s.where === "web" ? <Globe size={9} /> : <Monitor size={9} />} {s.where === "web" ? c.web : c.desktop}
                 </span>
               </div>
@@ -281,7 +281,7 @@ function GuideCard({ g, lang, idx }) {
 
       {g_t.tips && g_t.tips.length > 0 && (
         <div className="border-l-2 border-[#E5FF00] pl-4 py-2 bg-[#0F0F12]">
-          <div className="text-[10px] font-mono uppercase tracking-widest text-[#E5FF00] mb-1.5">Tips</div>
+          <div className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] mb-1.5">Tips</div>
           <ul className="space-y-1.5 text-sm text-zinc-300">
             {g_t.tips.map((tip, i) => (
               <li key={i} className="flex gap-2 leading-relaxed"><span className="text-zinc-600">—</span>{tip}</li>
@@ -316,7 +316,7 @@ export default function Guide() {
                   <Icon size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">GUIDA {String(i + 1).padStart(2, "0")} · {g.minutes} {c.time}</div>
+                  <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">GUIDA {String(i + 1).padStart(2, "0")} · {g.minutes} {c.time}</div>
                   <div className="text-base font-bold text-zinc-100 group-hover:text-[#E5FF00] transition-colors">{g[lang].title}</div>
                 </div>
                 <ChevronRight size={18} className="text-zinc-600 group-hover:text-[#E5FF00] shrink-0 transition-colors" />

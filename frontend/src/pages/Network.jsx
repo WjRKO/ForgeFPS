@@ -32,11 +32,11 @@ function SubGrade({ label, grade, value, unit, unitPrefix = "", hint, colorFn, t
     <div className="flex items-center gap-3 bg-black/40 border-l-4 border border-[#2A2A35] px-4 py-3 flex-1 min-w-[170px]" style={{ borderLeftColor: c }} data-testid={testid}>
       <div className="font-display font-black text-4xl leading-none" style={{ color: c }} data-testid={`${testid}-grade`}>{grade || "?"}</div>
       <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono">{label}</div>
+        <div className="text-[11px] uppercase tracking-widest text-zinc-500 font-mono">{label}</div>
         <div className="text-sm text-zinc-200 font-semibold" data-testid={`${testid}-value`}>
           {value != null ? `${unitPrefix}${value}` : "--"}<span className="text-zinc-500 text-xs ml-0.5">{value != null ? unit : ""}</span>
         </div>
-        {hint && <div className="text-[10px] text-zinc-600 truncate">{hint}</div>}
+        {hint && <div className="text-[11px] text-zinc-600 truncate">{hint}</div>}
       </div>
     </div>
   );
@@ -132,7 +132,7 @@ export default function Network() {
             }}
             testid="network-oneclick"
           />
-          <p className="text-[10px] text-zinc-600 mt-2 font-mono uppercase tracking-widest">
+          <p className="text-[11px] text-zinc-600 mt-2 font-mono uppercase tracking-widest">
             richiede FrameForge Agent installato · <Link to="/app/desktop" className="text-[#00E0FF] hover:underline">scaricalo qui</Link>
           </p>
         </div>
@@ -156,7 +156,7 @@ export default function Network() {
           <Activity size={28} className="mx-auto mb-3 text-zinc-600" />
           <p className="mb-4">{t("network.empty")}</p>
           <div className="inline-flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-zinc-400 border-t border-[#1A1A24] pt-4 mt-2">
-            <span className="text-[10px] uppercase tracking-widest text-zinc-600">{t("network.glossary_hint", { defaultValue: "Cosa misureremo" })}:</span>
+            <span className="text-[11px] uppercase tracking-widest text-zinc-600">{t("network.glossary_hint", { defaultValue: "Cosa misureremo" })}:</span>
             <TechTerm term="bufferbloat">Bufferbloat</TechTerm>
             <TechTerm term="ping">Ping</TechTerm>
             <TechTerm term="jitter">Jitter</TechTerm>
@@ -196,7 +196,7 @@ export default function Network() {
                 testid="subgrade-consistency"
               />
               <div className="flex-1 min-w-[200px] flex flex-col justify-center bg-black/40 border border-[#2A2A35] p-4">
-                <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1"><TechTerm term="bufferbloat">Bufferbloat</TechTerm> {t("network.bloat_label", { defaultValue: "aumento sotto carico" })}</div>
+                <div className="text-[11px] uppercase tracking-widest text-zinc-500 mb-1"><TechTerm term="bufferbloat">Bufferbloat</TechTerm> {t("network.bloat_label", { defaultValue: "aumento sotto carico" })}</div>
                 <div className="font-display font-black text-2xl">+{res.bufferbloat_ms ?? "--"}<span className="text-sm text-zinc-500 ml-1">ms</span></div>
                 {res.tail_spike_ms != null && (
                   <div className="text-[11px] text-zinc-500 mt-1" data-testid="tail-spike">
