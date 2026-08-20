@@ -145,6 +145,17 @@ class LabRunInput(BaseModel):
     run: dict[str, Any]
 
 
+class AgentDiagInput(BaseModel):
+    """Evento diagnostico dell'agent (non telemetria d'uso).
+
+    Serve a decidere con i dati invece che a intuito: per esempio se la GUI web
+    fallisca davvero abbastanza da giustificare il fallback WinForms, che oggi
+    e' 451 righe che duplicano un sottoinsieme dell'interfaccia vera.
+    """
+    event: str = Field(pattern="^[a-z_]{3,40}$")
+    detail: Optional[dict[str, Any]] = None
+
+
 class LabCheckInput(BaseModel):
     reason: str = Field(pattern="^(bios_xmp|bios_rebar|bios_dual|driver_update|manual)$")
 

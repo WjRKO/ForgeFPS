@@ -11,6 +11,8 @@ Modes:
   restore   -> revert every tweak from the backup file
 All reg/service/DNS/power tweaks are backed up before being applied so `restore` reverts them."""
 
+from pathlib import Path as _Path
+
 PS_SCRIPT = r'''Param([string]$Token = '', [string]$Mode = 'sync')
 $ErrorActionPreference = 'SilentlyContinue'
 $BACKEND = '__BACKEND_URL__'
@@ -32,6 +34,34 @@ if ([string]::IsNullOrWhiteSpace($TOKEN)) {
 }
 
 function Say($m, $c='Gray') { Write-Host $m -ForegroundColor $c }
+
+# Cinque severita', cinque colori, una sola scrittura per ciascuna.
+#
+# `Say` resta la primitiva "stampa questa riga in questo colore" e serve alle
+# righe che non sono messaggi di stato: banner, valori del benchmark, prose.
+# Li' il colore e' formattazione, non severita' — il giallo marca sia gli avvisi
+# sia l'intestazione, e dedurre la severita' dal colore sbaglierebbe.
+#
+# Il `tag` e' il CONTESTO (LAB, FPS, TERMICA...), che e' un asse diverso dalla
+# severita'. Prima i due finivano nello stesso slot fra parentesi quadre: da li'
+# venivano i venti prefissi diversi, con [OK] e [ OK ] che convivevano.
+# Aggiungere una severita' nuova ora richiede di scrivere una funzione: e' il
+# punto: la prossima persona se ne accorge invece di inventare un prefisso.
+function _SayLvl($lvl, $color, $m, $tag) {
+  $s = "$m"
+  # L'indentazione e gli a-capo iniziali appartengono al chiamante e servono a
+  # dare gerarchia alle sotto-voci: il prefisso va dopo, non prima.
+  $i = 0
+  while ($i -lt $s.Length -and ($s[$i] -eq ' ' -or $s[$i] -eq "`n" -or $s[$i] -eq "`r" -or $s[$i] -eq "`t")) { $i++ }
+  $t = ''
+  if ($tag) { $t = "[$tag] " }
+  Write-Host ($s.Substring(0, $i) + $lvl + ' ' + $t + $s.Substring($i)) -ForegroundColor $color
+}
+function Say-Ok  ($m, $tag = '') { _SayLvl '[ OK ]' 'Green'      $m $tag }
+function Say-Info($m, $tag = '') { _SayLvl '[INFO]' 'DarkGray'   $m $tag }
+function Say-Step($m, $tag = '') { _SayLvl '[STEP]' 'Cyan'       $m $tag }
+function Say-Warn($m, $tag = '') { _SayLvl '[WARN]' 'DarkYellow' $m $tag }
+function Say-Err ($m, $tag = '') { _SayLvl '[ERR ]' 'Red'        $m $tag }
 function ConvertTo-HashtableSafe { $h=@{}; foreach($p in $input.PSObject.Properties){ $h[$p.Name]=$p.Value }; return $h }
 
 Say '======================================' 'Yellow'
@@ -53,6 +83,16 @@ if ($script:BK.ContainsKey('__tweak_keys__')) {
   $__tk = $script:BK['__tweak_keys__']
   if ($__tk) { foreach ($p in $__tk.PSObject.Properties) { $script:TWKEYS[$p.Name] = @($p.Value) } }
   $script:BK.Remove('__tweak_keys__')
+}
+# Quando ogni tweak e' stato applicato. Il backup sapeva gia' COSA era stato
+# cambiato e come rimetterlo a posto, ma non QUANDO: senza, la cronologia delle
+# modifiche non si puo' raccontare, e la reversibilita' — che e' la cosa che
+# distingue davvero questo strumento — resta un bottone invece di una storia.
+$script:TWAT = @{}
+if ($script:BK.ContainsKey('__applied_at__')) {
+  $__ta = $script:BK['__applied_at__']
+  if ($__ta) { foreach ($p in $__ta.PSObject.Properties) { $script:TWAT[$p.Name] = "$($p.Value)" } }
+  $script:BK.Remove('__applied_at__')
 }
 
 function Backup-Reg($path, $name, $type) {
@@ -94,6 +134,7 @@ function Save-Backup {
   $__out = @{}
   foreach ($k in $script:BK.Keys) { $__out[$k] = $script:BK[$k] }
   if ($script:TWKEYS.Count -gt 0) { $__out['__tweak_keys__'] = $script:TWKEYS }
+  if ($script:TWAT.Count -gt 0) { $__out['__applied_at__'] = $script:TWAT }
   $__out | ConvertTo-Json -Depth 6 | Set-Content $BACKUP
   # v0.7.3+: se esiste ancora il legacy, rimuovilo (dopo il primo save su nuovo path)
   if (Test-Path $BACKUP_LEGACY) { Remove-Item $BACKUP_LEGACY -ErrorAction SilentlyContinue }
@@ -108,11 +149,35 @@ function Invoke-ApplyTracked($t) {
     $__ex = @(); if ($script:TWKEYS.ContainsKey($t.id)) { $__ex = @($script:TWKEYS[$t.id]) }
     $script:TWKEYS[$t.id] = @(@($__ex + $__new) | Select-Object -Unique)
   }
+  $script:TWAT[$t.id] = (Get-Date).ToString('o')
 }
 function Get-RevertableIds { return @($script:TWKEYS.Keys) }
 function Get-BackupIds { if ($script:TWKEYS.Count -gt 0) { return @($script:TWKEYS.Keys) } return @($script:BK.Keys) }
 
 function Get-RegVal($path, $name) { return (Get-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue).$name }
+
+# ---- Stato di un tweak: un codice, non una frase ----
+# Quattro stati: ok (gia' ottimale), todo (c'e' da applicare), na (non
+# applicabile su questo hardware), unknown (non determinabile).
+#
+# Il codice lo decide il tweak, non si deduce dal testo: la stessa parola vale
+# il contrario a seconda del contesto. 'Attivo' e' ottimale quasi ovunque, ma
+# per search_index vuol dire che il servizio di indicizzazione sta girando —
+# cioe' che il tweak NON e' applicato. Finche' la GUI classificava con una
+# regex sulla frase, mostrava quel tweak in verde e lo contava fra i "gia'
+# ottimali" proprio quando non lo era; stesso errore per i due tweak GPU, dove
+# 'applicabile' veniva letto come 'applicato'.
+#
+# L'etichetta resta quella di prima: cambia solo che accanto viaggia il codice.
+function Tw($code, $label) { return @{ code = "$code"; label = "$label" } }
+
+function Get-TwState($t) {
+  try { $r = & $t.state } catch { return (Tw 'unknown' 'n/d') }
+  if ($r -is [hashtable] -and $r.ContainsKey('code')) { return $r }
+  # Un tweak che ritorna ancora una stringa libera: si mostra, ma senza fingere
+  # di sapere cosa significhi.
+  return (Tw 'unknown' "$r")
+}
 function Get-GpuPnp { $g = Get-CimInstance Win32_VideoController | Where-Object { $_.PNPDeviceID -like 'PCI*' } | Select-Object -First 1; return $g.PNPDeviceID }
 function Get-GpuVendor {
   $g = (Get-CimInstance Win32_VideoController | Where-Object { $_.Name -notmatch 'Basic|Virtual|Remote|Meta' } | Select-Object -First 1).Name
@@ -173,7 +238,7 @@ function Get-LhmComputer {
   try {
     $dll = Join-Path $script:LHM_DIR 'LibreHardwareMonitorLib.dll'
     if (-not (Test-Path $dll)) {
-      Say '   [Sensori] Scarico LibreHardwareMonitor (una volta sola)...' 'DarkGray'
+      Say-Info '   Scarico LibreHardwareMonitor (una volta sola)...' 'Sensori'
       [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
       $zip = Join-Path $env:TEMP 'boostpc_lhm.zip'
       Invoke-WebRequest $script:LHM_ZIP_URL -OutFile $zip -UseBasicParsing
@@ -199,7 +264,7 @@ function Get-LhmComputer {
     Start-Sleep -Milliseconds 400
     $script:LHM_COMP = $c
     return $c
-  } catch { Say ('   [Sensori] Errore LibreHardwareMonitor: ' + $_.Exception.Message) 'DarkYellow'; return $null }
+  } catch { Say-Warn ('   Errore LibreHardwareMonitor: ' + $_.Exception.Message) 'Sensori'; return $null }
 }
 
 function Get-LhmTemps {
@@ -1170,9 +1235,9 @@ function Show-Bench($r, $title) {
   $lossTxt = if ($r.ContainsKey('ping_loss_pct') -and $r.ping_loss_pct -gt 0) { ", perdita $($r.ping_loss_pct)%" } else { '' }
   Say ("   Jitter timer {0} ms | {1} | Ping {2} ms (jitter {3} ms{4}){5} | PERFORMANCE SCORE {6}/100" -f $r.timer_jitter_ms, $dpcTxt, $r.ping_ms, $r.jitter_ms, $lossTxt, $(if($r.ContainsKey('boot_s')){" | Avvio $($r.boot_s)s"}else{''}), $r.score) 'Yellow'
   if (-not $r.reliable -and $r.ContainsKey('unreliable_reason')) {
-    Say ("   [ATTENZIONE] Misura poco affidabile: {0}. Chiudi le applicazioni pesanti e ripeti." -f $r.unreliable_reason) 'DarkYellow'
+    Say-Warn ("   Misura poco affidabile: {0}. Chiudi le applicazioni pesanti e ripeti." -f $r.unreliable_reason)
   }
-  Say '   [INFO] Il Performance Score misura la velocita del PC ora. Health Score globale su forgefps.dev -> Il mio PC.' 'DarkGray'
+  Say-Info '   Il Performance Score misura la velocita del PC ora. Health Score globale su forgefps.dev -> Il mio PC.'
 }
 
 # ---------------- Full Benchmark v2 (multi-thread CPU + RAM hierarchy + disk multi-QD + thermal trace) ----------------
@@ -1270,7 +1335,7 @@ function Run-FullBenchmark {
     $out.cpu_sustained_ratio = if ($out.cpu_mt_burst_mops -gt 0) { [math]::Round($out.cpu_mt_sustained_mops / $out.cpu_mt_burst_mops, 3) } else { 0 }
     Say ("         Sustained: {0} Mops/s (ratio {1} vs burst)" -f $out.cpu_mt_sustained_mops, $out.cpu_sustained_ratio) 'DarkGreen'
     if ($out.cpu_sustained_ratio -lt 0.85) {
-      Say "         [WARN] Thermal throttling rilevato: performance CPU scesa >15% dopo 30s. Cooler insufficiente?" 'Yellow'
+      Say-Warn "         Thermal throttling rilevato: performance CPU scesa >15% dopo 30s. Cooler insufficiente?"
       $out.cpu_thermal_throttle = $true
     } else {
       $out.cpu_thermal_throttle = $false
@@ -1327,7 +1392,7 @@ function Run-FullBenchmark {
       $out.disk_rand_4k_qd32_iops = [int]([math]::Round(600 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
       Say ("         Rand 4K QD32: {0} IOPS" -f $out.disk_rand_4k_qd32_iops) 'DarkGray'
     } catch {
-      Say ("         [WARN] Disk test parzialmente fallito: {0}" -f $_.Exception.Message) 'Yellow'
+      Say-Warn ("         Disk test parzialmente fallito: {0}" -f $_.Exception.Message)
     }
     Remove-Item $tmp -ErrorAction SilentlyContinue
 
@@ -1395,6 +1460,17 @@ function Run-FullBenchmark {
 }
 
 # ---------------- Reporting ----------------
+function Send-AgentDiag($event, $detail) {
+  # Eventi diagnostici, non telemetria d'uso: servono a decidere con i dati
+  # invece che a intuito. Silenziosa per costruzione — una diagnostica che
+  # interrompe l'utente e' peggio del problema che sta misurando.
+  try {
+    $body = @{ event = $event }
+    if ($detail) { $body.detail = $detail }
+    Invoke-RestMethod -Uri "$BACKEND/api/agent/diag" -Method Post -ContentType 'application/json' `
+      -Headers @{ 'X-Agent-Token' = $TOKEN } -Body ($body | ConvertTo-Json -Depth 4 -Compress) -TimeoutSec 8 | Out-Null
+  } catch {}
+}
 function Send-Data($specs, $health, $startup) {
   $body = @{ data = $specs; health = $health; startup = $startup }
   try { $svc = Get-ServicesAudit; if ($svc -and $svc.Count -gt 0) { $body.services_audit = $svc } } catch {}
@@ -1815,7 +1891,7 @@ function Enable-FpsPermission {
       $gname = ((New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-559')).Translate([System.Security.Principal.NTAccount]).Value -split '\\')[-1]
       net localgroup "$gname" "$me" /add 2>$null | Out-Null
     }
-    Say '   [FPS] Permessi cattura FPS attivati (gruppo Performance Log Users): dopo un riavvio o logout il monitor contera gli FPS senza admin.' 'Green'
+    Say-Ok '   Permessi cattura FPS attivati (gruppo Performance Log Users): dopo un riavvio o logout il monitor contera gli FPS senza admin.' 'FPS'
     try { WebLog '[FPS] Permessi cattura FPS attivati: riavvia il PC (o fai logout) per renderli effettivi.' } catch {}
     return $true
   } catch { return $false }
@@ -1824,19 +1900,19 @@ function Enable-FpsPermission {
 function Start-Fps {
   $cap = Test-FpsCapable
   if ($cap -eq 'relogon') {
-    Say '   [FPS] Permessi FPS gia attivati ma serve un riavvio (o logout) di Windows per renderli effettivi. Dopo, gli FPS verranno contati senza admin.' 'DarkYellow'
+    Say-Warn '   Permessi FPS gia attivati ma serve un riavvio (o logout) di Windows per renderli effettivi. Dopo, gli FPS verranno contati senza admin.' 'FPS'
     return
   }
   if ($cap -eq 'no') {
-    Say '   [FPS] Cattura FPS non disponibile: apri una volta la GUI FrameForge (doppio click su forgefps-agent.exe -> Ottimizza, con conferma amministratore) per attivare i permessi in automatico, poi riavvia il PC.' 'DarkYellow'
+    Say-Warn '   Cattura FPS non disponibile: apri una volta la GUI FrameForge (doppio click su forgefps-agent.exe -> Ottimizza, con conferma amministratore) per attivare i permessi in automatico, poi riavvia il PC.' 'FPS'
     return
   }
   if (-not (Test-Path $script:PM_EXE)) {
-    Say '   [FPS] Scarico PresentMon (una volta sola)...' 'DarkGray'
+    Say-Info '   Scarico PresentMon (una volta sola)...' 'FPS'
     try {
       [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
       Invoke-WebRequest $script:PM_URL -OutFile $script:PM_EXE -UseBasicParsing
-    } catch { Say ('   [FPS] Download PresentMon fallito: ' + $_.Exception.Message) 'DarkYellow'; return }
+    } catch { Say-Warn ('   Download PresentMon fallito: ' + $_.Exception.Message) 'FPS'; return }
   }
   Remove-Item $script:PM_CSV, $script:PM_OUT, $script:PM_ERR -ErrorAction SilentlyContinue
   try {
@@ -1849,17 +1925,17 @@ function Start-Fps {
       $script:PM_ON = $false
       $err = ''
       if (Test-Path $script:PM_ERR) { $err = (Get-Content $script:PM_ERR -Raw -ErrorAction SilentlyContinue) }
-      Say ('   [FPS] PresentMon si e chiuso subito (exit ' + $script:PM_PROC.ExitCode + '). Dettaglio: ' + ($err.Trim() -replace "`r?`n", ' | ')) 'DarkYellow'
+      Say-Warn ('   PresentMon si e chiuso subito (exit ' + $script:PM_PROC.ExitCode + '). Dettaglio: ' + ($err.Trim() -replace "`r?`n", ' | ')) 'FPS'
     } else {
-      Say '   [FPS] Cattura FPS attiva. Avvia un gioco (o uno screensaver 3D) a schermo intero.' 'DarkGray'
+      Say-Info '   Cattura FPS attiva. Avvia un gioco (o uno screensaver 3D) a schermo intero.' 'FPS'
     }
-  } catch { Say ('   [FPS] Avvio PresentMon fallito: ' + $_.Exception.Message) 'DarkYellow' }
+  } catch { Say-Warn ('   Avvio PresentMon fallito: ' + $_.Exception.Message) 'FPS' }
 }
 function Stop-Fps { if ($script:PM_ON) { Stop-Process -Name PresentMon -Force -ErrorAction SilentlyContinue; $script:PM_ON = $false } }
 function Show-FpsDiag {
   if ($script:PM_DIAG_DONE) { return }
   $script:PM_DIAG_DONE = $true
-  Say '   [diag FPS] Nessun FPS ancora rilevato. Controllo stato:' 'DarkYellow'
+  Say-Warn '   Nessun FPS ancora rilevato. Controllo stato:' 'diag FPS'
   $alive = ($script:PM_PROC -and -not $script:PM_PROC.HasExited)
   Say ("             PresentMon attivo: {0}" -f $(if($alive){'si'}else{'NO'})) 'DarkGray'
   if (Test-Path $script:PM_OUT) {
@@ -1877,7 +1953,7 @@ function Show-FpsDiag {
     if (Test-Path $script:PM_ERR) { $err = (Get-Content $script:PM_ERR -Raw -ErrorAction SilentlyContinue) }
     if ($err.Trim()) { Say ('             Errore PresentMon: ' + ($err.Trim() -replace "`r?`n", ' | ')) 'DarkGray' }
   }
-  Say '   [diag FPS] Se serve, incolla queste righe in chat. Ricorda: gli FPS compaiono SOLO mentre un app renderizza a schermo (uno screensaver si chiude al primo movimento del mouse).' 'DarkYellow'
+  Say-Warn '   Se serve, incolla queste righe in chat. Ricorda: gli FPS compaiono SOLO mentre un app renderizza a schermo (uno screensaver si chiude al primo movimento del mouse).' 'diag FPS'
 }
 function Get-Fps {
   if (-not $script:PM_ON) { return $null }
@@ -2199,35 +2275,35 @@ $script:TWEAKS = @(
      impact='+3-8% FPS medi e 1% low piu stabili, meno micro-stutter. Consuma piu energia (irrilevante su desktop).';
      risk='safe';
      fit={ if($script:HW.laptop){'note:Laptop rilevato: applico High Performance (non Ultimate) per proteggere batteria e temperature'}else{'ok'} };
-     state={ $p=(powercfg /getactivescheme); if($p -match 'high|ultimate|prestazioni elevate'){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Power } }
+     state={ $p=(powercfg /getactivescheme); if($p -match 'high|ultimate|prestazioni elevate'){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-Power } }
   @{ cat='gaming'; id='gaming'; name='Boost gaming (Game Mode, HAGS, Game DVR off)';
      problem='Game DVR registra in background e la GPU scheduling hardware potrebbe essere disattivata.';
      reason='Il Game DVR ruba CPU/GPU durante il gioco; HAGS riduce la latenza di pianificazione dei frame.';
      desc='Attiva Game Mode + Hardware GPU Scheduling, disattiva Game DVR/registrazione in background.';
      impact='+2-5% FPS e frametime piu costante, meno overhead durante il gioco.';
      risk='safe';
-     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode') -eq 1){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Gaming } }
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode') -eq 1){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-Gaming } }
   @{ cat='gaming'; id='priority'; name='Priorita GPU/CPU ai giochi (MMCSS)';
      problem='Windows assegna le stesse risorse ai processi in background e al gioco in primo piano.';
      reason='MMCSS/SystemResponsiveness a 0 da priorita reale ai task multimediali e ai giochi attivi.';
      desc='Imposta SystemResponsiveness=0 e priorita GPU/CPU ai giochi in primo piano.';
      impact='Frametime piu regolare, meno spike quando ci sono app in background.';
      risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' 'SystemResponsiveness') -eq 0){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Priority } }
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' 'SystemResponsiveness') -eq 0){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-Priority } }
   @{ cat='gaming'; id='mpo'; name='Disabilita MPO (Multi-Plane Overlay)';
      problem='Il Multi-Plane Overlay causa flickering, stutter e SCHERMO NERO in OBS Game Capture.';
      reason='MPO ha bug noti con molti driver: interferisce con la cattura schermo e il DWM.';
      desc='Imposta OverlayTestMode=5 per disattivare MPO nel Desktop Window Manager.';
      impact='Elimina flickering/schermo nero in OBS, meno stutter sul desktop. Richiede riavvio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows\Dwm' 'OverlayTestMode') -eq 5){'Disabilitato'}else{'Attivo (da disabilitare)'} }; apply={ Do-Mpo } }
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows\Dwm' 'OverlayTestMode') -eq 5){(Tw 'ok' 'Disabilitato')}else{(Tw 'todo' 'Attivo (da disabilitare)')} }; apply={ Do-Mpo } }
   @{ cat='gaming'; id='gpu_msi'; name='GPU: MSI mode ON (latenza DPC)';
      problem='La GPU usa interrupt line-based, che aumentano la latenza DPC e causano micro-stutter.';
      reason='I Message Signaled Interrupts (MSI) riducono la latenza di interrupt della GPU.';
      desc='Attiva MSISupported=1 nel ramo Interrupt Management della GPU (NVIDIA/AMD).';
      impact='Latenza DPC piu bassa, input piu reattivo. Richiede riavvio.';
      risk='safe';
-     state={ $pnp=Get-GpuPnp; if($pnp){ $v=Get-RegVal "HKLM:\SYSTEM\CurrentControlSet\Enum\$pnp\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties" 'MSISupported'; if($v -eq 1){'Attivo'}else{'Da attivare'} }else{'n/d'} }; apply={ Do-GpuMsi } }
+     state={ $pnp=Get-GpuPnp; if($pnp){ $v=Get-RegVal "HKLM:\SYSTEM\CurrentControlSet\Enum\$pnp\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties" 'MSISupported'; if($v -eq 1){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da attivare')} }else{(Tw 'unknown' 'n/d')} }; apply={ Do-GpuMsi } }
   @{ cat='gaming'; id='amd_ulps'; name='AMD: disabilita ULPS';
      problem='Le Radeon abbassano troppo il clock in idle (Ultra Low Power State), causando stutter.';
      reason='ULPS mette la GPU in stato a bassissimo consumo, con risvegli lenti che generano scatti.';
@@ -2235,7 +2311,7 @@ $script:TWEAKS = @(
      impact='Meno stutter e latenza su schede AMD, clock piu stabile.';
      risk='safe';
      fit={ if($script:HW.gpu -eq 'AMD'){'ok'}else{"skip:Solo GPU AMD (rilevata $($script:HW.gpu))"} };
-     state={ if((Get-GpuVendor) -eq 'AMD'){'GPU AMD: applicabile'}else{'Solo GPU AMD'} }; apply={ Do-AmdUlps } }
+     state={ if((Get-GpuVendor) -eq 'AMD'){(Tw 'todo' 'GPU AMD: applicabile')}else{(Tw 'na' 'Solo GPU AMD')} }; apply={ Do-AmdUlps } }
   @{ cat='gaming'; id='nvidia_tel'; name='NVIDIA: disabilita telemetria';
      problem='I driver NVIDIA installano task/servizi di telemetria che girano in background.';
      reason='La telemetria consuma CPU e rete senza alcun beneficio per il gaming.';
@@ -2243,7 +2319,7 @@ $script:TWEAKS = @(
      impact='Meno processi in background, CPU leggermente piu libera.';
      risk='safe';
      fit={ if($script:HW.gpu -eq 'NVIDIA'){'ok'}else{"skip:Solo GPU NVIDIA (rilevata $($script:HW.gpu))"} };
-     state={ if((Get-GpuVendor) -eq 'NVIDIA'){'GPU NVIDIA: applicabile'}else{'Solo GPU NVIDIA'} }; apply={ Do-NvidiaTel } }
+     state={ if((Get-GpuVendor) -eq 'NVIDIA'){(Tw 'todo' 'GPU NVIDIA: applicabile')}else{(Tw 'na' 'Solo GPU NVIDIA')} }; apply={ Do-NvidiaTel } }
   @{ cat='gaming'; id='hibernate'; name='Disabilita ibernazione';
      problem='Il file hiberfil.sys occupa diversi GB di disco anche se non usi mai la sospensione.';
      reason='Su desktop l ibernazione e raramente usata; il file pesa quanto la RAM installata.';
@@ -2251,7 +2327,7 @@ $script:TWEAKS = @(
      impact='Libera 4-32 GB su disco. Perdi la sospensione ibrida/avvio rapido.';
      risk='caution';
      fit={ if($script:HW.laptop){'warn:Su laptop l ibernazione e utile a batteria scarica: disattivala solo se non la usi mai'}else{'ok'} };
-     state={ 'Applica per liberare spazio' }; apply={ Do-Hibernate } }
+     state={ (Tw 'todo' 'Applica per liberare spazio') }; apply={ Do-Hibernate } }
   # LATENZA & INPUT
   @{ cat='input'; id='mouse'; name='Accelerazione mouse OFF (raw input)';
      problem='L Enhance Pointer Precision di Windows accelera il mouse in modo imprevedibile.';
@@ -2259,14 +2335,14 @@ $script:TWEAKS = @(
      desc='Disattiva MouseSpeed/Threshold per un input 1:1 (raw).';
      impact='Mira piu precisa e costante negli sparatutto. Nessun rischio.';
      risk='safe';
-     state={ if("$(Get-RegVal 'HKCU:\Control Panel\Mouse' 'MouseSpeed')" -eq '0'){'Gia disattivata'}else{'Attiva (da disattivare)'} }; apply={ Do-Mouse } }
+     state={ if("$(Get-RegVal 'HKCU:\Control Panel\Mouse' 'MouseSpeed')" -eq '0'){(Tw 'ok' 'Gia disattivata')}else{(Tw 'todo' 'Attiva (da disattivare)')} }; apply={ Do-Mouse } }
   @{ cat='input'; id='timer'; name='Timer resolution globale';
      problem='Su Windows 11 la timer resolution puo essere variabile, con scheduling meno preciso.';
      reason='Una timer resolution alta e costante rende piu regolari i frametime e la latenza.';
      desc='Attiva GlobalTimerResolutionRequests=1 (richiesta timer globale).';
      impact='Frametime piu costante, meno stutter. Richiede riavvio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel' 'GlobalTimerResolutionRequests') -eq 1){'Attivo'}else{'Da attivare'} }; apply={ Do-Timer } }
+     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel' 'GlobalTimerResolutionRequests') -eq 1){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da attivare')} }; apply={ Do-Timer } }
   @{ cat='input'; id='usb'; name='USB power management OFF';
      problem='Windows sospende le porte USB per risparmiare energia, causando cali di polling.';
      reason='Se il mouse/tastiera vanno in standby, si hanno input drop e micro-freeze.';
@@ -2274,21 +2350,21 @@ $script:TWEAKS = @(
      impact='Input di mouse/tastiera piu stabile, niente drop. Nessun rischio.';
      risk='safe';
      fit={ if($script:HW.laptop){'warn:Su laptop aumenta il consumo della batteria: attiva solo se giochi collegato alla corrente'}else{'ok'} };
-     state={ 'Applica per input stabile' }; apply={ Do-Usb } }
+     state={ (Tw 'todo' 'Applica per input stabile') }; apply={ Do-Usb } }
   @{ cat='input'; id='stickykeys'; name='Sticky/Filter/Toggle Keys OFF';
      problem='Premendo Shift ripetutamente compare il popup delle Sticky Keys che ti butta fuori dal gioco.';
      reason='Le funzioni di accessibilita tastiera si attivano per errore durante il gioco.';
      desc='Disattiva Sticky/Filter/Toggle Keys.';
      impact='Niente piu popup che rubano il focus in game. Nessun rischio.';
      risk='safe';
-     state={ if("$(Get-RegVal 'HKCU:\Control Panel\Accessibility\StickyKeys' 'Flags')" -eq '506'){'Disattivati'}else{'Attivi (da disattivare)'} }; apply={ Do-StickyKeys } }
+     state={ if("$(Get-RegVal 'HKCU:\Control Panel\Accessibility\StickyKeys' 'Flags')" -eq '506'){(Tw 'ok' 'Disattivati')}else{(Tw 'todo' 'Attivi (da disattivare)')} }; apply={ Do-StickyKeys } }
   @{ cat='input'; id='startupdelay'; name='Startup delay app ridotto';
      problem='Windows ritarda artificialmente l avvio delle app in autostart.';
      reason='Il delay serve a non sovraccaricare l avvio, ma rallenta l accesso al desktop utile.';
      desc='Imposta StartupDelayInMSec=0 per avviare subito le app.';
      impact='Desktop e app pronti prima dopo l accensione. Nessun rischio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize' 'StartupDelayInMSec') -eq 0){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-StartupDelay } }
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize' 'StartupDelayInMSec') -eq 0){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-StartupDelay } }
   # RETE & STREAMING
   @{ cat='network'; id='network'; name='Rete: Nagle OFF + TCP tuning';
      problem='L algoritmo di Nagle accumula piccoli pacchetti, aggiungendo latenza nei giochi online.';
@@ -2296,35 +2372,35 @@ $script:TWEAKS = @(
      desc='Disattiva Nagle sulla scheda attiva e regola autotuning/ECN/RSS.';
      impact='Ping piu basso e stabile online. Reversibile con Ripristina.';
      risk='safe';
-     state={ 'Applica per meno lag online' }; apply={ Do-Network } }
+     state={ (Tw 'todo' 'Applica per meno lag online') }; apply={ Do-Network } }
   @{ cat='network'; id='dns'; name='DNS veloci (Cloudflare 1.1.1.1)';
      problem='I DNS del provider sono spesso lenti e possono rallentare la risoluzione dei domini.';
      reason='DNS piu veloci riducono i tempi di connessione a server di gioco e matchmaking.';
      desc='Imposta 1.1.1.1 / 1.0.0.1 sulla scheda attiva (reversibile a DHCP).';
      impact='Connessioni piu rapide. Reversibile in un click.';
      risk='safe';
-     state={ $a=Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1; if($a){ $d=(Get-DnsClientServerAddress -InterfaceAlias $a.Name -AddressFamily IPv4).ServerAddresses -join ','; if($d -match '1.1.1.1'){'Gia Cloudflare'}else{"Attuale: $d"} }else{'n/d'} }; apply={ Do-Dns } }
+     state={ $a=Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1; if($a){ $d=(Get-DnsClientServerAddress -InterfaceAlias $a.Name -AddressFamily IPv4).ServerAddresses -join ','; if($d -match '1.1.1.1'){(Tw 'ok' 'Gia Cloudflare')}else{(Tw 'todo' "Attuale: $d")} }else{(Tw 'unknown' 'n/d')} }; apply={ Do-Dns } }
   @{ cat='network'; id='qos'; name='Rimuovi 20% banda riservata QoS';
      problem='Windows riserva fino al 20% della banda per il QoS di sistema.';
      reason='Recuperando quella banda hai piu throughput reale per download e streaming.';
      desc='Imposta NonBestEffortLimit=0.';
      impact='Piu banda disponibile per gioco/stream. Nessun rischio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit') -eq 0){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Qos } }
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit') -eq 0){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-Qos } }
   @{ cat='network'; id='deliveryopt'; name='Delivery Optimization P2P OFF';
      problem='Windows usa la tua banda in upload per distribuire aggiornamenti ad altri PC (P2P).';
      reason='Durante lo streaming quell upload occupa banda e destabilizza il bitrate.';
      desc='Imposta DODownloadMode=0 (nessun P2P).';
      impact='Upload piu libero, stream piu stabile. Nessun rischio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode') -eq 0){'Disattivato'}else{'Attivo (da disattivare)'} }; apply={ Do-DeliveryOpt } }
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode') -eq 0){(Tw 'ok' 'Disattivato')}else{(Tw 'todo' 'Attivo (da disattivare)')} }; apply={ Do-DeliveryOpt } }
   @{ cat='network'; id='obs_priority'; name='OBS ad alta priorita';
      problem='OBS gira a priorita normale e puo perdere frame in encoding sotto carico.';
      reason='Alzando la priorita CPU di OBS l encoding resta fluido anche con la CPU occupata dal gioco.';
      desc='Imposta CpuPriorityClass alta per obs64/obs32.exe (via Image File Execution Options).';
      impact='Meno frame persi in registrazione/stream. Nessun rischio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\obs64.exe\PerfOptions' 'CpuPriorityClass') -eq 3){'Attivo'}else{'Da attivare'} }; apply={ Do-ObsPriority } }
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\obs64.exe\PerfOptions' 'CpuPriorityClass') -eq 3){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da attivare')} }; apply={ Do-ObsPriority } }
   # SISTEMA & DEBLOAT
   @{ cat='system'; id='clean'; name='Pulizia temp + cache Windows Update';
      problem='File temporanei e cache degli aggiornamenti si accumulano e occupano spazio.';
@@ -2332,56 +2408,56 @@ $script:TWEAKS = @(
      desc='Rimuove temp utente/sistema, cache Windows Update e svuota il DNS.';
      impact='Libera spazio su disco. Nessun file personale toccato.';
      risk='safe';
-     state={ $mb=0; Get-ChildItem $env:TEMP -Recurse -File -Force 2>$null | ForEach-Object { $mb+=$_.Length }; "$([math]::Round($mb/1MB)) MB da pulire" }; apply={ Do-Cleanup } }
+     state={ $mb=0; Get-ChildItem $env:TEMP -Recurse -File -Force 2>$null | ForEach-Object { $mb+=$_.Length }; (Tw 'todo' "$([math]::Round($mb/1MB)) MB da pulire") }; apply={ Do-Cleanup } }
   @{ cat='system'; id='visual'; name='Effetti visivi: modalita prestazioni';
      problem='Animazioni e trasparenze consumano GPU/CPU e rendono la UI meno reattiva.';
      reason='In modalita prestazioni Windows disattiva gli effetti superflui.';
      desc='Imposta VisualFXSetting=2 (prestazioni).';
      impact='UI piu snella e reattiva. Estetica leggermente piu spartana.';
      risk='safe';
-     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' 'VisualFXSetting') -eq 2){'Prestazioni'}else{'Da ottimizzare'} }; apply={ Do-Visual } }
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' 'VisualFXSetting') -eq 2){(Tw 'ok' 'Prestazioni')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-Visual } }
   @{ cat='system'; id='telemetry'; name='Telemetria (DiagTrack) OFF';
      problem='Il servizio DiagTrack invia dati di diagnostica e gira sempre in background.';
      reason='Disattivarlo riduce l uso di CPU e rete senza impatti sulle funzioni essenziali.';
      desc='Ferma e disabilita il servizio DiagTrack (Connected User Experiences).';
      impact='Meno CPU/rete in background. NON tocca Defender ne la sicurezza.';
      risk='caution';
-     state={ $s=Get-Service DiagTrack -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){'Attiva (da disattivare)'}else{'Disattivata'} }; apply={ Do-Telemetry } }
+     state={ $s=Get-Service DiagTrack -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){(Tw 'todo' 'Attiva (da disattivare)')}else{(Tw 'ok' 'Disattivata')} }; apply={ Do-Telemetry } }
   @{ cat='system'; id='ads'; name='Suggerimenti/ads di Windows OFF';
      problem='Windows mostra app suggerite e contenuti promozionali nel menu Start e altrove.';
      reason='Sono distrazioni e consumano risorse per scaricare i contenuti suggeriti.';
      desc='Disattiva SilentInstalledApps, suggerimenti e Consumer Features.';
      impact='Start piu pulito, niente app installate a sorpresa. Nessun rischio.';
      risk='safe';
-     state={ 'Applica per rimuovere ads' }; apply={ Do-Ads } }
+     state={ (Tw 'todo' 'Applica per rimuovere ads') }; apply={ Do-Ads } }
   @{ cat='system'; id='bgapps'; name='App in background OFF (globale)';
      problem='Le app UWP restano attive in background consumando CPU/RAM e rete.';
      reason='Bloccarle libera risorse per il gioco senza disinstallare nulla.';
      desc='Imposta GlobalUserDisabled=1 e LetAppsRunInBackground.';
      impact='Meno consumo di CPU/RAM in background. Alcune notifiche UWP potrebbero ritardare.';
      risk='safe';
-     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' 'GlobalUserDisabled') -eq 1){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-BgApps } }
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' 'GlobalUserDisabled') -eq 1){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-BgApps } }
   @{ cat='system'; id='gamebar_rec'; name='Xbox Game Bar recording OFF';
      problem='La Game Bar registra in background per la funzione clip, usando risorse.';
      reason='Se non usi le clip Xbox, la registrazione continua e uno spreco di CPU/GPU.';
      desc='Disattiva GameDVR_Enabled e AppCaptureEnabled.';
      impact='Meno overhead in game. Perdi la registrazione automatica Xbox.';
      risk='safe';
-     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled') -eq 0){'Disattivato'}else{'Attivo (da disattivare)'} }; apply={ Do-GamebarRec } }
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled') -eq 0){(Tw 'ok' 'Disattivato')}else{(Tw 'todo' 'Attivo (da disattivare)')} }; apply={ Do-GamebarRec } }
   @{ cat='system'; id='debloat'; name='Debloat app superflue (UWP)';
      problem='Windows preinstalla app come Candy Crush, Solitaire, Bing, 3D Builder che non usi.';
      reason='Occupano spazio e alcune girano in background inutilmente.';
      desc='Rimuove una lista curata di app UWP (reinstallabili dallo Store).';
      impact='Sistema piu pulito. Puoi reinstallarle in qualsiasi momento dallo Store.';
      risk='caution';
-     state={ $n=0; foreach($p in $script:BLOAT){ if(Get-AppxPackage -Name $p -ErrorAction SilentlyContinue){$n++} }; "$n app rimovibili" }; apply={ Do-Debloat } }
+     state={ $n=0; foreach($p in $script:BLOAT){ if(Get-AppxPackage -Name $p -ErrorAction SilentlyContinue){$n++} }; if($n -eq 0){(Tw 'ok' 'Nessuna app da rimuovere')}else{(Tw 'todo' "$n app rimovibili")} }; apply={ Do-Debloat } }
   @{ cat='system'; id='search_index'; name='Windows Search indexing OFF (invasivo)';
      problem='Il servizio di indicizzazione della ricerca puo generare carico su disco/CPU.';
      reason='Su alcuni PC l indicizzazione rallenta il sistema, ma serve alla ricerca file veloce.';
      desc='Ferma e disabilita il servizio WSearch.';
      impact='Meno carico su disco/CPU, MA la ricerca file diventa piu lenta. Reversibile.';
      risk='caution';
-     state={ $s=Get-Service WSearch -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){'Attivo'}else{'Disattivato'} }; apply={ Do-SearchIndex } }
+     state={ $s=Get-Service WSearch -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){(Tw 'todo' 'Attivo')}else{(Tw 'ok' 'Disattivato')} }; apply={ Do-SearchIndex } }
   # NUOVI TWEAK (motore adattivo)
   @{ cat='gaming'; id='fse'; name='Fullscreen Optimizations OFF';
      problem='Windows forza il fullscreen ottimizzato (borderless) invece del fullscreen esclusivo reale.';
@@ -2389,7 +2465,7 @@ $script:TWEAKS = @(
      desc='Imposta FSEBehaviorMode=2 e HonorUserFSEBehavior nel GameConfigStore.';
      impact='Input lag ridotto nei giochi a schermo intero. Nessun rischio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKCU:\System\GameConfigStore' 'GameDVR_FSEBehaviorMode') -eq 2){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Fse } }
+     state={ if((Get-RegVal 'HKCU:\System\GameConfigStore' 'GameDVR_FSEBehaviorMode') -eq 2){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-Fse } }
   @{ cat='gaming'; id='power_throttling'; name='Power throttling CPU OFF';
      problem='Windows rallenta (throttla) i processi che considera poco importanti per risparmiare energia.';
      reason='A volte il throttling colpisce anche giochi, OBS o launcher, causando cali improvvisi.';
@@ -2397,14 +2473,14 @@ $script:TWEAKS = @(
      impact='CPU sempre reattiva per giochi e streaming. Consuma un po piu di energia.';
      risk='safe';
      fit={ if($script:HW.laptop){'warn:Su laptop il power throttling risparmia batteria: attiva solo se giochi sempre collegato alla corrente'}else{'ok'} };
-     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling' 'PowerThrottlingOff') -eq 1){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-PowerThrottling } }
+     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling' 'PowerThrottlingOff') -eq 1){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-PowerThrottling } }
   @{ cat='gaming'; id='standby_clear'; name='Svuota RAM standby (azione istantanea)';
      problem='Windows tiene in RAM una cache standby che a volte non viene liberata abbastanza in fretta.';
      reason='Svuotare la standby list prima di giocare rende la memoria subito disponibile per il gioco.';
      desc='Purge della standby memory list via API di sistema (richiede Amministratore). Nessuna modifica permanente.';
      impact='RAM libera immediata prima della sessione di gioco. Azione una tantum, sempre sicura.';
      risk='safe';
-     state={ $o=Get-CimInstance Win32_OperatingSystem; "$([math]::Round($o.FreePhysicalMemory/1MB,1)) GB RAM libera ora" }; apply={ Clear-StandbyList } }
+     state={ $o=Get-CimInstance Win32_OperatingSystem; (Tw 'todo' "$([math]::Round($o.FreePhysicalMemory/1MB,1)) GB RAM libera ora") }; apply={ Clear-StandbyList } }
   @{ cat='network'; id='nic_power'; name='Scheda di rete a piena potenza';
      problem='Windows puo spegnere la scheda di rete per risparmiare energia e usa interrupt moderation che aggiunge latenza.';
      reason='Il risparmio energetico della NIC causa micro-disconnessioni; la moderazione degli interrupt ritarda i pacchetti.';
@@ -2412,7 +2488,7 @@ $script:TWEAKS = @(
      impact='Ping piu stabile, niente drop di connessione in game. Richiede riavvio o riconnessione.';
      risk='safe';
      fit={ if($script:HW.laptop){'warn:Su laptop la scheda di rete sempre attiva consuma piu batteria'}else{'ok'} };
-     state={ $a=Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1; if(-not $a){'n/d'}else{ $ok=$false; Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | ForEach-Object { $p=Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if($p.NetCfgInstanceId -eq $a.InterfaceGuid -and $p.PnPCapabilities -eq 24){$ok=$true} }; if($ok){'Attivo'}else{'Da ottimizzare'} } }; apply={ Do-NicPower } }
+     state={ $a=Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1; if(-not $a){(Tw 'unknown' 'n/d')}else{ $ok=$false; Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | ForEach-Object { $p=Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if($p.NetCfgInstanceId -eq $a.InterfaceGuid -and $p.PnPCapabilities -eq 24){$ok=$true} }; if($ok){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} } }; apply={ Do-NicPower } }
   @{ cat='system'; id='paging_exec'; name='Kernel sempre in RAM (16GB+)';
      problem='Windows puo spostare parti del kernel e dei driver nel file di paging su disco.';
      reason='Con abbastanza RAM, tenere il kernel in memoria elimina micro-attese di paging.';
@@ -2420,7 +2496,7 @@ $script:TWEAKS = @(
      impact='Sistema piu scattante sotto carico. Consigliato solo con 16 GB o piu.';
      risk='safe';
      fit={ if($script:HW.ram -ge 16){'ok'}else{"skip:Richiede almeno 16 GB di RAM (rilevati $($script:HW.ram) GB)"} };
-     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' 'DisablePagingExecutive') -eq 1){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-PagingExec } }
+     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' 'DisablePagingExecutive') -eq 1){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-PagingExec } }
   @{ cat='system'; id='sysmain'; name='SysMain/Superfetch OFF (solo SSD)';
      problem='SysMain precarica app in RAM analizzando l uso del disco: su SSD e superfluo e consuma CPU/disco.';
      reason='Gli SSD sono gia velocissimi in lettura casuale: il preload di SysMain non serve e genera carico.';
@@ -2428,7 +2504,7 @@ $script:TWEAKS = @(
      impact='Meno attivita disco/CPU in background su SSD. Su HDD invece va lasciato attivo.';
      risk='caution';
      fit={ if($script:HW.ssd){'ok'}else{'skip:Solo con SSD: su HDD SysMain velocizza i caricamenti, meglio lasciarlo attivo'} };
-     state={ $s=Get-Service SysMain -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){'Attivo (da disattivare)'}else{'Disattivato'} }; apply={ Do-SysMain } }
+     state={ $s=Get-Service SysMain -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){(Tw 'todo' 'Attivo (da disattivare)')}else{(Tw 'ok' 'Disattivato')} }; apply={ Do-SysMain } }
   @{ cat='system'; id='trim'; name='Verifica TRIM SSD attivo';
      problem='Se il TRIM e disattivato, l SSD rallenta progressivamente con l uso.';
      reason='Il TRIM permette all SSD di riorganizzare le celle libere mantenendo le prestazioni di scrittura.';
@@ -2436,21 +2512,21 @@ $script:TWEAKS = @(
      impact='SSD sempre alla massima velocita nel tempo. Nessun rischio.';
      risk='safe';
      fit={ if($script:HW.ssd){'ok'}else{'skip:Solo per SSD: il TRIM non si applica agli HDD'} };
-     state={ $q=(fsutil behavior query DisableDeleteNotify) -join ' '; if($q -match 'DisableDeleteNotify\s*=\s*0'){'TRIM attivo'}else{'Da attivare'} }; apply={ Do-Trim } }
+     state={ $q=(fsutil behavior query DisableDeleteNotify) -join ' '; if($q -match 'DisableDeleteNotify\s*=\s*0'){(Tw 'ok' 'TRIM attivo')}else{(Tw 'todo' 'Da attivare')} }; apply={ Do-Trim } }
   @{ cat='system'; id='ntfs'; name='NTFS: last-access timestamp OFF';
      problem='NTFS aggiorna la data di ultimo accesso di ogni file letto, generando scritture inutili.';
      reason='Disattivarlo riduce le scritture su disco a ogni lettura di file (utile anche per la vita dell SSD).';
      desc='Esegue fsutil behavior set disablelastaccess 1 (con backup del valore precedente).';
      impact='Meno I/O su disco nelle operazioni quotidiane. Nessun rischio.';
      risk='safe';
-     state={ $q=(fsutil behavior query disablelastaccess) -join ' '; if($q -match '=\s*[13]'){'Attivo'}else{'Da ottimizzare'} }; apply={ Do-Ntfs } }
+     state={ $q=(fsutil behavior query disablelastaccess) -join ' '; if($q -match '=\s*[13]'){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-Ntfs } }
   @{ cat='system'; id='edge_preload'; name='Edge preload/background OFF';
      problem='Microsoft Edge si precarica all avvio e resta in background anche se non lo usi.';
      reason='Lo startup boost di Edge occupa RAM e CPU all accensione per un browser che magari non apri mai.';
      desc='Imposta StartupBoostEnabled=0 e BackgroundModeEnabled=0 via policy.';
      impact='Avvio piu pulito e RAM libera se non usi Edge. Nessun rischio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' 'StartupBoostEnabled') -eq 0){'Disattivato'}else{'Attivo (da disattivare)'} }; apply={ Do-EdgePreload } }
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' 'StartupBoostEnabled') -eq 0){(Tw 'ok' 'Disattivato')}else{(Tw 'todo' 'Attivo (da disattivare)')} }; apply={ Do-EdgePreload } }
 )
 
 $script:PRESETS = @{
@@ -2493,6 +2569,7 @@ function Invoke-RestoreTweak($id) {
     if ($script:BK.ContainsKey($k)) { Restore-OneKey $k $script:BK[$k]; $script:BK.Remove($k) }
   }
   $script:TWKEYS.Remove($id)
+  $script:TWAT.Remove($id)
   if ($id -eq 'network') { netsh int tcp set global autotuninglevel=normal 2>$null | Out-Null }
   Save-Backup
   return 'Tweak ripristinato al valore precedente.'
@@ -2542,7 +2619,7 @@ function Show-WebGui {
     }
   }
   if (-not $edgeExe) {
-    Say '[INFO] Nessun browser Edge/Chrome trovato: apro la GUI nel browser predefinito.' 'DarkGray'
+    Say-Info 'Nessun browser Edge/Chrome trovato: apro la GUI nel browser predefinito.'
     $script:GUI_BROWSER_FALLBACK = $true
   }
 
@@ -2569,7 +2646,7 @@ function Show-WebGui {
   # Avvia listener SOLO su 127.0.0.1
   $listener = New-Object System.Net.HttpListener
   $listener.Prefixes.Add("http://127.0.0.1:$port/")
-  try { $listener.Start() } catch { Say ("[WARN] Server GUI locale non avviabile: {0}" -f $_.Exception.Message) 'Yellow'; return $false }
+  try { $listener.Start() } catch { Say-Warn ("Server GUI locale non avviabile: {0}" -f $_.Exception.Message); return $false }
 
   function WebLog($m) { [void]$script:WEBLOG.Add(@{ ts=(Get-Date).ToString("HH:mm:ss"); msg=$m }) }
   function Send-Json { param($ctx, $obj, [int]$status=200)
@@ -2632,11 +2709,14 @@ function Show-WebGui {
       $fit = $script:FITMAP[$t.id]
       $skip = $fit -like "skip:*"; $warn = $fit -like "warn:*"; $note = $fit -like "note:*"
       $hint = ""; if ($skip -or $warn -or $note) { $hint = ($fit -split ":", 2)[1] }
-      $st = & $t.state
+      $st = Get-TwState $t
       $arr += @{
         id = $t.id; cat = $t.cat; name = $t.name; problem = $t.problem
         reason = $t.reason; desc = $t.desc; impact = $t.impact; risk = $t.risk
-        state = $st; fit = @{ ok = (-not $skip); warn = [bool]$warn; note = [bool]$note; skip = [bool]$skip; hint = $hint }
+        # `state` resta il testo per l'utente, `state_code` e' quello su cui la
+        # GUI decide colore e conteggi: prima li deduceva dal testo con una regex.
+        state = $st.label; state_code = $st.code
+        fit = @{ ok = (-not $skip); warn = [bool]$warn; note = [bool]$note; skip = [bool]$skip; hint = $hint }
       }
     }
     return $arr
@@ -2644,2127 +2724,7 @@ function Show-WebGui {
 
   # HTML della GUI (in singola-quote here-string: nessuna $-expansion PS; JS usa " e backtick)
   $html = @'
-<!DOCTYPE html>
-<html lang="it">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>FrameForge Agent — Ottimizzazioni</title>
-<style>
-  :root {
-    --bg: #0a0a0f;
-    --bg2: #12121a;
-    --card: #14141c;
-    --card-hi: #1a1a24;
-    --border: #23232e;
-    --accent: #E5FF00;
-    --ok: #00FF66;
-    --warn: #FFAA00;
-    --danger: #FF3355;
-    --info: #00E0FF;
-    --text: #e6e6ec;
-    --fg: #e6e6ec;
-    --muted: #7d7d8a;
-    --dim: #4a4a55;
-  }
-  * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; padding: 0; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: "Segoe UI Variable", "Segoe UI", -apple-system, sans-serif;
-    font-size: 14px;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
-    display: flex; flex-direction: column;
-    overflow: hidden;
-  }
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 0; }
-  ::-webkit-scrollbar-thumb:hover { background: #33333e; }
-
-  header {
-    padding: 20px 28px 16px;
-    background: linear-gradient(180deg, var(--bg2) 0%, var(--bg) 100%);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .brand-row { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
-  .brand {
-    font-size: 22px; font-weight: 800; letter-spacing: 2px;
-    color: var(--accent);
-    text-shadow: 0 0 24px rgba(229,255,0,0.25);
-  }
-  .brand-sub { font-size: 12px; color: var(--muted); }
-  .ver-pill {
-    font-size: 10px; padding: 2px 8px; border: 1px solid var(--info);
-    color: var(--info); font-family: "Consolas", monospace;
-  }
-  .safety {
-    color: var(--ok); font-size: 12px; margin-top: 4px; letter-spacing: 0.2px;
-  }
-  .safety strong { color: var(--ok); }
-  .meta-row {
-    display: grid; grid-template-columns: 1fr auto; align-items: end;
-    gap: 12px; margin-top: 12px;
-  }
-  .hw-line { font-size: 12px; color: var(--info); font-family: "Consolas", monospace; }
-  .hw-line b { color: var(--accent); font-weight: 600; }
-  .admin-line { font-size: 12px; margin-top: 4px; }
-  .admin-line.ok { color: var(--ok); }
-  .admin-line.no { color: var(--danger); }
-  .backup-badge {
-    font-size: 11px; padding: 6px 12px; border: 1px solid var(--info);
-    color: var(--info); font-family: "Consolas", monospace;
-    cursor: pointer; user-select: none; transition: background 0.15s;
-  }
-  .backup-badge:hover, .backup-badge:focus-visible { background: rgba(0, 224, 255, 0.08); outline: none; }
-  .backup-badge.disabled { opacity: 0.5; cursor: not-allowed; }
-  .backup-panel {
-    position: absolute; top: calc(100% + 6px); right: 28px;
-    min-width: 320px; max-width: 420px; max-height: 400px; overflow-y: auto;
-    background: var(--bg); border: 1px solid var(--info);
-    padding: 12px 14px; z-index: 100; box-shadow: 0 10px 40px rgba(0,0,0,0.6);
-  }
-  .backup-panel[hidden] { display: none; }
-  .backup-panel-title {
-    font-family: "Consolas", monospace; font-size: 10px;
-    color: var(--info); text-transform: uppercase; letter-spacing: 0.15em;
-    margin-bottom: 10px;
-  }
-  .backup-list { list-style: none; margin: 0; padding: 0; }
-  .backup-list li {
-    padding: 6px 0; border-bottom: 1px solid var(--border);
-    font-size: 12px; color: var(--fg); display: flex; align-items: center; gap: 8px;
-  }
-  .backup-list li:last-child { border-bottom: none; }
-  .backup-list li::before {
-    content: "\2713"; color: var(--ok); font-weight: 700; font-size: 11px;
-  }
-  .backup-list li.empty {
-    color: var(--muted); font-style: italic; justify-content: center; padding: 12px 0;
-  }
-  .backup-list li.empty::before { content: ""; }
-  .backup-panel-hint {
-    margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
-    font-size: 10px; color: var(--muted); line-height: 1.4;
-  }
-  header > div:has(> .backup-badge) { position: relative; }
-
-  /* Header actions: live sync toggle + backup badge grouped */
-  .header-actions {
-    display: flex; align-items: center; gap: 12px; position: relative;
-  }
-  .live-sync-toggle {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 6px 10px; border: 1px solid var(--border);
-    font-size: 11px; font-family: "Consolas", monospace;
-    color: var(--muted); cursor: pointer; user-select: none;
-    transition: all 0.15s;
-  }
-  .live-sync-toggle:hover { border-color: var(--ok); color: var(--fg); }
-  .live-sync-toggle input { position: absolute; opacity: 0; pointer-events: none; }
-  .live-sync-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: var(--muted); transition: all 0.2s;
-    box-shadow: 0 0 0 0 rgba(0, 255, 102, 0);
-  }
-  .live-sync-toggle input:checked ~ .live-sync-dot {
-    background: var(--ok);
-    box-shadow: 0 0 12px 2px rgba(0, 255, 102, 0.55);
-    animation: pulse 1.8s ease-in-out infinite;
-  }
-  .live-sync-toggle input:checked ~ .live-sync-text { color: var(--ok); }
-  @keyframes pulse {
-    0%, 100% { box-shadow: 0 0 8px 1px rgba(0, 255, 102, 0.45); }
-    50%      { box-shadow: 0 0 16px 3px rgba(0, 255, 102, 0.75); }
-  }
-
-  /* Continua sul Telefono button + Magic Link modal */
-  .mobile-btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 6px 12px; border: 1px solid var(--accent); background: transparent;
-    color: var(--accent); font-family: "Consolas", monospace;
-    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
-    cursor: pointer; transition: all 0.15s;
-  }
-  .mobile-btn:hover { background: var(--accent); color: #000; }
-  .mobile-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .mobile-btn-icon { font-size: 14px; line-height: 1; }
-
-  .logout-btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 6px 10px; border: 1px solid var(--dim); background: transparent;
-    color: var(--muted); font-family: "Consolas", monospace;
-    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
-    cursor: pointer; transition: all 0.15s;
-  }
-  .logout-btn:hover { border-color: var(--danger); color: var(--danger); }
-  .logout-btn-icon { font-size: 13px; line-height: 1; }
-
-  .mh-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.82);
-    z-index: 200; display: flex; align-items: center; justify-content: center;
-    padding: 20px; backdrop-filter: blur(6px);
-  }
-  .mh-overlay[hidden] { display: none; }
-  .mh-modal {
-    max-width: 440px; width: 100%; background: #0F0F12;
-    border: 1px solid #2A2A35; padding: 28px 26px 20px; position: relative;
-    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
-  }
-  .mh-close {
-    position: absolute; top: 10px; right: 12px; background: none; border: none;
-    color: #7a7a85; font-size: 22px; line-height: 1; cursor: pointer;
-  }
-  .mh-close:hover { color: var(--fg); }
-  .mh-eyebrow {
-    font-family: "Consolas", monospace; font-size: 10px; letter-spacing: 0.2em;
-    color: var(--accent); margin-bottom: 8px;
-  }
-  .mh-title {
-    font-size: 20px; margin: 0 0 6px; color: var(--fg); font-weight: 900; letter-spacing: -0.01em;
-  }
-  .mh-sub { font-size: 13px; color: #a1a1aa; margin: 0 0 18px; line-height: 1.5; }
-  .mh-body {
-    min-height: 240px; display: flex; align-items: center; justify-content: center;
-    margin-bottom: 14px;
-  }
-  .mh-loading { color: var(--muted); font-family: "Consolas", monospace; font-size: 12px; }
-  .mh-error {
-    color: #FF3B30; font-size: 13px; text-align: center; padding: 12px; line-height: 1.5;
-  }
-  .mh-qr { background: #fff; padding: 14px; }
-  .mh-qr svg { display: block; width: 220px; height: 220px; }
-  .mh-consumed { text-align: center; }
-  .mh-check {
-    width: 64px; height: 64px; margin: 0 auto 12px;
-    border-radius: 50%; background: rgba(0,255,102,0.12); color: var(--ok);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 40px; line-height: 1;
-    box-shadow: 0 0 24px 4px rgba(0,255,102,0.35);
-  }
-  .mh-consumed-title { font-size: 18px; font-weight: 900; color: var(--fg); margin-bottom: 4px; }
-  .mh-consumed-sub { font-size: 13px; color: #a1a1aa; }
-  .mh-footer {
-    display: flex; align-items: center; justify-content: space-between;
-    padding-top: 12px; border-top: 1px solid #1A1A24; margin-bottom: 12px;
-  }
-  .mh-countdown {
-    font-family: "Consolas", monospace; font-size: 11px;
-    letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
-  }
-  .mh-time { color: var(--ok); margin-left: 8px; }
-  .mh-time.low { color: #FF3B30; }
-  .mh-regen {
-    background: none; border: 1px solid #2A2A35; color: var(--muted);
-    padding: 6px 12px; font-family: "Consolas", monospace; font-size: 10px;
-    letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer;
-  }
-  .mh-regen:hover { color: var(--accent); border-color: var(--accent); }
-  .mh-safety {
-    font-size: 10px; color: #52525b; line-height: 1.5;
-    padding-top: 12px; border-top: 1px solid #1A1A24;
-  }
-  .mh-safety strong { color: #a1a1aa; }
-
-  /* Profili tab: cards per applicare preset dal cloud */
-  .profile-card {
-    background: var(--card); border: 1px solid var(--border);
-    padding: 16px; transition: border-color 0.15s;
-  }
-  .profile-card:hover { border-color: var(--accent); }
-  .profile-card h3 {
-    font-size: 15px; margin: 0 0 6px; color: var(--fg);
-  }
-  .profile-card .profile-meta {
-    font-size: 11px; color: var(--muted); font-family: "Consolas", monospace;
-    letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 8px;
-  }
-  .profile-card .profile-tweaks {
-    display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px;
-  }
-  .profile-card .profile-tweaks span {
-    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
-    padding: 2px 8px; font-size: 10px; color: var(--muted);
-  }
-  .profile-card .profile-apply {
-    background: var(--accent); color: #000; border: none;
-    padding: 8px 14px; font-size: 11px; font-weight: 700;
-    letter-spacing: 0.15em; cursor: pointer; text-transform: uppercase;
-    font-family: "Consolas", monospace;
-  }
-  .profile-card .profile-apply:hover { background: #fff; }
-  .profile-section-title {
-    grid-column: 1 / -1; font-family: "Consolas", monospace;
-    font-size: 10px; color: var(--accent); letter-spacing: 0.2em;
-    text-transform: uppercase; padding: 12px 0 4px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .preset-bar {
-    padding: 14px 28px;
-    background: var(--bg);
-    border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: 10px;
-    flex-shrink: 0;
-  }
-  .preset-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 2px; margin-right: 6px; }
-  .preset-btn {
-    background: var(--card); color: var(--text);
-    border: 1px solid var(--border);
-    padding: 8px 20px; font-size: 13px; font-weight: 600;
-    cursor: pointer; letter-spacing: 0.4px;
-    transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease;
-    font-family: inherit;
-  }
-  .preset-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .preset-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
-  .preset-btn:active { transform: scale(0.97); }
-  .preset-spacer { flex: 1; }
-  .search {
-    background: var(--card); color: var(--text);
-    border: 1px solid var(--border);
-    padding: 8px 14px; width: 220px; font-size: 12px;
-    font-family: inherit; outline: none;
-    transition: border-color 120ms ease;
-  }
-  .search:focus { border-color: var(--accent); }
-
-  /* ===== GUI v3.1: layout con sidebar categorie a sinistra ===== */
-  .layout { flex: 1; display: flex; overflow: hidden; min-height: 0; }
-  .tabs {
-    display: flex; flex-direction: column; gap: 2px;
-    width: 224px; flex-shrink: 0;
-    padding: 14px 10px;
-    border-right: 1px solid var(--border);
-    background: var(--bg2);
-    overflow-y: auto;
-  }
-  .tabs::before {
-    content: "// CATEGORIE";
-    font-family: "Consolas", monospace; font-size: 10px;
-    letter-spacing: 0.25em; color: var(--dim);
-    padding: 0 12px 8px;
-  }
-  .tab {
-    background: transparent; border: none; color: var(--muted);
-    padding: 10px 12px; font-size: 13px; font-weight: 600;
-    cursor: pointer; font-family: inherit; letter-spacing: 0.3px;
-    border-left: 2px solid transparent; text-align: left;
-    display: flex; align-items: center; gap: 8px;
-    transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
-  }
-  .tab:hover { color: var(--text); background: rgba(255,255,255,0.03); }
-  .tab.active { color: var(--accent); border-left-color: var(--accent); background: rgba(229,255,0,0.06); }
-  .tab .count { color: var(--dim); font-size: 11px; margin-left: auto; }
-  .tab.active .count { color: var(--accent); }
-  .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-
-  /* ===== GUI v3.2: skeleton + progresso analisi iniziale ===== */
-  .scan-strip {
-    grid-column: 1 / -1; background: var(--card);
-    border: 1px solid var(--border); padding: 14px 18px;
-  }
-  .scan-title {
-    font-family: "Consolas", monospace; font-size: 11px;
-    color: var(--accent); letter-spacing: 0.2em; margin-bottom: 6px;
-  }
-  .scan-sub { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
-  .scan-bar { height: 6px; background: #000; border: 1px solid var(--border); overflow: hidden; }
-  .scan-bar-fill { height: 100%; width: 0%; background: var(--accent); transition: width 300ms ease; }
-  .scan-meta {
-    font-family: "Consolas", monospace; font-size: 11px; color: var(--dim);
-    margin-top: 6px; display: flex; justify-content: space-between; gap: 10px;
-  }
-  .skel-card {
-    background: var(--card); border: 1px solid var(--border);
-    padding: 16px 18px; min-height: 150px; position: relative; overflow: hidden;
-  }
-  .skel-line { height: 12px; background: var(--card-hi); margin-bottom: 10px; }
-  .skel-line.w60 { width: 60%; }
-  .skel-line.w40 { width: 40%; height: 9px; }
-  .skel-line.w85 { width: 85%; height: 9px; }
-  .skel-line.w75 { width: 75%; height: 9px; }
-  .skel-card::after {
-    content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0;
-    transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
-    animation: skelShimmer 1.4s infinite;
-  }
-  @keyframes skelShimmer { 100% { transform: translateX(100%); } }
-
-  main {
-    flex: 1; overflow-y: auto;
-    padding: 20px 28px 12px;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-    gap: 14px;
-    align-content: start;
-  }
-  .card {
-    background: var(--card); border: 1px solid var(--border);
-    padding: 16px 18px; position: relative;
-    transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
-    animation: fadeUp 260ms cubic-bezier(.22,1,.36,1) both;
-  }
-  @keyframes fadeUp { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none;} }
-  .card:hover { border-color: #3a3a48; background: var(--card-hi); }
-  .card.selected { border-color: var(--accent); }
-  .card.skip { opacity: 0.45; }
-  .card::before {
-    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-    background: var(--accent);
-  }
-  .card.risk-caution::before { background: var(--warn); }
-  .card.skip::before { background: var(--dim); }
-
-  .card-head { display: flex; align-items: flex-start; gap: 10px; }
-  .cb {
-    appearance: none; width: 18px; height: 18px; margin: 2px 0 0;
-    border: 1px solid var(--border); background: var(--bg2);
-    cursor: pointer; flex-shrink: 0; position: relative;
-    transition: border-color 120ms ease, background 120ms ease;
-  }
-  .cb:hover { border-color: var(--accent); }
-  .cb:checked { background: var(--accent); border-color: var(--accent); }
-  .cb:checked::after {
-    content: ""; position: absolute;
-    left: 5px; top: 1px; width: 4px; height: 10px;
-    border: solid #000; border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-  }
-  .cb:disabled { opacity: 0.4; cursor: not-allowed; }
-  .name { flex: 1; font-weight: 700; font-size: 14px; color: var(--text); }
-  .risk-pill {
-    font-size: 9px; padding: 2px 6px; letter-spacing: 1px;
-    font-weight: 700; text-transform: uppercase;
-    background: var(--warn); color: #000;
-  }
-  .ok-pill {
-    font-size: 9px; padding: 2px 8px; letter-spacing: 1px;
-    font-weight: 700; text-transform: uppercase;
-    background: transparent; color: var(--ok);
-    border: 1px solid var(--ok);
-  }
-  .applied-note {
-    font-size: 10px; color: var(--dim);
-    font-style: italic; letter-spacing: 0.4px;
-  }
-  .card.applied { opacity: 0.72; }
-  .card.applied::before { background: var(--ok); }
-  .card.applied:hover { opacity: 1; }
-  .state {
-    font-size: 11px; margin-top: 6px; padding-left: 28px;
-    color: var(--accent); font-family: "Consolas", monospace;
-  }
-  .state.ok { color: var(--ok); }
-  .state.todo { color: var(--warn); }
-  .state.na { color: var(--muted); }
-  .desc-block {
-    margin-top: 12px; padding-left: 28px;
-    font-size: 12px; line-height: 1.65;
-  }
-  .desc-block .row { display: flex; gap: 8px; margin-bottom: 4px; }
-  .desc-block .row .k {
-    color: var(--warn); font-weight: 700; flex-shrink: 0; min-width: 68px;
-  }
-  .desc-block .row .k.motivo { color: var(--muted); }
-  .desc-block .row .k.mod { color: var(--muted); }
-  .desc-block .row .k.impatto { color: var(--ok); }
-  .desc-block .row .v { color: var(--text); }
-  .desc-block .row .v.impatto { color: var(--ok); }
-  .actions { margin-top: 12px; padding-left: 28px; display: flex; gap: 8px; }
-  .btn-apply-one {
-    background: transparent; color: var(--accent);
-    border: 1px solid var(--accent);
-    padding: 6px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 1.2px; cursor: pointer; font-family: inherit;
-    transition: background 120ms ease, color 120ms ease;
-  }
-  .btn-apply-one:hover { background: var(--accent); color: #000; }
-  .btn-apply-one:disabled { opacity: 0.4; cursor: not-allowed; }
-  .hint {
-    margin-top: 8px; padding: 8px 12px 8px 28px;
-    font-size: 11px; color: var(--muted);
-    border-left: 2px solid var(--warn); background: rgba(255,170,0,0.06);
-  }
-  .hint.skip { border-left-color: var(--dim); color: var(--dim); }
-
-  footer {
-    background: var(--bg2); border-top: 1px solid var(--border);
-    padding: 12px 28px 14px; flex-shrink: 0;
-    display: grid; grid-template-columns: 1fr auto; gap: 16px;
-    align-items: end;
-  }
-  .log {
-    background: #000; border: 1px solid var(--border);
-    height: 140px; overflow-y: auto;
-    font-family: "Consolas", monospace; font-size: 12px;
-    padding: 8px 12px; color: var(--ok);
-  }
-  .log .ts { color: var(--dim); margin-right: 8px; }
-  .btn-bar { display: flex; flex-direction: column; gap: 8px; }
-  .bench-toggle {
-    display: flex; align-items: center; gap: 8px;
-    font-size: 12px; color: var(--info); cursor: pointer;
-    user-select: none;
-  }
-  .btn-primary {
-    background: var(--accent); color: #000; border: none;
-    padding: 14px 32px; font-size: 13px; font-weight: 800; letter-spacing: 1.4px;
-    text-transform: uppercase; cursor: pointer; font-family: inherit;
-    transition: filter 120ms ease, transform 120ms ease;
-  }
-  .btn-primary:hover { filter: brightness(1.1); }
-  .btn-primary:active { transform: scale(0.98); }
-  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-danger {
-    background: transparent; color: var(--danger); border: 1px solid var(--danger);
-    padding: 10px 20px; font-size: 12px; font-weight: 700; letter-spacing: 1.2px;
-    text-transform: uppercase; cursor: pointer; font-family: inherit;
-    transition: background 120ms ease, color 120ms ease;
-  }
-  .btn-danger:hover { background: var(--danger); color: #000; }
-
-  .selection-count {
-    font-size: 11px; color: var(--muted); text-align: right;
-    letter-spacing: 0.5px;
-  }
-  .selection-count b { color: var(--accent); }
-
-  .toast {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    background: var(--card); border: 1px solid var(--ok); color: var(--ok);
-    padding: 10px 22px; font-size: 13px; font-weight: 600;
-    opacity: 0; transition: opacity 220ms ease;
-    z-index: 100;
-  }
-  .toast.show { opacity: 1; }
-
-  .empty {
-    grid-column: 1 / -1;
-    text-align: center; color: var(--muted); padding: 60px 20px;
-    font-size: 14px;
-  }
-
-  /* ===== A. Compact/Detailed toggle (per-card + global default) ===== */
-  .density-toggle {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 4px 10px; border: 1px solid var(--border);
-    font-family: "Consolas", monospace; font-size: 10px;
-    color: var(--muted); cursor: pointer; user-select: none;
-    letter-spacing: 0.12em; text-transform: uppercase;
-    transition: all 120ms ease;
-  }
-  .density-toggle:hover { border-color: var(--accent); color: var(--accent); }
-  .density-toggle.active { background: var(--accent); color: #000; border-color: var(--accent); }
-
-  /* Compact card: hide description block, condensed padding */
-  .card.compact { padding: 10px 14px; }
-  .card.compact .desc-block { display: none; }
-  .card.compact .state { display: none; }
-  .card.compact .actions { margin-top: 8px; padding-left: 28px; }
-  .card.compact .btn-apply-one { padding: 4px 12px; font-size: 10px; }
-  .card.compact .hint { margin-top: 6px; font-size: 10px; }
-  /* Expandable when clicked in compact mode */
-  .card.compact.expanded .desc-block, .card.compact.expanded .state { display: block; }
-  .card .chevron {
-    margin-left: auto; color: var(--dim); font-size: 12px; cursor: pointer;
-    transition: transform 200ms ease, color 120ms ease;
-    padding: 0 4px; user-select: none;
-  }
-  .card.compact .chevron { display: inline-block; }
-  .card:not(.compact) .chevron { display: none; }
-  .card.compact.expanded .chevron { transform: rotate(180deg); color: var(--accent); }
-
-  /* ===== B. Impact meter ===== */
-  .impact-meter {
-    display: inline-flex; align-items: center; gap: 4px;
-    margin-left: auto; font-family: "Consolas", monospace;
-    font-size: 10px; color: var(--dim);
-  }
-  .impact-dot {
-    width: 6px; height: 6px; background: var(--dim); border-radius: 50%;
-    transition: background 200ms ease;
-  }
-  .impact-dot.on-1 { background: #4a5d00; }
-  .impact-dot.on-2 { background: #7BE00B; }
-  .impact-dot.on-3 { background: var(--ok); }
-  .impact-dot.on-4 { background: var(--accent); box-shadow: 0 0 6px rgba(229,255,0,0.5); }
-  .impact-dot.on-5 { background: #FF9500; box-shadow: 0 0 8px rgba(255,149,0,0.6); }
-  .impact-label { margin-left: 4px; color: var(--muted); letter-spacing: 0.4px; }
-
-  /* ===== C. Preset preview strip ===== */
-  .preset-preview {
-    background: rgba(229,255,0,0.06); border-left: 3px solid var(--accent);
-    padding: 8px 16px; font-size: 12px; color: var(--muted);
-    display: none;
-    animation: fadeUp 180ms ease;
-  }
-  .preset-preview.show { display: block; }
-  .preset-preview b { color: var(--accent); font-family: "Consolas", monospace; }
-  .preset-preview .preview-sep { color: var(--dim); margin: 0 8px; }
-
-  /* Highlight for cards previewed by hovered preset */
-  .card.preview-pick { border-color: var(--accent); background: rgba(229,255,0,0.04); }
-  .card.preview-pick::before { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-
-  /* ===== E. Semaforo unico (bordo card colorato) — refine existing ===== */
-  .card::before { width: 4px; }
-  .card.applied::before {
-    background: var(--ok);
-    box-shadow: 0 0 8px rgba(0,255,102,0.4);
-  }
-  .card.risk-caution::before {
-    background: var(--warn);
-    box-shadow: 0 0 8px rgba(255,170,0,0.4);
-  }
-  .card:not(.applied):not(.risk-caution):not(.skip)::before {
-    background: var(--accent);
-  }
-
-  /* ===== D. Icone al posto delle label (kept as small colored keywords) ===== */
-  .desc-block .row .k {
-    min-width: 22px; text-align: center;
-    font-size: 13px; font-family: "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
-    letter-spacing: 0; text-transform: none;
-  }
-
-  /* ===== F. Progress ring in header ===== */
-  .progress-ring-wrap {
-    display: flex; align-items: center; gap: 14px;
-    padding: 8px 14px; border: 1px solid var(--border);
-    background: rgba(0,0,0,0.2);
-  }
-  .progress-ring { position: relative; width: 52px; height: 52px; flex-shrink: 0; }
-  .progress-ring svg { transform: rotate(-90deg); }
-  .progress-ring circle.bg { stroke: var(--border); }
-  .progress-ring circle.fg {
-    stroke: var(--accent); stroke-linecap: round;
-    transition: stroke-dashoffset 600ms cubic-bezier(.22,1,.36,1);
-    filter: drop-shadow(0 0 4px rgba(229,255,0,0.6));
-  }
-  .progress-ring-pct {
-    position: absolute; inset: 0; display: flex;
-    align-items: center; justify-content: center;
-    font-family: "Consolas", monospace; font-size: 12px; font-weight: 800;
-    color: var(--accent);
-  }
-  .progress-ring-info { font-size: 10px; color: var(--muted); line-height: 1.4; }
-  .progress-ring-info b { color: var(--text); font-family: "Consolas", monospace; }
-
-  /* ===== G. Search prominente ===== */
-  .search-hero {
-    flex: 1; max-width: 480px; position: relative; margin-left: 12px;
-  }
-  .search-hero input {
-    width: 100%; background: var(--card); color: var(--text);
-    border: 1px solid var(--border);
-    padding: 8px 14px 8px 34px; font-size: 13px; font-family: inherit;
-    outline: none; transition: border-color 120ms ease;
-  }
-  .search-hero input:focus { border-color: var(--accent); }
-  .search-hero .search-icon {
-    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-    color: var(--muted); font-size: 14px;
-  }
-  .search-hero .search-kbd {
-    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-    font-family: "Consolas", monospace; font-size: 9px; color: var(--dim);
-    border: 1px solid var(--border); padding: 2px 6px;
-    letter-spacing: 0.1em;
-  }
-  .search-hero input:focus + .search-icon + .search-kbd,
-  .search-hero:focus-within .search-kbd { display: none; }
-
-  /* ===== H. Filter chips ===== */
-  .filter-chips {
-    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-    padding: 8px 28px; background: var(--bg);
-    border-bottom: 1px solid var(--border);
-  }
-  .filter-chips-label {
-    font-family: "Consolas", monospace; font-size: 10px;
-    color: var(--muted); text-transform: uppercase;
-    letter-spacing: 0.15em; margin-right: 4px;
-  }
-  .chip {
-    background: transparent; border: 1px solid var(--border);
-    color: var(--muted); padding: 4px 10px; font-size: 11px;
-    font-family: inherit; cursor: pointer;
-    transition: all 120ms ease; letter-spacing: 0.2px;
-  }
-  .chip:hover { border-color: var(--accent); color: var(--accent); }
-  .chip.active { background: var(--accent); color: #000; border-color: var(--accent); }
-  .chip .chip-count { opacity: 0.7; margin-left: 4px; font-size: 10px; }
-
-  /* ===== I. Sort dropdown ===== */
-  .sort-select {
-    background: var(--card); color: var(--muted);
-    border: 1px solid var(--border);
-    padding: 4px 10px; font-size: 11px; font-family: inherit;
-    cursor: pointer; margin-left: auto;
-  }
-  .sort-select:hover { border-color: var(--accent); }
-  .sort-select:focus { outline: none; border-color: var(--accent); color: var(--text); }
-
-  /* ===== J. Summary strip (riepilogo pre-apply) ===== */
-  .summary-strip {
-    background: var(--card); border: 1px solid var(--border);
-    padding: 10px 14px; font-size: 11px; color: var(--muted);
-    font-family: "Consolas", monospace; letter-spacing: 0.4px;
-    margin-bottom: 8px; transition: border-color 200ms ease;
-  }
-  .summary-strip.armed { border-color: var(--accent); color: var(--text); }
-  .summary-strip.danger { border-color: var(--warn); }
-  .summary-strip b { color: var(--accent); }
-  .summary-strip .sep { color: var(--dim); margin: 0 8px; }
-
-  /* Bigger Apply button when armed */
-  .btn-primary:disabled { background: var(--card); color: var(--dim); border: 1px solid var(--border); }
-
-  /* Time pill (⏱ 2s or ⏱ + riavvio) */
-  .time-pill {
-    display: inline-flex; align-items: center; gap: 3px;
-    font-family: "Consolas", monospace; font-size: 9px;
-    color: var(--muted); border: 1px solid var(--border);
-    padding: 1px 6px; letter-spacing: 0.4px;
-    margin-left: 6px;
-  }
-  .time-pill.reboot { color: var(--warn); border-color: rgba(255,170,0,0.35); }
-
-  /* ===== K. Big toast (post-apply overlay) ===== */
-  .big-toast {
-    position: fixed; top: 24px; right: 24px;
-    min-width: 320px; max-width: 420px;
-    background: var(--card); border: 1px solid var(--ok);
-    padding: 14px 16px; z-index: 300;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 32px rgba(0,255,102,0.15);
-    opacity: 0; transform: translateX(20px);
-    transition: opacity 260ms ease, transform 260ms ease;
-  }
-  .big-toast.show { opacity: 1; transform: translateX(0); }
-  .big-toast.warn { border-color: var(--warn); box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 32px rgba(255,170,0,0.15); }
-  .big-toast.danger { border-color: var(--danger); box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 32px rgba(255,51,85,0.15); }
-  .big-toast-title {
-    font-size: 13px; font-weight: 800; color: var(--ok);
-    letter-spacing: 0.4px; margin-bottom: 6px;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .big-toast.warn .big-toast-title { color: var(--warn); }
-  .big-toast.danger .big-toast-title { color: var(--danger); }
-  .big-toast-body {
-    font-size: 12px; color: var(--muted); line-height: 1.5;
-  }
-  .big-toast-actions {
-    margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;
-  }
-  .big-toast-actions button {
-    background: transparent; border: 1px solid var(--border);
-    color: var(--text); font-family: inherit; font-size: 11px;
-    padding: 6px 12px; cursor: pointer; letter-spacing: 0.3px;
-    transition: all 120ms ease;
-  }
-  .big-toast-actions button.primary {
-    background: var(--ok); color: #000; border-color: var(--ok);
-  }
-  .big-toast-actions button:hover { border-color: var(--accent); color: var(--accent); }
-  .big-toast-actions button.primary:hover {
-    filter: brightness(1.1); color: #000; border-color: var(--ok);
-  }
-  .big-toast-close {
-    position: absolute; top: 6px; right: 8px;
-    background: none; border: none; color: var(--muted);
-    font-size: 18px; line-height: 1; cursor: pointer;
-  }
-  .big-toast-close:hover { color: var(--text); }
-
-  /* Applied pulse animation */
-  @keyframes appliedPulse {
-    0%   { box-shadow: 0 0 0 0 rgba(0,255,102,0.6); }
-    70%  { box-shadow: 0 0 0 12px rgba(0,255,102,0); }
-    100% { box-shadow: 0 0 0 0 rgba(0,255,102,0); }
-  }
-  .card.just-applied { animation: appliedPulse 900ms ease-out; }
-
-  /* ===== v0.7.7 — Update banner ===== */
-  .update-banner {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 28px; background: rgba(0,224,255,0.07);
-    border-bottom: 1px solid var(--info); font-size: 12px; color: var(--text);
-    flex-shrink: 0; animation: fadeUp 260ms ease;
-  }
-  .update-banner[hidden] { display: none; }
-  .upd-icon { color: var(--info); font-weight: 800; font-size: 15px; }
-  .upd-text { flex: 1; min-width: 0; }
-  .upd-text b { color: var(--info); }
-  .upd-btn {
-    margin-left: auto; border: 1px solid var(--info); color: var(--info);
-    padding: 6px 14px; text-decoration: none; font-family: "Consolas", monospace;
-    text-transform: uppercase; font-size: 10px; letter-spacing: 0.12em;
-    white-space: nowrap; transition: background 120ms ease, color 120ms ease;
-  }
-  .upd-btn:hover { background: var(--info); color: #000; }
-  .upd-dismiss {
-    background: none; border: none; color: var(--muted);
-    font-size: 17px; line-height: 1; cursor: pointer; padding: 0 2px;
-  }
-  .upd-dismiss:hover { color: var(--text); }
-
-  /* ===== v0.7.7 — Revert singolo tweak ===== */
-  .actions { align-items: center; }
-  .btn-revert-one {
-    background: transparent; color: var(--info); border: 1px solid var(--info);
-    padding: 6px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 1.2px; cursor: pointer; font-family: inherit; margin-left: 8px;
-    transition: background 120ms ease, color 120ms ease;
-  }
-  .btn-revert-one:hover { background: var(--info); color: #000; }
-  .card.compact .btn-revert-one { padding: 4px 12px; font-size: 10px; }
-
-  /* ===== v0.7.7 — Monitor Live ===== */
-  .mon-head, .bloat-head {
-    grid-column: 1 / -1; display: flex; align-items: flex-end;
-    justify-content: space-between; gap: 16px; flex-wrap: wrap;
-  }
-  .mon-title {
-    font-family: "Consolas", monospace; font-size: 11px; color: var(--accent);
-    letter-spacing: 0.2em; margin-bottom: 4px;
-  }
-  .mon-sub { font-size: 12px; color: var(--muted); max-width: 760px; line-height: 1.5; }
-  .mon-sub b { color: var(--ok); }
-  .mon-grid {
-    grid-column: 1 / -1; display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px;
-  }
-  .mon-tile {
-    background: var(--card); border: 1px solid var(--border);
-    padding: 14px 16px 10px; transition: border-color 160ms ease;
-    animation: fadeUp 260ms ease both;
-  }
-  .mon-tile:hover { border-color: #3a3a48; }
-  .mon-label {
-    font-family: "Consolas", monospace; font-size: 10px; color: var(--muted);
-    text-transform: uppercase; letter-spacing: 0.15em;
-  }
-  .mon-value { font-family: "Consolas", monospace; font-size: 30px; font-weight: 800; margin: 6px 0 4px; line-height: 1; }
-  .mon-unit { font-size: 13px; color: var(--muted); margin-left: 2px; font-weight: 400; }
-  .mon-spark { width: 100%; height: 36px; display: block; opacity: 0.85; }
-  .mon-live-dot {
-    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-    background: var(--ok); margin-right: 6px;
-    box-shadow: 0 0 8px rgba(0,255,102,0.6);
-    animation: pulse 1.8s ease-in-out infinite;
-  }
-
-  /* ===== v0.7.7 — Bloatware tab ===== */
-  .bloat-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .bloat-list {
-    grid-column: 1 / -1; display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 10px;
-  }
-  .bloat-row {
-    display: flex; gap: 12px; align-items: flex-start;
-    background: var(--card); border: 1px solid var(--border); padding: 12px 14px;
-    cursor: pointer; transition: border-color 120ms ease, background 120ms ease;
-    animation: fadeUp 260ms ease both;
-  }
-  .bloat-row:hover { border-color: #3a3a48; background: var(--card-hi); }
-  .bloat-row.selected { border-color: var(--danger); }
-  .bloat-name { font-size: 13px; font-weight: 600; color: var(--text); word-break: break-all; }
-  .bloat-meta {
-    font-size: 10px; color: var(--muted); margin-top: 4px;
-    display: flex; gap: 8px; flex-wrap: wrap; font-family: "Consolas", monospace;
-  }
-  .bloat-badge { border: 1px solid var(--border); padding: 1px 6px; color: var(--muted); }
-  .bloat-badge.curated { border-color: var(--warn); color: var(--warn); }
-
-  /* ===== v0.7.7 — Responsive: finestra ridotta ===== */
-  @media (max-width: 1080px) {
-    header { padding: 14px 18px 12px; }
-    .preset-bar, .filter-chips { padding-left: 18px; padding-right: 18px; }
-    .tabs { width: 190px; }
-    main { padding: 16px 18px 10px; }
-    footer { padding: 10px 18px 12px; }
-    .backup-panel { right: 18px; }
-    .meta-row { grid-template-columns: 1fr; align-items: start; gap: 10px; }
-    .header-actions { flex-wrap: wrap; justify-content: flex-start; }
-    .update-banner { padding: 8px 18px; }
-  }
-  @media (max-width: 860px) {
-    .brand-sub { display: none; }
-    .brand { font-size: 18px; }
-    .preset-bar { flex-wrap: wrap; gap: 8px; }
-    .preset-btn { padding: 6px 14px; font-size: 12px; }
-    .search-hero { flex-basis: 100%; margin-left: 0; max-width: none; order: 10; }
-    .layout { flex-direction: column; }
-    .tabs {
-      flex-direction: row; width: auto; border-right: none;
-      border-bottom: 1px solid var(--border);
-      overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
-      padding: 4px 12px; gap: 4px;
-    }
-    .tabs::before { display: none; }
-    .tab {
-      padding: 10px 12px; font-size: 12px; white-space: nowrap; flex-shrink: 0;
-      border-left: none; border-bottom: 2px solid transparent;
-    }
-    .tab.active { border-bottom-color: var(--accent); background: transparent; }
-    footer { grid-template-columns: 1fr; gap: 10px; }
-    .log { height: 70px; }
-    .btn-bar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
-    .summary-strip { flex-basis: 100%; margin-bottom: 0; }
-    .bench-toggle { flex-basis: 100%; }
-    .btn-primary, .btn-danger { flex: 1; padding: 12px 16px; white-space: nowrap; }
-    main { grid-template-columns: 1fr; }
-    .mon-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-    .mon-value { font-size: 24px; }
-    .bloat-list { grid-template-columns: 1fr; }
-    .progress-ring-info { display: none; }
-    .live-sync-text, .mobile-btn span:last-child, .logout-btn span:last-child { display: none; }
-    .filter-chips { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: thin; }
-    .chip { white-space: nowrap; flex-shrink: 0; }
-    .sort-select { flex-shrink: 0; }
-  }
-
-  /* ===== v0.7.7 — Responsive: fullscreen / monitor larghi ===== */
-  @media (min-width: 1500px) {
-    body { font-size: 15px; }
-    header { padding: 24px 40px 18px; }
-    .preset-bar, .filter-chips { padding-left: 40px; padding-right: 40px; }
-    .tabs { width: 252px; }
-    main { padding: 24px 40px 16px; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; }
-    footer { padding: 14px 40px 16px; }
-    .backup-panel { right: 40px; }
-    .update-banner { padding-left: 40px; padding-right: 40px; }
-    .log { height: 160px; }
-    .name { font-size: 15px; }
-    .desc-block { font-size: 13px; }
-    .mon-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-  }
-</style>
-</head>
-<body>
-  <header>
-    <div class="brand-row">
-      <div class="brand">FRAMEFORGE AGENT</div>
-      <div class="brand-sub">Trova i colli di bottiglia. Ottimizza in sicurezza.</div>
-      <div class="ver-pill">GUI v3.2</div>
-    </div>
-    <div class="safety">
-      <strong>SICUREZZA</strong> - Non tocchiamo mai Windows Defender, Firewall o servizi di sicurezza. Ogni modifica ha backup automatico ed e reversibile.
-    </div>
-    <div class="meta-row">
-      <div style="display:flex;align-items:center;gap:14px;">
-        <div class="progress-ring-wrap" id="progressRingWrap" data-testid="progress-ring">
-          <div class="progress-ring">
-            <svg width="52" height="52" viewBox="0 0 52 52">
-              <circle class="bg" cx="26" cy="26" r="22" fill="none" stroke-width="4"></circle>
-              <circle class="fg" id="progressRingFg" cx="26" cy="26" r="22" fill="none" stroke-width="4"
-                stroke-dasharray="138.23" stroke-dashoffset="138.23"></circle>
-            </svg>
-            <div class="progress-ring-pct" id="progressRingPct">--%</div>
-          </div>
-          <div class="progress-ring-info" id="progressRingInfo">
-            <b>--/--</b> ottimizzato<br/>
-            <span id="progressRingSub" style="color:var(--dim)">Analisi in corso...</span>
-          </div>
-        </div>
-        <div>
-          <div class="hw-line" id="hwLine">PC: rilevamento in corso...</div>
-          <div class="admin-line" id="adminLine"></div>
-        </div>
-      </div>
-      <div class="header-actions">
-        <button type="button" class="density-toggle" id="densityToggle" data-testid="density-toggle" title="Alterna layout compatto/dettagliato (D)">
-          <span id="densityLabel">Compatto</span>
-        </button>
-        <button type="button" class="mobile-btn" id="mobileHandoffBtn" data-testid="mobile-handoff-btn" title="Apri la Dashboard sul telefono senza login">
-          <span class="mobile-btn-icon" aria-hidden="true">&#9990;</span>
-          <span>Continua sul Telefono</span>
-        </button>
-        <button type="button" class="logout-btn" id="logoutBtn" data-testid="logout-btn" title="Rimuove il token salvato: al prossimo avvio l'agent chiedera' un nuovo token">
-          <span class="logout-btn-icon" aria-hidden="true">&#128100;</span>
-          <span>Cambia account</span>
-        </button>
-        <label class="live-sync-toggle" data-testid="live-sync-label" title="Invia CPU/GPU/RAM/temp in tempo reale al Command Center cloud">
-          <input type="checkbox" id="liveSyncToggle" data-testid="live-sync-toggle" />
-          <span class="live-sync-dot" aria-hidden="true"></span>
-          <span class="live-sync-text">Sync Cloud</span>
-        </label>
-        <div class="backup-badge" id="backupBadge" data-testid="backup-badge" role="button" tabindex="0" title="Clicca per vedere la lista">Backup: 0</div>
-        <div class="backup-panel" id="backupPanel" data-testid="backup-panel" hidden>
-          <div class="backup-panel-title">Modifiche reversibili</div>
-          <ul id="backupList" class="backup-list"></ul>
-          <div class="backup-panel-hint">Usa "RIPRISTINA TUTTO" in fondo per riportare il PC allo stato iniziale.</div>
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <div class="update-banner" id="updateBanner" data-testid="agent-update-banner" hidden></div>
-
-  <div class="preset-bar">
-    <div class="preset-label">Preset:</div>
-    <button class="preset-btn" data-preset="competitive" data-testid="preset-competitive">Competitivo</button>
-    <button class="preset-btn" data-preset="streaming" data-testid="preset-streaming">Streaming</button>
-    <button class="preset-btn" data-preset="complete" data-testid="preset-complete">Completo</button>
-    <button class="preset-btn" data-preset="none" data-testid="preset-none">Nessuno</button>
-    <div class="preset-spacer"></div>
-    <div class="search-hero">
-      <input type="text" id="searchBox" placeholder="Cerca tweak... prova 'NVIDIA', 'network', 'DPI'" data-testid="search-input" />
-      <span class="search-icon">&#128269;</span>
-      <span class="search-kbd">Ctrl+K</span>
-    </div>
-  </div>
-
-  <div class="preset-preview" id="presetPreview" data-testid="preset-preview"></div>
-
-  <div class="layout">
-    <nav class="tabs" id="tabs" data-testid="sidebar-tabs"></nav>
-    <div class="content">
-      <div class="filter-chips" id="filterChips" data-testid="filter-chips">
-        <span class="filter-chips-label">Filtri:</span>
-        <button class="chip" data-filter="recommended" data-testid="chip-recommended">&#9733; Consigliati</button>
-        <button class="chip" data-filter="no-reboot" data-testid="chip-no-reboot">&#9889; No riavvio</button>
-        <button class="chip" data-filter="reversible" data-testid="chip-reversible">&#128737; Reversibili</button>
-        <button class="chip" data-filter="caution" data-testid="chip-caution">&#9888; Cautela</button>
-        <button class="chip" data-filter="pending" data-testid="chip-pending">&#9679; Da applicare</button>
-        <select class="sort-select" id="sortSelect" data-testid="sort-select">
-          <option value="impact">Ordina: Impatto stimato</option>
-          <option value="category">Ordina: Categoria</option>
-          <option value="name">Ordina: Nome (A-Z)</option>
-          <option value="pending">Ordina: Da applicare per primi</option>
-        </select>
-      </div>
-
-      <main id="cards"></main>
-    </div>
-  </div>
-
-  <footer>
-    <div class="log" id="log"></div>
-    <div class="btn-bar">
-      <div class="summary-strip" id="summaryStrip" data-testid="summary-strip">
-        Nessun tweak selezionato · scegli i tweak o clicca un preset
-      </div>
-      <label class="bench-toggle">
-        <input type="checkbox" id="benchToggle" checked /> Benchmark PRIMA/DOPO
-      </label>
-      <button class="btn-primary" id="applyBtn" data-testid="apply-selected-btn" disabled>Applica selezionati</button>
-      <button class="btn-danger" id="restoreBtn" data-testid="restore-all-btn">Ripristina tutto</button>
-    </div>
-  </footer>
-
-  <div class="toast" id="toast"></div>
-  <div id="bigToastHost"></div>
-
-  <div class="mh-overlay" id="mobileHandoffOverlay" hidden data-testid="mobile-handoff-overlay">
-    <div class="mh-modal" role="dialog" aria-modal="true" aria-labelledby="mhTitle" data-testid="mobile-handoff-modal">
-      <button type="button" class="mh-close" id="mhClose" aria-label="Chiudi" data-testid="mobile-handoff-close">&times;</button>
-      <div class="mh-eyebrow">// CONTINUA SUL TELEFONO</div>
-      <h2 class="mh-title" id="mhTitle">Apri la Dashboard sul mobile</h2>
-      <p class="mh-sub">Scansiona il QR con la fotocamera del telefono. Ti collegherai automaticamente al tuo account, senza login.</p>
-      <div class="mh-body" id="mhBody">
-        <div class="mh-loading" id="mhLoading">Generazione QR sicuro...</div>
-        <div class="mh-error" id="mhError" hidden></div>
-        <div class="mh-qr" id="mhQr" hidden></div>
-        <div class="mh-consumed" id="mhConsumed" hidden>
-          <div class="mh-check">&#10003;</div>
-          <div class="mh-consumed-title">Device connesso</div>
-          <div class="mh-consumed-sub" id="mhDeviceLabel">Dispositivo</div>
-        </div>
-      </div>
-      <div class="mh-footer" id="mhFooter" hidden>
-        <div class="mh-countdown"><span>Scade tra</span> <span class="mh-time" id="mhTime">05:00</span></div>
-        <button type="button" class="mh-regen" id="mhRegen" data-testid="mobile-handoff-regenerate">Rigenera</button>
-      </div>
-      <div class="mh-safety">
-        <strong>Sicurezza:</strong> il link scade in 5 minuti ed &egrave; a uso singolo.
-      </div>
-    </div>
-  </div>
-
-<script>
-(function(){
-  const TOKEN = "__TOKEN__";
-  const CATS = [
-    { key: "gaming",  label: "Gaming & FPS" },
-    { key: "input",   label: "Latenza & Input" },
-    { key: "network", label: "Rete & Streaming" },
-    { key: "system",  label: "Sistema & Debloat" },
-    { key: "bloatware", label: "Bloatware" },
-    { key: "monitor", label: "Monitor Live" },
-    { key: "profiles", label: "Profili Cloud" }
-  ];
-  let state = { tweaks: [], hw: {}, admin: false, backup: 0, backup_ids: [], presets: {}, profiles: null, revertable: [], agent: {} };
-  let selected = new Set();
-  let activeCat = "gaming";
-  let searchQ = "";
-  let logSince = 0;
-  let applying = false;
-  // GUI v2.5 — density mode (A), filters (H), sort (I)
-  let density = (localStorage.getItem("ff_density") || "detailed"); // "compact" | "detailed"
-  let expanded = new Set(); // per-card override in compact mode
-  let activeFilters = new Set();
-  let sortMode = "impact";
-
-  function api(path, opts) {
-    opts = opts || {};
-    const url = path + (path.indexOf("?") >= 0 ? "&" : "?") + "tk=" + encodeURIComponent(TOKEN);
-    return fetch(url, opts).then(r => r.json());
-  }
-  // GUI v3.1: errori JS -> log visibile in GUI + console (debug remoto senza rebuild)
-  function reportClientError(msg) {
-    try { console.error("[FF-GUI]", msg); } catch(_) {}
-    try {
-      fetch("/api/client-error?tk=" + encodeURIComponent(TOKEN), {
-        method: "POST", headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ msg: String(msg).slice(0, 600) })
-      }).catch(()=>{});
-    } catch(_) {}
-  }
-  window.addEventListener("error", e => reportClientError((e.message || "?") + " @riga " + (e.lineno || "?")));
-  window.addEventListener("unhandledrejection", e => reportClientError("promise: " + (e.reason && (e.reason.stack || e.reason.message) || e.reason)));
-  function safeRender(name, fn) {
-    try { fn(); } catch (err) { reportClientError(name + ": " + (err && err.stack || err)); }
-  }
-
-  // ===== GUI v3.2: skeleton + progresso stimato durante la prima analisi =====
-  // Il server PS e' single-thread: mentre esegue lo scan non puo' rispondere a
-  // richieste di progresso reale. Il progresso e' quindi stimato client-side,
-  // calibrato sulla durata effettiva dell'ultimo scan (localStorage ff_scan_ms).
-  let _scanTimer = null;
-  let _scanT0 = 0;
-  const _SCAN_STEPS = ["Gaming & FPS", "Latenza & Input", "Rete & Streaming", "Sistema & Debloat", "Servizi Windows", "GPU & driver"];
-  function renderScanSkeleton() {
-    const el = document.getElementById("cards");
-    if (!el || state.tweaks.length) return;
-    let est = 9000;
-    try { est = parseInt(localStorage.getItem("ff_scan_ms") || "9000", 10) || 9000; } catch (_) {}
-    est = Math.max(3000, Math.min(60000, est));
-    _scanT0 = Date.now();
-    const skel = Array.from({ length: 6 }, () => `
-      <div class="skel-card" aria-hidden="true">
-        <div class="skel-line w60"></div>
-        <div class="skel-line w40"></div>
-        <div class="skel-line w85"></div>
-        <div class="skel-line w75"></div>
-      </div>`).join("");
-    el.innerHTML = `
-      <div class="scan-strip" data-testid="scan-progress">
-        <div class="scan-title">// ANALISI SISTEMA IN CORSO</div>
-        <div class="scan-sub">Controllo lo stato REALE di ogni tweak sul tuo PC (registro, servizi, driver). Nessuna modifica viene applicata.</div>
-        <div class="scan-bar"><div class="scan-bar-fill" id="scanBarFill"></div></div>
-        <div class="scan-meta"><span id="scanStep">${_SCAN_STEPS[0]}…</span><span id="scanPct">0%</span></div>
-      </div>` + skel;
-    clearInterval(_scanTimer);
-    _scanTimer = setInterval(() => {
-      const fill = document.getElementById("scanBarFill");
-      if (!fill) { clearInterval(_scanTimer); _scanTimer = null; return; }
-      const p = Math.min(92, Math.round((Date.now() - _scanT0) / est * 100));
-      fill.style.width = p + "%";
-      const pctEl = document.getElementById("scanPct");
-      if (pctEl) pctEl.textContent = p + "%";
-      const stepEl = document.getElementById("scanStep");
-      if (stepEl) stepEl.textContent = _SCAN_STEPS[Math.min(_SCAN_STEPS.length - 1, Math.floor(p / (92 / _SCAN_STEPS.length)))] + "…";
-    }, 250);
-  }
-  function finishScanSkeleton() {
-    if (_scanTimer) { clearInterval(_scanTimer); _scanTimer = null; }
-    if (_scanT0) {
-      const took = Date.now() - _scanT0;
-      _scanT0 = 0;
-      if (took > 1500) { try { localStorage.setItem("ff_scan_ms", String(took)); } catch (_) {} }
-    }
-  }
-  function toast(msg, cls) {
-    const t = document.getElementById("toast");
-    t.textContent = msg;
-    t.className = "toast show" + (cls ? " " + cls : "");
-    clearTimeout(t._h); t._h = setTimeout(() => t.className = "toast", 2400);
-  }
-  function esc(s) {
-    return String(s || "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-  }
-  function stateClass(s) {
-    const x = String(s || "").toLowerCase();
-    if (!x || x === "n/d") return "na";
-    // "(da attivare|disattivare|disabilitare|ottimizzare)" o "da attivare" ecc. -> azione richiesta
-    if (/\(da (att|dis|ott)/i.test(x) || /^da (att|dis|ott)/i.test(x)) return "todo";
-    // Solo GPU X (skip perche' altro vendor) -> non applicabile
-    if (/^solo gpu /i.test(x)) return "na";
-    // Stati positivi noti
-    if (/attivo|attiva|disabilit|disattivat|gia |prestazioni|nessun|applicabile|libera ora|trim attivo/i.test(x)) return "ok";
-    return "";
-  }
-  function isApplied(t) {
-    if (t.fit.skip) return false;
-    return stateClass(t.state) === "ok";
-  }
-
-  // ===== B. Impact meter — parse "+3-8% FPS", "meno stutter" ecc. -> 0..5 stars =====
-  function parseImpact(t) {
-    const s = String(t.impact || "").toLowerCase();
-    // Numeric percentage range or single value
-    const m = s.match(/\+?(\d+)\s*[-–]\s*(\d+)\s*%/) || s.match(/\+?(\d+)\s*%/);
-    if (m) {
-      const hi = parseInt(m[2] || m[1], 10);
-      if (hi >= 20) return 5;
-      if (hi >= 11) return 4;
-      if (hi >= 6)  return 3;
-      if (hi >= 3)  return 2;
-      return 1;
-    }
-    // Qualitative
-    if (/molto\s+meno\s+stutter|enorme|drastic/i.test(s)) return 4;
-    if (/meno\s+stutter|pi[uù]\s+stabil|migliora\s+netta|pi[uù]\s+veloce/i.test(s)) return 3;
-    if (/leggero|marginal|piccolo|minimo/i.test(s)) return 1;
-    if (/latenza|input|frametime|reattiv/i.test(s)) return 2;
-    return 2; // default
-  }
-
-  // Simple time/reboot detection from various text fields
-  function needsReboot(t) {
-    const s = ((t.desc || "") + " " + (t.impact || "") + " " + (t.problem || "") + " " + (t.reason || "")).toLowerCase();
-    return /richiede\s+riavvio|require[s]?\s+reboot|riavvio\s+richiest/i.test(s);
-  }
-
-  // ===== H. Filter matching =====
-  function matchFilters(t) {
-    if (!activeFilters.size) return true;
-    if (activeFilters.has("recommended") && parseImpact(t) < 3) return false;
-    if (activeFilters.has("no-reboot") && needsReboot(t)) return false;
-    if (activeFilters.has("reversible") && t.risk === "caution") return false;
-    if (activeFilters.has("caution") && t.risk !== "caution") return false;
-    if (activeFilters.has("pending") && (isApplied(t) || t.fit.skip)) return false;
-    return true;
-  }
-
-  // ===== I. Sort =====
-  function sortItems(items) {
-    const arr = items.slice();
-    if (sortMode === "impact") {
-      arr.sort((a, b) => parseImpact(b) - parseImpact(a));
-    } else if (sortMode === "name") {
-      arr.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-    } else if (sortMode === "pending") {
-      arr.sort((a, b) => {
-        const pa = isApplied(a) ? 1 : 0, pb = isApplied(b) ? 1 : 0;
-        if (pa !== pb) return pa - pb;
-        return parseImpact(b) - parseImpact(a);
-      });
-    }
-    return arr;
-  }
-
-  // ===== C. Preset preview — which tweaks would this preset apply? =====
-  function computePresetPreview(name) {
-    const ids = (state.presets && state.presets[name]) ? new Set(state.presets[name]) : new Set();
-    const picks = state.tweaks.filter(t => ids.has(t.id) && !t.fit.skip && !isApplied(t));
-    const fpsBoost = picks.reduce((sum, t) => {
-      const s = String(t.impact || "");
-      const m = s.match(/\+(\d+)\s*[-–]\s*(\d+)\s*%\s*FPS/i);
-      return sum + (m ? parseInt(m[2], 10) : 0);
-    }, 0);
-    const reboots = picks.filter(needsReboot).length;
-    return { picks, count: picks.length, fpsBoost, reboots, ids };
-  }
-
-  function renderPresetPreview(name) {
-    const el = document.getElementById("presetPreview");
-    if (!name || name === "none") { el.classList.remove("show"); el.innerHTML = ""; return; }
-    const p = computePresetPreview(name);
-    if (!p.count) { el.classList.remove("show"); el.innerHTML = ""; return; }
-    const parts = [`<b>${p.count}</b> tweak da applicare`];
-    if (p.fpsBoost) parts.push(`<b>+${p.fpsBoost}%</b> FPS stimati max`);
-    parts.push(p.reboots ? `<b>${p.reboots}</b> riavvi` : `<b>0</b> riavvi`);
-    el.innerHTML = `Preset <b>${esc(name)}</b>: ` + parts.join(`<span class="preview-sep">·</span>`);
-    el.classList.add("show");
-    // Highlight cards
-    document.querySelectorAll(".card").forEach(c => {
-      const id = c.dataset.id;
-      c.classList.toggle("preview-pick", p.ids.has(id) && !isApplied({ id, state: "", fit: { skip: false } }));
-    });
-  }
-  function clearPresetPreview() {
-    const el = document.getElementById("presetPreview");
-    el.classList.remove("show"); el.innerHTML = "";
-    document.querySelectorAll(".card.preview-pick").forEach(c => c.classList.remove("preview-pick"));
-  }
-
-  // ===== F. Progress ring =====
-  function renderProgressRing() {
-    const items = state.tweaks.filter(t => !t.fit.skip);
-    const done = items.filter(t => isApplied(t)).length;
-    const total = items.length || 1;
-    const pct = Math.round((done / total) * 100);
-    const circumference = 2 * Math.PI * 22; // r=22
-    const offset = circumference * (1 - done / total);
-    const fg = document.getElementById("progressRingFg");
-    if (fg) fg.setAttribute("stroke-dashoffset", offset.toFixed(2));
-    const pctEl = document.getElementById("progressRingPct");
-    if (pctEl) pctEl.textContent = pct + "%";
-    const info = document.getElementById("progressRingInfo");
-    if (info) {
-      const sub = pct >= 80 ? "Configurazione ottimale" : pct >= 50 ? "Buona strada" : "C'è margine di miglioramento";
-      info.innerHTML = `<b>${done}/${total}</b> ottimizzato<br/><span style="color:var(--dim)">${sub}</span>`;
-    }
-  }
-
-  // ===== J. Summary strip =====
-  function updateSummaryStrip() {
-    const strip = document.getElementById("summaryStrip");
-    const btn = document.getElementById("applyBtn");
-    const n = selected.size;
-    if (!n) {
-      strip.className = "summary-strip";
-      strip.textContent = "Nessun tweak selezionato · scegli i tweak o clicca un preset";
-      btn.disabled = true;
-      btn.textContent = "Applica selezionati";
-      return;
-    }
-    const picks = state.tweaks.filter(t => selected.has(t.id));
-    const fpsMax = picks.reduce((sum, t) => {
-      const m = String(t.impact || "").match(/\+(\d+)\s*[-–]\s*(\d+)\s*%\s*FPS/i);
-      return sum + (m ? parseInt(m[2], 10) : 0);
-    }, 0);
-    const reboots = picks.filter(needsReboot).length;
-    const cauts = picks.filter(t => t.risk === "caution").length;
-    const parts = [`<b>${n}</b> selezionati`];
-    if (fpsMax) parts.push(`<b>+${fpsMax}%</b> FPS stimati max`);
-    if (reboots) parts.push(`<b>${reboots}</b> con riavvio`);
-    if (cauts) parts.push(`<b>${cauts}</b> in cautela`);
-    parts.push(`Backup automatico <b>ON</b>`);
-    strip.innerHTML = parts.join(`<span class="sep">·</span>`);
-    strip.className = cauts ? "summary-strip danger" : "summary-strip armed";
-    btn.disabled = false;
-    btn.textContent = `Applica ${n} tweak`;
-  }
-
-  // ===== K. Big toast (post-apply) =====
-  function bigToast({ level, title, body, actions, autoDismiss }) {
-    const host = document.getElementById("bigToastHost");
-    const id = "bt-" + Date.now();
-    const div = document.createElement("div");
-    div.className = "big-toast " + (level || "");
-    div.id = id;
-    div.innerHTML = `
-      <button class="big-toast-close" aria-label="Chiudi">&times;</button>
-      <div class="big-toast-title">${esc(title || "")}</div>
-      <div class="big-toast-body">${body || ""}</div>
-      <div class="big-toast-actions"></div>`;
-    const actsEl = div.querySelector(".big-toast-actions");
-    (actions || []).forEach(a => {
-      const b = document.createElement("button");
-      b.className = a.primary ? "primary" : "";
-      b.textContent = a.label;
-      b.onclick = () => { try { a.onClick && a.onClick(); } finally { dismiss(); } };
-      actsEl.appendChild(b);
-    });
-    if (!actions || !actions.length) actsEl.remove();
-    const dismiss = () => {
-      div.classList.remove("show");
-      setTimeout(() => div.remove(), 300);
-    };
-    div.querySelector(".big-toast-close").onclick = dismiss;
-    host.appendChild(div);
-    requestAnimationFrame(() => div.classList.add("show"));
-    if (autoDismiss !== false) setTimeout(dismiss, autoDismiss || 12000);
-    return { dismiss };
-  }
-
-  function renderTabs() {
-    const el = document.getElementById("tabs");
-    el.innerHTML = CATS.map(c => {
-      if (c.key === "profiles") {
-        const count = state.profiles?.profiles?.length ?? "…";
-        return `<button class="tab ${c.key === activeCat ? "active" : ""}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${count}</span></button>`;
-      }
-      if (c.key === "monitor") {
-        return `<button class="tab ${c.key === activeCat ? "active" : ""}" data-cat="${c.key}" data-testid="tab-${c.key}"><span class="mon-live-dot"></span>${c.label}</button>`;
-      }
-      if (c.key === "bloatware") {
-        const count = bloat ? (bloat.apps || []).length : "…";
-        return `<button class="tab ${c.key === activeCat ? "active" : ""}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${count}</span></button>`;
-      }
-      const inCat = state.tweaks.filter(t => t.cat === c.key && !t.fit.skip);
-      const todo = inCat.filter(t => !isApplied(t)).length;
-      const total = inCat.length;
-      return `<button class="tab ${c.key === activeCat ? "active" : ""}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${todo}/${total}</span></button>`;
-    }).join("");
-    [...el.querySelectorAll(".tab")].forEach(b => b.onclick = () => {
-      activeCat = b.dataset.cat;
-      if (activeCat === "profiles" && !state.profiles) loadProfiles();
-      if (activeCat === "bloatware" && !bloat) loadBloat();
-      if (activeCat === "monitor") startMonitor(); else stopMonitor();
-      renderTabs();
-      renderCards();
-    });
-  }
-
-  function renderCards() {
-    const el = document.getElementById("cards");
-    if (activeCat === "profiles") { renderProfilesTab(el); return; }
-    if (activeCat === "monitor") { renderMonitorTab(el); return; }
-    if (activeCat === "bloatware") { renderBloatwareTab(el); return; }
-    let items = state.tweaks.filter(t => t.cat === activeCat).filter(t => {
-      if (!searchQ) return true;
-      const q = searchQ.toLowerCase();
-      return (t.name + " " + (t.problem||"") + " " + (t.impact||"")).toLowerCase().includes(q);
-    });
-    items = items.filter(matchFilters);
-    items = sortItems(items);
-    if (!items.length) { el.innerHTML = `<div class="empty">Nessun tweak in questa categoria.</div>`; return; }
-    const cardHtml = (t) => {
-      const applied = isApplied(t);
-      t.applied = applied;
-      const sel = selected.has(t.id);
-      const skipCls = t.fit.skip ? " skip" : "";
-      const appliedCls = applied ? " applied" : "";
-      const riskCls = t.risk === "caution" ? " risk-caution" : "";
-      const selCls = sel ? " selected" : "";
-      const compactCls = density === "compact" ? " compact" : "";
-      const expandedCls = expanded.has(t.id) ? " expanded" : "";
-      let hint = "";
-      if (t.fit.skip) hint = `<div class="hint skip">Non applicabile: ${esc(t.fit.hint)}</div>`;
-      else if (t.fit.warn) hint = `<div class="hint">Attenzione: ${esc(t.fit.hint)}</div>`;
-      else if (t.fit.note) hint = `<div class="hint">Nota: ${esc(t.fit.hint)}</div>`;
-      const impactLvl = parseImpact(t);
-      const impactPct = String(t.impact || "").match(/\+(\d+)\s*[-–]\s*(\d+)\s*%/);
-      const impactLabel = impactPct ? `+${impactPct[2]}%` : (impactLvl >= 4 ? "high" : impactLvl >= 3 ? "med" : "low");
-      const meterDots = Array.from({length: 5}, (_, i) => `<span class="impact-dot${i < impactLvl ? ` on-${impactLvl}` : ""}"></span>`).join("");
-      const timePill = needsReboot(t) ? `<span class="time-pill reboot">&#128260; riavvio</span>` : `<span class="time-pill">&#9202; ~2s</span>`;
-      const chevron = density === "compact" ? `<span class="chevron" data-toggle="${t.id}">&#9662;</span>` : "";
-      return `
-        <div class="card${skipCls}${riskCls}${selCls}${appliedCls}${compactCls}${expandedCls}" data-id="${t.id}" data-testid="card-${t.id}">
-          <div class="card-head">
-            <input type="checkbox" class="cb" data-id="${t.id}" ${sel?"checked":""} ${t.fit.skip?"disabled":""} data-testid="cb-${t.id}" />
-            <div class="name">${esc(t.name)}</div>
-            <span class="impact-meter" title="Impatto stimato">${meterDots}<span class="impact-label">${esc(impactLabel)}</span></span>
-            ${timePill}
-            ${chevron}
-          </div>
-          <div class="state ${stateClass(t.state)}">Stato: ${esc(t.state)}</div>
-          <div class="desc-block">
-            <div class="row"><div class="k" title="Problema">&#9888;</div><div class="v">${esc(t.problem)}</div></div>
-            <div class="row"><div class="k motivo" title="Motivo">&#8505;</div><div class="v">${esc(t.reason)}</div></div>
-            <div class="row"><div class="k mod" title="Modifica">&#9881;</div><div class="v">${esc(t.desc)}</div></div>
-            <div class="row"><div class="k impatto" title="Impatto">&#128200;</div><div class="v impatto">${esc(t.impact)}</div></div>
-          </div>
-          ${hint}
-          <div class="actions">
-            ${applied
-              ? `<span class="applied-note">&#10003; gia attivo</span>${(state.revertable||[]).indexOf(t.id) >= 0 ? `<button class="btn-revert-one" data-revert="${t.id}" data-testid="revert-one-${t.id}">&#8617; Ripristina</button>` : ""}`
-              : `<button class="btn-apply-one" data-apply="${t.id}" ${t.fit.skip?"disabled":""} data-testid="apply-one-${t.id}">Applica</button>`}
-          </div>
-        </div>`;
-    };
-    // Una card corrotta non deve mai svuotare l'intera griglia: fallback per-card.
-    el.innerHTML = items.map(t => {
-      try { return cardHtml(t); }
-      catch (err) {
-        reportClientError("card '" + (t && t.id) + "': " + (err && err.stack || err));
-        return `<div class="card" data-id="${esc(t && t.id || "")}"><div class="card-head"><div class="name">${esc((t && (t.name || t.id)) || "Tweak")}</div></div><div class="hint">Card non visualizzabile (dettagli nel log in basso)</div></div>`;
-      }
-    }).join("");
-    el.querySelectorAll(".cb").forEach(cb => cb.onchange = e => {
-      const id = e.target.dataset.id;
-      if (e.target.checked) selected.add(id); else selected.delete(id);
-      updateSelCount();
-      const card = e.target.closest(".card");
-      if (card) card.classList.toggle("selected", e.target.checked);
-    });
-    el.querySelectorAll(".btn-apply-one").forEach(b => b.onclick = () => applyOne(b.dataset.apply));
-    el.querySelectorAll(".btn-revert-one").forEach(b => b.onclick = () => revertOne(b.dataset.revert));
-    // Chevron expand/collapse in compact mode
-    el.querySelectorAll(".chevron").forEach(ch => ch.onclick = (e) => {
-      e.stopPropagation();
-      const id = ch.dataset.toggle;
-      if (expanded.has(id)) expanded.delete(id); else expanded.add(id);
-      const card = ch.closest(".card");
-      if (card) card.classList.toggle("expanded", expanded.has(id));
-    });
-  }
-
-  function updateSelCount() {
-    updateSummaryStrip();
-    renderProgressRing();
-  }
-
-  // -------- Cloud profiles tab --------
-  async function loadProfiles() {
-    const el = document.getElementById("cards");
-    if (activeCat === "profiles") el.innerHTML = `<div class="empty">Caricamento profili dal cloud…</div>`;
-    try {
-      const d = await api("/api/profiles-cloud");
-      state.profiles = d && !d.err ? d : { profiles: [], templates: [], catalog: [], err: d?.err };
-    } catch (e) {
-      state.profiles = { profiles: [], templates: [], catalog: [], err: "network" };
-    }
-    if (activeCat === "profiles") { renderTabs(); renderCards(); }
-  }
-
-  function renderProfilesTab(el) {
-    const p = state.profiles;
-    if (!p) { el.innerHTML = `<div class="empty">Caricamento profili…</div>`; loadProfiles(); return; }
-    if (p.err) { el.innerHTML = `<div class="empty">Cloud non raggiungibile. Verifica la connessione internet e riprova.</div>`; return; }
-    const catalogMap = {};
-    (p.catalog || []).forEach(c => { catalogMap[c.id] = c.name; });
-    const cardHtml = (item, opts) => {
-      const isTemplate = !!opts.template;
-      const tweakIds = item.tweak_ids || [];
-      const names = tweakIds.map(id => catalogMap[id]).filter(Boolean).slice(0, 6);
-      const extra = tweakIds.length > 6 ? ` <span>+${tweakIds.length - 6}</span>` : "";
-      const meta = isTemplate ? `📚 Template community · ${tweakIds.length} tweak` : `👤 Il tuo profilo · ${tweakIds.length} tweak`;
-      const testid = isTemplate ? `profile-template-${item.id}` : `profile-${item.id}`;
-      return `<div class="profile-card" data-testid="${testid}">
-        <h3>${esc(item.name || item.game_name || 'Senza nome')}</h3>
-        <div class="profile-meta">${meta}</div>
-        <div class="profile-tweaks">${names.map(n => `<span>${esc(n)}</span>`).join("")}${extra}</div>
-        <button class="profile-apply" data-testid="apply-${testid}" onclick='applyProfile(${JSON.stringify(tweakIds)})'>Applica profilo</button>
-      </div>`;
-    };
-    let html = "";
-    if ((p.profiles || []).length) {
-      html += `<div class="profile-section-title" data-testid="section-my-profiles">// I MIEI PROFILI</div>`;
-      html += p.profiles.map(pr => cardHtml(pr, { template: false })).join("");
-    } else {
-      html += `<div class="profile-section-title">// I MIEI PROFILI</div><div class="empty" style="grid-column: 1 / -1;">Nessun profilo personale ancora. Crea preset gaming su forgefps.dev &rarr; Gaming.</div>`;
-    }
-    if ((p.templates || []).length) {
-      html += `<div class="profile-section-title" data-testid="section-templates">// TEMPLATE COMMUNITY</div>`;
-      html += p.templates.map(t => cardHtml(t, { template: true })).join("");
-    }
-    el.innerHTML = html;
-  }
-
-  window.applyProfile = function(tweakIds) {
-    if (!Array.isArray(tweakIds) || !tweakIds.length) return;
-    // Select the tweaks in the local catalog matching this profile.
-    selected.clear();
-    let matched = 0;
-    for (const id of tweakIds) {
-      if (state.tweaks.find(t => t.id === id && !t.fit.skip)) { selected.add(id); matched++; }
-    }
-    if (!matched) { toast("Nessun tweak compatibile con il tuo hardware", "err"); return; }
-    toast(`Profilo caricato: ${matched} tweak selezionati`, "ok");
-    // Jump to Gaming tab so the user sees what got selected.
-    activeCat = "gaming";
-    renderTabs(); renderCards(); updateSelCount();
-  };
-
-  function renderHeader() {
-    const hw = state.hw || {};
-    const gpuTxt = hw.gpu || "?";
-    const chassis = hw.laptop ? "Laptop" : "Desktop";
-    const disk = hw.ssd ? "SSD" : "HDD";
-    const win11 = hw.win11 ? " | Win 11" : "";
-    document.getElementById("hwLine").innerHTML =
-      `PC: <b>${chassis}</b> | GPU <b>${esc(gpuTxt)}</b> | RAM <b>${hw.ram||"?"} GB</b> | <b>${disk}</b>${win11} -> tweak adattati automaticamente`;
-    const adm = document.getElementById("adminLine");
-    if (state.admin) { adm.className = "admin-line ok"; adm.textContent = "Amministratore: SI - tutte le ottimizzazioni disponibili."; }
-    else { adm.className = "admin-line no"; adm.textContent = "Amministratore: NO - alcune opzioni non verranno applicate."; }
-    document.getElementById("backupBadge").textContent = `Backup: ${state.backup} modifiche reversibili`;
-    renderBackupPanel();
-  }
-
-  // Populate the backup dropdown with the names of the tweaks currently reversible.
-  function renderBackupPanel() {
-    const badge = document.getElementById("backupBadge");
-    const list = document.getElementById("backupList");
-    if (!list) return;
-    const ids = Array.isArray(state.backup_ids) ? state.backup_ids : [];
-    // ID -> friendly name via existing tweaks catalog.
-    const items = ids.map(id => {
-      const tw = state.tweaks.find(t => t.id === id);
-      return { id, name: tw ? tw.name : id };
-    });
-    list.innerHTML = "";
-    if (items.length === 0) {
-      const li = document.createElement("li");
-      li.className = "empty";
-      li.textContent = "Nessuna modifica applicata ancora.";
-      list.appendChild(li);
-      badge.classList.add("disabled");
-    } else {
-      badge.classList.remove("disabled");
-      for (const it of items) {
-        const li = document.createElement("li");
-        li.setAttribute("data-testid", `backup-item-${it.id}`);
-        li.textContent = it.name;
-        list.appendChild(li);
-      }
-    }
-  }
-
-  function toggleBackupPanel(force) {
-    const panel = document.getElementById("backupPanel");
-    if (!panel) return;
-    const willOpen = typeof force === "boolean" ? force : panel.hasAttribute("hidden");
-    if (willOpen) panel.removeAttribute("hidden");
-    else panel.setAttribute("hidden", "");
-  }
-
-  function applyPreset(key) {
-    document.querySelectorAll(".preset-btn").forEach(b => b.classList.toggle("active", b.dataset.preset === key));
-    selected.clear();
-    if (key === "none") { renderCards(); updateSelCount(); return; }
-    const list = key === "complete"
-      ? state.tweaks.filter(t => !t.fit.skip && !isApplied(t)).map(t => t.id)
-      : (state.presets[key] || []).filter(id => {
-          const t = state.tweaks.find(x => x.id === id);
-          return t && !t.fit.skip && !isApplied(t);
-        });
-    list.forEach(id => selected.add(id));
-    renderCards(); updateSelCount();
-  }
-
-  function pollLog() {
-    fetch(`/api/log?tk=${encodeURIComponent(TOKEN)}&since=${logSince}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.logs && d.logs.length) {
-          const el = document.getElementById("log");
-          d.logs.forEach(l => {
-            const div = document.createElement("div");
-            div.innerHTML = `<span class="ts">${l.ts}</span>${esc(l.msg)}`;
-            el.appendChild(div);
-          });
-          el.scrollTop = el.scrollHeight;
-          logSince = d.total;
-        }
-        if (typeof d.applying === "boolean") setApplying(d.applying);
-      }).catch(()=>{});
-  }
-  function setApplying(v) {
-    applying = v;
-    document.getElementById("applyBtn").disabled = v;
-    document.getElementById("restoreBtn").disabled = v;
-  }
-
-  let _stateRetries = 0;
-  async function refreshState(showToast) {
-    let d;
-    try {
-      d = await api("/api/state");
-      if (!d || !Array.isArray(d.tweaks)) throw new Error("payload /api/state non valido");
-    } catch (e) {
-      reportClientError("refreshState: " + (e && e.message || e));
-      const sub = document.querySelector(".scan-strip .scan-sub");
-      if (sub) sub.textContent = "Collegamento all'agent in corso… riprovo tra qualche secondo.";
-      if (_stateRetries++ < 6) setTimeout(() => refreshState(showToast), 2500);
-      return;
-    }
-    _stateRetries = 0;
-    finishScanSkeleton();
-    // Normalizza il payload: ConvertTo-Json (PS 5.1) puo' produrre scalari al posto
-    // di array (1 elemento) o campi mancanti. Il render non deve MAI rompersi per
-    // un dato inatteso (bug storico: griglia vuota all'avvio finche' non si
-    // cliccava un filtro).
-    state.tweaks = d.tweaks.filter(t => t && typeof t === "object").map(t => {
-      if (!t.fit || typeof t.fit !== "object") t.fit = { ok: true, warn: false, note: false, skip: false, hint: "" };
-      if (typeof t.state !== "string") t.state = t.state == null ? "n/d" : String(t.state);
-      return t;
-    });
-    state.hw = d.hw || {}; state.admin = !!d.admin;
-    state.backup = d.backup || 0;
-    state.backup_ids = Array.isArray(d.backup_ids) ? d.backup_ids : (d.backup_ids ? [d.backup_ids] : []);
-    state.presets = d.presets || {};
-    state.revertable = Array.isArray(d.revertable) ? d.revertable : (d.revertable ? [d.revertable] : []);
-    state.agent = d.agent || {};
-    safeRender("renderHeader", renderHeader);
-    safeRender("renderTabs", renderTabs);
-    safeRender("renderCards", renderCards);
-    safeRender("renderProgressRing", renderProgressRing);
-    safeRender("updateSummaryStrip", updateSummaryStrip);
-    safeRender("renderUpdateBanner", renderUpdateBanner);
-    if (showToast) toast("\u21bb Aggiornato", "ok");
-  }
-
-  async function applySelected() {
-    if (!selected.size) { toast("Seleziona almeno un tweak"); return; }
-    setApplying(true);
-    const bench = document.getElementById("benchToggle").checked;
-    const appliedIds = Array.from(selected);
-    const picks = state.tweaks.filter(t => selected.has(t.id));
-    const rebootCount = picks.filter(needsReboot).length;
-    const d = await api("/api/apply", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ ids: appliedIds, benchmark: bench }) });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; if (d.revertable) state.revertable = d.revertable; renderHeader(); renderCards(); renderProgressRing(); }
-    selected.clear();
-    updateSummaryStrip();
-    setApplying(false);
-    // K. Big toast post-apply
-    appliedIds.forEach(id => {
-      const c = document.querySelector(`.card[data-id="${id}"]`);
-      if (c) { c.classList.add("just-applied"); setTimeout(() => c.classList.remove("just-applied"), 1000); }
-    });
-    const level = rebootCount > 0 ? "warn" : null;
-    const parts = [`<b>${appliedIds.length}</b> tweak applicati`];
-    if (rebootCount > 0) parts.push(`<b>${rebootCount}</b> richiede/richiedono riavvio`);
-    bigToast({
-      level,
-      title: rebootCount > 0 ? "\u26a0 Applicati · Riavvio consigliato" : "\u2713 Ottimizzazioni applicate",
-      body: parts.join(" \u00b7 ") + " \u00b7 Backup salvato",
-      actions: rebootCount > 0 ? [
-        { label: "Ricorda dopo", onClick: () => {} },
-        { label: "Riavvia ora", primary: true, onClick: () => api("/api/reboot", { method: "POST", headers:{"X-FF-Token":TOKEN}}) },
-      ] : [{ label: "OK", primary: true, onClick: () => {} }],
-    });
-  }
-  async function applyOne(id) {
-    setApplying(true);
-    const t = state.tweaks.find(x => x.id === id);
-    const d = await api("/api/apply-one", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ id }) });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; if (d.revertable) state.revertable = d.revertable; renderHeader(); renderCards(); renderProgressRing(); }
-    setApplying(false);
-    // Pulse animation on the just-applied card
-    const c = document.querySelector(`.card[data-id="${id}"]`);
-    if (c) { c.classList.add("just-applied"); setTimeout(() => c.classList.remove("just-applied"), 1000); }
-    if (t && needsReboot(t)) {
-      bigToast({
-        level: "warn",
-        title: "\u26a0 Applicato · Riavvio consigliato",
-        body: `<b>${esc(t.name)}</b> richiede un riavvio per essere pienamente attivo.`,
-        actions: [
-          { label: "Pi\u00f9 tardi", onClick: () => {} },
-          { label: "Riavvia ora", primary: true, onClick: () => api("/api/reboot", { method: "POST", headers:{"X-FF-Token":TOKEN}}) },
-        ],
-      });
-    } else {
-      toast("\u2713 Applicato", "ok");
-    }
-  }
-  async function doRestore() {
-    if (!confirm("Ripristinare TUTTE le modifiche dal backup?")) return;
-    setApplying(true);
-    const d = await api("/api/restore", { method: "POST", headers:{"X-FF-Token":TOKEN} });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = 0; state.backup_ids = []; state.revertable = []; renderHeader(); renderCards(); renderProgressRing(); }
-    setApplying(false);
-    toast("\u21a9 Ripristinato", "ok");
-  }
-
-  // ===== v0.7.7 — Revert singolo tweak =====
-  async function revertOne(id) {
-    const t = state.tweaks.find(x => x.id === id);
-    if (!confirm(`Ripristinare "${t ? t.name : id}" al valore precedente?`)) return;
-    setApplying(true);
-    const d = await api("/api/restore-one", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ id }) });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || 0; state.backup_ids = d.backup_ids || []; state.revertable = d.revertable || []; renderHeader(); renderTabs(); renderCards(); renderProgressRing(); }
-    setApplying(false);
-    toast("\u21a9 Tweak ripristinato", "ok");
-  }
-
-  // ===== v0.7.7 — Monitor Live locale =====
-  const MON_METRICS = [
-    { k: "cpu_util", label: "CPU", unit: "%", max: 100 },
-    { k: "cpu_temp", label: "CPU Temp", unit: "\u00b0C", temp: true },
-    { k: "gpu_util", label: "GPU", unit: "%", max: 100 },
-    { k: "gpu_temp", label: "GPU Temp", unit: "\u00b0C", temp: true },
-    { k: "ram_used_pct", label: "RAM", unit: "%", max: 100 },
-    { k: "vram_used_pct", label: "VRAM", unit: "%", max: 100 },
-    { k: "gpu_clock", label: "GPU Clock", unit: " MHz" },
-    { k: "gpu_power", label: "GPU Power", unit: " W" },
-  ];
-  let monHist = {}; let monTimer = 0; let monBusy = false; let monFirst = true;
-  function startMonitor() { if (!monTimer) { monPoll(); monTimer = setInterval(monPoll, 3000); } }
-  function stopMonitor() { if (monTimer) { clearInterval(monTimer); monTimer = 0; } }
-  async function monPoll() {
-    if (activeCat !== "monitor") { stopMonitor(); return; }
-    if (monBusy) return;
-    monBusy = true;
-    try {
-      const s = await api("/api/telemetry-local");
-      MON_METRICS.forEach(m => {
-        if (typeof s[m.k] === "number") {
-          (monHist[m.k] = monHist[m.k] || []).push(s[m.k]);
-          if (monHist[m.k].length > 40) monHist[m.k].shift();
-        }
-      });
-      monFirst = false;
-      if (activeCat === "monitor") renderMonitorTiles();
-    } catch (e) {}
-    monBusy = false;
-  }
-  function sparkline(vals, color) {
-    if (!vals || vals.length < 2) return "";
-    const w = 150, h = 36;
-    const mn = Math.min(...vals), mx = Math.max(...vals);
-    const rng = (mx - mn) || 1;
-    const pts = vals.map((v, i) => `${(i / (vals.length - 1) * w).toFixed(1)},${(h - 3 - ((v - mn) / rng) * (h - 6)).toFixed(1)}`).join(" ");
-    return `<svg class="mon-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5"/></svg>`;
-  }
-  function monColor(m, v) {
-    if (v == null) return "var(--dim)";
-    if (m.temp) return v >= 85 ? "var(--danger)" : v >= 72 ? "var(--warn)" : "var(--ok)";
-    if (m.max) return v >= 92 ? "var(--danger)" : v >= 75 ? "var(--warn)" : "var(--info)";
-    return "var(--info)";
-  }
-  function renderMonitorTab(el) {
-    el.innerHTML = `
-      <div class="mon-head">
-        <div>
-          <div class="mon-title">// MONITOR LIVE</div>
-          <div class="mon-sub">Telemetria locale in tempo reale, aggiornata ogni 3 secondi. Attiva <b>Sync Cloud</b> in alto a destra per inviarla anche al Command Center di FrameForge.</div>
-        </div>
-      </div>
-      <div class="mon-grid" id="monGrid" data-testid="monitor-grid"></div>`;
-    renderMonitorTiles();
-    startMonitor();
-  }
-  function renderMonitorTiles() {
-    const grid = document.getElementById("monGrid");
-    if (!grid) return;
-    grid.innerHTML = MON_METRICS.map(m => {
-      const hist = monHist[m.k] || [];
-      const v = hist.length ? hist[hist.length - 1] : null;
-      const col = monColor(m, v);
-      const valTxt = v == null ? (monFirst ? "..." : "n/d") : `${v}<span class="mon-unit">${m.unit}</span>`;
-      return `<div class="mon-tile" data-testid="mon-${m.k}">
-        <div class="mon-label">${m.label}</div>
-        <div class="mon-value" style="color:${col}">${valTxt}</div>
-        ${sparkline(hist, col)}
-      </div>`;
-    }).join("");
-  }
-
-  // ===== v0.7.7 — Bloatware tab =====
-  let bloat = null; let bloatSel = new Set(); let bloatBusy = false;
-  async function loadBloat() {
-    if (activeCat === "bloatware") document.getElementById("cards").innerHTML = `<div class="empty">Scansione app installate in corso...</div>`;
-    try {
-      const d = await api("/api/bloatware");
-      bloat = { apps: d.apps || [] };
-    } catch (e) { bloat = { apps: [], err: true }; }
-    bloatSel = new Set();
-    renderTabs();
-    if (activeCat === "bloatware") renderCards();
-  }
-  function updateBloatBtn() {
-    const b = document.getElementById("bloatRemoveBtn");
-    if (b) { b.disabled = !bloatSel.size || bloatBusy; b.textContent = bloatSel.size ? `Rimuovi ${bloatSel.size} selezionate` : "Rimuovi selezionate"; }
-  }
-  function renderBloatwareTab(el) {
-    if (!bloat) { el.innerHTML = `<div class="empty">Scansione app installate in corso...</div>`; return; }
-    const apps = bloat.apps || [];
-    if (bloat.err) { el.innerHTML = `<div class="empty">Errore durante la scansione. Riapri la tab per riprovare.</div>`; bloat = null; return; }
-    if (!apps.length) { el.innerHTML = `<div class="empty">&#10003; Nessun bloatware rilevato: il tuo sistema e gia pulito.</div>`; return; }
-    const rows = apps.map(a => `
-      <label class="bloat-row${bloatSel.has(a.name) ? " selected" : ""}" data-testid="bloat-${esc(a.name)}">
-        <input type="checkbox" class="cb bloat-cb" data-name="${esc(a.name)}" ${bloatSel.has(a.name) ? "checked" : ""} />
-        <div class="bloat-info">
-          <div class="bloat-name">${esc(a.name)}</div>
-          <div class="bloat-meta">${a.curated ? `<span class="bloat-badge curated">lista curata</span>` : `<span class="bloat-badge">auto-rilevata</span>`}${a.size_mb ? ` <span>${a.size_mb} MB</span>` : ""}${a.version ? ` <span>v${esc(a.version)}</span>` : ""}</div>
-        </div>
-      </label>`).join("");
-    el.innerHTML = `
-      <div class="bloat-head">
-        <div>
-          <div class="mon-title">// BLOATWARE TROVATO: ${apps.length} APP</div>
-          <div class="mon-sub">App preinstallate e promozionali rimovibili in sicurezza, tutte reinstallabili dal Microsoft Store. Store, Calculator, Photos e i runtime di sistema sono protetti e non compaiono mai in questa lista.</div>
-        </div>
-        <div class="bloat-actions">
-          <button class="chip" id="bloatSelAll" data-testid="bloat-select-all">Seleziona tutte</button>
-          <button class="btn-danger" id="bloatRemoveBtn" data-testid="bloat-remove-btn" disabled>Rimuovi selezionate</button>
-        </div>
-      </div>
-      <div class="bloat-list">${rows}</div>`;
-    el.querySelectorAll(".bloat-cb").forEach(cb => cb.onchange = () => {
-      const n = cb.dataset.name;
-      if (cb.checked) bloatSel.add(n); else bloatSel.delete(n);
-      const row = cb.closest(".bloat-row");
-      if (row) row.classList.toggle("selected", cb.checked);
-      updateBloatBtn();
-    });
-    const selAll = document.getElementById("bloatSelAll");
-    if (selAll) selAll.onclick = () => {
-      if (bloatSel.size === apps.length) bloatSel.clear();
-      else apps.forEach(a => bloatSel.add(a.name));
-      el.querySelectorAll(".bloat-cb").forEach(cb => {
-        cb.checked = bloatSel.has(cb.dataset.name);
-        const row = cb.closest(".bloat-row");
-        if (row) row.classList.toggle("selected", cb.checked);
-      });
-      updateBloatBtn();
-    };
-    const rmBtn = document.getElementById("bloatRemoveBtn");
-    if (rmBtn) rmBtn.onclick = removeBloat;
-    updateBloatBtn();
-  }
-  async function removeBloat() {
-    if (!bloatSel.size || bloatBusy) return;
-    if (!confirm(`Rimuovere ${bloatSel.size} app? Potrai reinstallarle dal Microsoft Store in qualsiasi momento.`)) return;
-    bloatBusy = true;
-    const btn = document.getElementById("bloatRemoveBtn");
-    if (btn) { btn.disabled = true; btn.textContent = "Rimozione in corso..."; }
-    try {
-      const d = await api("/api/bloatware/remove", { method: "POST", headers: {"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ names: Array.from(bloatSel) }) });
-      bloat = { apps: (d && d.apps) || [] };
-      bloatSel = new Set();
-      bigToast({
-        title: "\u2713 Bloatware rimosso",
-        body: `<b>${(d && d.removed) || 0}</b> app rimosse dal sistema. Reinstallabili in qualsiasi momento dal Microsoft Store.`,
-        actions: [{ label: "OK", primary: true, onClick: () => {} }],
-      });
-    } catch (e) { toast("Errore durante la rimozione", "err"); }
-    bloatBusy = false;
-    renderTabs();
-    if (activeCat === "bloatware") renderCards();
-  }
-
-  // ===== v0.7.7 — Banner aggiornamento agent =====
-  function verLt(a, b) {
-    if (!b) return false;
-    if (!a) return true;
-    const pa = String(a).split(".").map(Number), pb = String(b).split(".").map(Number);
-    for (let i = 0; i < 3; i++) {
-      const x = pa[i] || 0, y = pb[i] || 0;
-      if (x < y) return true;
-      if (x > y) return false;
-    }
-    return false;
-  }
-  function renderUpdateBanner() {
-    const el = document.getElementById("updateBanner");
-    if (!el) return;
-    const ag = state.agent || {};
-    const latest = (ag.latest && ag.latest.indexOf("__") < 0) ? ag.latest : "";
-    const installed = (ag.installed && ag.installed.indexOf("__") < 0) ? ag.installed : "";
-    const show = latest && verLt(installed, latest) && !sessionStorage.getItem("ff_upd_dismiss");
-    if (!show) { el.setAttribute("hidden", ""); return; }
-    const cur = installed ? `hai la v${esc(installed)}` : "la tua versione e precedente alla 0.7.8";
-    el.innerHTML = `
-      <span class="upd-icon">&#8593;</span>
-      <span class="upd-text"><b>FrameForge Agent v${esc(latest)}</b> disponibile (${cur}): auto-update, zero-flash console e nuovi tweak.</span>
-      <a class="upd-btn" href="${esc(ag.dl || "#")}" target="_blank" rel="noopener" data-testid="update-download-btn">Scarica v${esc(latest)}</a>
-      <button class="upd-dismiss" id="updDismiss" title="Nascondi per questa sessione" data-testid="update-dismiss-btn">&times;</button>`;
-    el.removeAttribute("hidden");
-    const d = document.getElementById("updDismiss");
-    if (d) d.onclick = () => { sessionStorage.setItem("ff_upd_dismiss", "1"); el.setAttribute("hidden", ""); };
-  }
-
-  // events
-  document.querySelectorAll(".preset-btn").forEach(b => {
-    b.onclick = () => applyPreset(b.dataset.preset);
-    // C. Preset hover preview
-    b.addEventListener("mouseenter", () => renderPresetPreview(b.dataset.preset));
-    b.addEventListener("mouseleave", clearPresetPreview);
-    b.addEventListener("focus", () => renderPresetPreview(b.dataset.preset));
-    b.addEventListener("blur", clearPresetPreview);
-  });
-  document.getElementById("applyBtn").onclick = applySelected;
-  document.getElementById("restoreBtn").onclick = doRestore;
-  document.getElementById("searchBox").oninput = e => { searchQ = e.target.value; renderCards(); };
-
-  // A. Density toggle (Compact/Detailed)
-  const _densityBtn = document.getElementById("densityToggle");
-  const _densityLabel = document.getElementById("densityLabel");
-  function _refreshDensityUI() {
-    if (!_densityBtn) return;
-    _densityBtn.classList.toggle("active", density === "compact");
-    if (_densityLabel) _densityLabel.textContent = density === "compact" ? "Compatto" : "Dettagliato";
-  }
-  _refreshDensityUI();
-  if (_densityBtn) _densityBtn.onclick = () => {
-    density = (density === "compact") ? "detailed" : "compact";
-    localStorage.setItem("ff_density", density);
-    expanded.clear();
-    _refreshDensityUI();
-    renderCards();
-  };
-
-  // Cambia account: cancella token.dat + chiude GUI
-  const _logoutBtn = document.getElementById("logoutBtn");
-  if (_logoutBtn) _logoutBtn.onclick = async () => {
-    if (!confirm("Rimuovere il token FrameForge da questo PC?\n\nAl prossimo avvio dell'agent verra' richiesto un nuovo token.\nUsalo se stai passando a un altro account.")) return;
-    _logoutBtn.disabled = true;
-    try {
-      const r = await api("/api/logout", { method: "POST", headers:{"X-FF-Token":TOKEN} });
-      toast(r && r.removed ? "\u2713 Token rimosso · chiusura in corso..." : "Chiusura in corso...", "ok");
-      setTimeout(() => { try { window.close(); } catch(_){} }, 900);
-    } catch (e) {
-      _logoutBtn.disabled = false;
-      toast("Errore: " + (e && e.message || e), "err");
-    }
-  };
-
-  // H. Filter chips
-  document.querySelectorAll("#filterChips .chip").forEach(chip => {
-    chip.onclick = () => {
-      const k = chip.dataset.filter;
-      if (activeFilters.has(k)) activeFilters.delete(k); else activeFilters.add(k);
-      chip.classList.toggle("active", activeFilters.has(k));
-      renderCards();
-    };
-  });
-
-  // I. Sort
-  const _sortSel = document.getElementById("sortSelect");
-  if (_sortSel) _sortSel.onchange = () => { sortMode = _sortSel.value; renderCards(); };
-
-  // G. Keyboard Ctrl+K -> focus search; D -> toggle density
-  document.addEventListener("keydown", (e) => {
-    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
-      e.preventDefault();
-      const s = document.getElementById("searchBox");
-      if (s) { s.focus(); s.select(); }
-    } else if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "d" || e.key === "D")) {
-      const tag = (e.target && e.target.tagName || "").toLowerCase();
-      if (tag !== "input" && tag !== "textarea" && tag !== "select") {
-        if (_densityBtn) _densityBtn.click();
-      }
-    }
-  });
-
-  // Live Sync toggle: streams telemetry to cloud when ON.
-  const _liveToggle = document.getElementById("liveSyncToggle");
-  if (_liveToggle) {
-    _liveToggle.addEventListener("change", async () => {
-      try {
-        const d = await api("/api/live-sync", { method: "POST", headers: {"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ enabled: _liveToggle.checked }) });
-        if (d && d.ok) toast(d.enabled ? "Sync Cloud attivo · dati in streaming" : "Sync Cloud disattivato", d.enabled ? "ok" : null);
-      } catch { _liveToggle.checked = !_liveToggle.checked; toast("Errore attivazione sync", "err"); }
-    });
-  }
-
-  // Backup badge toggle: open panel with reversible tweaks list.
-  const _backupBadge = document.getElementById("backupBadge");
-  if (_backupBadge) {
-    _backupBadge.addEventListener("click", () => toggleBackupPanel());
-    _backupBadge.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleBackupPanel(); }
-    });
-    document.addEventListener("click", (e) => {
-      const panel = document.getElementById("backupPanel");
-      if (!panel || panel.hasAttribute("hidden")) return;
-      if (!panel.contains(e.target) && e.target !== _backupBadge) toggleBackupPanel(false);
-    });
-  }
-  window.addEventListener("beforeunload", () => {
-    try { navigator.sendBeacon(`/api/close?tk=${encodeURIComponent(TOKEN)}`, ""); } catch(e){}
-  });
-
-  // -------- Mobile Handoff (Continua sul Telefono) --------
-  const mh = {
-    btn: document.getElementById("mobileHandoffBtn"),
-    overlay: document.getElementById("mobileHandoffOverlay"),
-    closeBtn: document.getElementById("mhClose"),
-    regenBtn: document.getElementById("mhRegen"),
-    loading: document.getElementById("mhLoading"),
-    error: document.getElementById("mhError"),
-    qr: document.getElementById("mhQr"),
-    consumed: document.getElementById("mhConsumed"),
-    deviceLabel: document.getElementById("mhDeviceLabel"),
-    footer: document.getElementById("mhFooter"),
-    time: document.getElementById("mhTime"),
-    token: "",
-    remaining: 0,
-    tickId: 0,
-    pollId: 0,
-    open: false,
-  };
-  function mhSetVis(node, visible) {
-    if (!node) return;
-    if (visible) node.removeAttribute("hidden"); else node.setAttribute("hidden", "");
-  }
-  function mhStopTimers() {
-    if (mh.tickId) { clearInterval(mh.tickId); mh.tickId = 0; }
-    if (mh.pollId) { clearInterval(mh.pollId); mh.pollId = 0; }
-  }
-  function mhReset() {
-    mhStopTimers();
-    mh.token = ""; mh.remaining = 0;
-    mhSetVis(mh.loading, true);
-    mhSetVis(mh.error, false); mh.error.textContent = "";
-    mhSetVis(mh.qr, false); mh.qr.innerHTML = "";
-    mhSetVis(mh.consumed, false);
-    mhSetVis(mh.footer, false);
-  }
-  function mhOpen() {
-    mh.open = true; mhSetVis(mh.overlay, true); mhReset(); mhGenerate();
-  }
-  function mhClose() {
-    mh.open = false; mhStopTimers(); mhSetVis(mh.overlay, false); mhReset();
-  }
-  function mhFmt(sec) {
-    const m = String(Math.floor(sec/60)).padStart(2,"0");
-    const s = String(sec%60).padStart(2,"0");
-    return m+":"+s;
-  }
-  async function mhGenerate() {
-    mhReset();
-    try {
-      const d = await api("/api/mobile-handoff/generate", { method: "POST", headers: {"X-FF-Token": TOKEN} });
-      if (!d || d.err) throw new Error(d && d.err ? d.err : "unknown");
-      mh.token = d.token;
-      mh.remaining = d.expires_in_seconds || 300;
-      // Fetch QR SVG (locally proxied to cloud) and inject.
-      const qrResp = await fetch(`/api/mobile-handoff/qr?tk=${encodeURIComponent(TOKEN)}&token=${encodeURIComponent(mh.token)}`);
-      if (!qrResp.ok) throw new Error("qr_fetch_failed");
-      const svg = await qrResp.text();
-      mhSetVis(mh.loading, false);
-      mh.qr.innerHTML = svg;
-      mhSetVis(mh.qr, true);
-      mhSetVis(mh.footer, true);
-      mh.time.textContent = mhFmt(mh.remaining);
-      mh.time.classList.remove("low");
-      mh.tickId = setInterval(() => {
-        mh.remaining = Math.max(0, mh.remaining - 1);
-        mh.time.textContent = mhFmt(mh.remaining);
-        if (mh.remaining < 60) mh.time.classList.add("low");
-        if (mh.remaining <= 0) { mhStopTimers(); mhShowError("Il QR e scaduto. Rigenera."); }
-      }, 1000);
-      mh.pollId = setInterval(mhPoll, 2000);
-    } catch (e) {
-      mhShowError((e && e.message === "rate_limited") ? "Troppi QR generati. Riprova tra un'ora." : "Errore nella generazione del QR");
-    }
-  }
-  function mhShowError(msg) {
-    mhStopTimers();
-    mhSetVis(mh.loading, false);
-    mhSetVis(mh.qr, false);
-    mhSetVis(mh.footer, false);
-    mh.error.textContent = msg;
-    mhSetVis(mh.error, true);
-  }
-  async function mhPoll() {
-    if (!mh.token || !mh.open) return;
-    try {
-      const d = await api(`/api/mobile-handoff/status?magic=${encodeURIComponent(mh.token)}`);
-      if (!d || d.err) return;
-      if (d.used) {
-        mhStopTimers();
-        const label = d.device_label || "Dispositivo";
-        mh.deviceLabel.textContent = label + " ha effettuato l'accesso";
-        mhSetVis(mh.qr, false);
-        mhSetVis(mh.footer, false);
-        mhSetVis(mh.error, false);
-        mhSetVis(mh.consumed, true);
-        toast("Nuovo device connesso: " + label, "ok");
-        // Also trigger Windows native toast via local endpoint.
-        try { fetch(`/api/mobile-handoff/notify?tk=${encodeURIComponent(TOKEN)}&device=${encodeURIComponent(label)}`, { method: "POST" }); } catch(e){}
-        setTimeout(() => { if (mh.open) mhClose(); }, 2600);
-      } else if (d.expired) {
-        mhStopTimers();
-        mhShowError("Il QR e scaduto. Rigenera.");
-      }
-    } catch(e) {}
-  }
-  if (mh.btn)      mh.btn.addEventListener("click", mhOpen);
-  if (mh.closeBtn) mh.closeBtn.addEventListener("click", mhClose);
-  if (mh.regenBtn) mh.regenBtn.addEventListener("click", mhGenerate);
-  if (mh.overlay)  mh.overlay.addEventListener("click", (e) => { if (e.target === mh.overlay) mhClose(); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && mh.open) mhClose(); });
-
-  renderScanSkeleton();
-  refreshState();
-  setInterval(pollLog, 400);
-})();
-</script>
-</body>
-</html>
+__GUI_HTML__
 '@
   $html = $html.Replace('__TOKEN__', $sessionToken)
 
@@ -4773,8 +2733,12 @@ function Show-WebGui {
   if (-not (Test-Path $tmpDir)) { New-Item -ItemType Directory -Path $tmpDir | Out-Null }
   $profileDir = Join-Path $tmpDir 'edge-profile'
 
-  $localUrl = "http://127.0.0.1:$port/?tk=$sessionToken"
-  Say "[STEP] GUI locale su $localUrl" 'Cyan'
+  # Niente token nell'URL: la pagina `/` viene servita senza controllo (il token
+  # e' gia' dentro l'HTML, sostituito qui sotto), quindi in barra degli indirizzi
+  # non serviva a nulla — ci finiva soltanto, e da li' nella cronologia del
+  # browser e sotto gli occhi di qualsiasi estensione con accesso alle schede.
+  $localUrl = "http://127.0.0.1:$port/"
+  Say-Step "GUI locale su $localUrl"
   Say "       (se la finestra non si apre, incolla l'URL sopra in un browser)" 'DarkGray'
 
   # Lancia Edge in modalita app (chromeless)
@@ -4796,7 +2760,7 @@ function Show-WebGui {
   } catch {
     # Ultimo tentativo: browser predefinito
     try { $edge = $null; Start-Process $localUrl | Out-Null }
-    catch { Say ("[WARN] Impossibile aprire il browser: {0}" -f $_.Exception.Message) 'Yellow'; try { $listener.Stop() } catch {}; return $false }
+    catch { Say-Warn ("Impossibile aprire il browser: {0}" -f $_.Exception.Message); try { $listener.Stop() } catch {}; return $false }
   }
 
   # Il launcher msedge.exe fa "hop and exit" se c'e' gia' un'istanza Edge attiva.
@@ -4900,6 +2864,35 @@ function Show-WebGui {
           $t = $script:TWMAP[$body.id]
           if ($t) { WebLog ("-> {0}" -f $t.name); Invoke-ApplyTracked $t; Save-Backup }
           Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = (Get-BackupIds); revertable = (Get-RevertableIds) }
+        }
+        elseif ($path -eq '/api/changes' -and $method -eq 'GET') {
+          # Cronologia delle modifiche fatte da FrameForge su questo PC.
+          # Il dato c'era gia' tutto nel file di backup: cosa e' stato cambiato,
+          # con che valore precedente, e da quale tweak. Mancava solo un posto
+          # dove leggerlo — il log della GUI vive in memoria e muore con la
+          # finestra, quindi "cosa mi ha toccato e come lo annullo" non era
+          # rispondibile da nessuna parte.
+          $items = @()
+          foreach ($id in @($script:TWKEYS.Keys)) {
+            $tw = $script:TWMAP[$id]
+            $keys = @()
+            foreach ($k in @($script:TWKEYS[$id])) {
+              $prev = "$($script:BK[$k])"
+              $parts = $prev.Split('|', 2)
+              $keys += @{
+                key = "$k"
+                previous = if ($prev -eq '__ABSENT__') { 'non esisteva' } else { $parts[-1] }
+              }
+            }
+            $items += @{
+              id = "$id"
+              name = if ($tw) { $tw.name } else { "$id" }
+              cat = if ($tw) { $tw.cat } else { '' }
+              applied_at = "$($script:TWAT[$id])"
+              keys = $keys
+            }
+          }
+          Send-Json $ctx @{ ok = $true; items = $items; backup_file = "$BACKUP" }
         }
         elseif ($path -eq '/api/restore-one' -and $method -eq 'POST') {
           # v0.7.7: revert granulare di un singolo tweak dalle chiavi tracciate
@@ -5150,12 +3143,10 @@ function Show-Gui {
 
   function Set-Stat($id) {
     $t = $script:TWMAP[$id]; if (-not $t) { return }
-    $s = & $t.state
+    $s = Get-TwState $t
     $lbl = $script:STATUS[$id]; if (-not $lbl) { return }
-    $lbl.Text = "Stato attuale: $s"
-    if ($s -like '*(da *') { $lbl.ForeColor = $script:C_ACC }
-    elseif ($s -match 'Attivo|Disabilit|Disattivat|Gia|Prestazioni') { $lbl.ForeColor = $script:C_GREEN }
-    else { $lbl.ForeColor = $script:C_ACC }
+    $lbl.Text = "Stato attuale: $($s.label)"
+    if ($s.code -eq 'ok') { $lbl.ForeColor = $script:C_GREEN } else { $lbl.ForeColor = $script:C_ACC }
   }
   function Refresh-Status {
     foreach ($id in @($script:STATUS.Keys)) { Set-Stat $id }
@@ -5338,8 +3329,8 @@ if ($MODE -eq 'autopilot' -or $MODE -eq 'cleanup') {
     try {
       Invoke-ApplyTracked $t
       $__apApplied += $t.id
-      Say ("  [OK] {0}" -f $t.name) 'Green'
-    } catch { Say ("  [SKIP] {0}" -f $t.name) 'Yellow' }
+      Say-Ok ("  {0}" -f $t.name)
+    } catch { Say-Warn ("  {0}" -f $t.name) }
   }
   Save-Backup
   Say ("`n[AUTO-PILOT] {0} tweak applicati. Misuro il dopo..." -f $__apApplied.Count) 'Cyan'
@@ -5380,7 +3371,7 @@ if ($MODE -eq 'fullbench') {
   $fb = Run-FullBenchmark
   Send-Benchmark @{ full = $fb; ts = (Get-Date).ToString('o') }
   Say "`n==============================================" 'Yellow'
-  Say ("[ OK ] Full Benchmark completato in {0}s. Dati inviati al cloud." -f $fb.duration_s) 'Green'
+  Say-Ok ("Full Benchmark completato in {0}s. Dati inviati al cloud." -f $fb.duration_s)
   Say "        Apri FrameForge -> Il mio PC per il report completo." 'Green'
   Say "==============================================" 'Yellow'
   return
@@ -5431,13 +3422,13 @@ if ($MODE -eq 'optimize') {
       $resp = Invoke-WebRequest -Uri "$BACKEND/api/agent/report-specs" -Method Post `
         -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } `
         -Body $__b -UseBasicParsing -TimeoutSec 20
-      Say ("  [OK] {0}: {1} bytes -> HTTP {2}" -f $label, $json.Length, $resp.StatusCode) 'DarkGreen'
+      Say-Ok ("  {0}: {1} bytes -> HTTP {2}" -f $label, $json.Length, $resp.StatusCode)
       return $true
     } catch {
       $status = 0
       try { $status = $_.Exception.Response.StatusCode.value__ } catch {}
       $errMsg = $_.Exception.Message
-      Say ("  [FAIL] {0} -> HTTP {1}: {2}" -f $label, $status, $errMsg) 'Red'
+      Say-Err ("  {0} -> HTTP {1}: {2}" -f $label, $status, $errMsg)
       if ($status -eq 401) {
         Say "         Token agent non valido. Riscarica il ZIP personalizzato dalla pagina 'FrameForge Agent'." 'Yellow'
       } elseif ($status -eq 0) {
@@ -5461,9 +3452,9 @@ if ($MODE -eq 'optimize') {
     if ($__scanSvc -and $__scanSvc.Count -gt 0) { $__body.services_audit = $__scanSvc }
     $__ok = __FsPost $__body 'specs+health+startup'
     if ($__ok) {
-      Say ("[ OK ] Primo scan completato: {0} | GPU {1} | RAM {2}. Dati inviati al cloud." -f $__scanSpecs.cpu, $__scanSpecs.gpu, $__scanSpecs.ram) 'Green'
+      Say-Ok ("Primo scan completato: {0} | GPU {1} | RAM {2}. Dati inviati al cloud." -f $__scanSpecs.cpu, $__scanSpecs.gpu, $__scanSpecs.ram)
     } else {
-      Say "[ERR ] Primo scan: dati NON inviati. La GUI continua ma la dashboard restera' vuota finche' non risolvi l'errore sopra." 'Red'
+      Say-Err "Primo scan: dati NON inviati. La GUI continua ma la dashboard restera' vuota finche' non risolvi l'errore sopra."
     }
     try {
       $__scanRun = Get-RunningApps
@@ -5474,21 +3465,37 @@ if ($MODE -eq 'optimize') {
       if ($__scanGames.Count -gt 0) { __FsPost @{ games = $__scanGames } ("games ({0})" -f $__scanGames.Count) | Out-Null }
     } catch { Say ("  Get-Games FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
   } else {
-    Say "[ERR ] Impossibile raccogliere le specs, invio saltato. Riprova come Amministratore." 'Red'
+    Say-Err "Impossibile raccogliere le specs, invio saltato. Riprova come Amministratore."
   }
   }  # end if -not $__skipFirstScan
 
   Say "`n[STEP] Apro il pannello ottimizzazioni..." 'Cyan'
   $ok = $false
-  try { $ok = Show-WebGui } catch { Say ("[WARN] Errore Web GUI: {0} (riga {1})" -f $_.Exception.Message, $_.InvocationInfo.ScriptLineNumber) 'Yellow'; $ok = $false }
+  $guiErr = ''
+  # Un secondo tentativo prima di arrendersi: la porta viene chiesta al sistema
+  # e poi rilasciata un istante prima di legarla, quindi l'unica causa plausibile
+  # di fallimento e' che qualcuno l'abbia presa in quella finestra. Ritentare
+  # costa niente e copre proprio quel caso.
+  foreach ($try in 1, 2) {
+    try { $ok = Show-WebGui } catch { $guiErr = "$($_.Exception.Message) (riga $($_.InvocationInfo.ScriptLineNumber))"; $ok = $false }
+    if ($ok) { break }
+    if ($try -eq 1) { Say-Info 'Server locale non avviato, riprovo su un altra porta...'; Start-Sleep -Milliseconds 400 }
+  }
   if (-not $ok) {
-    Say '[WARN] Interfaccia web non disponibile, uso la GUI classica...' 'Yellow'
+    if (-not $guiErr) { $guiErr = 'il server locale non si e avviato (nessuna eccezione)' }
+    Say-Warn ("Interfaccia web non disponibile: {0}" -f $guiErr)
+    Say-Warn 'Uso la GUI classica: ha meno funzioni della finestra normale.'
+    # Registrato per poter decidere con i dati se la GUI classica valga le 451
+    # righe che costa: oggi nessuno sa quanto scatti davvero.
+    try {
+      Send-AgentDiag 'gui_web_failed' @{ error = $guiErr; admin = (Test-Admin); os = "$([Environment]::OSVersion.Version)" }
+    } catch {}
     $ok = Show-Gui
   }
   if (-not $ok) {
-    Say '[WARN] Interfaccia grafica non disponibile. Applico i preset Completo...' 'Yellow'
+    Say-Warn 'Interfaccia grafica non disponibile. Applico i preset Completo...'
     $before = Run-Benchmark; Show-Bench $before 'PRIMA'
-    Say ("[INFO][HW] {0} | GPU {1} | RAM {2} GB | {3} -> tweak adattati" -f $(if($script:HW.laptop){'Laptop'}else{'Desktop'}), $script:HW.gpu, $script:HW.ram, $(if($script:HW.ssd){'SSD'}else{'HDD'})) 'Cyan'
+    Say-Info ("{0} | GPU {1} | RAM {2} GB | {3} -> tweak adattati" -f $(if($script:HW.laptop){'Laptop'}else{'Desktop'}), $script:HW.gpu, $script:HW.ram, $(if($script:HW.ssd){'SSD'}else{'HDD'})) 'HW'
     foreach ($t in $script:TWEAKS) {
       $f = 'ok'; if ($t.fit) { $f = & $t.fit }
       if ($t.id -eq 'search_index' -or $f -like 'skip:*' -or $f -like 'warn:*') { Say ("   -- saltato (adattivo): {0}" -f $t.name) 'DarkGray'; continue }
@@ -5573,13 +3580,13 @@ function Run-Bufferbloat {
   $downUrl = 'https://speed.cloudflare.com/__down?bytes=1073741824'
   $upUrl = 'https://speed.cloudflare.com/__up'
 
-  Say '   [1/3] Latenza a riposo (baseline, 50 campioni)...' 'DarkGray'
+  Say-Info '   Latenza a riposo (baseline, 50 campioni)...' '1/3'
   $idle = Measure-Ping $target 50 40 1000
   $idleP50 = Percentile $idle.rtts 0.5
   $idleMin = Percentile $idle.rtts 0.0
   Say ("        idle p50: {0} ms | min: {1} ms | jitter: {2} ms" -f $idleP50, $idleMin, (Jitter $idle.rtts)) 'DarkGray'
 
-  Say '   [2/3] Sotto carico DOWNLOAD (8 stream, warm-up 2.5s)...' 'DarkGray'
+  Say-Info '   Sotto carico DOWNLOAD (8 stream, warm-up 2.5s)...' '2/3'
   $dljobs = @(); for ($i = 0; $i -lt 8; $i++) { $dljobs += Start-Job -ScriptBlock $script:DL_BLOCK -ArgumentList $downUrl }
   Start-Sleep -Milliseconds 2500
   $down = Measure-Ping $target 80 40 2000
@@ -5588,7 +3595,7 @@ function Run-Bufferbloat {
   Say ("        download p50: {0} ms | p95: {1} ms | p99: {2} ms" -f $downP50, $downP95, $downP99) 'DarkGray'
   Start-Sleep -Milliseconds 1000
 
-  Say '   [3/3] Sotto carico UPLOAD (4 stream, warm-up 2.5s)...' 'DarkGray'
+  Say-Info '   Sotto carico UPLOAD (4 stream, warm-up 2.5s)...' '3/3'
   $upP50 = $null; $upP95 = $null; $upP99 = $null; $upLost = 0; $upSent = 0
   try {
     $upjobs = @(); for ($i = 0; $i -lt 4; $i++) { $upjobs += Start-Job -ScriptBlock $script:UP_BLOCK -ArgumentList $upUrl }
@@ -5811,15 +3818,15 @@ function Wait-LabGame {
         $script:LAB_APP = $t.app
         $script:LAB_PID = $t.pid
       }
-      if ($shown) { Say ("   [LAB] Gioco rilevato: {0}" -f $t.app) 'Green'; LabEvent 'game_detected' @{ game = $t.app } }
+      if ($shown) { Say-Ok ("   Gioco rilevato: {0}" -f $t.app) 'LAB'; LabEvent 'game_detected' @{ game = $t.app } }
       return $t.app
     }
     if (-not $shown) {
       $shown = $true
       if ($script:LAB_APP) {
-        Say ("   [LAB] In attesa di {0}... la sessione misura questo processo e nessun altro: riaprilo e resta in partita (scena il piu possibile ripetibile)." -f $script:LAB_APP) 'Yellow'
+        Say-Warn ("   In attesa di {0}... la sessione misura questo processo e nessun altro: riaprilo e resta in partita (scena il piu possibile ripetibile)." -f $script:LAB_APP) 'LAB'
       } else {
-        Say '   [LAB] In attesa del gioco... avvia il gioco e resta in partita (scena il piu possibile ripetibile).' 'Yellow'
+        Say-Warn '   In attesa del gioco... avvia il gioco e resta in partita (scena il piu possibile ripetibile).' 'LAB'
       }
       LabEvent 'waiting_game' $null
     }
@@ -5908,11 +3915,11 @@ function Test-RunRejected($resp) {
   # batteria, gioco diverso, troppi pochi frame). Si ripete la misura invece di
   # infilare nel confronto un dato che appartiene a un altro esperimento.
   if ($resp -and $resp.rejected) {
-    Say ("   [SCARTATO] {0}. Ripeto la misura." -f $resp.reason) 'DarkYellow'
+    Say-Warn ("   {0}. Ripeto la misura." -f $resp.reason)
     return $true
   }
   if ($resp -and $resp.warnings) {
-    foreach ($w in @($resp.warnings)) { Say ("   [nota] {0}" -f $w) 'DarkYellow' }
+    foreach ($w in @($resp.warnings)) { Say-Info ("   {0}" -f $w) }
   }
   return $false
 }
@@ -5942,8 +3949,8 @@ function Remove-LabResume {
 }
 function Invoke-LabRebootPrompt($tweakId) {
   $reg = Register-LabResume
-  if ($reg) { Say '   [ OK ] Ripresa automatica registrata: dopo il riavvio e il login, il Lab continua da solo (conferma UAC richiesta).' 'Green' }
-  else { Say '   [WARN] Non sono riuscito a registrare la ripresa automatica: dopo il riavvio rilancia tu il comando Lab.' 'DarkYellow' }
+  if ($reg) { Say-Ok '   Ripresa automatica registrata: dopo il riavvio e il login, il Lab continua da solo (conferma UAC richiesta).' }
+  else { Say-Warn '   Non sono riuscito a registrare la ripresa automatica: dopo il riavvio rilancia tu il comando Lab.' }
   Say ("`n   Il tweak '{0}' richiede un RIAVVIO per avere effetto." -f $tweakId) 'Yellow'
   $ans = Read-Host '   Riavviare ADESSO? Digita S per riavviare subito, altro tasto per riavviare tu manualmente'
   if ($ans -match '^[sS]') {
@@ -5959,13 +3966,13 @@ if ($MODE -eq 'lab') {
   Say '   Testo i tweak UNO ALLA VOLTA sul tuo gioco: baseline x3, misura, statistica, rollback se inutile.' 'Gray'
   if (-not (Test-Admin)) {
     if ($PSCommandPath) {
-      Say '   [LAB] Servono i permessi amministratore (tweak di sistema + punto di ripristino): riavvio elevato...' 'Yellow'
+      Say-Warn '   Servono i permessi amministratore (tweak di sistema + punto di ripristino): riavvio elevato...' 'LAB'
       try {
         Start-Process powershell -Verb RunAs -ArgumentList ('-ExecutionPolicy Bypass -File "' + $PSCommandPath + '" -Token ' + $TOKEN + ' -Mode lab')
         return
       } catch {}
     }
-    Say '[ERR ] Il Laboratorio richiede PowerShell come AMMINISTRATORE.' 'Red'
+    Say-Err 'Il Laboratorio richiede PowerShell come AMMINISTRATORE.'
     Say '       Apri PowerShell con tasto destro -> Esegui come amministratore e rilancia il comando.' 'Yellow'
     return
   }
@@ -5982,12 +3989,12 @@ if ($MODE -eq 'lab') {
       $g = $null
       if ($tel.ContainsKey('gpu_temp')) { $g = [double]$tel.gpu_temp }
       if ((-not $g) -or ($g -le ($script:LAB_TREF + 3))) { return }
-      Say ("   [TERMICA] GPU {0}C oltre il riferimento baseline ({1}C): attendo il raffreddamento per una misura pulita..." -f $g, $script:LAB_TREF) 'DarkGray'
+      Say-Info ("   GPU {0}C oltre il riferimento baseline ({1}C): attendo il raffreddamento per una misura pulita..." -f $g, $script:LAB_TREF) 'TERMICA'
       Start-Sleep -Seconds 8
     }
   }
   Start-Fps
-  if (-not $script:PM_ON) { Say '[ERR ] Cattura FPS non disponibile: il Lab non puo misurare i benchmark.' 'Red'; return }
+  if (-not $script:PM_ON) { Say-Err 'Cattura FPS non disponibile: il Lab non puo misurare i benchmark.'; return }
   Say '   Collegato. Controllo la sessione Lab (avviala da FrameForge -> Laboratorio se non lo hai gia fatto)...' 'DarkGray'
   $idleWaits = 0
   $labDone = $false
@@ -5998,8 +4005,8 @@ if ($MODE -eq 'lab') {
       $act = "$($nx.action)"
       if ($act -eq 'wait') {
         $idleWaits++
-        if ($idleWaits -eq 1) { Say '   [LAB] Nessuna sessione attiva. Avviane una da FrameForge -> Laboratorio (resto in ascolto).' 'Yellow' }
-        if ($idleWaits -gt 75) { Say '   [LAB] Nessuna sessione avviata in 5 minuti: esco.' 'DarkYellow'; $labDone = $true; continue }
+        if ($idleWaits -eq 1) { Say-Warn '   Nessuna sessione attiva. Avviane una da FrameForge -> Laboratorio (resto in ascolto).' 'LAB' }
+        if ($idleWaits -gt 75) { Say-Warn '   Nessuna sessione avviata in 5 minuti: esco.' 'LAB'; $labDone = $true; continue }
         Start-Sleep -Seconds 4
       }
       elseif ($act -eq 'snapshot') {
@@ -6014,43 +4021,43 @@ if ($MODE -eq 'lab') {
           Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction SilentlyContinue
           Checkpoint-Computer -Description 'FrameForge Lab' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop
           $rp = $true
-          Say '   [ OK ] Punto di ripristino Windows creato.' 'Green'
+          Say-Ok '   Punto di ripristino Windows creato.'
         } catch {
-          Say ('   [WARN] Punto di ripristino non creato: ' + $_.Exception.Message) 'DarkYellow'
+          Say-Warn ('   Punto di ripristino non creato: ' + $_.Exception.Message)
           Say '          (Windows ne consente 1 ogni 24h; il backup mirato per-tweak resta comunque attivo.)' 'DarkGray'
         }
         $states = @{}
         foreach ($cid in @($nx.candidate_ids)) {
           $tw = $script:TWMAP[$cid]
-          if ($tw) { try { $states[$cid] = "$(& $tw.state)" } catch { $states[$cid] = 'n/d' } }
+          if ($tw) { $states[$cid] = "$((Get-TwState $tw).label)" }
         }
         LabEvent 'snapshot_done' @{ restore_point = $rp; states = $states }
-        Say '   [ OK ] Snapshot inviato. Si passa alla BASELINE.' 'Green'
+        Say-Ok '   Snapshot inviato. Si passa alla BASELINE.'
       }
       elseif ($act -eq 'run_baseline') {
         Say ("`n[FASE 2/4] BASELINE - run {0}/{1} ({2}s)" -f ([int]$nx.runs_done + 1), $nx.runs_target, $nx.run_seconds) 'Cyan'
         $g = Wait-LabGame
         if ($g -eq '__STOP__') { continue }
         $run = Invoke-LabRun $nx.run_seconds 'baseline'
-        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti (gioco chiuso o in pausa?). Riprovo.' 'DarkYellow'; continue }
+        if (-not $run) { Say-Warn '   Troppi pochi frame raccolti (gioco chiuso o in pausa?). Riprovo.'; continue }
         Say ("   run: {0} FPS avg | 1% low {1} | frame {2}" -f $run.fps_avg, $run.fps_p1, $run.frames) 'Gray'
         $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'baseline'; run = $run }
         if (Test-RunRejected $resp) { continue }
         if ($run.temp_gpu) { [void]$script:LAB_BTEMPS.Add([double]$run.temp_gpu) }
         if ($resp -and $resp.baseline_ok) {
-          Say ("   [ OK ] BASELINE stabile: {0} FPS avg (CV {1}%)" -f $resp.stats.fps_avg, $resp.stats.cv_pct) 'Green'
+          Say-Ok ("   BASELINE stabile: {0} FPS avg (CV {1}%)" -f $resp.stats.fps_avg, $resp.stats.cv_pct)
           if ($resp.quality -and $resp.quality.capped) {
-            Say ("   [ATTENZIONE] Frame cap rilevato a ~{0} FPS: con V-Sync o un limitatore attivo nessun tweak puo' mostrare un effetto misurabile. Togli il limite e rilancia il Lab." -f $resp.quality.cap_fps) 'Yellow'
+            Say-Warn ("   Frame cap rilevato a ~{0} FPS: con V-Sync o un limitatore attivo nessun tweak puo' mostrare un effetto misurabile. Togli il limite e rilancia il Lab." -f $resp.quality.cap_fps)
           }
           if ($script:LAB_BTEMPS.Count -gt 0) { $script:LAB_TREF = [int](($script:LAB_BTEMPS | Measure-Object -Average).Average) }
         }
-        elseif ($resp -and $resp.extra_run) { Say '   [INFO] Variabilita alta tra i run (CV > 5%): 4o run e scarto l outlier.' 'DarkYellow' }
+        elseif ($resp -and $resp.extra_run) { Say-Info '   Variabilita alta tra i run (CV > 5%): 4o run e scarto l outlier.' }
       }
       elseif ($act -eq 'apply_tweak') {
         $tw = $script:TWMAP[$nx.tweak_id]
         if (-not $tw) {
           LabEvent 'tweak_skip' @{ tweak_id = $nx.tweak_id; reason = 'tweak non presente nel catalogo agent' }
-          Say ("   [WARN] Tweak {0} non trovato nel catalogo: salto." -f $nx.tweak_id) 'DarkYellow'
+          Say-Warn ("   Tweak {0} non trovato nel catalogo: salto." -f $nx.tweak_id)
         } else {
           Say ("`n[FASE 3/4] TEST {0}/{1}: {2}" -f $nx.step, $nx.total, $tw.name) 'Cyan'
           Invoke-ApplyTracked $tw
@@ -6061,7 +4068,7 @@ if ($MODE -eq 'lab') {
             Invoke-LabRebootPrompt $nx.tweak_id
             $labDone = $true
           } else {
-            Say '   [ OK ] Tweak applicato (backup automatico). Attendo 3s che si assesti...' 'Green'
+            Say-Ok '   Tweak applicato (backup automatico). Attendo 3s che si assesti...'
             Start-Sleep -Seconds 3
           }
         }
@@ -6072,11 +4079,11 @@ if ($MODE -eq 'lab') {
         $tid = "$($nx.tweak_id)"
         if ("$($nx.stage)" -eq 'off') {
           $msg = Invoke-RestoreTweak $tid
-          Say ("   [COPPIA] {0} disattivato per la misura OFF: {1}" -f $tid, $msg) 'DarkGray'
+          Say-Info ("   {0} disattivato per la misura OFF: {1}" -f $tid, $msg) 'COPPIA'
         } else {
           $tw = $script:TWMAP[$tid]
           if ($tw) { Invoke-ApplyTracked $tw; Save-Backup }
-          Say ("   [COPPIA] {0} riattivato per la misura ON" -f $tid) 'DarkGray'
+          Say-Info ("   {0} riattivato per la misura ON" -f $tid) 'COPPIA'
         }
         Start-Sleep -Seconds 3
         LabEvent 'pair_toggled' @{ tweak_id = $tid; stage = "$($nx.stage)"; final = [bool]$nx.final }
@@ -6087,26 +4094,26 @@ if ($MODE -eq 'lab') {
         if ($g -eq '__STOP__') { continue }
         Wait-ThermalStable
         $run = Invoke-LabRun $nx.run_seconds ("$($nx.tweak_id) " + $nx.stage)
-        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti (gioco chiuso o in pausa?). Riprovo.' 'DarkYellow'; continue }
+        if (-not $run) { Say-Warn '   Troppi pochi frame raccolti (gioco chiuso o in pausa?). Riprovo.'; continue }
         Say ("   run: {0} FPS avg | 1% low {1}" -f $run.fps_avg, $run.fps_p1) 'Gray'
         $ph = if ("$($nx.stage)" -eq 'off') { 'pair_off' } else { 'pair_on' }
         $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = $ph; tweak_id = $nx.tweak_id; run = $run }
         if (Test-RunRejected $resp) { continue }
         if ($resp -and $resp.decision) {
           if ($resp.decision -eq 'kept') {
-            Say ("   [ OK ] MANTENUTO: {0}" -f $resp.reason) 'Green'
+            Say-Ok ("   MANTENUTO: {0}" -f $resp.reason)
           } else {
-            Say ("   [ROLLBACK] {0}" -f $resp.reason) 'Yellow'
+            Say-Warn ("   {0}" -f $resp.reason) 'ROLLBACK'
             if (-not $resp.already_off) {
               $msg = Invoke-RestoreTweak "$($nx.tweak_id)"
-              Say ("   [ OK ] {0}" -f $msg) 'DarkGray'
+              Say-Ok ("   {0}" -f $msg)
             } else {
-              Say '   [ OK ] Gia disattivato dall ultima misura della sequenza.' 'DarkGray'
+              Say-Ok '   Gia disattivato dall ultima misura della sequenza.'
             }
             $script:LAB_APPLIED.Remove("$($nx.tweak_id)")
             LabEvent 'rolled_back' @{ tweak_id = $nx.tweak_id }
           }
-          if ($resp.completed) { Say '   [LAB] Sequenza completata: genero il report...' 'Cyan' }
+          if ($resp.completed) { Say-Step '   Sequenza completata: genero il report...' 'LAB' }
         }
       }
       elseif ($act -eq 'rollback_tweaks') {
@@ -6141,7 +4148,7 @@ if ($MODE -eq 'lab') {
         $g = Wait-LabGame
         if ($g -eq '__STOP__') { continue }
         $run = Invoke-LabRun $nx.run_seconds 'warmup'
-        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        if (-not $run) { Say-Warn '   Troppi pochi frame raccolti. Riprovo.'; continue }
         LabApi 'Post' '/api/agent/lab/run' @{ phase = 'warmup'; tweak_id = $nx.tweak_id; run = $run } | Out-Null
         Say ("   warm-up: {0} FPS avg (ok, ora si misura sul serio)" -f $run.fps_avg) 'Gray'
       }
@@ -6168,14 +4175,14 @@ if ($MODE -eq 'lab') {
         if ($g -eq '__STOP__') { continue }
         Wait-ThermalStable
         $run = Invoke-LabRun $nx.run_seconds ('synergy ' + $nx.stage)
-        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        if (-not $run) { Say-Warn '   Troppi pochi frame raccolti. Riprovo.'; continue }
         Say ("   run: {0} FPS avg" -f $run.fps_avg) 'Gray'
         $ph = 'synergy_' + $nx.stage
         $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = $ph; run = $run }
         if (Test-RunRejected $resp) { continue }
         if ($resp -and $resp.pair_done -and $resp.synergy) {
-          if ($resp.synergy.is_synergy) { Say ("   [ OK ] SINERGIA: insieme {0}% vs somma singoli {1}%" -f $resp.synergy.combined_delta_pct, $resp.synergy.individual_sum_pct) 'Green' }
-          else { Say ("   [INFO] Nessuna sinergia extra ({0}% vs {1}%)" -f $resp.synergy.combined_delta_pct, $resp.synergy.individual_sum_pct) 'Gray' }
+          if ($resp.synergy.is_synergy) { Say-Ok ("   SINERGIA: insieme {0}% vs somma singoli {1}%" -f $resp.synergy.combined_delta_pct, $resp.synergy.individual_sum_pct) }
+          else { Say-Info ("   Nessuna sinergia extra ({0}% vs {1}%)" -f $resp.synergy.combined_delta_pct, $resp.synergy.individual_sum_pct) }
         }
       }
       elseif ($act -eq 'run_validation') {
@@ -6184,27 +4191,27 @@ if ($MODE -eq 'lab') {
         if ($g -eq '__STOP__') { continue }
         Wait-ThermalStable
         $run = Invoke-LabRun $nx.run_seconds 'validazione'
-        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        if (-not $run) { Say-Warn '   Troppi pochi frame raccolti. Riprovo.'; continue }
         $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'validation'; run = $run }
         if (Test-RunRejected $resp) { continue }
         if ($resp -and $resp.validation) {
           Say ("   Reale: {0}% vs previsto {1}%" -f $resp.validation.real_gain_pct, $resp.validation.predicted_gain_pct) 'Yellow'
-          if ($resp.validation.discrepancy) { Say '   [WARN] Guadagno reale sotto il 50% del previsto: segnalato nel report.' 'DarkYellow' }
+          if ($resp.validation.discrepancy) { Say-Warn '   Guadagno reale sotto il 50% del previsto: segnalato nel report.' }
         }
       }
       elseif ($act -eq 'run_recheck') {
-        Say ("   [DRIFT CHECK] run di controllo baseline {0}/{1} ({2}s)" -f ([int]$nx.runs_done + 1), $nx.runs_target, $nx.run_seconds) 'Cyan'
+        Say-Step ("   run di controllo baseline {0}/{1} ({2}s)" -f ([int]$nx.runs_done + 1), $nx.runs_target, $nx.run_seconds) 'DRIFT CHECK'
         $g = Wait-LabGame
         if ($g -eq '__STOP__') { continue }
         Wait-ThermalStable
         $run = Invoke-LabRun $nx.run_seconds 'drift check'
-        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        if (-not $run) { Say-Warn '   Troppi pochi frame raccolti. Riprovo.'; continue }
         $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'recheck'; run = $run }
         if (Test-RunRejected $resp) { continue }
         if ($resp) {
-          if ($resp.stable) { Say ("   [ OK ] Baseline stabile (drift {0}%)" -f $resp.drift_pct) 'Green' }
-          elseif ($resp.rebaselined) { Say ("   [ OK ] Nuova baseline: {0} FPS avg (drift compensato)" -f $resp.stats.fps_avg) 'Yellow' }
-          elseif ($null -ne $resp.drift_pct) { Say ("   [WARN] Drift {0}% rilevato: ri-misuro la baseline" -f $resp.drift_pct) 'DarkYellow' }
+          if ($resp.stable) { Say-Ok ("   Baseline stabile (drift {0}%)" -f $resp.drift_pct) }
+          elseif ($resp.rebaselined) { Say-Ok ("   Nuova baseline: {0} FPS avg (drift compensato)" -f $resp.stats.fps_avg) }
+          elseif ($null -ne $resp.drift_pct) { Say-Warn ("   Drift {0}% rilevato: ri-misuro la baseline" -f $resp.drift_pct) }
         }
       }
       elseif ($act -eq 'run_test') {
@@ -6213,21 +4220,21 @@ if ($MODE -eq 'lab') {
         if ($g -eq '__STOP__') { continue }
         Wait-ThermalStable
         $run = Invoke-LabRun $nx.run_seconds ("test " + $nx.tweak_id)
-        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
+        if (-not $run) { Say-Warn '   Troppi pochi frame raccolti. Riprovo.'; continue }
         Say ("   run: {0} FPS avg | 1% low {1}" -f $run.fps_avg, $run.fps_p1) 'Gray'
         $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'test'; tweak_id = $nx.tweak_id; run = $run }
         if (Test-RunRejected $resp) { continue }
         if ($resp -and $resp.decision) {
           if ($resp.decision -eq 'kept') {
-            Say ("   [ OK ] MANTENUTO: {0}" -f $resp.reason) 'Green'
+            Say-Ok ("   MANTENUTO: {0}" -f $resp.reason)
           } else {
-            Say ("   [ROLLBACK] {0}" -f $resp.reason) 'Yellow'
+            Say-Warn ("   {0}" -f $resp.reason) 'ROLLBACK'
             $msg = Invoke-RestoreTweak "$($nx.tweak_id)"
             $script:LAB_APPLIED.Remove("$($nx.tweak_id)")
             LabEvent 'rolled_back' @{ tweak_id = $nx.tweak_id }
-            Say ("   [ OK ] {0}" -f $msg) 'DarkGray'
+            Say-Ok ("   {0}" -f $msg)
           }
-          if ($resp.completed) { Say '   [LAB] Sequenza completata: genero il report...' 'Cyan' }
+          if ($resp.completed) { Say-Step '   Sequenza completata: genero il report...' 'LAB' }
         }
       }
       elseif ($act -eq 'abort') {
@@ -6237,7 +4244,7 @@ if ($MODE -eq 'lab') {
         foreach ($rid in $ids) { $msg = Invoke-RestoreTweak "$rid"; Say ("   {0}: {1}" -f $rid, $msg) 'DarkGray' }
         $script:LAB_APPLIED.Clear()
         LabEvent 'aborted' $null
-        Say '[ OK ] Tutto annullato. Sessione interrotta.' 'Green'
+        Say-Ok 'Tutto annullato. Sessione interrotta.'
         $labDone = $true
       }
       elseif ($act -eq 'complete') {
@@ -6310,9 +4317,9 @@ if ($MODE -eq 'prematch') {
     $prevPlan = ([regex]::Match($out, '([0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})')).Value
     if ($prevPlan) { Say ("   Piano energetico attuale salvato: {0}" -f $prevPlan) 'DarkGray' }
     powercfg /setactive scheme_min 2>$null
-    Say "   [ OK ] Piano Prestazioni elevate attivato." 'Green'
+    Say-Ok "   Piano Prestazioni elevate attivato."
   } else {
-    Say "   [INFO] Piano energetico lasciato invariato (da impostazioni)." 'DarkGray'
+    Say-Info "   Piano energetico lasciato invariato (da impostazioni)."
   }
   $apps = @(__PREMATCH_APPS__)
   $closed = 0
@@ -6320,12 +4327,12 @@ if ($MODE -eq 'prematch') {
     $p = Get-Process -Name $a -ErrorAction SilentlyContinue
     if ($p) { Stop-Process -InputObject $p -Force -ErrorAction SilentlyContinue; $closed++ }
   }
-  Say ("   [ OK ] App in background chiuse: {0} (su {1} selezionate)" -f $closed, $apps.Count) 'Green'
+  Say-Ok ("   App in background chiuse: {0} (su {1} selezionate)" -f $closed, $apps.Count)
   Say "`n   Boost attivo. Avvia pure il tuo gioco. Buon match!" 'Yellow'
   Read-Host "`nPremi INVIO quando hai finito di giocare per ripristinare tutto"
   if ($setPower) {
-    if ($prevPlan) { powercfg /setactive $prevPlan 2>$null; Say "   [ OK ] Piano energetico originale ripristinato." 'Green' }
-    else { powercfg /setactive scheme_balanced 2>$null; Say "   [ OK ] Piano energetico bilanciato ripristinato." 'Green' }
+    if ($prevPlan) { powercfg /setactive $prevPlan 2>$null; Say-Ok "   Piano energetico originale ripristinato." }
+    else { powercfg /setactive scheme_balanced 2>$null; Say-Ok "   Piano energetico bilanciato ripristinato." }
   }
   Say "`n[ OK ] Le app chiuse puoi riaprirle normalmente. A presto!" 'Cyan'
   return
@@ -6341,7 +4348,7 @@ if ($MODE -eq 'booster') {
   $doPurge = __BOOSTER_PURGE__
   $apps = @(__BOOSTER_APPS__)
   Say ("   Azioni configurate (FrameForge -> Games): priorita={0} energia={1} purgeRAM={2} appDaChiudere={3}" -f $doPriority, $doPower, $doPurge, $apps.Count) 'DarkGray'
-  if (-not (Test-Admin) -and (Test-FpsCapable) -ne 'ok') { Say '   [INFO] Cattura FPS non ancora autorizzata: apri una volta la GUI (Ottimizza) e riavvia il PC. Intanto rilevo il gioco dalla finestra a schermo intero.' 'DarkYellow' }
+  if (-not (Test-Admin) -and (Test-FpsCapable) -ne 'ok') { Say-Info '   Cattura FPS non ancora autorizzata: apri una volta la GUI (Ottimizza) e riavvia il PC. Intanto rilevo il gioco dalla finestra a schermo intero.' }
   if (-not ('FFWin' -as [type])) {
     Add-Type -TypeDefinition @"
 using System;
@@ -6427,20 +4434,20 @@ public static class FFWin {
           $acts = New-Object System.Collections.Generic.List[string]
           if ($doPriority) {
             if (-not $gpid) { $pp = Get-Process -Name ($curName -replace '\.exe$', '') -ErrorAction SilentlyContinue | Select-Object -First 1; if ($pp) { $gpid = $pp.Id } }
-            if ($gpid) { try { (Get-Process -Id $gpid).PriorityClass = 'High'; $acts.Add('priorita_high'); Say '   [ OK ] Priorita CPU del gioco: HIGH.' 'Green' } catch {} }
+            if ($gpid) { try { (Get-Process -Id $gpid).PriorityClass = 'High'; $acts.Add('priorita_high'); Say-Ok '   Priorita CPU del gioco: HIGH.' } catch {} }
           }
           if ($doPower) {
             $out = powercfg /getactivescheme
             $prevPlan = ([regex]::Match($out, '([0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})')).Value
             powercfg /setactive scheme_min 2>$null
-            $acts.Add('piano_energetico'); Say '   [ OK ] Piano Prestazioni elevate attivo (solo durante il gioco).' 'Green'
+            $acts.Add('piano_energetico'); Say-Ok '   Piano Prestazioni elevate attivo (solo durante il gioco).'
           }
           if ($apps.Count -gt 0) {
             $closed = 0
             foreach ($a in $apps) { $pr = Get-Process -Name $a -ErrorAction SilentlyContinue; if ($pr) { Stop-Process -InputObject $pr -Force -ErrorAction SilentlyContinue; $closed++ } }
-            if ($closed -gt 0) { $acts.Add("app_chiuse_$closed"); Say ("   [ OK ] App in background chiuse: {0}." -f $closed) 'Green' }
+            if ($closed -gt 0) { $acts.Add("app_chiuse_$closed"); Say-Ok ("   App in background chiuse: {0}." -f $closed) }
           }
-          if ($doPurge) { Clear-StandbyList; $acts.Add('purge_ram'); Say '   [ OK ] RAM standby svuotata.' 'Green' }
+          if ($doPurge) { Clear-StandbyList; $acts.Add('purge_ram'); Say-Ok '   RAM standby svuotata.' }
           $boosted = $true; $bGame = $curName; $bStart = Get-Date; $script:BACTS = @($acts)
           Say ("`n   Boost attivo! Buona partita! Ripristino tutto quando esci da {0}." -f ($curName -replace '\.exe$', '')) 'Yellow'
         }
@@ -6448,7 +4455,7 @@ public static class FFWin {
       if (($boosted -or $skipUntilExit) -and $lostCount -ge 8) {
         if ($boosted) {
           Say ("`n[STEP] Fine partita {0}: ripristino..." -f ($bGame -replace '\.exe$', '')) 'Cyan'
-          if ($doPower) { if ($prevPlan) { powercfg /setactive $prevPlan 2>$null } else { powercfg /setactive scheme_balanced 2>$null }; Say '   [ OK ] Piano energetico ripristinato.' 'Green' }
+          if ($doPower) { if ($prevPlan) { powercfg /setactive $prevPlan 2>$null } else { powercfg /setactive scheme_balanced 2>$null }; Say-Ok '   Piano energetico ripristinato.' }
           $dur = [int]((Get-Date) - $bStart).TotalSeconds
           $recap = $null
           if ($script:RCP_FPS.Count -ge 5) {
@@ -6493,21 +4500,21 @@ public static class FFWin {
 
 # default: sync (safe)
 Say "`n[STEP] Rilevamento hardware, salute e avvio..." 'Cyan'
-if (-not (Test-Admin)) { Say '   [INFO] Suggerimento: esegui in PowerShell (Amministratore) per temperature CPU/GPU reali e analisi piu precisa.' 'DarkYellow' }
+if (-not (Test-Admin)) { Say-Info '   Suggerimento: esegui in PowerShell (Amministratore) per temperature CPU/GPU reali e analisi piu precisa.' }
 $specs = Get-Specs
 Say ("   CPU: {0}" -f $specs.cpu); Say ("   GPU: {0}" -f $specs.gpu)
 Say ("   MB : {0}  ({1} {2})" -f $specs.motherboard, $specs.cpu_socket, $specs.chipset)
 $health = Get-Health
 if ($health.ContainsKey('cpu_temp')) { Say ("   Temp CPU: {0}C  |  Temp GPU: {1}C" -f $health.cpu_temp, $(if($health.ContainsKey('gpu_temp')){$health.gpu_temp}else{'n/d'})) 'DarkGray' }
 elseif (Test-Admin) {
-  Say '   [INFO][diag] Temp CPU non leggibile. Sensori temperatura rilevati:' 'DarkYellow'
+  Say-Info '   [diag] Temp CPU non leggibile. Sensori temperatura rilevati:'
   if ($script:LHM_LAST) { Say ("         " + $script:LHM_LAST) 'DarkGray' }
   else { Say '         (nessuno)' 'DarkGray' }
   $mi = Test-MemoryIntegrity
   $bl = Test-VulnerableDriverBlocklist
-  Say ("   [INFO][diag] Integrita memoria: {0}  |  Blocklist driver vulnerabili: {1}" -f $(if($mi){'ATTIVA'}else{'disattivata'}), $(if($bl){'ATTIVA'}else{'disattivata'})) 'DarkGray'
+  Say-Info ("   Integrita memoria: {0}  |  Blocklist driver vulnerabili: {1}" -f $(if($mi){'ATTIVA'}else{'disattivata'}), $(if($bl){'ATTIVA'}else{'disattivata'})) 'diag'
   if ($mi -or $bl) {
-    Say '   [WARN] CAUSA: Windows sta bloccando il driver dei sensori CPU (protezione di sicurezza).' 'Yellow'
+    Say-Warn '   CAUSA: Windows sta bloccando il driver dei sensori CPU (protezione di sicurezza).'
     Say '       La temperatura CPU sulle AMD Ryzen richiede questo driver di basso livello.' 'Gray'
     if ($mi) {
       Say '       -> Disattiva "Integrita della memoria": Impostazioni > Privacy e sicurezza >' 'Gray'
@@ -6519,7 +4526,7 @@ elseif (Test-Admin) {
     }
     Say '       (La temperatura GPU funziona gia e non richiede alcuna modifica.)' 'DarkGray'
   } else {
-    Say '   [INFO] Il driver sensori CPU non ha risposto (possibile blocco antivirus). La temp GPU funziona comunque.' 'DarkGray'
+    Say-Info '   Il driver sensori CPU non ha risposto (possibile blocco antivirus). La temp GPU funziona comunque.'
   }
 }
 Send-Data $specs $health (Get-StartupList)
@@ -6530,3 +4537,34 @@ Send-Running $running
 Say ("   App in background attive: {0}" -f $running.Count) 'DarkGray'
 Say "`n[ OK ] Dati inviati! Apri FrameForge -> Il mio PC per analisi e consigli." 'Green'
 '''
+
+
+# ---------------------------------------------------------------------------
+# La GUI locale vive in agent_gui.html, non qui dentro.
+#
+# Erano 2.121 righe di HTML/CSS/JS in una here-string PowerShell dentro una
+# stringa raw Python: tre livelli di annidamento, quindi niente evidenziazione,
+# niente linting, niente formattatore, e insidie di quoting su due livelli.
+# Il file viene reinserito qui all'import, cosi' `PS_SCRIPT` resta completo per
+# tutti quelli che lo consumano (routers/pc.py, desktop_agent, l'harness di
+# test) e nulla a valle deve sapere che la sorgente e' cambiata.
+#
+# Vincolo da rispettare in agent_gui.html: il contenuto finisce in una
+# here-string a singolo apice (@'...'@), quindi nessuna riga puo' iniziare con
+# `'@` — verificato dal test in tests_unit/test_agent_gui_asset.py. In compenso
+# PowerShell non espande nulla, quindi il JS puo' usare $ e ${} liberamente.
+_GUI_HTML_PATH = _Path(__file__).with_name("agent_gui.html")
+
+
+def _load_gui_html() -> str:
+    try:
+        return _GUI_HTML_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:  # pragma: no cover - deploy incompleto
+        raise RuntimeError(
+            f"agent_gui.html non trovato accanto a ps_agent.py ({_GUI_HTML_PATH}). "
+            "Va distribuito insieme al backend: senza, l'agent non ha interfaccia."
+        )
+
+
+GUI_HTML = _load_gui_html()
+PS_SCRIPT = PS_SCRIPT.replace("__GUI_HTML__", GUI_HTML)

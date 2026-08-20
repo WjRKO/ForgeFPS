@@ -20,7 +20,7 @@ from helpers import specs_to_text, compute_health, compute_hw_insights, get_or_c
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
 from services.gpu_catalog_service import find_gpu_reference, compute_health_vs_reference
-from models import SpecsInput, GoalInput, FpsInput, FpsUpgradeInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput
+from models import SpecsInput, GoalInput, FpsInput, FpsUpgradeInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput, AgentDiagInput
 from routers.profiles import resolve_tweak_ids, TWEAK_CATALOG, TEMPLATES
 from routers.advisor import _check_ai_rate_limit
 from plan_gate import require_pro, require_streamer, get_entitlements, plan_402
@@ -1373,6 +1373,30 @@ def build(get_current_user):
         backend = os.environ.get("FRONTEND_URL", "http://localhost:8001")
         script = AGENT_SCRIPT.replace("__BACKEND_URL__", backend).replace("__AGENT_TOKEN__", token)
         return PlainTextResponse(script, headers={"Content-Disposition": "attachment; filename=forgefps_agent.py"})
+
+    @r.post("/agent/diag")
+    async def agent_diag(payload: AgentDiagInput, x_agent_token: str = Header(default="")):
+        """Eventi diagnostici dell'agent, non telemetria d'uso.
+
+        Esiste per una domanda precisa: il fallback WinForms della GUI vale le
+        451 righe che costa? Oggi scatta solo se il server locale non parte, e
+        nessuno sa quanto succeda davvero. Con questo, fra un mese lo si sa.
+        La collezione e' a sola scrittura dall'agent e si interroga a mano:
+            db.agent_diagnostics.aggregate([{$group:{_id:"$event",n:{$sum:1}}}])
+        """
+        rec = await db.agent_tokens.find_one({"token": x_agent_token})
+        if not rec:
+            raise HTTPException(status_code=401, detail="token agent non valido")
+        detail = {}
+        for k, v in (payload.detail or {}).items():
+            if len(detail) >= 12 or not isinstance(v, (int, float, str, bool)):
+                continue
+            detail[str(k)[:40]] = v if not isinstance(v, str) else v[:300]
+        await db.agent_diagnostics.insert_one({
+            "user_id": rec["user_id"], "event": payload.event,
+            "detail": detail, "at": now_iso(),
+        })
+        return {"ok": True}
 
     @r.get("/agent/latest-version")
     async def agent_latest_version():
