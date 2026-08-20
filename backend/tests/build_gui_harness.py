@@ -11,10 +11,10 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import ps_agent
 
-s = ps_agent.PS_SCRIPT
-i = s.index("$html = @'")
-j = s.index("\n'@", i)
-html = s[i + len("$html = @'") + 1:j]
+# La GUI e' un file: si legge, non si ritaglia. Prima questo harness cercava i
+# delimitatori della here-string dentro PS_SCRIPT e affettava per indice, il che
+# funzionava finche' nessuno toccava i delimitatori.
+html = ps_agent.GUI_HTML
 
 MOCK = """<script>
 // ---- TEST MOCK LAYER (solo harness, non nella GUI reale) ----
@@ -49,12 +49,26 @@ const MOCK_STATE = {
   tweaks: MOCK_TWEAKS,
   presets: { competitive:['g1','g8'], streaming:['g9'], complete: MOCK_TWEAKS.map(t=>t.id) }
 };
+// Cronologia delle modifiche: una voce con valore precedente, una con chiave
+// che prima non esisteva, una senza data (backup scritto da un agent vecchio).
+const MOCK_CHANGES = { ok: true, backup_file: 'C:\\\\Users\\\\tester\\\\AppData\\\\Local\\\\Temp\\\\forgefps_backup.json', items: [
+  { id:'g1', name:'Piano energetico prestazioni massime', cat:'gaming',
+    applied_at:'2026-08-20T18:30:00+02:00',
+    keys:[{key:'HKLM:\\\\SYSTEM\\\\...\\\\Power::Scheme', previous:'Bilanciato'}] },
+  { id:'g8', name:'MPO off (fix stutter DWM)', cat:'gaming',
+    applied_at:'2026-08-19T09:05:00+02:00',
+    keys:[{key:'HKLM:\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\Dwm::OverlayTestMode', previous:'non esisteva'},
+          {key:'HKLM:\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\Dwm::Other', previous:'2'}] },
+  { id:'g9', name:'Tweak applicato da una versione precedente', cat:'network',
+    applied_at:'', keys:[{key:'HKCU:\\\\Software\\\\X::Y', previous:'0'}] }
+] };
 window.fetch = function(url, opts) {
   const u = String(url);
   let body = { ok: true };
   let delay = 0;
   if (u.indexOf('/api/state') >= 0) { body = MOCK_STATE; delay = 4000; }
   else if (u.indexOf('/api/log') >= 0) body = { logs: [], total: 0, applying: false };
+  else if (u.indexOf('/api/changes') >= 0) body = MOCK_CHANGES;
   else if (u.indexOf('/api/client-error') >= 0) { try { window.__reported.push(JSON.parse(opts.body).msg); } catch(e){} }
   return new Promise(res => setTimeout(() => res({ json: () => Promise.resolve(body), ok: true, status: 200 }), delay));
 };
