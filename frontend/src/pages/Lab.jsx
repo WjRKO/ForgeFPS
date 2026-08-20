@@ -24,7 +24,7 @@ const PHASES = [
   { id: "validation", it: "Validazione", en: "Validation" },
   { id: "completed", it: "Report", en: "Report" },
 ];
-const PHASE_IDX = { waiting_agent: -1, snapshot: 0, baseline: 1, testing: 2, awaiting_reboot: 2, synergy: 3, validation: 4, completed: 5, aborting: 2, aborted: -1 };
+const PHASE_IDX = { waiting_agent: -1, snapshot: 0, baseline: 1, testing: 2, awaiting_reboot: 2, rollback: 2, synergy: 3, validation: 4, completed: 5, aborting: 2, aborted: -1 };
 
 const StatusPill = ({ status }) => {
   const map = {
@@ -33,6 +33,7 @@ const StatusPill = ({ status }) => {
     baseline: ["bg-cyan-500/15 text-cyan-400", T("Baseline in corso", "Baseline running")],
     testing: ["bg-[#E5FF00]/15 text-[#E5FF00]", T("Test in corso", "Testing")],
     awaiting_reboot: ["bg-orange-500/15 text-orange-400", T("Riavvio richiesto", "Reboot required")],
+    rollback: ["bg-amber-500/15 text-amber-400", T("Annullamento non confermati", "Reverting unconfirmed")],
     synergy: ["bg-purple-500/15 text-purple-400", T("Synergy pass", "Synergy pass")],
     validation: ["bg-[#00E0FF]/15 text-[#00E0FF]", T("Validazione in gioco", "In-game validation")],
     aborting: ["bg-orange-500/15 text-orange-400", T("Interruzione...", "Aborting...")],
@@ -129,6 +130,7 @@ function SetupCard({ registry, onStart, starting }) {
   const [risk, setRisk] = useState("medium");
   const [win, setWin] = useState(90);
   const [reboot, setReboot] = useState(true);
+  const [paired, setPaired] = useState(true);
   const [preview, setPreview] = useState(registry);
   useEffect(() => {
     api.get(`/lab/registry?risk_level=${risk}&include_reboot=${reboot}`).then(({ data }) => setPreview(data)).catch(() => {});
@@ -136,7 +138,10 @@ function SetupCard({ registry, onStart, starting }) {
   const n = preview?.candidates?.length || 0;
   const nReboot = (preview?.candidates || []).filter((c) => c.requires_reboot).length;
   const fleetN = (preview?.candidates || []).reduce((acc, c) => acc + (c.fleet?.tested || 0), 0);
-  const estMin = Math.round(((3 + n * 3) * (win + 8)) / 60) + 5;
+  // Lo schema appaiato misura 6 finestre per tweak (3 coppie ON/OFF) invece di 3,
+  // piu' il tempo delle commutazioni: costa il doppio e va detto prima, non dopo.
+  const runsPerTweak = paired ? 6 : 3;
+  const estMin = Math.round(((3 + n * runsPerTweak) * (win + 8)) / 60) + 5;
   return (
     <HUDCard testid="lab-setup-card">
       <div className="p-5 space-y-5">
@@ -174,11 +179,25 @@ function SetupCard({ registry, onStart, starting }) {
           </button>
           <div className="text-[11px] text-zinc-500 mt-1.5">{T("MPO, GPU MSI mode, timer resolution: il Lab si mette in pausa, riavvii e riprende da solo.", "MPO, GPU MSI mode, timer resolution: the Lab pauses, you reboot, it resumes automatically.")}</div>
         </div>
+        <div>
+          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{T("4 · Precisione della misura", "4 · Measurement precision")}</div>
+          <button data-testid="lab-paired-toggle" onClick={() => setPaired(!paired)}
+            className={`px-4 py-2 text-xs uppercase tracking-widest border transition-colors ${paired ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/10" : "border-[#2A2A35] text-zinc-400 hover:border-zinc-500"}`}>
+            {paired ? T("Appaiata (consigliata)", "Paired (recommended)") : T("Rapida", "Quick")}
+          </button>
+          <div className="text-[11px] text-zinc-500 mt-1.5">
+            {paired
+              ? T("Ogni tweak viene acceso e spento fra una misura e l'altra (3 coppie ON/OFF): il PC che si scalda e la scena che cambia si annullano invece di finire nel confronto. Doppio tempo, ma vede differenze del 2% invece che solo quelle sopra il 7%.",
+                  "Each tweak is toggled on and off between runs (3 ON/OFF pairs): a warming PC and a changing scene cancel out instead of ending up in the comparison. Twice the time, but it can see 2% differences instead of only those above 7%.")
+              : T("Tre misure col tweak attivo confrontate con la baseline iniziale. Meta' del tempo, ma solo gli effetti grandi emergono dal rumore.",
+                  "Three runs with the tweak on, compared against the initial baseline. Half the time, but only large effects rise above the noise.")}
+          </div>
+        </div>
         <div className="border border-[#2A2A35] bg-black/40 p-3 text-xs text-zinc-400" data-testid="lab-candidates-preview">
           <span className="text-[#00E0FF] font-bold">{n}</span> {T("tweak candidati per il tuo hardware", "candidate tweaks for your hardware")}
           {nReboot > 0 && <span className="text-orange-400"> ({nReboot} {T("con riavvio", "with reboot")})</span>}
           {n > 0 && <span className="text-zinc-600"> · {preview.candidates.map((c) => c.tweak_id).join(", ")}</span>}
-          <div className="text-zinc-600 mt-1 flex items-center gap-1"><Timer size={11} /> {T(`Durata stimata: ~${estMin} min (baseline ×3 + 3 run per tweak + synergy + validazione)`, `Estimated duration: ~${estMin} min (baseline ×3 + 3 runs per tweak + synergy + validation)`)}</div>
+          <div className="text-zinc-600 mt-1 flex items-center gap-1"><Timer size={11} /> {T(`Durata stimata: ~${estMin} min (baseline ×3 + ${runsPerTweak} run per tweak + synergy + validazione)`, `Estimated duration: ~${estMin} min (baseline ×3 + ${runsPerTweak} runs per tweak + synergy + validation)`)}</div>
           {fleetN > 0 && (
             <div className="text-[#00E0FF]/80 mt-1 flex items-center gap-1" data-testid="lab-fleet-hint">
               <Users size={11} /> {T(`Priorità arricchite dai dati fleet: ${fleetN} test su PC con hardware simile al tuo`, `Priorities enriched with fleet data: ${fleetN} tests on PCs with hardware similar to yours`)}
@@ -199,7 +218,7 @@ function SetupCard({ registry, onStart, starting }) {
             </div>
           )}
         </div>
-        <button onClick={() => onStart(risk, win, reboot)} disabled={starting || n === 0} data-testid="lab-start-btn"
+        <button onClick={() => onStart(risk, win, reboot, paired)} disabled={starting || n === 0} data-testid="lab-start-btn"
           className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold uppercase tracking-widest text-xs px-6 py-3 hover:bg-[#D4EC00] transition-colors disabled:opacity-50">
           <FlaskConical size={15} /> {starting ? T("Avvio...", "Starting...") : T("Avvia sessione Lab", "Start Lab session")}
         </button>
@@ -335,7 +354,17 @@ function Timeline({ session }) {
         {cur && (
           <div className="flex items-center justify-between gap-2 border border-[#E5FF00]/40 bg-[#E5FF00]/5 px-3 py-2" data-testid="lab-current-tweak">
             <div className="text-xs text-[#E5FF00]">{names[cur.tweak_id] || cur.tweak_id}</div>
-            <div className="text-[11px] text-zinc-400">{cur.applied ? T(`run ${(cur.runs || []).length}/3 in corso...`, `run ${(cur.runs || []).length}/3 running...`) : T("applicazione...", "applying...")}</div>
+            <div className="text-[11px] text-zinc-400">{(() => {
+              if (!cur.applied) return T("applicazione...", "applying...");
+              // Nello schema appaiato le misure stanno in on_runs/off_runs, non in runs:
+              // leggendo solo `runs` la riga sarebbe rimasta ferma su 0/3.
+              const pairDone = (cur.on_runs || []).length + (cur.off_runs || []).length;
+              if (pairDone > 0 || (cur.stage_state && !(cur.runs || []).length)) {
+                return T(`misura ${pairDone}/6 (coppie ON/OFF) · ora ${(cur.stage_state || "on").toUpperCase()}`,
+                         `run ${pairDone}/6 (ON/OFF pairs) · now ${(cur.stage_state || "on").toUpperCase()}`);
+              }
+              return T(`run ${(cur.runs || []).length}/3 in corso...`, `run ${(cur.runs || []).length}/3 running...`);
+            })()}</div>
           </div>
         )}
         {queue.map((tid) => (
@@ -537,7 +566,7 @@ function ShareCard({ report, innerRef }) {
           </div>
         )}
         <div className="flex items-center justify-between border-t border-[#1F1F28] pt-3">
-          <div className="text-[11px] text-zinc-500">{T(`${report.tweaks_tested} tweak testati · baseline ×3 · Welch t-test · rollback automatico`, `${report.tweaks_tested} tweaks tested · baseline ×3 · Welch t-test · auto rollback`)}</div>
+          <div className="text-[11px] text-zinc-500">{T(`${report.tweaks_tested} tweak testati · ${report.design === "paired_abba" ? "coppie ON/OFF · t-test appaiato" : "baseline ×3 · Welch t-test"} · correzione Holm applicata · rollback automatico`, `${report.tweaks_tested} tweaks tested · ${report.design === "paired_abba" ? "ON/OFF pairs · paired t-test" : "baseline ×3 · Welch t-test"} · Holm correction applied · auto rollback`)}</div>
           <div className="text-[11px] font-mono text-[#E5FF00]">forgefps.dev</div>
         </div>
       </div>
@@ -606,8 +635,11 @@ function ReportCard({ report, onNew }) {
                 <div className="text-xs text-white truncate">{s.tweak}</div>
                 <div className="text-[11px] text-zinc-500">
                   {s.reason} · p={s.p_value}
+                  {s.p_adj != null && <span className="text-zinc-600"> ({T("corretto", "adjusted")} {s.p_adj})</span>}
                   {s.ci_pct && <span className="text-zinc-600"> · IC95 {s.ci_pct[0] > 0 ? "+" : ""}{s.ci_pct[0]}/{s.ci_pct[1] > 0 ? "+" : ""}{s.ci_pct[1]}%</span>}
-                  {s.decision === "kept" && s.holm_ok === false && <span className="text-amber-500/90"> · {T("non confermato dopo correzione Holm", "not confirmed after Holm correction")}</span>}
+                  {s.n_pairs > 0 && <span className="text-zinc-600"> · {s.n_pairs} {T("coppie ON/OFF", "ON/OFF pairs")}</span>}
+                  {s.demoted && <span className="text-amber-500/90"> · {T("annullato dalla correzione per test multipli", "reverted by the multiple-testing correction")}</span>}
+                  {(s.warnings || []).map((w, k) => <span key={k} className="text-amber-500/70"> · {w}</span>)}
                 </div>
               </div>
               <div className="flex items-center gap-3 shrink-0">
@@ -621,10 +653,19 @@ function ReportCard({ report, onNew }) {
           ))}
         </div>
         <ValidationBlock validation={report.validation} />
+        {report.quality?.capped && (
+          <div className="text-[11px] text-amber-400/90 border border-amber-500/30 bg-amber-500/5 px-3 py-2" data-testid="lab-report-capped">
+            {T(`Frame cap attivo a ~${report.quality.cap_fps} FPS durante le misure: con V-Sync o un limitatore acceso nessun tweak puo' mostrare un effetto. Togli il limite e rilancia il Lab per una misura utile.`,
+               `Frame cap active at ~${report.quality.cap_fps} FPS during the measurements: with V-Sync or a limiter on, no tweak can show an effect. Remove the cap and run the Lab again for a meaningful measurement.`)}
+          </div>
+        )}
         {report.multiple_testing && report.multiple_testing.kept_total > 0 && (
           <div className="text-[11px] text-zinc-500 border border-[#1F1F28] bg-black/30 px-3 py-2" data-testid="lab-report-rigor">
-            {T(`Rigore statistico: ${report.multiple_testing.kept_confirmed}/${report.multiple_testing.kept_total} tweak mantenuti restano significativi dopo correzione Holm-Bonferroni (test multipli, α=${report.multiple_testing.alpha}).`,
-               `Statistical rigor: ${report.multiple_testing.kept_confirmed}/${report.multiple_testing.kept_total} kept tweaks remain significant after Holm-Bonferroni correction (multiple testing, α=${report.multiple_testing.alpha}).`)}
+            {T(`Rigore statistico: ${report.multiple_testing.hypotheses || report.multiple_testing.kept_total} tweak messi alla prova, ${report.multiple_testing.kept_total} mantenuti dopo la correzione Holm-Bonferroni per test multipli (α=${report.multiple_testing.alpha}).`,
+               `Statistical rigor: ${report.multiple_testing.hypotheses || report.multiple_testing.kept_total} tweaks put to the test, ${report.multiple_testing.kept_total} kept after Holm-Bonferroni correction for multiple testing (α=${report.multiple_testing.alpha}).`)}
+            {(report.multiple_testing.demoted || []).length > 0 && (
+              <span className="text-amber-500/90"> {T(`· ${report.multiple_testing.demoted.length} tweak sembravano funzionare ma non hanno retto la correzione: sono stati annullati sul PC.`, `· ${report.multiple_testing.demoted.length} tweaks looked like they worked but did not survive the correction: they were reverted on the PC.`)}</span>
+            )}
             {(report.drift_events || []).length > 0 && (
               <span className="text-amber-500/90"> {T(`· ${report.drift_events.length} drift baseline rilevati e compensati (schema A/B/A).`, `· ${report.drift_events.length} baseline drifts detected and compensated (A/B/A scheme).`)}</span>
             )}
@@ -677,17 +718,17 @@ export default function Lab() {
     api.get("/agent/token").then(({ data }) => setToken(data.token)).catch(() => {});
   }, [load]);
 
-  const active = session && ["waiting_agent", "snapshot", "baseline", "testing", "awaiting_reboot", "synergy", "validation", "aborting"].includes(session.status);
+  const active = session && ["waiting_agent", "snapshot", "baseline", "testing", "awaiting_reboot", "rollback", "synergy", "validation", "aborting"].includes(session.status);
   useEffect(() => {
     if (!active) return;
     const t = setInterval(load, 2500);
     return () => clearInterval(t);
   }, [active, load]);
 
-  const start = async (risk, win, reboot) => {
+  const start = async (risk, win, reboot, paired = true) => {
     setStarting(true);
     try {
-      const { data } = await api.post("/lab/start", { risk_level: risk, run_seconds: win, include_reboot: reboot });
+      const { data } = await api.post("/lab/start", { risk_level: risk, run_seconds: win, include_reboot: reboot, paired });
       setSession(data.session);
       setShowSetup(false);
       toast.success(T("Sessione Lab creata! Ora avvia l'agent.", "Lab session created! Now start the agent."));

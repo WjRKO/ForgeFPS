@@ -10,10 +10,12 @@ consent, and then verifies whether they actually helped.
 
 The distinguishing idea is measurement rather than folklore. Most "PC booster" tools
 apply a fixed list of registry edits and declare victory. FrameForge runs an automated
-lab: it benchmarks a baseline, applies one tweak at a time, re-measures with repeated
-runs, checks statistical significance, and rolls back anything that does not hold up.
-Results are aggregated anonymously across similar hardware, so recommendations improve
-as the fleet grows.
+lab: it benchmarks a baseline, toggles one tweak at a time in paired ON/OFF runs,
+checks statistical significance, and rolls back anything that does not hold up. Runs
+taken in non-comparable conditions — on battery, on a different game, with a frame cap
+active — are rejected rather than averaged in. Results are aggregated anonymously
+across similar hardware, capped per user so one enthusiast cannot outvote the fleet,
+so recommendations improve as the fleet grows.
 
 **▶ [Try the interactive demo](https://wjrko.github.io/ForgeFPS/)** — no install, no account.
 Watch the lab measure a baseline, apply four tweaks one at a time, and roll back the one
@@ -26,15 +28,20 @@ that fails its significance test. Runs entirely in the browser with sample data.
 **Measure**
 - Hardware detection via the desktop agent (CPU/GPU/RAM/storage/BIOS, driver versions,
   sensor temperatures through LibreHardwareMonitor)
-- Benchmark with DPC latency, IOPS and frame-time jitter, plus a 0–100 health score
+- Benchmark with DPC time, 4K IOPS at QD1, timer jitter and network quality, plus a
+  0–100 health score; each result carries the background load it was measured under
 - Live telemetry, thermal alerts, per-game session recaps
 - Network quality test with bufferbloat grading
 
 **Optimize**
 - **Auto-Pilot** — applies the safe tweaks that are not active yet, measures before and
   after, and always writes a backup first
-- **Performance Lab** — tests tweaks one at a time with repeated runs, Welch's t-test,
-  Holm correction and automatic rollback of anything that fails to prove itself
+- **Performance Lab** — tests tweaks one at a time with a paired ON/OFF design: the
+  tweak is toggled between runs in an ABBA sequence, so thermal drift and scene
+  changes cancel out instead of ending up in the comparison. Decisions come from a
+  paired t-test with a confidence interval, and the Holm correction for multiple
+  testing is *applied*: a tweak that looked good on its own test but does not survive
+  the correction is reverted on the machine before the final validation
 - **Regression watchdog** — re-checks 48 hours later and tells you if the boost did not
   hold, so a bad tweak does not sit unnoticed
 - **What changed on your PC** — cross-references configuration changes (driver updates,
