@@ -63,11 +63,17 @@ def _iso_age(ts):
 # GitHub Release del ZIP generico dell'agent. Aggiornare a ogni bump di versione.
 AGENT_ZIP_UPSTREAM = os.environ.get(
     "AGENT_ZIP_UPSTREAM",
-    # v0.8.0: stop UAC dai bottoni dashboard (no runas via URI, anti-downgrade
-    # launcher, auto-rimozione flag RUNASADMIN). Tag GitHub con punto: v.0.8.0.
-    # SHA256 zip: 408259a31729f2b4033171b384dd3c196079cc2890015c9187d7aeaf65c7eedb
-    "https://github.com/WjRKO/ForgeFPS/releases/download/v.0.8.0/forgefps-agent.zip",
+    "https://github.com/WjRKO/ForgeFPS/releases/download/v0.8.1/forgefps-agent.zip",
 )
+# SHA256 del ZIP a cui punta AGENT_ZIP_UPSTREAM. Non e' documentazione: viene
+# servito al self-updater dell'agent, che rifiuta di aggiornarsi se il file
+# scaricato non corrisponde. Finche' l'eseguibile non e' firmato, questo e'
+# l'unico controllo di integrita' che sta fra una release e le macchine degli
+# utenti — quindi va aggiornato INSIEME all'URL, mai dopo.
+AGENT_ZIP_SHA256 = os.environ.get(
+    "AGENT_ZIP_SHA256",
+    "386271c41808f565e655090ff0fa77f5750cee6ba508d70909120e378b42e4a8",
+).lower()
 # La directory temporanea va chiesta al sistema: con "/tmp" scritto a mano il
 # download dell'agent falliva con FileNotFoundError fuori da un container Linux.
 _AGENT_ZIP_CACHE_PATH = os.path.join(
@@ -144,17 +150,34 @@ def _render_launcher_bat(token: str, backend: str, standalone: bool) -> bytes:
     return "\r\n".join(lines).encode("utf-8")
 
 
+def _zip_digest_ok(data: bytes) -> bool:
+    """Il ZIP e' quello che ci aspettiamo? Se non abbiamo un hash configurato
+    non blocchiamo nulla: sarebbe un downtime di distribuzione per una
+    configurazione mancante."""
+    if not AGENT_ZIP_SHA256:
+        return True
+    return hashlib.sha256(data).hexdigest() == AGENT_ZIP_SHA256
+
+
 async def _ensure_agent_zip_cached() -> bytes:
     """Fetch (una sola volta) il ZIP dell'agent da GitHub e caching su disco.
-    Le chiamate successive lo servono dal filesystem. Se il file cache manca o
-    e' inconsistente, viene ri-scaricato."""
+    Le chiamate successive lo servono dal filesystem. Se il file cache manca,
+    e' inconsistente o non corrisponde all'hash atteso, viene ri-scaricato.
+
+    La verifica dell'hash vale sia in scrittura sia in lettura: un ZIP alterato
+    nella cartella temporanea del server verrebbe altrimenti servito a ogni
+    utente che scarica l'agent dalla dashboard.
+    """
     if os.path.exists(_AGENT_ZIP_CACHE_PATH):
         try:
             with open(_AGENT_ZIP_CACHE_PATH, "rb") as fh:
                 data = fh.read()
             zipfile.ZipFile(io.BytesIO(data)).close()  # sanity
+            if not _zip_digest_ok(data):
+                raise ValueError("hash della cache diverso da AGENT_ZIP_SHA256")
             return data
-        except Exception:
+        except Exception as exc:
+            logger.warning("cache ZIP agent scartata (%s): riscarico da upstream", exc)
             try: os.unlink(_AGENT_ZIP_CACHE_PATH)
             except Exception: pass
     import httpx as _httpx
@@ -163,6 +186,13 @@ async def _ensure_agent_zip_cached() -> bytes:
         if resp.status_code != 200:
             raise HTTPException(status_code=502, detail=f"Upstream ZIP fetch failed ({resp.status_code})")
         data = resp.content
+    if not _zip_digest_ok(data):
+        # Meglio non distribuire nulla che distribuire un pacchetto che non
+        # corrisponde a quello dichiarato agli utenti sulla pagina di download.
+        logger.error("ZIP agent da %s non corrisponde a AGENT_ZIP_SHA256: distribuzione bloccata",
+                     AGENT_ZIP_UPSTREAM)
+        raise HTTPException(status_code=502,
+                            detail="Il pacchetto dell'agent non corrisponde all'hash atteso.")
     with open(_AGENT_ZIP_CACHE_PATH, "wb") as fh:
         fh.write(data)
     return data
@@ -1377,11 +1407,18 @@ def build(get_current_user):
     @r.get("/agent/latest-version")
     async def agent_latest_version():
         """Endpoint pubblico usato dal self-updater dell'agent (che non ha auth cookie).
-        Ritorna solo la versione + URL di download della release corrente. Nessun
-        dato utente. Cachable a livello CDN."""
+        Ritorna versione, URL e SHA256 della release corrente. Nessun dato
+        utente. Cachable a livello CDN.
+
+        L'hash e' la parte che conta: l'agent rifiuta di applicare un
+        aggiornamento il cui ZIP non corrisponda. Finche' l'eseguibile non e'
+        firmato, questo e' l'unico controllo di integrita' sul percorso di
+        aggiornamento automatico — quello che avviene senza che l'utente guardi.
+        """
         return {
             "version": LATEST_AGENT_VERSION,
             "download_url": AGENT_ZIP_UPSTREAM,
+            "sha256": AGENT_ZIP_SHA256,
         }
 
     @r.get("/agent/script")

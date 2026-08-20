@@ -157,6 +157,37 @@ def _current_agent_version_tuple() -> tuple:
         return (0, 0, 0)
 
 
+# Da dove accettiamo un pacchetto di aggiornamento. Il backend dice quale URL
+# scaricare, ma non puo' mandarci ovunque: se una risposta (per errore di
+# configurazione, per un backend sbagliato passato con --backend, o perche'
+# manomessa) puntasse altrove, l'updater diventerebbe un downloader-esecutore
+# generico.
+_UPDATE_HOST = "github.com"
+_UPDATE_PATH_PREFIX = "/WjRKO/ForgeFPS/releases/download/"
+
+
+def _is_allowed_update_url(url: str) -> bool:
+    try:
+        u = urllib.parse.urlparse((url or "").strip())
+    except Exception:
+        return False
+    if u.scheme != "https" or u.netloc.lower() != _UPDATE_HOST:
+        return False
+    return u.path.startswith(_UPDATE_PATH_PREFIX) and ".." not in u.path
+
+
+def _sha256_file(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _looks_like_sha256(v: str) -> bool:
+    return len(v) == 64 and all(c in "0123456789abcdef" for c in v)
+
+
 def _check_and_apply_update(relaunch: bool = True) -> bool:
     """Ritorna True se ha avviato l'updater (chi chiama deve fare sys.exit).
     False se non serve aggiornare o se qualcosa e' fallito (continua normale).
@@ -178,11 +209,24 @@ def _check_and_apply_update(relaunch: bool = True) -> bool:
             data = json.loads(r.read().decode("utf-8"))
         latest = data.get("version", "")
         zip_url = data.get("download_url", "")
+        expected_sha = str(data.get("sha256") or "").strip().lower()
         if not latest or not zip_url:
             return False
         latest_t = tuple(int(x) for x in latest.split(".")) if all(x.isdigit() for x in latest.split(".")) else (0, 0, 0)
         if latest_t <= _current_agent_version_tuple():
             return False  # gia' aggiornato
+        if not _is_allowed_update_url(zip_url):
+            print("[WARN] Aggiornamento ignorato: URL di download non consentito (%s)." % zip_url[:120])
+            return False
+        # Nessun hash, nessun aggiornamento. L'eseguibile non e' firmato, quindi
+        # il confronto con lo SHA256 dichiarato dal backend e' l'unica cosa che
+        # sta fra una release e il xcopy sopra l'installazione dell'utente.
+        # Un backend vecchio che non lo espone semplicemente non aggiorna: non
+        # aggiornarsi e' un fallimento innocuo, sovrascriversi con un pacchetto
+        # non verificato no.
+        if not _looks_like_sha256(expected_sha):
+            print("[WARN] Aggiornamento ignorato: il backend non dichiara lo SHA256 del pacchetto.")
+            return False
         # Scarica lo zip
         upd_dir = _update_dir()
         os.makedirs(upd_dir, exist_ok=True)
@@ -191,6 +235,16 @@ def _check_and_apply_update(relaunch: bool = True) -> bool:
         with urllib.request.urlopen(req2, timeout=30) as r:
             with open(zip_path, "wb") as f:
                 shutil.copyfileobj(r, f)
+        got_sha = _sha256_file(zip_path)
+        if got_sha != expected_sha:
+            print("[ERR ] Aggiornamento ANNULLATO: il pacchetto scaricato non corrisponde.")
+            print("       atteso  %s" % expected_sha)
+            print("       ricevuto %s" % got_sha)
+            try:
+                os.unlink(zip_path)
+            except Exception:
+                pass
+            return False
         # Estrai
         import zipfile as _zip
         with _zip.ZipFile(zip_path) as z:
