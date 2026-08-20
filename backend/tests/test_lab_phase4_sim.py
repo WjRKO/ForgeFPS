@@ -1,5 +1,11 @@
 """Sim E2E Lab fase 4: stutter score, latenza input, mini-lab di verifica (check), history/insights.
-Eseguire come script: python tests/test_lab_phase4_sim.py (NON via pytest)."""
+Eseguire come script: python tests/test_lab_phase4_sim.py (NON via pytest).
+
+Avvia con `paired: false`: qui si verifica lo schema a BLOCCHI, che resta la
+strada per i tweak con riavvio e per chi sceglie la sessione breve. I run non
+portano l'istogramma, quindi copre anche il percorso di ricaduta per gli agent
+vecchi. Lo schema appaiato ha la sua simulazione in test_lab_paired_sim.py.
+"""
 import os
 import sys
 import requests
@@ -49,7 +55,7 @@ def mk(fps, p1, lat=None, game="cs2.exe", dur=90):
 
 
 # ---------- FULL LAB con profili di decisione controllati ----------
-r = s.post(f"{BASE}/api/lab/start", json={"risk_level": "medium", "run_seconds": 90, "include_reboot": False}, timeout=15)
+r = s.post(f"{BASE}/api/lab/start", json={"risk_level": "medium", "run_seconds": 90, "include_reboot": False, "paired": False}, timeout=15)
 assert r.status_code == 200, r.text
 print("full lab avviato, candidati:", len(r.json()["session"]["candidates"]))
 

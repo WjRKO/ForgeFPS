@@ -93,8 +93,13 @@ def welch_t_test(a, b):
     v1, v2 = sample_var(a), sample_var(b)
     se2 = v1 / n1 + v2 / n2
     if se2 <= 0:
-        p = 1.0 if abs(m1 - m2) < 1e-12 else 0.0
-        return {"method": "welch_t_test", "t": None, "df": None, "p_value": round(p, 4)}
+        # Varianza nulla in entrambi i gruppi: nessuna stima dell'errore, e
+        # p = 0 sarebbe certezza assoluta da due manciate di numeri identici.
+        # Si usa il p piu' piccolo che un test di permutazione possa produrre
+        # con queste numerosita': 2 / C(n1+n2, n1), cioe' 0.1 su 3 contro 3.
+        p = 1.0 if abs(m1 - m2) < 1e-12 else min(1.0, 2.0 / math.comb(n1 + n2, n1))
+        return {"method": "welch_t_test", "t": None, "df": None,
+                "degenerate": True, "p_value": round(p, 4)}
     t = (m1 - m2) / math.sqrt(se2)
     denom = 0.0
     if n1 > 1:
@@ -214,3 +219,267 @@ def holm_adjust(p_values):
         running = max(running, val)
         adj[i] = round(min(1.0, running), 4)
     return adj
+
+
+# --------------------------------------------------------------------------
+# Statistica appaiata (schema A/B/A/B)
+# --------------------------------------------------------------------------
+# Il confronto a blocchi (3 run di baseline, poi 3 run col tweak) mette nel
+# confronto tutto cio' che cambia nel frattempo: temperatura, scena di gioco,
+# shader cache, stato del driver. Con 3 run per lato e CV per-run del 3-5%
+# l'effetto minimo rilevabile e' del 7-12%: uno strumento che non puo' vedere
+# la soglia dell'1% che il Lab dichiara di misurare.
+#
+# Alternando ON/OFF e analizzando le DIFFERENZE di ogni coppia, la deriva
+# comune si cancella: la varianza che conta diventa quella dentro la coppia,
+# molto piu' piccola di quella tra blocchi distanti minuti.
+
+
+def paired_t_test(diffs):
+    """t-test appaiato (one-sample sulle differenze). Ritorna dict o None.
+
+    `diffs` sono le differenze ON-OFF di ogni coppia: gia' depurate dalla
+    deriva comune ai due run della coppia.
+    """
+    n = len(diffs)
+    if n < 2:
+        return None
+    m = mean(diffs)
+    v = sample_var(diffs)
+    if v <= 0:
+        # Differenze tutte identiche: il t non esiste (divisione per zero) e
+        # dichiarare p = 0 sarebbe certezza assoluta ricavata da n numeri
+        # uguali. Quello che i dati sostengono davvero e' soltanto che le
+        # differenze hanno tutte lo stesso segno: il p esatto del test dei
+        # segni, 2^-(n-1), che con tre coppie vale 0.25.
+        p = 1.0 if abs(m) < 1e-12 else min(1.0, 2.0 ** -(n - 1))
+        return {"method": "paired_t_test", "t": None, "df": n - 1, "n_pairs": n,
+                "degenerate": True, "p_value": round(p, 4)}
+    se = math.sqrt(v / n)
+    t = m / se
+    p = 2.0 * t_sf(abs(t), n - 1)
+    return {"method": "paired_t_test", "t": round(t, 3), "df": n - 1, "n_pairs": n,
+            "p_value": round(min(1.0, p), 4)}
+
+
+def paired_ci(diffs, conf=0.95):
+    """IC sulla media delle differenze appaiate. Ritorna (diff, lo, hi) o None."""
+    n = len(diffs)
+    if n < 2:
+        return None
+    m = mean(diffs)
+    v = sample_var(diffs)
+    if v <= 0:
+        return (m, m, m)
+    se = math.sqrt(v / n)
+    half = t_ppf(1 - (1 - conf) / 2, n - 1) * se
+    return (m, m - half, m + half)
+
+
+def paired_significance(diffs, alpha=None):
+    """Verdetto appaiato con la stessa forma di `significance` (chiavi omogenee)."""
+    n = len(diffs)
+    if alpha is None:
+        alpha = 0.10 if n < 4 else 0.05
+    t = paired_t_test(diffs)
+    if not t:
+        return {"method": "paired_t_test", "p_value": 1.0, "alpha": alpha,
+                "significant": False, "n_pairs": n}
+    return {"method": "paired_t_test", "p_value": t["p_value"], "alpha": alpha,
+            "significant": bool(t["p_value"] < alpha), "n_pairs": n, "paired": t}
+
+
+def wilson_ci(k, n, z=1.96):
+    """IC di Wilson per una proporzione. (lo, hi) in 0-1; (0,1) se n == 0.
+
+    Serve a non presentare '2 successi su 3' come un tasso del 67% secco: con
+    Wilson quel 67% viene accompagnato da un intervallo 21%-94%, che e'
+    l'informazione onesta.
+    """
+    if n <= 0:
+        return (0.0, 1.0)
+    p = k / n
+    d = 1 + z * z / n
+    centre = p + z * z / (2 * n)
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))
+    return (max(0.0, (centre - half) / d), min(1.0, (centre + half) / d))
+
+
+# --------------------------------------------------------------------------
+# Istogramma dei frametime
+# --------------------------------------------------------------------------
+# I percentili di una sessione non si ottengono mediando i percentili dei
+# singoli run (la media di percentili non e' un percentile). L'agent manda
+# quindi anche l'istogramma dei frametime: sommandolo tra run si ottiene la
+# distribuzione dell'intero blocco, e da li' i percentili esatti.
+#
+# Risoluzione variabile perche' i millisecondi non contano tutti uguali: a 200
+# FPS un frame dura 5 ms e un bucket da 1 ms sarebbe il 20% del valore, mentre
+# sopra i 100 ms la precisione al millisecondo non interessa a nessuno.
+#   [0,20)    -> 0.1 ms  (200 bucket)
+#   [20,50)   -> 0.5 ms  ( 60 bucket)
+#   [50,100)  -> 2 ms    ( 25 bucket)
+#   [100,300) -> 10 ms   ( 20 bucket)
+#   >=300     -> 1 bucket di coda
+# La stessa suddivisione e' replicata nell'agent (Get-HistBucket in ps_agent.py):
+# se cambia qui deve cambiare anche li'.
+HIST_BUCKETS = 306
+_HIST_SEGMENTS = ((0.0, 20.0, 0.1, 0), (20.0, 50.0, 0.5, 200),
+                  (50.0, 100.0, 2.0, 260), (100.0, 300.0, 10.0, 285))
+HIST_TAIL_MID = 350.0  # oltre 300 ms non e' un frame lento, e' uno stallo
+
+
+def hist_bucket(ms):
+    """Indice del bucket per un frametime in ms."""
+    if ms < 0:
+        ms = 0.0
+    for lo, hi, step, base in _HIST_SEGMENTS:
+        if ms < hi:
+            return base + int((ms - lo) / step)
+    return HIST_BUCKETS - 1
+
+
+def hist_mid(i):
+    """Frametime rappresentativo (centro) del bucket i."""
+    if i >= HIST_BUCKETS - 1:
+        return HIST_TAIL_MID
+    for lo, hi, step, base in _HIST_SEGMENTS:
+        n = int(round((hi - lo) / step))
+        if i < base + n:
+            return lo + (i - base) * step + step / 2
+    return HIST_TAIL_MID
+
+
+def build_hist(frametimes):
+    """Istogramma da una lista di frametime."""
+    h = [0] * HIST_BUCKETS
+    for v in frametimes:
+        h[hist_bucket(v)] += 1
+    return h
+
+
+def hist_add(acc, hist):
+    """Somma di due istogrammi. `acc` puo' essere None (viene creato)."""
+    if not hist:
+        return acc
+    if acc is None:
+        acc = [0] * HIST_BUCKETS
+    for i in range(min(HIST_BUCKETS, len(hist))):
+        acc[i] += int(hist[i] or 0)
+    return acc
+
+
+def hist_total(hist):
+    return sum(int(x or 0) for x in (hist or []))
+
+
+def hist_low_mean_ms(hist, frac=0.01, min_frames=1):
+    """Frametime medio del `frac` peggiore dei frame: il vero '1% low'.
+
+    Il p99 puntuale usato finora e' un singolo frame in fondo alla coda, e
+    soprattutto ignora tutto cio' che sta oltre: una sessione con esitazioni da
+    30 ms e una con freeze da mezzo secondo possono avere lo stesso p99. La
+    media della coda pesa l'intera coda, cioe' anche quanto sono gravi i frame
+    peggiori — che e' la differenza che si sente giocando. E' anche la
+    definizione di '1% low' usata dagli strumenti di benchmark.
+    Ritorna None quando la coda richiesta non contiene abbastanza frame perche'
+    il numero significhi qualcosa.
+    """
+    n = hist_total(hist)
+    if n <= 0:
+        return None
+    want = n * frac
+    if want < min_frames:
+        return None
+    acc = 0.0
+    taken = 0.0
+    for i in range(len(hist) - 1, -1, -1):
+        c = int(hist[i] or 0)
+        if c <= 0:
+            continue
+        use = min(float(c), want - taken)
+        acc += hist_mid(i) * use
+        taken += use
+        if taken >= want - 1e-9:
+            break
+    if taken <= 0:
+        return None
+    return acc / taken
+
+
+def hist_percentile_ms(hist, q):
+    """Percentile del frametime (q in 0-1) dall'istogramma cumulativo."""
+    n = hist_total(hist)
+    if n <= 0:
+        return None
+    target = n * q
+    cum = 0
+    for i, c in enumerate(hist):
+        cum += int(c or 0)
+        if cum >= target:
+            return hist_mid(i)
+    return hist_mid(len(hist) - 1)
+
+
+def hist_mean_ms(hist):
+    n = hist_total(hist)
+    if n <= 0:
+        return None
+    return sum(hist_mid(i) * int(c or 0) for i, c in enumerate(hist)) / n
+
+
+def _fps(ms):
+    return round(1000.0 / ms, 2) if ms and ms > 0 else None
+
+
+def hist_fps_metrics(hist):
+    """Metriche FPS di un blocco a partire dall'istogramma sommato dei suoi run.
+
+    `fps_p1` / `fps_p01` sono medie della coda (1% e 0.1% peggiori), non il
+    percentile puntuale: vedi `hist_low_mean_ms` per il perche'. `fps_p01`
+    resta None quando lo 0.1% dei frame sarebbe meno di cinque campioni.
+    """
+    n = hist_total(hist)
+    if n <= 0:
+        return {}
+    out = {"frames": n}
+    m = hist_mean_ms(hist)
+    if m:
+        out["fps_avg"] = _fps(m)
+        out["ft_avg_ms"] = round(m, 3)
+    p1 = hist_low_mean_ms(hist, 0.01, min_frames=20)
+    if p1:
+        out["fps_p1"] = _fps(p1)
+    p01 = hist_low_mean_ms(hist, 0.001, min_frames=5)
+    if p01:
+        out["fps_p01"] = _fps(p01)
+    med = hist_percentile_ms(hist, 0.5)
+    if med:
+        out["ft_median_ms"] = round(med, 3)
+    return out
+
+
+def frame_cap_signature(hist, tol=0.02, min_share=0.6):
+    """Rileva un frame cap / V-Sync dalla distribuzione dei frametime.
+
+    Con un cap attivo la distribuzione collassa attorno a un solo valore: ogni
+    tweak diventa per costruzione non significativo, e il Lab produrrebbe dieci
+    'nessun effetto' che sembrano un risultato invece che uno strumento cieco.
+    Ritorna dict con `capped` e, quando c'e', gli FPS del cap.
+    """
+    n = hist_total(hist)
+    if n < 200:
+        return {"capped": False}
+    med = hist_percentile_ms(hist, 0.5)
+    if not med or med <= 0:
+        return {"capped": False}
+    lo, hi = med * (1 - tol), med * (1 + tol)
+    inside = 0
+    for i, c in enumerate(hist):
+        c = int(c or 0)
+        if c and lo <= hist_mid(i) <= hi:
+            inside += c
+    share = inside / n
+    if share < min_share:
+        return {"capped": False, "peak_share": round(share, 3)}
+    return {"capped": True, "peak_share": round(share, 3), "cap_fps": _fps(med)}

@@ -9,6 +9,54 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 
 _Prossime feature in sviluppo — vedi `/app/memory/ROADMAP.md`._
 
+### Changed — precisione delle misure (Lab v2, `metrics_version: 2`)
+- **Schema appaiato ABBA** come default del test loop: invece di tre run col tweak
+  attivo confrontati con un blocco di baseline misurato minuti prima, si alternano
+  coppie ON/OFF (`on,off,off,on,on,off`) e si analizzano le differenze interne a
+  ogni coppia. La deriva comune — temperatura, scena, shader cache — si cancella
+  invece di finire nel confronto. Decisione su `paired_t_test` + IC di Welch sulle
+  differenze. `POST /api/lab/start` accetta `paired: false` per tornare allo schema
+  a blocchi, che resta l'unica strada per i tweak che richiedono un riavvio.
+  Nuove azioni agent: `pair_toggle`, `run_pair`, `rollback_tweaks`.
+- **Percentili dall'istogramma dei frametime**: l'agent invia un istogramma a 306
+  bucket a risoluzione variabile (0.1 ms sotto i 20 ms), il backend somma gli
+  istogrammi del blocco e ne ricava i percentili. `fps_p1` non e' piu' la media dei
+  p99 per-run — la media di percentili non e' un percentile — ma la media dell'1%
+  peggiore dei frame dell'intero blocco.
+- **Correzione Holm applicata, non annotata**: i tweak mantenuti che non reggono la
+  correzione per test multipli vengono ora davvero annullati sul PC prima della
+  validazione finale (stato sessione `rollback`).
+- **Baseline coerente**: dopo un tweak mantenuto avanzano sia le statistiche sia i
+  run di riferimento. Prima il p-value guardava la baseline iniziale mentre il
+  delta guardava quella aggiornata: due domande diverse nello stesso verdetto.
+- **Guardie sulle condizioni di misura**: run rifiutati e ripetuti se presi a
+  batteria, su un gioco diverso o con troppi pochi frame; avvisi su risoluzione,
+  refresh, piano energetico e OBS cambiati rispetto alla baseline. Ogni run porta
+  con se' il proprio contesto.
+- **Frame cap / V-Sync rilevato sulla baseline**: con un limite attivo ogni tweak e'
+  ininfluente per costruzione, e il Lab lo dice invece di produrre dieci "nessun
+  effetto" che sembrano un risultato.
+- **Bersaglio bloccato**: i frametime vengono letti solo dal processo del gioco
+  rilevato (nome + PID). Prima si prendeva a ogni tick l'app con piu' present, e un
+  overlay poteva infilare i propri frame nel campione.
+- **Telemetria del run campionata** ogni 5s (media e massimo) invece di
+  un'istantanea presa alla fine; `nvidia-smi` gira una volta sola scrivendo su file
+  invece di essere rilanciato a ogni campione. CPU dai contatori di prestazione
+  invece di `Win32_Processor.LoadPercentage`, anche nella telemetria live.
+- **Benchmark rapido**: `dpc_ms` non ha mai misurato le DPC — e' l'oversleep del
+  timer, ora esposto come `timer_jitter_ms`, affiancato dal tempo in DPC vero letto
+  dai contatori raw (`dpc_time_pct`). CPU misurata a priorita' alta con un giro di
+  riscaldamento scartato e 5 ripetizioni, con il carico di fondo registrato; disco
+  testato sul drive dei giochi con 1000 operazioni e la profondita' di coda
+  dichiarata; ping su 20 campioni con perdita, p95 e jitter RFC 3550. `score_version: 2`.
+- **Aggregato di flotta**: tetto di 3 contributi per utente e tweak (prima un solo
+  utente che rilanciava il Lab dieci volte pesava dieci volte), `delta_sq_sum` per
+  poter dare una dispersione accanto alla media, breakdown per gioco, intervalli di
+  Wilson sui tassi di successo e nessun contributo dalle sessioni con frame cap.
+- **Casi degeneri**: con varianza campionaria nulla i t-test restituivano `p = 0`,
+  cioe' certezza assoluta da manciate di numeri identici. Ora ricadono sul p esatto
+  del test dei segni (appaiato) e sul minimo di un test di permutazione (Welch).
+
 ## [0.6.5] — 2026-07-19
 
 ### Added

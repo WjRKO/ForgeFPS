@@ -1,4 +1,10 @@
-"""Mini-sim: path drift -> re-baseline del recheck A/B/A. Eseguire come script."""
+"""Mini-sim: path drift -> re-baseline del recheck A/B/A. Eseguire come script.
+
+Avvia con `paired: false`: qui si verifica lo schema a BLOCCHI, che resta la
+strada per i tweak con riavvio e per chi sceglie la sessione breve. I run non
+portano l'istogramma, quindi copre anche il percorso di ricaduta per gli agent
+vecchi. Lo schema appaiato ha la sua simulazione in test_lab_paired_sim.py.
+"""
 import os
 
 import requests
@@ -29,7 +35,7 @@ sess = s.get(f"{BASE}/api/lab/session", timeout=15).json()["session"]
 if sess and sess["status"] not in ("completed", "aborted"):
     s.post(f"{BASE}/api/lab/abort", timeout=15)
     ev("aborted")
-s.post(f"{BASE}/api/lab/start", json={"risk_level": "medium", "run_seconds": 90, "include_reboot": False}, timeout=15)
+s.post(f"{BASE}/api/lab/start", json={"risk_level": "medium", "run_seconds": 90, "include_reboot": False, "paired": False}, timeout=15)
 base = 200.0
 n_res, i, done = 0, 0, False
 for _ in range(200):

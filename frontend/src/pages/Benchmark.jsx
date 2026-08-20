@@ -22,9 +22,14 @@ const BENCH_METRICS = [
   { key: "disk_write_mbps", lk: "m_disk_w", unit: "MB/s", higherBetter: true },
   { key: "disk_read_mbps", lk: "m_disk_r", unit: "MB/s", higherBetter: true },
   { key: "iops_4k", lk: "m_iops", unit: "IOPS", higherBetter: true },
-  { key: "dpc_ms", lk: "m_dpc", unit: "ms", higherBetter: false },
+  // `dpc_ms` non ha mai misurato le DPC: e' l'oversleep di uno Start-Sleep da 1ms,
+  // cioe' la granularita' del timer di sistema. Dall'agent v2 arriva con il suo
+  // nome, e accanto c'e' la misura vera delle DPC dai contatori di prestazione.
+  { key: "timer_jitter_ms", lk: "m_timer_jitter", unit: "ms", higherBetter: false, fallback: "dpc_ms" },
+  { key: "dpc_time_pct", lk: "m_dpc_time", unit: "%", higherBetter: false },
   { key: "ping_ms", lk: "m_ping", unit: "ms", higherBetter: false },
   { key: "jitter_ms", lk: "m_jitter", unit: "ms", higherBetter: false },
+  { key: "ping_loss_pct", lk: "m_ping_loss", unit: "%", higherBetter: false },
   { key: "boot_s", lk: "m_boot", unit: "s", higherBetter: false },
   { key: "free_ram_pct", lk: "m_free_ram", unit: "%", higherBetter: true },
 ];
@@ -107,9 +112,11 @@ function BenchmarkCard({ bench }) {
       )}
       <div className="grid sm:grid-cols-2 gap-2">
         {BENCH_METRICS.map((m) => {
-          const av = after?.[m.key];
+          // `fallback`: la chiave con cui la stessa misura arrivava dagli agent
+          // precedenti, cosi' i benchmark storici restano leggibili.
+          const av = after?.[m.key] ?? (m.fallback ? after?.[m.fallback] : undefined);
           if (av == null) return null;
-          const bv = before?.[m.key];
+          const bv = before?.[m.key] ?? (m.fallback ? before?.[m.fallback] : undefined);
           let delta = null, improved = null;
           if (hasCompare && bv != null && bv !== 0) {
             delta = Math.round(((av - bv) / bv) * 100);

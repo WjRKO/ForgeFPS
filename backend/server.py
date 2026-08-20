@@ -172,6 +172,10 @@ async def _ensure_indexes():
     await db.chat_messages.create_index("session_id")
     await db.lab_sessions.create_index([("user_id", 1), ("status", 1)])
     await db.lab_sessions.create_index("session_id")
+    await db.lab_fleet_stats.create_index([("tweak_id", 1), ("hw_class", 1), ("scope", 1)])
+    # Contatore dei contributi per utente all'aggregato anonimo: letto e
+    # incrementato una volta per ogni tweak testato.
+    await db.lab_fleet_seen.create_index([("user_id", 1), ("tweak_id", 1)], unique=True)
     await db.overlay_tokens.create_index("token")
     await db.overlay_tokens.create_index("user_id")
     await db.autopilot_runs.create_index([("user_id", 1), ("created_at", -1)])
