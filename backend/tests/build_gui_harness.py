@@ -22,25 +22,31 @@ window.__errors = [];
 window.__reported = [];
 window.addEventListener('error', e => window.__errors.push(String(e.message)));
 const MOCK_TWEAKS = [];
-function twk(id, cat, state, fitskip, extra) {
+// Stessa forma che manda il backend: codice + etichetta composta dallo stato.
+// Prima il mock inventava le proprie frasi ('Gia attivo', 'TRIM attivo') e
+// l'anteprima mostrava un modello che non esiste piu' da nessuna parte.
+const PAROLE = { ok:'Ottimale', todo:'Da applicare', na:'Non applicabile', unknown:'Sconosciuto' };
+function twk(id, cat, code, fitskip, extra, dettaglio) {
+  const label = PAROLE[code] + (dettaglio ? ' - ' + dettaglio : '');
   return Object.assign({ id: id, cat: cat, name: 'Tweak ' + id, problem: 'Problema x', reason: 'Motivo y',
     desc: 'Descrizione z', impact: '+3-8% FPS', risk: 'safe',
-    state: state, fit: fitskip ? { ok:false, warn:false, note:false, skip:true, hint:'Solo GPU AMD (rilevata NVIDIA)' } : { ok:true, warn:false, note:false, skip:false, hint:'' } }, extra || {});
+    state: label, state_code: code,
+    fit: fitskip ? { ok:false, warn:false, note:false, skip:true, hint:'Solo GPU AMD (rilevata NVIDIA)' } : { ok:true, warn:false, note:false, skip:false, hint:'' } }, extra || {});
 }
-MOCK_TWEAKS.push(twk('g1','gaming','Gia attivo',false));
-MOCK_TWEAKS.push(twk('g2','gaming','Gia attivo',false));
+MOCK_TWEAKS.push(twk('g1','gaming','ok',false));
+MOCK_TWEAKS.push(twk('g2','gaming','ok',false));
 // DATO CORROTTO: fit mancante + state/impact null (simula il bug reale)
 MOCK_TWEAKS.push({ id:'g3-broken', cat:'gaming', name:'Tweak corrotto (no fit)', problem:'p', reason:'r', desc:'d', impact:null, risk:'safe', state:null });
-MOCK_TWEAKS.push(twk('g4','gaming','Solo GPU AMD',true));
-MOCK_TWEAKS.push(twk('g5','gaming','Disabilitato correttamente',false));
-MOCK_TWEAKS.push(twk('g6','gaming','Nessun bloat rilevato',false));
-MOCK_TWEAKS.push(twk('g7','gaming','TRIM attivo',false));
-MOCK_TWEAKS.push(twk('g8','gaming','(da attivare)',false));
-MOCK_TWEAKS.push(twk('g9','gaming','(da disattivare)',false));
-MOCK_TWEAKS.push(twk('g10','gaming','(da ottimizzare)',false, { risk:'caution' }));
-MOCK_TWEAKS.push(twk('i1','input','(da attivare)',false));
-MOCK_TWEAKS.push(twk('n1','network','Gia attivo',false));
-MOCK_TWEAKS.push(twk('s1','system','(da attivare)',false));
+MOCK_TWEAKS.push(twk('g4','gaming','na',true,null,'solo su GPU AMD'));
+MOCK_TWEAKS.push(twk('g5','gaming','ok',false));
+MOCK_TWEAKS.push(twk('g6','gaming','ok',false,null,'nessuna app da rimuovere'));
+MOCK_TWEAKS.push(twk('g7','gaming','ok',false));
+MOCK_TWEAKS.push(twk('g8','gaming','todo',false));
+MOCK_TWEAKS.push(twk('g9','gaming','todo',false));
+MOCK_TWEAKS.push(twk('g10','gaming','todo',false, { risk:'caution' }, '261 MB da pulire'));
+MOCK_TWEAKS.push(twk('i1','input','todo',false));
+MOCK_TWEAKS.push(twk('n1','network','ok',false,null,'gia su Cloudflare'));
+MOCK_TWEAKS.push(twk('s1','system','todo',false));
 const MOCK_STATE = {
   hw: { gpu:'NVIDIA', ram:32, ssd:true, laptop:false, win11:true },
   admin: true, backup: 1,

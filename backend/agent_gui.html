@@ -18,10 +18,27 @@
     --info: #00E0FF;
     --text: #e6e6ec;
     --fg: #e6e6ec;
-    --muted: #7d7d8a;
-    --dim: #4a4a55;
+    /* Tre livelli di testo, tarati sul fondo delle CARD (#14141c) e non su
+       quello della pagina: le card sono piu' chiare, quindi sono il caso
+       peggiore, ed e' li' che sta quasi tutto il testo. Sulle card danno
+       13.8:1 / 7.6:1 / 5.1:1, tutti sopra la soglia AA di 4.5.
+       `--dim` stava a 2.26:1, cioe' sotto perfino la soglia del testo grande, e
+       non lo usavano solo separatori e puntini: ci finivano i contatori delle
+       categorie, i timestamp del log, il sottotitolo del punteggio, il badge
+       "gia attivo" e la spiegazione di perche' un tweak non sia applicabile.
+       Stessa strada della PR #33 sul dashboard: si alza il token, i tre livelli
+       restano distinti, nessuna sostituzione sparsa. */
+    --muted: #a6a6b2;
+    --dim: #868692;
   }
   * { box-sizing: border-box; }
+  /* Un <button> senza `background` esplicito prende il grigio chiaro di default
+     del browser: in una interfaccia scura diventa l'unico elemento bianco della
+     pagina, con sopra il testo grigio previsto per un fondo scuro. E' successo a
+     .density-toggle, ed e' un errore che si ripete ogni volta che si aggiunge un
+     bottone e ci si dimentica. Si neutralizza qui una volta sola; le regole
+     specifiche che vogliono un fondo lo dichiarano e vincono per specificita'. */
+  button { background: transparent; }
   html, body { height: 100%; margin: 0; padding: 0; }
   body {
     background: var(--bg);
@@ -52,7 +69,7 @@
   }
   .brand-sub { font-size: 12px; color: var(--muted); }
   .ver-pill {
-    font-size: 10px; padding: 2px 8px; border: 1px solid var(--info);
+    font-size: 11px; padding: 2px 8px; border: 1px solid var(--info);
     color: var(--info); font-family: "Consolas", monospace;
   }
   .safety {
@@ -83,7 +100,7 @@
   }
   .backup-panel[hidden] { display: none; }
   .backup-panel-title {
-    font-family: "Consolas", monospace; font-size: 10px;
+    font-family: "Consolas", monospace; font-size: 11px;
     color: var(--info); text-transform: uppercase; letter-spacing: 0.15em;
     margin-bottom: 10px;
   }
@@ -102,7 +119,7 @@
   .backup-list li.empty::before { content: ""; }
   .backup-panel-hint {
     margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
-    font-size: 10px; color: var(--muted); line-height: 1.4;
+    font-size: 11px; color: var(--muted); line-height: 1.4;
   }
   header > div:has(> .backup-badge) { position: relative; }
 
@@ -174,7 +191,7 @@
   }
   .mh-close:hover { color: var(--fg); }
   .mh-eyebrow {
-    font-family: "Consolas", monospace; font-size: 10px; letter-spacing: 0.2em;
+    font-family: "Consolas", monospace; font-size: 11px; letter-spacing: 0.2em;
     color: var(--accent); margin-bottom: 8px;
   }
   .mh-title {
@@ -213,12 +230,12 @@
   .mh-time.low { color: #FF3B30; }
   .mh-regen {
     background: none; border: 1px solid #2A2A35; color: var(--muted);
-    padding: 6px 12px; font-family: "Consolas", monospace; font-size: 10px;
+    padding: 6px 12px; font-family: "Consolas", monospace; font-size: 11px;
     letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer;
   }
   .mh-regen:hover { color: var(--accent); border-color: var(--accent); }
   .mh-safety {
-    font-size: 10px; color: #52525b; line-height: 1.5;
+    font-size: 11px; color: #52525b; line-height: 1.5;
     padding-top: 12px; border-top: 1px solid #1A1A24;
   }
   .mh-safety strong { color: #a1a1aa; }
@@ -241,7 +258,7 @@
   }
   .profile-card .profile-tweaks span {
     background: rgba(255,255,255,0.04); border: 1px solid var(--border);
-    padding: 2px 8px; font-size: 10px; color: var(--muted);
+    padding: 2px 8px; font-size: 11px; color: var(--muted);
   }
   .profile-card .profile-apply {
     background: var(--accent); color: #000; border: none;
@@ -252,7 +269,7 @@
   .profile-card .profile-apply:hover { background: #fff; }
   .profile-section-title {
     grid-column: 1 / -1; font-family: "Consolas", monospace;
-    font-size: 10px; color: var(--accent); letter-spacing: 0.2em;
+    font-size: 11px; color: var(--accent); letter-spacing: 0.2em;
     text-transform: uppercase; padding: 12px 0 4px;
     border-bottom: 1px solid var(--border);
   }
@@ -298,7 +315,7 @@
   }
   .tabs::before {
     content: "// CATEGORIE";
-    font-family: "Consolas", monospace; font-size: 10px;
+    font-family: "Consolas", monospace; font-size: 11px;
     letter-spacing: 0.25em; color: var(--dim);
     padding: 0 12px 8px;
   }
@@ -392,18 +409,18 @@
   .cb:disabled { opacity: 0.4; cursor: not-allowed; }
   .name { flex: 1; font-weight: 700; font-size: 14px; color: var(--text); }
   .risk-pill {
-    font-size: 9px; padding: 2px 6px; letter-spacing: 1px;
+    font-size: 11px; padding: 2px 6px; letter-spacing: 1px;
     font-weight: 700; text-transform: uppercase;
     background: var(--warn); color: #000;
   }
   .ok-pill {
-    font-size: 9px; padding: 2px 8px; letter-spacing: 1px;
+    font-size: 11px; padding: 2px 8px; letter-spacing: 1px;
     font-weight: 700; text-transform: uppercase;
     background: transparent; color: var(--ok);
     border: 1px solid var(--ok);
   }
   .applied-note {
-    font-size: 10px; color: var(--dim);
+    font-size: 11px; color: var(--dim);
     font-style: italic; letter-spacing: 0.4px;
   }
   .card.applied { opacity: 0.72; }
@@ -434,10 +451,15 @@
   .change-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .change-name { font-weight: 600; }
   .change-when { font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .change-keys { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
-  .change-key { font-size: 11px; display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
-  .change-key code { color: var(--text); word-break: break-all; }
-  .change-prev { color: var(--muted); }
+  .change-keys { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .change-key { font-size: 11px; border-left: 2px solid var(--border); padding-left: 10px; }
+  .change-key-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; }
+  /* Il nome del valore e' cio' che e' stato toccato: sta in primo piano. */
+  .change-name-k { color: var(--text); font-weight: 600; word-break: break-all; }
+  /* Il percorso e' la coordinata per ritrovarlo: serve, ma non per primo. */
+  .change-path { color: var(--dim); word-break: break-all; margin-top: 2px; font-size: 11px; }
+  .change-prev { color: var(--muted); margin-left: auto; white-space: nowrap; }
+  .change-prev b { color: var(--warn); font-weight: 600; }
   .btn-revert {
     flex: none; padding: 6px 12px; border: 1px solid var(--accent);
     background: transparent; color: var(--accent); font-family: inherit;
@@ -473,7 +495,9 @@
     font-size: 11px; color: var(--muted);
     border-left: 2px solid var(--warn); background: rgba(255,170,0,0.06);
   }
-  .hint.skip { border-left-color: var(--dim); color: var(--dim); }
+  /* Il bordo puo' restare tenue, il testo no: qui c'e' scritto PERCHE' un tweak
+     non e' applicabile, ed e' l'unico posto dove l'utente lo scopre. */
+  .hint.skip { border-left-color: var(--dim); color: var(--muted); }
 
   footer {
     background: var(--bg2); border-top: 1px solid var(--border);
@@ -519,11 +543,18 @@
 
   .toast {
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-    background: var(--card); border: 1px solid var(--ok); color: var(--ok);
+    background: var(--card); border: 1px solid var(--border); color: var(--text);
     padding: 10px 22px; font-size: 13px; font-weight: 600;
     opacity: 0; transition: opacity 220ms ease;
     z-index: 100;
   }
+  /* I livelli venivano passati da sempre — toast(msg, "err") — ma non erano
+     stilati: la classe finiva sull'elemento e non cambiava niente, quindi un
+     errore usciva verde come una conferma. Il verde ora e' solo delle conferme,
+     ed e' il default a essere neutro. */
+  .toast.ok   { border-color: var(--ok);     color: var(--ok); }
+  .toast.warn { border-color: var(--warn);   color: var(--warn); }
+  .toast.err  { border-color: var(--danger); color: var(--danger); }
   .toast.show { opacity: 1; }
 
   .empty {
@@ -534,9 +565,13 @@
 
   /* ===== A. Compact/Detailed toggle (per-card + global default) ===== */
   .density-toggle {
+    /* `background` va dichiarato: senza, un <button> prende il grigio chiaro di
+       default del browser, e in una UI scura diventa l'unico elemento bianco
+       della pagina — con sopra del testo grigio a 2.4:1. */
     display: inline-flex; align-items: center; gap: 6px;
+    background: transparent;
     padding: 4px 10px; border: 1px solid var(--border);
-    font-family: "Consolas", monospace; font-size: 10px;
+    font-family: "Consolas", monospace; font-size: 11px;
     color: var(--muted); cursor: pointer; user-select: none;
     letter-spacing: 0.12em; text-transform: uppercase;
     transition: all 120ms ease;
@@ -549,8 +584,8 @@
   .card.compact .desc-block { display: none; }
   .card.compact .state { display: none; }
   .card.compact .actions { margin-top: 8px; padding-left: 28px; }
-  .card.compact .btn-apply-one { padding: 4px 12px; font-size: 10px; }
-  .card.compact .hint { margin-top: 6px; font-size: 10px; }
+  .card.compact .btn-apply-one { padding: 4px 12px; font-size: 11px; }
+  .card.compact .hint { margin-top: 6px; font-size: 11px; }
   /* Expandable when clicked in compact mode */
   .card.compact.expanded .desc-block, .card.compact.expanded .state { display: block; }
   .card .chevron {
@@ -566,7 +601,7 @@
   .impact-meter {
     display: inline-flex; align-items: center; gap: 4px;
     margin-left: auto; font-family: "Consolas", monospace;
-    font-size: 10px; color: var(--dim);
+    font-size: 11px; color: var(--dim);
   }
   .impact-dot {
     width: 6px; height: 6px; background: var(--dim); border-radius: 50%;
@@ -635,7 +670,7 @@
     font-family: "Consolas", monospace; font-size: 12px; font-weight: 800;
     color: var(--accent);
   }
-  .progress-ring-info { font-size: 10px; color: var(--muted); line-height: 1.4; }
+  .progress-ring-info { font-size: 11px; color: var(--muted); line-height: 1.4; }
   .progress-ring-info b { color: var(--text); font-family: "Consolas", monospace; }
 
   /* ===== G. Search prominente ===== */
@@ -655,7 +690,7 @@
   }
   .search-hero .search-kbd {
     position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-    font-family: "Consolas", monospace; font-size: 9px; color: var(--dim);
+    font-family: "Consolas", monospace; font-size: 11px; color: var(--dim);
     border: 1px solid var(--border); padding: 2px 6px;
     letter-spacing: 0.1em;
   }
@@ -669,7 +704,7 @@
     border-bottom: 1px solid var(--border);
   }
   .filter-chips-label {
-    font-family: "Consolas", monospace; font-size: 10px;
+    font-family: "Consolas", monospace; font-size: 11px;
     color: var(--muted); text-transform: uppercase;
     letter-spacing: 0.15em; margin-right: 4px;
   }
@@ -681,7 +716,7 @@
   }
   .chip:hover { border-color: var(--accent); color: var(--accent); }
   .chip.active { background: var(--accent); color: #000; border-color: var(--accent); }
-  .chip .chip-count { opacity: 0.7; margin-left: 4px; font-size: 10px; }
+  .chip .chip-count { opacity: 0.7; margin-left: 4px; font-size: 11px; }
 
   /* ===== I. Sort dropdown ===== */
   .sort-select {
@@ -711,7 +746,7 @@
   /* Time pill (⏱ 2s or ⏱ + riavvio) */
   .time-pill {
     display: inline-flex; align-items: center; gap: 3px;
-    font-family: "Consolas", monospace; font-size: 9px;
+    font-family: "Consolas", monospace; font-size: 11px;
     color: var(--muted); border: 1px solid var(--border);
     padding: 1px 6px; letter-spacing: 0.4px;
     margin-left: 6px;
@@ -786,7 +821,7 @@
   .upd-btn {
     margin-left: auto; border: 1px solid var(--info); color: var(--info);
     padding: 6px 14px; text-decoration: none; font-family: "Consolas", monospace;
-    text-transform: uppercase; font-size: 10px; letter-spacing: 0.12em;
+    text-transform: uppercase; font-size: 11px; letter-spacing: 0.12em;
     white-space: nowrap; transition: background 120ms ease, color 120ms ease;
   }
   .upd-btn:hover { background: var(--info); color: #000; }
@@ -805,7 +840,7 @@
     transition: background 120ms ease, color 120ms ease;
   }
   .btn-revert-one:hover { background: var(--info); color: #000; }
-  .card.compact .btn-revert-one { padding: 4px 12px; font-size: 10px; }
+  .card.compact .btn-revert-one { padding: 4px 12px; font-size: 11px; }
 
   /* ===== v0.7.7 — Monitor Live ===== */
   .mon-head, .bloat-head {
@@ -829,7 +864,7 @@
   }
   .mon-tile:hover { border-color: #3a3a48; }
   .mon-label {
-    font-family: "Consolas", monospace; font-size: 10px; color: var(--muted);
+    font-family: "Consolas", monospace; font-size: 11px; color: var(--muted);
     text-transform: uppercase; letter-spacing: 0.15em;
   }
   .mon-value { font-family: "Consolas", monospace; font-size: 30px; font-weight: 800; margin: 6px 0 4px; line-height: 1; }
@@ -858,7 +893,7 @@
   .bloat-row.selected { border-color: var(--danger); }
   .bloat-name { font-size: 13px; font-weight: 600; color: var(--text); word-break: break-all; }
   .bloat-meta {
-    font-size: 10px; color: var(--muted); margin-top: 4px;
+    font-size: 11px; color: var(--muted); margin-top: 4px;
     display: flex; gap: 8px; flex-wrap: wrap; font-family: "Consolas", monospace;
   }
   .bloat-badge { border: 1px solid var(--border); padding: 1px 6px; color: var(--muted); }
@@ -934,7 +969,7 @@
     <div class="brand-row">
       <div class="brand">FRAMEFORGE AGENT</div>
       <div class="brand-sub">Trova i colli di bottiglia. Ottimizza in sicurezza.</div>
-      <div class="ver-pill">GUI v3.2</div>
+      <div class="ver-pill" id="verPill" title="Versione dell'agent installata su questo PC">FrameForge</div>
     </div>
     <div class="safety">
       <strong>SICUREZZA</strong> - Non tocchiamo mai Windows Defender, Firewall o servizi di sicurezza. Ogni modifica ha backup automatico ed e reversibile.
@@ -1682,11 +1717,12 @@
     safeRender("renderProgressRing", renderProgressRing);
     safeRender("updateSummaryStrip", updateSummaryStrip);
     safeRender("renderUpdateBanner", renderUpdateBanner);
+    safeRender("renderVerPill", renderVerPill);
     if (showToast) toast("\u21bb Aggiornato", "ok");
   }
 
   async function applySelected() {
-    if (!selected.size) { toast("Seleziona almeno un tweak"); return; }
+    if (!selected.size) { toast("⚠ Seleziona almeno un tweak", "warn"); return; }
     setApplying(true);
     const bench = document.getElementById("benchToggle").checked;
     const appliedIds = Array.from(selected);
@@ -1792,8 +1828,19 @@
             <button class="btn-revert" data-revert="${esc(it.id)}" data-testid="revert-${esc(it.id)}">Annulla</button>
           </div>
           <div class="change-keys">
-            ${(it.keys || []).map(k => `<div class="change-key"><code>${esc(k.key)}</code>
-              <span class="change-prev">prima: ${esc(k.previous)}</span></div>`).join("")}
+            ${(it.keys || []).map(k => {
+              // "HKLM:\Percorso\Lungo::NomeValore" -> il nome e' l'informazione,
+              // il percorso e' la coordinata. Prima erano la stessa riga di
+              // monospace indistinta, lunga il doppio della card.
+              const i = k.key.lastIndexOf("::");
+              const perc = i > 0 ? k.key.slice(0, i) : "";
+              const nome = i > 0 ? k.key.slice(i + 2) : k.key;
+              return `<div class="change-key">
+                <div class="change-key-row"><code class="change-name-k">${esc(nome)}</code>
+                  <span class="change-prev">prima: <b>${esc(k.previous)}</b></span></div>
+                ${perc ? `<div class="change-path">${esc(perc)}</div>` : ""}
+              </div>`;
+            }).join("")}
           </div>
         </div>`).join("");
     el.querySelectorAll("[data-revert]").forEach(b => {
@@ -1965,7 +2012,7 @@
         body: `<b>${(d && d.removed) || 0}</b> app rimosse dal sistema. Reinstallabili in qualsiasi momento dal Microsoft Store.`,
         actions: [{ label: "OK", primary: true, onClick: () => {} }],
       });
-    } catch (e) { toast("Errore durante la rimozione", "err"); }
+    } catch (e) { toast("✗ Rimozione non riuscita", "err"); }
     bloatBusy = false;
     renderTabs();
     if (activeCat === "bloatware") renderCards();
@@ -1983,6 +2030,17 @@
     }
     return false;
   }
+  function renderVerPill() {
+    // La pill diceva "GUI v3.2": un numero mantenuto a mano e scollegato da
+    // tutto, mentre l'agent e' alla 0.8.1. E' la stessa deriva che oggi era
+    // gia' costata una release distribuita sbagliata, in piccolo. Ora mostra la
+    // versione vera, e quando non la conosce non inventa un numero.
+    const el = document.getElementById("verPill");
+    if (!el) return;
+    const v = state.agent && state.agent.installed;
+    el.textContent = (v && v.indexOf("__") < 0) ? ("FrameForge v" + v) : "FrameForge";
+  }
+
   function renderUpdateBanner() {
     const el = document.getElementById("updateBanner");
     if (!el) return;
@@ -2043,7 +2101,7 @@
       setTimeout(() => { try { window.close(); } catch(_){} }, 900);
     } catch (e) {
       _logoutBtn.disabled = false;
-      toast("Errore: " + (e && e.message || e), "err");
+      toast("✗ " + (e && e.message || e), "err");
     }
   };
 
@@ -2082,7 +2140,7 @@
       try {
         const d = await api("/api/live-sync", { method: "POST", headers: {"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ enabled: _liveToggle.checked }) });
         if (d && d.ok) toast(d.enabled ? "Sync Cloud attivo · dati in streaming" : "Sync Cloud disattivato", d.enabled ? "ok" : null);
-      } catch { _liveToggle.checked = !_liveToggle.checked; toast("Errore attivazione sync", "err"); }
+      } catch { _liveToggle.checked = !_liveToggle.checked; toast("✗ Sync cloud non attivata", "err"); }
     });
   }
 
@@ -2199,7 +2257,7 @@
         mhSetVis(mh.footer, false);
         mhSetVis(mh.error, false);
         mhSetVis(mh.consumed, true);
-        toast("Nuovo device connesso: " + label, "ok");
+        toast("✓ Nuovo device connesso: " + label, "ok");
         // Also trigger Windows native toast via local endpoint.
         try { fetch(`/api/mobile-handoff/notify?tk=${encodeURIComponent(TOKEN)}&device=${encodeURIComponent(label)}`, { method: "POST" }); } catch(e){}
         setTimeout(() => { if (mh.open) mhClose(); }, 2600);
