@@ -1,4 +1,10 @@
-"""Simulazione E2E agent del Laboratorio FASE 2: reboot-resume, warmup, synergy pass, validazione."""
+"""Simulazione E2E agent del Laboratorio FASE 2: reboot-resume, warmup, synergy pass, validazione.
+
+Avvia con `paired: false`: qui si verifica lo schema a BLOCCHI, che resta la
+strada per i tweak con riavvio e per chi sceglie la sessione breve. I run non
+portano l'istogramma, quindi copre anche il percorso di ricaduta per gli agent
+vecchi. Lo schema appaiato ha la sua simulazione in test_lab_paired_sim.py.
+"""
 import os
 import random
 import sys
@@ -32,7 +38,7 @@ reg2 = s.get(f"{BASE}/api/lab/registry?risk_level=medium&include_reboot=false", 
 assert not any(c.get("requires_reboot") for c in reg2["candidates"])
 print(f"registry OK: {len(ids)} candidati, reboot in coda {reboot_ids}; senza reboot: {len(reg2['candidates'])}")
 
-r = s.post(f"{BASE}/api/lab/start", json={"risk_level": "medium", "run_seconds": 90, "include_reboot": True}, timeout=15)
+r = s.post(f"{BASE}/api/lab/start", json={"risk_level": "medium", "run_seconds": 90, "include_reboot": True, "paired": False}, timeout=15)
 assert r.status_code == 200, r.text
 print("sessione creata, candidati:", len(r.json()["session"]["candidates"]))
 

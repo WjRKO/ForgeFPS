@@ -134,10 +134,13 @@ class LabStartInput(BaseModel):
     risk_level: str = Field(default="medium", pattern="^(safe|medium)$")
     run_seconds: int = Field(default=90, ge=30, le=180)
     include_reboot: bool = True
+    # Schema appaiato ON/OFF (default). False torna al confronto a blocchi:
+    # meta' del tempo, ma con un effetto minimo rilevabile molto piu' alto.
+    paired: bool = True
 
 
 class LabRunInput(BaseModel):
-    phase: str = Field(pattern="^(baseline|test|warmup|synergy_off|synergy_on|validation|recheck)$")
+    phase: str = Field(pattern="^(baseline|test|pair_on|pair_off|warmup|synergy_off|synergy_on|validation|recheck)$")
     tweak_id: Optional[str] = Field(default=None, max_length=50)
     run: dict[str, Any]
 

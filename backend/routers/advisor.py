@@ -14,6 +14,7 @@ from helpers import pc_context_text, compute_health
 from models import ChatMessageInput
 import hardware
 import fleet_evidence
+import lab_stats
 from plan_gate import require_pro
 
 logger = logging.getLogger("boostpc.advisor")
@@ -141,10 +142,23 @@ def _gameplay_stats(sess: list) -> dict:
 
     # percentili ESATTI dall'istogramma cumulativo di sessione (se agent v2)
     hist = next((s["ft_hist"] for s in reversed(sess) if isinstance(s.get("ft_hist"), list)), None)
-    ft_p99_s = _gd_hist_pct(hist, 0.99) if hist else None
-    ft_p999_s = _gd_hist_pct(hist, 0.999) if hist else None
-    fps_1low = round(1000 / ft_p99_s) if ft_p99_s else None
-    fps_01low = round(1000 / ft_p999_s) if ft_p999_s else None
+    ft_p99_s, ft_p999_s, fps_1low, fps_01low = None, None, None, None
+    if hist and len(hist) >= lab_stats.HIST_BUCKETS - 6 and sum(hist) >= 500:
+        # Agent con istogramma fine: 1% e 0.1% low come MEDIA della coda, non
+        # come percentile puntuale. Il p99.9 di una sessione poggia su pochi
+        # frame e balla; la media di quella stessa coda no.
+        ft_p99_s = lab_stats.hist_percentile_ms(hist, 0.99)
+        ft_p999_s = lab_stats.hist_percentile_ms(hist, 0.999)
+        low1 = lab_stats.hist_low_mean_ms(hist, 0.01, min_frames=20)
+        low01 = lab_stats.hist_low_mean_ms(hist, 0.001, min_frames=5)
+        fps_1low = round(1000 / low1) if low1 else None
+        fps_01low = round(1000 / low01) if low01 else None
+    elif hist:
+        # Istogramma a 60 bucket da 1 ms delle versioni precedenti dell'agent.
+        ft_p99_s = _gd_hist_pct(hist, 0.99)
+        ft_p999_s = _gd_hist_pct(hist, 0.999)
+        fps_1low = round(1000 / ft_p99_s) if ft_p99_s else None
+        fps_01low = round(1000 / ft_p999_s) if ft_p999_s else None
 
     # eventi (hitch adattivi agent-side + fps drop) con cause ranked su finestra lag
     raw_events = []
@@ -362,7 +376,23 @@ async def _community_insights(uid: str, specs: dict) -> list:
         return []
 
 
-async def _measured_evidence(specs: dict) -> list:
+async def _last_lab_game(uid: str) -> str | None:
+    """Il gioco su cui il Lab ha misurato l'ultima volta.
+
+    Serve a preferire, quando c'e', il breakdown per gioco dell'aggregato: lo
+    stesso tweak puo' valere molto in un titolo CPU-bound e nulla in uno
+    GPU-bound, e la media dei due non descrive nessuno dei due.
+    """
+    try:
+        last = await db.lab_sessions.find_one(
+            {"user_id": uid, "status": "completed", "report": {"$ne": None}},
+            {"report.game": 1}, sort=[("started_at", -1)])
+        return ((last or {}).get("report") or {}).get("game")
+    except Exception:
+        return None
+
+
+async def _measured_evidence(specs: dict, game: str | None = None) -> list:
     """Righe di contesto dall'aggregato del Laboratorio per l'hardware dell'utente.
 
     Differenza rispetto a `_community_insights`: li' si conta chi ha *dichiarato*
@@ -375,7 +405,7 @@ async def _measured_evidence(specs: dict) -> list:
         return []
     try:
         items = await fleet_evidence.load_for_specs(
-            db, data, hardware.vendor_class(data), hardware.fleet_key(data))
+            db, data, hardware.vendor_class(data), hardware.fleet_key(data), game=game)
         if not items:
             return []
         from lab_registry import TWEAKS
@@ -614,7 +644,7 @@ def build(get_current_user):
         # Fase 3: personalization + Fase 2: community
         profile = await _get_user_profile(uid)
         community = await _community_insights(uid, specs)
-        measured = await _measured_evidence(specs)
+        measured = await _measured_evidence(specs, await _last_lab_game(uid))
         extra_context = ""
         if profile["applied_tweaks"]:
             extra_context += "\n\n[TWEAK GIA' ATTIVI sul PC dell'utente - NON riproporli come nuove azioni]:\n"

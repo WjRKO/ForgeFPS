@@ -923,35 +923,146 @@ function Get-ServicesAudit {
 }
 
 # ---------------- Benchmark ----------------
+function Get-CpuBusyPct {
+  # Contatore di prestazione: Win32_Processor.LoadPercentage e' aggiornato di
+  # rado e mediato su una finestra che non controlliamo.
+  try {
+    $p = Get-CimInstance -ClassName Win32_PerfFormattedData_PerfOS_Processor `
+         -Filter "Name='_Total'" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($p) { return [double]$p.PercentProcessorTime }
+  } catch {}
+  try { return [double](Get-CimInstance Win32_Processor | Select-Object -First 1).LoadPercentage } catch {}
+  return $null
+}
+
+function Get-DpcTimePct {
+  # Tempo speso nelle DPC: questa e' una misura di DPC, a differenza
+  # dell'oversleep di Start-Sleep, che misura la granularita' del timer.
+  #
+  # Contatori RAW e non formatted: la classe formatted espone la percentuale
+  # come intero, e un valore tipico (0.3%) verrebbe restituito come 0. Dai raw
+  # si calcola la frazione a mano, con la precisione che serve per accorgersi
+  # che un driver e' passato dallo 0.2% al 2%.
+  try {
+    $a = @(Get-CimInstance -ClassName Win32_PerfRawData_PerfOS_Processor -ErrorAction Stop |
+           Where-Object { $_.Name -ne '_Total' })
+    if ($a.Count -eq 0) { return $null }
+    Start-Sleep -Milliseconds 1200
+    $b = @(Get-CimInstance -ClassName Win32_PerfRawData_PerfOS_Processor -ErrorAction Stop |
+           Where-Object { $_.Name -ne '_Total' })
+    $prev = @{}
+    foreach ($x in $a) { $prev[$x.Name] = $x }
+    $dt = 0.0; $dpc = 0.0; $isr = 0.0; $cnt = 0.0; $queued = 0.0
+    foreach ($x in $b) {
+      $p = $prev[$x.Name]
+      if (-not $p) { continue }
+      $d = [double]($x.Timestamp_Sys100NS - $p.Timestamp_Sys100NS)
+      if ($d -le 0) { continue }
+      $dt = $d
+      $dpc += [double]($x.PercentDPCTime - $p.PercentDPCTime)
+      $isr += [double]($x.PercentInterruptTime - $p.PercentInterruptTime)
+      $queued += [double]($x.DPCsQueuedPersec - $p.DPCsQueuedPersec)
+      $cnt += 1.0
+    }
+    if ($dt -le 0 -or $cnt -le 0) { return $null }
+    $secs = $dt / 1e7
+    return @{
+      pct = [math]::Round(100.0 * $dpc / ($dt * $cnt), 3)
+      isr_pct = [math]::Round(100.0 * $isr / ($dt * $cnt), 3)
+      rate = [int][math]::Round($queued / [math]::Max($secs, 0.001))
+    }
+  } catch {}
+  return $null
+}
+
+function Get-BenchDriveRoot {
+  # Il disco che conta per un giocatore e' quello dove stanno i giochi, non
+  # necessariamente quello di sistema dove finisce %TEMP%.
+  try {
+    $steamP = (Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction SilentlyContinue).SteamPath
+    if ($steamP) {
+      $vdf = Join-Path $steamP 'steamapps\libraryfolders.vdf'
+      if (Test-Path $vdf) {
+        $m = [regex]::Match((Get-Content $vdf -Raw), '"path"\s+"([^"]+)"')
+        if ($m.Success) {
+          $root = [System.IO.Path]::GetPathRoot(($m.Groups[1].Value -replace '\\\\', '\'))
+          if ($root -and (Test-Path $root)) { return $root }
+        }
+      }
+      $root = [System.IO.Path]::GetPathRoot($steamP)
+      if ($root -and (Test-Path $root)) { return $root }
+    }
+  } catch {}
+  return "$env:SystemDrive\"
+}
+
 function Run-Benchmark {
   $r = @{}
+  $r.bench_engine = 'powershell'
+  $r.ps_version = "$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
-  # CPU e RAM: 3 ripetizioni -> mediana + CV (affidabilita' della misura)
-  $cpuRuns = New-Object System.Collections.ArrayList
-  $ramRuns = New-Object System.Collections.ArrayList
-  $size = 64MB
-  $buf = New-Object byte[] $size; $dst = New-Object byte[] $size
-  for ($rep = 0; $rep -lt 3; $rep++) {
-    $acc = 0.0
-    $sw.Restart(); for ($i = 0; $i -lt 3000000; $i++) { $acc += [math]::Sqrt($i) }; $sw.Stop()
-    [void]$cpuRuns.Add([double](3000000 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001) / 1000))
-    $sw.Restart(); for ($i = 0; $i -lt 5; $i++) { [Array]::Copy($buf, $dst, $size) }; $sw.Stop()
-    [void]$ramRuns.Add([double]((5 * $size / 1MB) / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+  # Carico di fondo PRIMA di misurare: un antivirus a pieno regime non rende la
+  # misura rumorosa, la rende di un'altra macchina.
+  $bg = Get-CpuBusyPct
+  if ($null -ne $bg) { $r.bg_load_pct = [math]::Round($bg, 1) }
+  # Priorita' alta per la durata del benchmark: senza, il risultato dipende da
+  # come lo scheduler ha diviso la CPU con il resto del sistema.
+  $proc = [System.Diagnostics.Process]::GetCurrentProcess()
+  $oldPrio = $proc.PriorityClass
+  try { $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::High } catch {}
+  try {
+    # CPU e RAM: 1 giro di riscaldamento scartato + 5 ripetizioni -> mediana e CV.
+    # Il primo giro paga la compilazione del ciclo e la cache fredda: tenerlo
+    # dentro significava misurare l'avvio, non la macchina.
+    $cpuRuns = New-Object System.Collections.ArrayList
+    $ramRuns = New-Object System.Collections.ArrayList
+    $size = 64MB
+    $buf = New-Object byte[] $size; $dst = New-Object byte[] $size
+    $reps = 5
+    for ($rep = -1; $rep -lt $reps; $rep++) {
+      $acc = 0.0
+      $sw.Restart(); for ($i = 0; $i -lt 3000000; $i++) { $acc += [math]::Sqrt($i) }; $sw.Stop()
+      $cpuVal = [double](3000000 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001) / 1000)
+      $sw.Restart(); for ($i = 0; $i -lt 5; $i++) { [Array]::Copy($buf, $dst, $size) }; $sw.Stop()
+      $ramVal = [double]((5 * $size / 1MB) / [math]::Max($sw.Elapsed.TotalSeconds, 0.001))
+      if ($rep -lt 0) { continue }
+      [void]$cpuRuns.Add($cpuVal)
+      [void]$ramRuns.Add($ramVal)
+    }
+    $cpuS = @($cpuRuns | Sort-Object); $ramS = @($ramRuns | Sort-Object)
+    $mid = [int][math]::Floor($reps / 2)
+    $r.cpu_score = [int][math]::Round($cpuS[$mid])
+    $r.ram_mbps = [int][math]::Round($ramS[$mid])
+    $cpuAvg = ($cpuRuns | Measure-Object -Average).Average
+    $ramAvg = ($ramRuns | Measure-Object -Average).Average
+    $cv1 = 0.0; foreach ($x in $cpuRuns) { $cv1 += [math]::Pow($x - $cpuAvg, 2) }
+    $cv2 = 0.0; foreach ($x in $ramRuns) { $cv2 += [math]::Pow($x - $ramAvg, 2) }
+    # Deviazione campionaria (n-1): con n-1 al denominatore il CV non e'
+    # sistematicamente sottostimato come con n.
+    $r.cpu_cv_pct = [math]::Round([math]::Sqrt($cv1 / ($reps - 1)) / [math]::Max($cpuAvg, 1) * 100, 1)
+    $r.ram_cv_pct = [math]::Round([math]::Sqrt($cv2 / ($reps - 1)) / [math]::Max($ramAvg, 1) * 100, 1)
+    $r.bench_runs = $reps
+    $r.cv_pct = [math]::Max($r.cpu_cv_pct, $r.ram_cv_pct)
+    $r.reliable = ($r.cv_pct -le 10 -and ($null -eq $bg -or $bg -le 25))
+    if ($null -ne $bg -and $bg -gt 25) { $r.unreliable_reason = "carico di fondo al $([math]::Round($bg))% durante la misura" }
+    elseif ($r.cv_pct -gt 10) { $r.unreliable_reason = "ripetizioni troppo diverse fra loro (CV $($r.cv_pct)%)" }
+  } finally {
+    try { $proc.PriorityClass = $oldPrio } catch {}
   }
-  $cpuS = @($cpuRuns | Sort-Object); $ramS = @($ramRuns | Sort-Object)
-  $r.cpu_score = [int][math]::Round($cpuS[1])
-  $r.ram_mbps = [int][math]::Round($ramS[1])
-  $cpuAvg = ($cpuRuns | Measure-Object -Average).Average
-  $ramAvg = ($ramRuns | Measure-Object -Average).Average
-  $cv1 = 0.0; foreach ($x in $cpuRuns) { $cv1 += [math]::Pow($x - $cpuAvg, 2) }
-  $cv2 = 0.0; foreach ($x in $ramRuns) { $cv2 += [math]::Pow($x - $ramAvg, 2) }
-  $r.cpu_cv_pct = [math]::Round([math]::Sqrt($cv1 / 3) / [math]::Max($cpuAvg, 1) * 100, 1)
-  $r.ram_cv_pct = [math]::Round([math]::Sqrt($cv2 / 3) / [math]::Max($ramAvg, 1) * 100, 1)
-  $r.bench_runs = 3
-  $r.cv_pct = [math]::Max($r.cpu_cv_pct, $r.ram_cv_pct)
-  $r.reliable = ($r.cv_pct -le 10)
   # Disco: scrittura sequenziale REALE (WriteThrough bypassa la cache, 256MB)
-  $tmp = Join-Path $env:TEMP 'boostpc_bench.bin'
+  $benchRoot = Get-BenchDriveRoot
+  try {
+    $probe = Join-Path $benchRoot ('ff_probe_' + [guid]::NewGuid().ToString('N') + '.tmp')
+    [System.IO.File]::WriteAllBytes($probe, (New-Object byte[] 16))
+    Remove-Item $probe -Force -ErrorAction SilentlyContinue
+  } catch {
+    # Radice non scrivibile (permessi, disco di rete): si torna a %TEMP%, ma
+    # dichiarandolo, cosi' chi legge sa a quale disco si riferisce il numero.
+    $benchRoot = "$env:TEMP"
+    $r.disk_drive_fallback = $true
+  }
+  $r.disk_drive = "$benchRoot"
+  $tmp = Join-Path $benchRoot 'forgefps_bench.bin'
   try {
     $chunk = New-Object byte[] (8MB); (New-Object Random).NextBytes($chunk)
     $fs = New-Object System.IO.FileStream($tmp, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None, 1MB, [System.IO.FileOptions]::WriteThrough)
@@ -961,14 +1072,24 @@ function Run-Benchmark {
     $r.disk_read_mbps = [int]([math]::Round(256 / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
     $b4 = New-Object byte[] 4096; $rnd = New-Object Random
     $fs2 = New-Object System.IO.FileStream($tmp, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None, 4096, [System.IO.FileOptions]::WriteThrough)
-    $ops = 200
+    # 1000 operazioni invece di 200: con duecento campioni il numero ballava di
+    # decine di punti percentuali fra una misura e l'altra.
+    $ops = 1000
     $sw.Restart()
     for ($i = 0; $i -lt $ops; $i++) { $fs2.Position = 4096 * $rnd.Next(0, 65536); $fs2.Write($b4, 0, 4096) }
     $fs2.Flush($true); $sw.Stop(); $fs2.Close()
     $r.iops_4k = [int]([math]::Round($ops / [math]::Max($sw.Elapsed.TotalSeconds, 0.001)))
+    # Il nome dichiara la profondita' di coda: su un NVMe l'IOPS a QD1 e' un
+    # decimo di quello a QD32, e confrontarli come se fossero la stessa cosa
+    # e' il modo piu' rapido per credere che un SSD sia rotto.
+    $r.iops_4k_qd1 = $r.iops_4k
+    $r.disk_note = 'QD1, file da 256MB: puo cadere nella cache SLC di un SSD'
   } catch { if (-not $r.ContainsKey('disk_write_mbps')) { $r.disk_write_mbps = 0 }; if (-not $r.ContainsKey('disk_read_mbps')) { $r.disk_read_mbps = 0 }; $r.iops_4k = 0 }
   Remove-Item $tmp -ErrorAction SilentlyContinue
-  # Latenza scheduler/DPC (proxy): oversleep p95 su 150 sleep da 1ms
+  # Granularita' del timer di sistema: oversleep p95 su 150 sleep da 1ms.
+  # NON e' la latenza DPC (che si misura sotto): questo valore dipende dalla
+  # risoluzione del timer, ed e' influenzato dal tweak 'timer' che il Lab
+  # applica — chiamarlo dpc_ms faceva sembrare che il tweak curasse le DPC.
   $lat = New-Object System.Collections.Generic.List[double]
   $sw2 = [System.Diagnostics.Stopwatch]::StartNew()
   $prev = $sw2.Elapsed.TotalMilliseconds
@@ -978,18 +1099,38 @@ function Run-Benchmark {
     $lat.Add([math]::Max(0, $nowMs - $prev - 1)); $prev = $nowMs
   }
   $sorted = @($lat | Sort-Object)
-  $r.dpc_ms = [math]::Round($sorted[[int][math]::Floor($sorted.Count * 0.95)], 1)
-  # Rete: ping medio + jitter su 10 campioni
+  $r.timer_jitter_ms = [math]::Round($sorted[[int][math]::Floor($sorted.Count * 0.95)], 1)
+  $r.dpc_ms = $r.timer_jitter_ms   # chiave storica: i grafici esistenti la leggono
+  $dpc = Get-DpcTimePct
+  if ($dpc) { $r.dpc_time_pct = $dpc.pct; $r.dpc_rate = $dpc.rate }
+  # Rete: 20 campioni, perdita, p95 e jitter come media delle differenze
+  # consecutive (RFC 3550). La deviazione standard usata prima misura la
+  # dispersione attorno alla media, non lo sfarfallio fra un pacchetto e il
+  # successivo, che e' quello che si sente giocando.
   try {
     $png = New-Object System.Net.NetworkInformation.Ping
     $rtts = New-Object System.Collections.Generic.List[double]
-    for ($i = 0; $i -lt 10; $i++) { $res = $png.Send('1.1.1.1', 2000); if ($res.Status -eq 'Success') { $rtts.Add([double]$res.RoundtripTime) } }
+    $sent = 20
+    for ($i = 0; $i -lt $sent; $i++) {
+      $res = $png.Send('1.1.1.1', 2000)
+      if ($res.Status -eq 'Success') { $rtts.Add([double]$res.RoundtripTime) }
+      Start-Sleep -Milliseconds 120
+    }
     if ($rtts.Count -gt 0) {
       $avg = ($rtts | Measure-Object -Average).Average
       $r.ping_ms = [int]([math]::Round($avg))
+      $ps = @($rtts | Sort-Object)
+      $r.ping_p95_ms = [int]([math]::Round($ps[[math]::Min($ps.Count - 1, [int][math]::Floor($ps.Count * 0.95))]))
+      $r.ping_loss_pct = [math]::Round(100.0 * ($sent - $rtts.Count) / $sent, 1)
+      $r.ping_samples = $rtts.Count
       $var = 0.0; foreach ($v in $rtts) { $var += [math]::Pow($v - $avg, 2) }
-      $r.jitter_ms = [math]::Round([math]::Sqrt($var / $rtts.Count), 1)
-    } else { $r.ping_ms = 0; $r.jitter_ms = 0 }
+      $r.jitter_sd_ms = [math]::Round([math]::Sqrt($var / $rtts.Count), 1)
+      if ($rtts.Count -ge 2) {
+        $d = 0.0
+        for ($i = 1; $i -lt $rtts.Count; $i++) { $d += [math]::Abs($rtts[$i] - $rtts[$i - 1]) }
+        $r.jitter_ms = [math]::Round($d / ($rtts.Count - 1), 1)
+      } else { $r.jitter_ms = 0 }
+    } else { $r.ping_ms = 0; $r.jitter_ms = 0; $r.ping_loss_pct = 100.0 }
   } catch { $r.ping_ms = 0; $r.jitter_ms = 0 }
   # Tempo di avvio Windows (event log Diagnostics-Performance 100)
   try {
@@ -1008,17 +1149,29 @@ function Run-Benchmark {
   $dwN = [math]::Min(100, $r.disk_write_mbps / 20.0)
   $drN = [math]::Min(100, $r.disk_read_mbps / 30.0)
   $ioN = [math]::Min(100, $r.iops_4k / 50.0)
-  $dpcN = [math]::Max(0, 100 - $r.dpc_ms * 20)
+  # Quando la misura vera delle DPC c'e', il punteggio usa quella; l'oversleep
+  # del timer resta come ripiego sulle macchine dove il contatore non risponde.
+  if ($r.ContainsKey('dpc_time_pct')) { $dpcN = [math]::Max(0, 100 - $r.dpc_time_pct * 25) }
+  else { $dpcN = [math]::Max(0, 100 - $r.timer_jitter_ms * 20) }
   $pingN = [math]::Max(0, 100 - $r.ping_ms)
   $jitN = [math]::Max(0, 100 - $r.jitter_ms * 10)
   $r.score = [int]([math]::Round($cpuN * 0.20 + $ramN * 0.10 + $dwN * 0.15 + $drN * 0.10 + $ioN * 0.10 + $dpcN * 0.15 + $pingN * 0.15 + $jitN * 0.05))
+  # Il termine DPC del punteggio ha cambiato sorgente: due score con versione
+  # diversa non vanno messi sulla stessa linea di un grafico come se fossero
+  # la stessa misura.
+  $r.score_version = 2
   $r.overall = [int]([math]::Round($r.cpu_score + $r.ram_mbps/50.0 + $r.disk_write_mbps/50.0 + $r.disk_read_mbps/50.0 + [math]::Max(0, 120 - $r.ping_ms) + $r.free_ram_pct))
   return $r
 }
 function Show-Bench($r, $title) {
   Say "`n   [$title]" 'Cyan'
-  Say ("   CPU {0} | RAM {1} MB/s | Disco W/R {2}/{3} MB/s | 4K {4} IOPS" -f $r.cpu_score, $r.ram_mbps, $r.disk_write_mbps, $r.disk_read_mbps, $r.iops_4k) 'Yellow'
-  Say ("   DPC {0} ms | Ping {1} ms (jitter {2} ms){3} | PERFORMANCE SCORE {4}/100" -f $r.dpc_ms, $r.ping_ms, $r.jitter_ms, $(if($r.ContainsKey('boot_s')){" | Avvio $($r.boot_s)s"}else{''}), $r.score) 'Yellow'
+  Say ("   CPU {0} | RAM {1} MB/s | Disco W/R {2}/{3} MB/s | 4K {4} IOPS (QD1, {5})" -f $r.cpu_score, $r.ram_mbps, $r.disk_write_mbps, $r.disk_read_mbps, $r.iops_4k, $r.disk_drive) 'Yellow'
+  $dpcTxt = if ($r.ContainsKey('dpc_time_pct')) { "DPC {0}% del tempo" -f $r.dpc_time_pct } else { "DPC non misurabile" }
+  $lossTxt = if ($r.ContainsKey('ping_loss_pct') -and $r.ping_loss_pct -gt 0) { ", perdita $($r.ping_loss_pct)%" } else { '' }
+  Say ("   Jitter timer {0} ms | {1} | Ping {2} ms (jitter {3} ms{4}){5} | PERFORMANCE SCORE {6}/100" -f $r.timer_jitter_ms, $dpcTxt, $r.ping_ms, $r.jitter_ms, $lossTxt, $(if($r.ContainsKey('boot_s')){" | Avvio $($r.boot_s)s"}else{''}), $r.score) 'Yellow'
+  if (-not $r.reliable -and $r.ContainsKey('unreliable_reason')) {
+    Say ("   [ATTENZIONE] Misura poco affidabile: {0}. Chiudi le applicazioni pesanti e ripeti." -f $r.unreliable_reason) 'DarkYellow'
+  }
   Say '   [INFO] Il Performance Score misura la velocita del PC ora. Health Score globale su forgefps.dev -> Il mio PC.' 'DarkGray'
 }
 
@@ -1040,26 +1193,34 @@ function Run-FullBenchmark {
 
   # Job in parallelo: thermal sampling ogni 1s per tutta la durata del benchmark.
   # Salva ts (secondi dall'inizio), cpu_temp, gpu_temp, cpu_clock, gpu_clock.
+  # GPU: un solo processo nvidia-smi che scrive su file per tutta la durata.
+  # Prima veniva lanciato un nvidia-smi al secondo dentro il job: due-trecento
+  # avvii di processo nel mezzo di un benchmark che misura proprio quanto la
+  # macchina e' reattiva.
+  $nvFile = Join-Path $env:TEMP ('ff_bench_nv_' + [guid]::NewGuid().ToString('N') + '.csv')
+  $nvProc = $null
+  try {
+    if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+      $nvProc = Start-Process -FilePath 'nvidia-smi' -WindowStyle Hidden -PassThru -ErrorAction SilentlyContinue `
+        -ArgumentList ('--query-gpu=temperature.gpu,clocks.gr --format=csv,noheader,nounits -l 1 -f "' + $nvFile + '"')
+    }
+  } catch {}
   $traceJob = Start-Job -ScriptBlock {
     param($StartTs)
     $samples = New-Object System.Collections.Generic.List[hashtable]
     while ($true) {
       $elapsed = [int]((Get-Date) - $StartTs).TotalSeconds
-      $cpuTemp = 0; $gpuTemp = 0; $cpuClock = 0
+      $cpuTemp = 0
       try {
-        # LibreHardwareMonitor già in memoria dal loader principale — non riusabile in job.
-        # Fallback: leggi WMI (meno preciso ma non richiede il DLL).
+        # LibreHardwareMonitor e' gia' in memoria nel processo principale ma non
+        # e' riusabile dentro un job. Qui resta MSAcpi_ThermalZoneTemperature,
+        # che su molte schede madri riporta la temperatura di una zona ACPI
+        # generica e non quella del package: per questo il campione porta con se'
+        # la sorgente, invece di far credere che sia una lettura del sensore CPU.
         $t = Get-CimInstance -Namespace 'root/wmi' -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($t) { $cpuTemp = [int](($t.CurrentTemperature - 2732) / 10) }
       } catch {}
-      try {
-        $nvsmi = Get-Command nvidia-smi -ErrorAction SilentlyContinue
-        if ($nvsmi) {
-          $csv = & nvidia-smi --query-gpu=temperature.gpu,clocks.gr --format=csv,noheader,nounits 2>$null
-          if ($csv) { $parts = $csv.Split(','); $gpuTemp = [int]$parts[0].Trim(); }
-        }
-      } catch {}
-      $samples.Add(@{ ts = $elapsed; cpu_temp = $cpuTemp; gpu_temp = $gpuTemp; cpu_clock = $cpuClock })
+      $samples.Add(@{ ts = $elapsed; cpu_temp = $cpuTemp; cpu_temp_source = 'acpi_thermal_zone'; gpu_temp = 0; cpu_clock = 0 })
       Start-Sleep -Seconds 1
     }
   } -ArgumentList (Get-Date)
@@ -1200,8 +1361,24 @@ function Run-FullBenchmark {
     # Stop thermal trace + fold results
     try {
       Stop-Job -Job $traceJob -ErrorAction SilentlyContinue
-      $samples = Receive-Job -Job $traceJob -ErrorAction SilentlyContinue
+      $samples = @(Receive-Job -Job $traceJob -ErrorAction SilentlyContinue)
       Remove-Job -Job $traceJob -Force -ErrorAction SilentlyContinue
+      if ($nvProc) {
+        try { Stop-Process -Id $nvProc.Id -Force -ErrorAction SilentlyContinue } catch {}
+        Start-Sleep -Milliseconds 200
+        # Le righe di nvidia-smi sono una al secondo come i campioni del job:
+        # si allineano per indice.
+        $nvLines = @(Get-Content $nvFile -ErrorAction SilentlyContinue)
+        for ($i = 0; $i -lt [math]::Min($nvLines.Count, $samples.Count); $i++) {
+          $parts = "$($nvLines[$i])".Split(',')
+          if ($parts.Count -lt 2) { continue }
+          try {
+            $samples[$i].gpu_temp = [int]$parts[0].Trim()
+            $samples[$i].gpu_clock = [int]$parts[1].Trim()
+          } catch {}
+        }
+        try { Remove-Item $nvFile -Force -ErrorAction SilentlyContinue } catch {}
+      }
       if ($samples) {
         $out.thermal_trace = @($samples)
         $cpuT = @($samples | Where-Object { $_.cpu_temp -gt 0 } | ForEach-Object { $_.cpu_temp })
@@ -1499,8 +1676,11 @@ function Get-CurrentGame {
 
 function Get-TelemetrySample {
   $s = @{ ts = (Get-Date).ToString('o') }
-  $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
-  $s.cpu_util = [int]$cpu.LoadPercentage
+  # Contatore di prestazione invece di Win32_Processor.LoadPercentage: quello e'
+  # aggiornato di rado e mediato su una finestra che non controlliamo, ed e' il
+  # numero che finisce nel grafico live e nelle correlazioni del Gameplay Doctor.
+  $cpuBusy = Get-CpuBusyPct
+  if ($null -ne $cpuBusy) { $s.cpu_util = [int][math]::Round($cpuBusy) }
   $o = Get-CimInstance Win32_OperatingSystem
   $s.ram_used_pct = [int]([math]::Round(($o.TotalVisibleMemorySize - $o.FreePhysicalMemory) / $o.TotalVisibleMemorySize * 100))
   $lhm = Get-LhmTemps
@@ -1581,6 +1761,29 @@ function Read-Shared($path) {
     $t = $sr.ReadToEnd(); $sr.Close(); $fs.Close(); return $t
   } catch { return '' }
 }
+# ---------------- Istogramma dei frametime ----------------
+# Stessa suddivisione di lab_stats.py (HIST_BUCKETS = 306): risoluzione fine
+# dove i frame sono veloci e i millisecondi contano, grossolana sopra i 100 ms
+# dove non interessa piu' a nessuno. Se cambia li' va cambiata anche qui,
+# altrimenti il backend calcola percentili su una scala diversa da quella che
+# crede di avere.
+#   [0,20) 0.1ms | [20,50) 0.5ms | [50,100) 2ms | [100,300) 10ms | >=300 coda
+function Get-HistBucket([double]$ms) {
+  if ($ms -lt 0) { $ms = 0 }
+  if ($ms -lt 20) { return [int][math]::Floor($ms / 0.1) }
+  if ($ms -lt 50) { return 200 + [int][math]::Floor(($ms - 20) / 0.5) }
+  if ($ms -lt 100) { return 260 + [int][math]::Floor(($ms - 50) / 2.0) }
+  if ($ms -lt 300) { return 285 + [int][math]::Floor(($ms - 100) / 10.0) }
+  return 305
+}
+function Get-HistMid([int]$i) {
+  if ($i -ge 305) { return 350.0 }
+  if ($i -lt 200) { return $i * 0.1 + 0.05 }
+  if ($i -lt 260) { return 20.0 + ($i - 200) * 0.5 + 0.25 }
+  if ($i -lt 285) { return 50.0 + ($i - 260) * 2.0 + 1.0 }
+  return 100.0 + ($i - 285) * 10.0 + 5.0
+}
+
 function Test-FpsCapable {
   # 'ok' = ETW consentito (admin, o token con gruppo Performance Log Users S-1-5-32-559)
   # 'relogon' = utente iscritto al gruppo ma token vecchio: serve logout/riavvio
@@ -1721,22 +1924,18 @@ function Get-Fps {
   $gd = $null
   $fr = $top.Value.fr
   if ($fr -and $fr.Count -ge 10) {
-    if (-not $script:GD_HIST) { $script:GD_HIST = New-Object 'int[]' 60; $script:GD_N = 0; $script:GD_TICK = 0 }
-    foreach ($v in $fr) {
-      $bi = [int][math]::Floor([double]$v)
-      if ($bi -lt 0) { $bi = 0 }
-      if ($bi -ge 50) {
-        if ($v -lt 60) { $bi = 50 } elseif ($v -lt 70) { $bi = 51 } elseif ($v -lt 80) { $bi = 52 }
-        elseif ($v -lt 90) { $bi = 53 } elseif ($v -lt 100) { $bi = 54 } elseif ($v -lt 125) { $bi = 55 }
-        elseif ($v -lt 150) { $bi = 56 } elseif ($v -lt 200) { $bi = 57 } elseif ($v -lt 300) { $bi = 58 } else { $bi = 59 }
-      }
-      $script:GD_HIST[$bi]++
-    }
+    # Istogramma a 306 bucket (stessa scala del Lab e di lab_stats.py). Quello
+    # a 1 ms usato prima aveva senso a 60 FPS, ma a 200 FPS un frame dura 5 ms:
+    # il bucket era il 20% del valore, e la mediana ne ereditava l'incertezza.
+    if (-not $script:GD_HIST) { $script:GD_HIST = New-Object 'int[]' 306; $script:GD_N = 0; $script:GD_TICK = 0 }
+    foreach ($v in $fr) { $script:GD_HIST[(Get-HistBucket ([double]$v))]++ }
     $script:GD_N += $fr.Count
     $script:GD_TICK++
-    # mediana di sessione dall'istogramma (bucket <50 ~= ms)
-    $half = $script:GD_N / 2; $cum = 0; $med = 8
-    for ($b = 0; $b -lt 60; $b++) { $cum += $script:GD_HIST[$b]; if ($cum -ge $half) { $med = $b + 0.5; break } }
+    $half = $script:GD_N / 2; $cum = 0; $med = 8.0
+    for ($b = 0; $b -lt 306; $b++) {
+      $cum += $script:GD_HIST[$b]
+      if ($cum -ge $half) { $med = (Get-HistMid $b); break }
+    }
     $thr = [math]::Max(25.0, 3.0 * $med)
     $sorted = [double[]]$fr.ToArray(); [Array]::Sort($sorted)
     $p99 = $sorted[[math]::Min($sorted.Length - 1, [int][math]::Ceiling(0.99 * $sorted.Length) - 1)]
@@ -5434,18 +5633,134 @@ function LabEvent($type, $data) {
   if ($data) { $b.data = $data }
   LabApi 'Post' '/api/agent/lab/event' $b | Out-Null
 }
+# ---------------- Strumenti di misura del Lab ----------------
+function Get-LabRunContext {
+  # Contesto in cui la misura e' stata presa. Senza, due run non confrontabili
+  # (uno a batteria, uno dopo un cambio di risoluzione) finiscono nello stesso
+  # confronto come se fossero la stessa cosa.
+  $c = @{}
+  try {
+    $vc = Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
+          Where-Object { $_.CurrentHorizontalResolution -gt 0 } | Select-Object -First 1
+    if ($vc) {
+      $c.res_w = [int]$vc.CurrentHorizontalResolution
+      $c.res_h = [int]$vc.CurrentVerticalResolution
+      $c.refresh_hz = [int]$vc.CurrentRefreshRate
+      if ($vc.DriverVersion) { $c.gpu_driver = "$($vc.DriverVersion)" }
+    }
+  } catch {}
+  try {
+    # BatteryStatus 1 = a batteria. Su un fisso la classe non esiste proprio.
+    $b = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1
+    $c.on_battery = [bool]($b -and $b.BatteryStatus -eq 1)
+  } catch { $c.on_battery = $false }
+  try { $c.power_plan = "$(Get-PowerPlanNormalized)" } catch {}
+  try { $c.obs_running = [bool](Get-Process -Name 'obs64', 'obs32', 'obs' -ErrorAction SilentlyContinue) } catch {}
+  return $c
+}
+
+function Start-LabTelemetry {
+  # nvidia-smi gira UNA volta per tutto il run scrivendo su file, invece di
+  # essere rilanciato a ogni campione: avviare un processo ogni cinque secondi
+  # durante un benchmark significa misurare anche il proprio disturbo.
+  $script:LT_CPU = New-Object System.Collections.ArrayList
+  $script:LT_TCPU = New-Object System.Collections.ArrayList
+  $script:LT_RAM = New-Object System.Collections.ArrayList
+  $script:LT_GPU = New-Object System.Collections.ArrayList
+  $script:LT_TGPU = New-Object System.Collections.ArrayList
+  $script:LT_CLK = New-Object System.Collections.ArrayList
+  $script:LT_PWR = New-Object System.Collections.ArrayList
+  $script:LT_NVFILE = Join-Path $env:TEMP ('ff_lab_nv_' + [guid]::NewGuid().ToString('N') + '.csv')
+  $script:LT_NV = $null
+  try {
+    if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+      $nvArgs = '--query-gpu=utilization.gpu,temperature.gpu,clocks.gr,power.draw ' +
+                '--format=csv,noheader,nounits -l 1 -f "' + $script:LT_NVFILE + '"'
+      $script:LT_NV = Start-Process -FilePath 'nvidia-smi' -ArgumentList $nvArgs `
+        -WindowStyle Hidden -PassThru -ErrorAction SilentlyContinue
+    }
+  } catch {}
+}
+
+function Add-LabTelemetrySample {
+  # Contatore di prestazione invece di Win32_Processor.LoadPercentage, che e'
+  # aggiornato di rado e mediato su una finestra che nessuno controlla.
+  try {
+    $p = Get-CimInstance -ClassName Win32_PerfFormattedData_PerfOS_Processor `
+         -Filter "Name='_Total'" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($p) { [void]$script:LT_CPU.Add([double]$p.PercentProcessorTime) }
+  } catch {}
+  try {
+    $o = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+    if ($o -and $o.TotalVisibleMemorySize -gt 0) {
+      [void]$script:LT_RAM.Add([double](($o.TotalVisibleMemorySize - $o.FreePhysicalMemory) / $o.TotalVisibleMemorySize * 100))
+    }
+  } catch {}
+  try {
+    $lhm = Get-LhmTemps
+    if ($lhm.ContainsKey('cpu_temp')) { [void]$script:LT_TCPU.Add([double]$lhm.cpu_temp) }
+    if ((-not $script:LT_NV) -and $lhm.ContainsKey('gpu_temp')) { [void]$script:LT_TGPU.Add([double]$lhm.gpu_temp) }
+  } catch {}
+}
+
+function _LtAgg($list, $name, $target) {
+  if (-not $list -or $list.Count -eq 0) { return }
+  $target[($name + '_avg')] = [math]::Round(($list | Measure-Object -Average).Average, 1)
+  $target[($name + '_max')] = [math]::Round(($list | Measure-Object -Maximum).Maximum, 1)
+}
+
+function Stop-LabTelemetry {
+  $out = @{}
+  if ($script:LT_NV) {
+    try { Stop-Process -Id $script:LT_NV.Id -Force -ErrorAction SilentlyContinue } catch {}
+    Start-Sleep -Milliseconds 200
+    try {
+      foreach ($ln in (Get-Content $script:LT_NVFILE -ErrorAction SilentlyContinue)) {
+        $p = "$ln".Split(',')
+        if ($p.Count -lt 4) { continue }
+        try {
+          [void]$script:LT_GPU.Add([double]$p[0].Trim())
+          [void]$script:LT_TGPU.Add([double]$p[1].Trim())
+          [void]$script:LT_CLK.Add([double]$p[2].Trim())
+          [void]$script:LT_PWR.Add([double]$p[3].Trim())
+        } catch {}
+      }
+    } catch {}
+    try { Remove-Item $script:LT_NVFILE -Force -ErrorAction SilentlyContinue } catch {}
+    $script:LT_NV = $null
+  }
+  _LtAgg $script:LT_CPU 'cpu_pct' $out
+  _LtAgg $script:LT_GPU 'gpu_pct' $out
+  _LtAgg $script:LT_TCPU 'temp_cpu' $out
+  _LtAgg $script:LT_TGPU 'temp_gpu' $out
+  $n = 0
+  foreach ($l in @($script:LT_CPU, $script:LT_GPU)) { if ($l -and $l.Count -gt $n) { $n = $l.Count } }
+  $out.telemetry_samples = $n
+  if ($script:LT_CLK -and $script:LT_CLK.Count -gt 0) {
+    $out.gpu_clock_avg = [int][math]::Round(($script:LT_CLK | Measure-Object -Average).Average)
+  }
+  if ($script:LT_PWR -and $script:LT_PWR.Count -gt 0) {
+    $out.gpu_power_avg = [int][math]::Round(($script:LT_PWR | Measure-Object -Average).Average)
+  }
+  return $out
+}
+
 function Get-LabTick {
-  # Frametime (ms) NUOVI dal flusso PresentMon, per l'app con piu frame nel tick
+  # Frametime (ms) NUOVI dal flusso PresentMon. Quando il gioco bersaglio e'
+  # gia' stato scelto si leggono SOLO le sue righe: prendere a ogni tick l'app
+  # con piu' present significa che un overlay o il browser possono vincere un
+  # tick e infilare i propri frametime nel campione del gioco.
   if (-not $script:PM_ON) { return $null }
   $raw = Read-Shared $script:PM_OUT
   if (-not $raw) { return $null }
   $lines = $raw -split "`r?`n" | Where-Object { $_ -ne '' }
   if (-not $lines -or $lines.Count -le $script:PM_ROWS) { return $null }
   $hdr = $lines[0] -split ','
-  $iApp = -1; $iMs = -1; $iLat = -1
+  $iApp = -1; $iMs = -1; $iLat = -1; $iPid = -1
   for ($k = 0; $k -lt $hdr.Count; $k++) {
     $h = $hdr[$k].Trim().ToLower()
     if ($h -eq 'application') { $iApp = $k }
+    if ($h -eq 'processid') { $iPid = $k }
     if ($h -like '*betweenpresents*') { $iMs = $k }
     if ($h -like '*untildisplayed*') { $iLat = $k }
   }
@@ -5454,15 +5769,22 @@ function Get-LabTick {
   $script:PM_ROWS = $lines.Count
   $byApp = @{}
   $byLat = @{}
+  $byPid = @{}
   $inv = [Globalization.CultureInfo]::InvariantCulture
   foreach ($ln in $new) {
     $c = $ln -split ','
     if ($c.Count -le $iMs) { continue }
     $app = if ($iApp -ge 0 -and $c.Count -gt $iApp) { $c[$iApp] } else { 'game' }
+    $pid_ = if ($iPid -ge 0 -and $c.Count -gt $iPid) { "$($c[$iPid])".Trim() } else { '' }
+    if ($script:LAB_APP) {
+      if ($app -ne $script:LAB_APP) { continue }
+      if ($script:LAB_PID -and $pid_ -and $pid_ -ne $script:LAB_PID) { continue }
+    }
     try { $ms = [double]::Parse($c[$iMs], $inv) } catch { continue }
     if ($ms -le 0) { continue }
     if (-not $byApp.ContainsKey($app)) { $byApp[$app] = New-Object System.Collections.ArrayList }
     [void]$byApp[$app].Add($ms)
+    if ($pid_) { $byPid[$app] = $pid_ }
     if ($iLat -ge 0 -and $c.Count -gt $iLat) {
       try {
         $lv = [double]::Parse($c[$iLat], $inv)
@@ -5475,7 +5797,7 @@ function Get-LabTick {
   }
   if ($byApp.Count -eq 0) { return $null }
   $top = $byApp.GetEnumerator() | Sort-Object { $_.Value.Count } -Descending | Select-Object -First 1
-  return @{ app = $top.Key; ms = $top.Value; lat = $byLat[$top.Key] }
+  return @{ app = $top.Key; pid = $byPid[$top.Key]; ms = $top.Value; lat = $byLat[$top.Key] }
 }
 function Wait-LabGame {
   $shown = $false
@@ -5483,12 +5805,22 @@ function Wait-LabGame {
   while ($true) {
     $t = Get-LabTick
     if ($t -and $t.ms.Count -ge 15) {
+      if (-not $script:LAB_APP) {
+        # Bersaglio bloccato una volta per tutta la sessione: da qui in poi si
+        # misura questo processo e nient'altro.
+        $script:LAB_APP = $t.app
+        $script:LAB_PID = $t.pid
+      }
       if ($shown) { Say ("   [LAB] Gioco rilevato: {0}" -f $t.app) 'Green'; LabEvent 'game_detected' @{ game = $t.app } }
       return $t.app
     }
     if (-not $shown) {
       $shown = $true
-      Say '   [LAB] In attesa del gioco... avvia il gioco e resta in partita (scena il piu possibile ripetibile).' 'Yellow'
+      if ($script:LAB_APP) {
+        Say ("   [LAB] In attesa di {0}... la sessione misura questo processo e nessun altro: riaprilo e resta in partita (scena il piu possibile ripetibile)." -f $script:LAB_APP) 'Yellow'
+      } else {
+        Say '   [LAB] In attesa del gioco... avvia il gioco e resta in partita (scena il piu possibile ripetibile).' 'Yellow'
+      }
       LabEvent 'waiting_game' $null
     }
     if (((Get-Date) - $lastPoll).TotalSeconds -ge 12) {
@@ -5502,20 +5834,28 @@ function Wait-LabGame {
 function Invoke-LabRun($seconds, $label) {
   $fr = New-Object System.Collections.ArrayList
   $lt = New-Object System.Collections.ArrayList
+  $hist = New-Object 'int[]' 306
   $app = ''
+  $ctx = Get-LabRunContext
+  Start-LabTelemetry
   $t0 = Get-Date
   $lastSay = -100
+  $lastTel = -100
   while (((Get-Date) - $t0).TotalSeconds -lt $seconds) {
     $t = Get-LabTick
     if ($t) {
       $app = $t.app
-      foreach ($v in $t.ms) { [void]$fr.Add($v) }
+      foreach ($v in $t.ms) { [void]$fr.Add($v); $hist[(Get-HistBucket ([double]$v))]++ }
       if ($t.lat) { foreach ($v in $t.lat) { [void]$lt.Add($v) } }
     }
     $el = [int]((Get-Date) - $t0).TotalSeconds
+    # Un campione ogni 5s: la telemetria del run e' una media della finestra,
+    # non l'istantanea presa alla fine come faceva la versione precedente.
+    if (($el - $lastTel) -ge 5) { $lastTel = $el; Add-LabTelemetrySample }
     if (($el - $lastSay) -ge 15) { $lastSay = $el; Say ("      [{0}] {1}/{2}s - frame raccolti: {3}" -f $label, $el, $seconds, $fr.Count) 'DarkGray' }
     Start-Sleep -Milliseconds 900
   }
+  $tel = Stop-LabTelemetry
   if ($fr.Count -lt 100) { return $null }
   $arr = [double[]]$fr.ToArray()
   $sorted = [double[]]$arr.Clone(); [Array]::Sort($sorted)
@@ -5523,30 +5863,58 @@ function Invoke-LabRun($seconds, $label) {
   $avg = $sum / $arr.Length
   $var = 0.0; foreach ($v in $arr) { $var += ($v - $avg) * ($v - $avg) }
   $var = $var / $arr.Length
-  $p99 = $sorted[[math]::Min($sorted.Length - 1, [math]::Max(0, [int][math]::Ceiling(0.99 * $sorted.Length) - 1))]
-  $p999 = $sorted[[math]::Min($sorted.Length - 1, [math]::Max(0, [int][math]::Ceiling(0.999 * $sorted.Length) - 1))]
+  # 1% low = frametime MEDIO dell'1% peggiore dei frame, non il p99 puntuale:
+  # il p99 guarda un solo frame e ignora tutto cio' che sta oltre, quindi non
+  # distingue un'esitazione da 30 ms da un freeze da mezzo secondo.
+  $k1 = [math]::Max(1, [int][math]::Ceiling($arr.Length * 0.01))
+  $s1 = 0.0; for ($i = $sorted.Length - $k1; $i -lt $sorted.Length; $i++) { $s1 += $sorted[$i] }
+  $low1 = $s1 / $k1
   $run = @{
     fps_avg = [math]::Round(1000.0 / $avg, 2)
-    fps_p1 = [math]::Round(1000.0 / $p99, 2)
-    fps_p01 = [math]::Round(1000.0 / $p999, 2)
+    fps_p1 = [math]::Round(1000.0 / $low1, 2)
     ft_avg_ms = [math]::Round($avg, 3)
     ft_var = [math]::Round($var, 3)
+    ft_cv = [math]::Round([math]::Sqrt($var) / [math]::Max($avg, 0.001), 3)
     frames = $arr.Length
     duration_s = [int]$seconds
     game = $app
+    hist = $hist
+    metrics_version = 2
   }
-  try {
-    $tel = Get-TelemetrySample
-    if ($tel.ContainsKey('cpu_util')) { $run.cpu_pct = $tel.cpu_util }
-    if ($tel.ContainsKey('gpu_util')) { $run.gpu_pct = $tel.gpu_util }
-    if ($tel.ContainsKey('gpu_temp')) { $run.temp_gpu = $tel.gpu_temp }
-    if ($tel.ContainsKey('cpu_temp')) { $run.temp_cpu = $tel.cpu_temp }
-  } catch {}
+  # Lo 0.1% peggiore ha senso solo se sono almeno cinque frame: sotto, sarebbe
+  # il singolo frame piu' sfortunato del run spacciato per una statistica.
+  $k01 = [int][math]::Ceiling($arr.Length * 0.001)
+  if ($k01 -ge 5) {
+    $s01 = 0.0; for ($i = $sorted.Length - $k01; $i -lt $sorted.Length; $i++) { $s01 += $sorted[$i] }
+    $run.fps_p01 = [math]::Round(1000.0 / ($s01 / $k01), 2)
+  }
+  foreach ($kv in $tel.GetEnumerator()) { $ctx[$kv.Key] = $kv.Value }
+  if ($script:LAB_PID) { $ctx.process_id = "$script:LAB_PID" }
+  $run.ctx = $ctx
+  # Chiavi storiche mantenute: il resto del prodotto (grafici, report, AI) le legge.
+  if ($ctx.ContainsKey('cpu_pct_avg')) { $run.cpu_pct = [int]$ctx.cpu_pct_avg }
+  if ($ctx.ContainsKey('gpu_pct_avg')) { $run.gpu_pct = [int]$ctx.gpu_pct_avg }
+  if ($ctx.ContainsKey('temp_gpu_avg')) { $run.temp_gpu = [int]$ctx.temp_gpu_avg }
+  if ($ctx.ContainsKey('temp_cpu_avg')) { $run.temp_cpu = [int]$ctx.temp_cpu_avg }
   if ($lt.Count -ge 50) {
     $ls = 0.0; foreach ($v in $lt) { $ls += $v }
     $run.latency_ms = [math]::Round($ls / $lt.Count, 2)
   }
   return $run
+}
+
+function Test-RunRejected($resp) {
+  # Il backend rifiuta i run presi in condizioni non confrontabili (PC a
+  # batteria, gioco diverso, troppi pochi frame). Si ripete la misura invece di
+  # infilare nel confronto un dato che appartiene a un altro esperimento.
+  if ($resp -and $resp.rejected) {
+    Say ("   [SCARTATO] {0}. Ripeto la misura." -f $resp.reason) 'DarkYellow'
+    return $true
+  }
+  if ($resp -and $resp.warnings) {
+    foreach ($w in @($resp.warnings)) { Say ("   [nota] {0}" -f $w) 'DarkYellow' }
+  }
+  return $false
 }
 
 function Register-LabResume {
@@ -5637,6 +6005,10 @@ if ($MODE -eq 'lab') {
       elseif ($act -eq 'snapshot') {
         $idleWaits = 0
         Say "`n[FASE 1/4] SNAPSHOT - punto di ripristino Windows + stato iniziale" 'Cyan'
+        # Nuova sessione: si riparte senza bersaglio, altrimenti resterebbe
+        # agganciato al gioco della sessione precedente.
+        $script:LAB_APP = $null
+        $script:LAB_PID = $null
         $rp = $false
         try {
           Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction SilentlyContinue
@@ -5663,9 +6035,13 @@ if ($MODE -eq 'lab') {
         if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti (gioco chiuso o in pausa?). Riprovo.' 'DarkYellow'; continue }
         Say ("   run: {0} FPS avg | 1% low {1} | frame {2}" -f $run.fps_avg, $run.fps_p1, $run.frames) 'Gray'
         $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'baseline'; run = $run }
+        if (Test-RunRejected $resp) { continue }
         if ($run.temp_gpu) { [void]$script:LAB_BTEMPS.Add([double]$run.temp_gpu) }
         if ($resp -and $resp.baseline_ok) {
           Say ("   [ OK ] BASELINE stabile: {0} FPS avg (CV {1}%)" -f $resp.stats.fps_avg, $resp.stats.cv_pct) 'Green'
+          if ($resp.quality -and $resp.quality.capped) {
+            Say ("   [ATTENZIONE] Frame cap rilevato a ~{0} FPS: con V-Sync o un limitatore attivo nessun tweak puo' mostrare un effetto misurabile. Togli il limite e rilancia il Lab." -f $resp.quality.cap_fps) 'Yellow'
+          }
           if ($script:LAB_BTEMPS.Count -gt 0) { $script:LAB_TREF = [int](($script:LAB_BTEMPS | Measure-Object -Average).Average) }
         }
         elseif ($resp -and $resp.extra_run) { Say '   [INFO] Variabilita alta tra i run (CV > 5%): 4o run e scarto l outlier.' 'DarkYellow' }
@@ -5689,6 +6065,60 @@ if ($MODE -eq 'lab') {
             Start-Sleep -Seconds 3
           }
         }
+      }
+      elseif ($act -eq 'pair_toggle') {
+        # Schema appaiato: si spegne e riaccende il tweak fra una misura e
+        # l'altra, cosi' ogni coppia ON/OFF condivide temperatura e scena.
+        $tid = "$($nx.tweak_id)"
+        if ("$($nx.stage)" -eq 'off') {
+          $msg = Invoke-RestoreTweak $tid
+          Say ("   [COPPIA] {0} disattivato per la misura OFF: {1}" -f $tid, $msg) 'DarkGray'
+        } else {
+          $tw = $script:TWMAP[$tid]
+          if ($tw) { Invoke-ApplyTracked $tw; Save-Backup }
+          Say ("   [COPPIA] {0} riattivato per la misura ON" -f $tid) 'DarkGray'
+        }
+        Start-Sleep -Seconds 3
+        LabEvent 'pair_toggled' @{ tweak_id = $tid; stage = "$($nx.stage)"; final = [bool]$nx.final }
+      }
+      elseif ($act -eq 'run_pair') {
+        Say ("   [TEST {0} - {1}] coppia {2}/{3} ({4}s)" -f $nx.tweak_id, "$($nx.stage)".ToUpper(), $nx.pair_num, $nx.pairs_total, $nx.run_seconds) 'Cyan'
+        $g = Wait-LabGame
+        if ($g -eq '__STOP__') { continue }
+        Wait-ThermalStable
+        $run = Invoke-LabRun $nx.run_seconds ("$($nx.tweak_id) " + $nx.stage)
+        if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti (gioco chiuso o in pausa?). Riprovo.' 'DarkYellow'; continue }
+        Say ("   run: {0} FPS avg | 1% low {1}" -f $run.fps_avg, $run.fps_p1) 'Gray'
+        $ph = if ("$($nx.stage)" -eq 'off') { 'pair_off' } else { 'pair_on' }
+        $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = $ph; tweak_id = $nx.tweak_id; run = $run }
+        if (Test-RunRejected $resp) { continue }
+        if ($resp -and $resp.decision) {
+          if ($resp.decision -eq 'kept') {
+            Say ("   [ OK ] MANTENUTO: {0}" -f $resp.reason) 'Green'
+          } else {
+            Say ("   [ROLLBACK] {0}" -f $resp.reason) 'Yellow'
+            if (-not $resp.already_off) {
+              $msg = Invoke-RestoreTweak "$($nx.tweak_id)"
+              Say ("   [ OK ] {0}" -f $msg) 'DarkGray'
+            } else {
+              Say '   [ OK ] Gia disattivato dall ultima misura della sequenza.' 'DarkGray'
+            }
+            $script:LAB_APPLIED.Remove("$($nx.tweak_id)")
+            LabEvent 'rolled_back' @{ tweak_id = $nx.tweak_id }
+          }
+          if ($resp.completed) { Say '   [LAB] Sequenza completata: genero il report...' 'Cyan' }
+        }
+      }
+      elseif ($act -eq 'rollback_tweaks') {
+        $ids = @($nx.tweak_ids)
+        Say ("`n[CONTROLLO STATISTICO] {0} tweak mantenuti non reggono la correzione per test multipli: li annullo." -f $ids.Count) 'Yellow'
+        Say '   (Testare molti tweak di fila fa comparire per caso qualche falso positivo: questo passaggio li toglie di mezzo.)' 'DarkGray'
+        foreach ($rid in $ids) {
+          $msg = Invoke-RestoreTweak "$rid"
+          $script:LAB_APPLIED.Remove("$rid")
+          Say ("   {0}: {1}" -f $rid, $msg) 'DarkGray'
+        }
+        LabEvent 'tweaks_rolled_back' @{ tweak_ids = $ids }
       }
       elseif ($act -eq 'reboot_required') {
         $rebooted = $false
@@ -5742,6 +6172,7 @@ if ($MODE -eq 'lab') {
         Say ("   run: {0} FPS avg" -f $run.fps_avg) 'Gray'
         $ph = 'synergy_' + $nx.stage
         $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = $ph; run = $run }
+        if (Test-RunRejected $resp) { continue }
         if ($resp -and $resp.pair_done -and $resp.synergy) {
           if ($resp.synergy.is_synergy) { Say ("   [ OK ] SINERGIA: insieme {0}% vs somma singoli {1}%" -f $resp.synergy.combined_delta_pct, $resp.synergy.individual_sum_pct) 'Green' }
           else { Say ("   [INFO] Nessuna sinergia extra ({0}% vs {1}%)" -f $resp.synergy.combined_delta_pct, $resp.synergy.individual_sum_pct) 'Gray' }
@@ -5755,6 +6186,7 @@ if ($MODE -eq 'lab') {
         $run = Invoke-LabRun $nx.run_seconds 'validazione'
         if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
         $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'validation'; run = $run }
+        if (Test-RunRejected $resp) { continue }
         if ($resp -and $resp.validation) {
           Say ("   Reale: {0}% vs previsto {1}%" -f $resp.validation.real_gain_pct, $resp.validation.predicted_gain_pct) 'Yellow'
           if ($resp.validation.discrepancy) { Say '   [WARN] Guadagno reale sotto il 50% del previsto: segnalato nel report.' 'DarkYellow' }
@@ -5768,6 +6200,7 @@ if ($MODE -eq 'lab') {
         $run = Invoke-LabRun $nx.run_seconds 'drift check'
         if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
         $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'recheck'; run = $run }
+        if (Test-RunRejected $resp) { continue }
         if ($resp) {
           if ($resp.stable) { Say ("   [ OK ] Baseline stabile (drift {0}%)" -f $resp.drift_pct) 'Green' }
           elseif ($resp.rebaselined) { Say ("   [ OK ] Nuova baseline: {0} FPS avg (drift compensato)" -f $resp.stats.fps_avg) 'Yellow' }
@@ -5783,6 +6216,7 @@ if ($MODE -eq 'lab') {
         if (-not $run) { Say '   [WARN] Troppi pochi frame raccolti. Riprovo.' 'DarkYellow'; continue }
         Say ("   run: {0} FPS avg | 1% low {1}" -f $run.fps_avg, $run.fps_p1) 'Gray'
         $resp = LabApi 'Post' '/api/agent/lab/run' @{ phase = 'test'; tweak_id = $nx.tweak_id; run = $run }
+        if (Test-RunRejected $resp) { continue }
         if ($resp -and $resp.decision) {
           if ($resp.decision -eq 'kept') {
             Say ("   [ OK ] MANTENUTO: {0}" -f $resp.reason) 'Green'

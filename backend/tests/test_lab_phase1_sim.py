@@ -1,4 +1,10 @@
-"""Simulazione E2E agent del Laboratorio (Fase 1) via HTTP."""
+"""Simulazione E2E agent del Laboratorio (Fase 1) via HTTP.
+
+Avvia con `paired: false`: qui si verifica lo schema a BLOCCHI, che resta la
+strada per i tweak con riavvio e per chi sceglie la sessione breve. I run non
+portano l'istogramma, quindi copre anche il percorso di ricaduta per gli agent
+vecchi. Lo schema appaiato ha la sua simulazione in test_lab_paired_sim.py.
+"""
 import os
 import random
 import sys
@@ -32,7 +38,7 @@ r = s.post(f"{BASE}/api/lab/start", json={"risk_level": "hardware"}, timeout=15)
 assert r.status_code == 422, f"expected 422 got {r.status_code}"
 print("start rischio invalido -> 422 OK")
 
-r = s.post(f"{BASE}/api/lab/start", json={"risk_level": "medium", "run_seconds": 90, "include_reboot": False}, timeout=15)
+r = s.post(f"{BASE}/api/lab/start", json={"risk_level": "medium", "run_seconds": 90, "include_reboot": False, "paired": False}, timeout=15)
 assert r.status_code == 200, r.text
 sess = r.json()["session"]
 print("sessione creata:", sess["session_id"][:8], "status", sess["status"], "| candidati:", len(sess["candidates"]))
@@ -132,7 +138,7 @@ assert sess["status"] == "completed" and sess["report"]
 print("GET /lab/session -> completed con report OK")
 
 # 5. test abort su nuova sessione
-r = s.post(f"{BASE}/api/lab/start", json={"risk_level": "safe", "run_seconds": 90}, timeout=15)
+r = s.post(f"{BASE}/api/lab/start", json={"risk_level": "safe", "run_seconds": 90, "paired": False}, timeout=15)
 assert r.status_code == 200
 n = nxt(); assert n["action"] == "snapshot"
 s.post(f"{BASE}/api/lab/abort", timeout=15)
