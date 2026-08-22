@@ -9,6 +9,232 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 
 _Prossime feature in sviluppo — vedi `/app/memory/ROADMAP.md`._
 
+### Fixed — un tweak che fallisce in silenzio non risulta piu' applicato
+- **L'esito di un tweak si verifica guardando la macchina, non gli errori.** Lo
+  script gira con `$ErrorActionPreference = 'SilentlyContinue'` dalla prima riga
+  e non puo' non girarci — meta' delle sonde interroga cose che su molti PC non
+  esistono. Il prezzo era che un tweak che non scriveva niente (permessi negati,
+  chiave protetta, criterio di dominio) risultava applicato esattamente come uno
+  riuscito, e finiva cosi' nel journal, nel riepilogo e nel conteggio. Ora, dopo
+  l'apply, si **rilegge il piano**: le righe che dovevano cambiare devono
+  risultare a posto.
+  - Nessuna delle modifiche previste risulta scritta &rarr; **il tweak e'
+    fallito**, con il motivo, e le chiavi di backup appena create vengono
+    rimosse: il backup deve contenere solo cio' che e' stato davvero cambiato,
+    altrimenti "Annulla" rimette valori che nessuno ha toccato.
+  - Alcune si' e altre no &rarr; **applicato in parte**, che non e' un
+    fallimento (qualcosa e' passato ed e' annullabile) e non e' un successo
+    pieno: passo giallo nella schermata di lavoro, riga gialla nel Journal con
+    l'elenco di cosa non e' passato, e riepilogo che li conta separati.
+  - Quello che il piano non sa rileggere (powercfg, netsh, fsutil) resta **non
+    verificabile** e non viene spacciato per verificato: il journal registra
+    quante modifiche erano controllabili.
+- Il test statico fra piano e apply ora confronta anche i **valori**, non solo
+  le chiavi: da quando la verifica si basa sul piano, un valore sbagliato li'
+  farebbe dichiarare fallito un tweak riuscito.
+
+### Changed — nessun lavoro gira piu' dentro la richiesta
+- `/api/apply-one`, `/api/restore-one`, `/api/restore` e
+  `/api/bloatware/remove` diventano job a passi come `/api/apply`: rimettere
+  tutto com'era puo' voler dire venti tweak e servizi da riavviare,
+  `Remove-AppxPackage` ci mette secondi per app, e applicare un tweak solo puo'
+  comunque scandire tutte le schede di rete. Tutti mostrano la schermata di
+  lavoro, tutti rimbalzano con `409` se ce n'e' gia' uno in corso.
+- **Anche la rimozione di una app si verifica guardando**: `Remove-AppxPackage`
+  non alza la voce quando non riesce, quindi si ricontrolla se la app c'e'
+  ancora invece di contare i tentativi. Una che non si lascia rimuovere lo dice.
+- I passi si costruiscono in un posto solo (`New-TweakStep`, `New-RevertStep`,
+  `New-StateStep`) e il client avvia i lavori in un posto solo (`runJob`):
+  applicare un tweak da `/api/apply` e applicarlo da `/api/apply-one` facevano
+  cose leggermente diverse, e la differenza non la voleva nessuno.
+
+### Fixed — un solo backup e un solo journal per tutti e due gli agent
+- L'.exe Python teneva il proprio backup **accanto all'eseguibile**: se l'exe e'
+  in Program Files quella cartella non e' scrivibile, se sta in Download
+  sparisce col primo riordino, e ogni reinstallazione ci passa sopra. Era il
+  file piu' fragile del prodotto, e serve ad annullare le modifiche.
+- Ed era un **secondo** backup: i due motori hanno cataloghi di tweak diversi
+  (`tcp-nagle-off` di qua, `network` di la') ma scrivono le stesse chiavi di
+  registro nello stesso formato, in due file che non si parlavano. "Ripristina"
+  da riga di comando non annullava quello che aveva fatto la finestra, e
+  viceversa. Ora e' lo stesso `%APPDATA%\FrameForge\backup.json`, e un
+  ripristino solo rimette tutto.
+- I backup vecchi vengono **fusi** nel condiviso invece che abbandonati, e
+  cancellati solo dopo che il nuovo e' stato scritto. I metadati dell'altro
+  motore (`__tweak_keys__`, `__applied_at__`) sopravvivono al giro: senza,
+  sparirebbe la possibilita' di annullare un singolo tweak dalla finestra.
+- Il ripristino da CLI **non tratta piu' i metadati come chiavi di registro**:
+  finivano nel ramo generico e producevano comandi `reg add` su percorsi
+  inventati, che fallivano in silenzio.
+- **Anche la riga di comando scrive nel journal condiviso**, con l'esito vero
+  del Recipe System (applicato / applicato ma non verificato / fallito) invece
+  di un totale, e con `via: cli` — la schermata Journal marca quelle righe,
+  altrimenti sembrerebbe che la finestra abbia fatto cose che non ha fatto.
+- Resta separato quello che non si puo' unire con un rename: **due cataloghi di
+  tweak e due motori di apply**. Lo stesso `--mode apply-one` passa dal motore
+  Python da riga di comando e da quello PowerShell dai bottoni della dashboard.
+  E' una scelta di architettura, non un bug da correggere di lato.
+
+### Added — Diagnosi: il risultato prima del catalogo
+- **La schermata di partenza non e' piu' il catalogo dei tweak.** Era un
+  pannello con le checkbox: giusto per chi vuole controllo, servito al 90% di
+  gente che vuole un bottone. Ora la prima cosa e' cosa c'e' da sistemare su
+  questo PC, con il diff gia' visibile riga per riga, un solo primario
+  **"Ottimizza"** e il catalogo dietro **"Personalizza"**.
+- **Il punteggio misura una cosa sola e la schermata la scrive per intero**:
+  quanta parte delle ottimizzazioni che FrameForge sa fare e' gia' attiva qui,
+  pesata per l'impatto che ogni tweak dichiara. Non e' un voto alla macchina, e
+  non finge di esserlo — un numero che promette piu' di quello che misura e'
+  esattamente la promessa dei "booster" da cui questo prodotto vuole
+  distinguersi. La legenda mostra i conteggi da cui esce, e i tweak non
+  applicabili a questo PC restano fuori dal calcolo, ne' come merito ne' come
+  colpa.
+- **Nessuna percentuale aggregata inventata.** Sommare le stime dichiarate di
+  dodici tweak e stampare "+11% FPS" in cima e' precisione finta: gli effetti
+  non si sommano e quel numero non lo puo' controllare nessuno. La stima resta
+  accanto a ogni singolo tweak, dove si puo' valutare. **L'unico numero grande
+  e' quello misurato**: il benchmark prima/dopo dell'ultima volta — che ora
+  viene scritto anche nel journal, non solo spedito al cloud, quindi sul PC ne
+  resta traccia (`104 → 113, +9%`).
+- **Chi ha bisogno dei privilegi di amministratore si deduce dai piani**: le
+  righe che scrivono in `HKLM` o sui servizi lo dicono da sole, quindi l'avviso
+  conta le modifiche vere invece di dire "alcune". Una lista scritta a mano si
+  sarebbe disallineata al primo tweak nuovo.
+- **Il bottone unico non decide sui tweak marcati "cautela"**: restano fuori,
+  nominati sotto, e si applicano da Personalizza. Un click solo puo' fare le
+  cose sicure, non le scelte.
+- Con niente da sistemare la schermata lo dice ("Non ho trovato niente da
+  sistemare") invece di sembrare rotta.
+
+### Added — ogni tweak dice cosa cambia, non cosa fa
+- **Il piano di un tweak**: tutti e 35 i tweak dichiarano ora, chiave per
+  chiave, cosa cambierebbe su **questa** macchina — `Game Mode: 0 → 1`,
+  `MouseSpeed: 1 → 0`, `Schema energetico: Bilanciato → Prestazioni eccellenti`.
+  Una descrizione vale per tutti i PC, un piano vale per questo: "disattiva
+  l'accelerazione del mouse" e "MouseSpeed: 1 → 0" dicono la stessa cosa, ma
+  solo la seconda si puo' controllare — e chi accetta che un programma gli
+  scriva nel registro ha diritto di controllare prima, non dopo. Dove il piano
+  c'e', prende il posto della riga "Modifica" nella scheda.
+- **Il valore attuale non si dichiara mai: si legge.** `PlReg` interroga il
+  registro al momento; `PlSvc` chiede lo stato del servizio. Dichiarare il
+  "prima" vorrebbe dire scrivere nel piano quello che ci si aspetta di trovare,
+  che e' il modo in cui un diff comincia a mentire. Dove il valore non si legge
+  a buon mercato (powercfg, fsutil, chiavi sparse su tutte le schede di rete) il
+  "prima" manca e si mostra solo il "dopo", invece di inventarlo.
+- **Le righe che non cambiano niente lo dicono.** Lo stato di un tweak lo decide
+  una chiave sola, ma il tweak ne scrive parecchie: senza questo il piano
+  prometteva `0 → 0`. Ora quelle righe restano visibili — fanno vedere tutta
+  l'impronta del tweak — ma sono marcate "gia a posto" e non si contano fra le
+  modifiche.
+- **Un test statico tiene il piano legato all'apply**: per ogni `Set-Reg` con
+  argomenti risolvibili dentro le funzioni di apply, il test verifica che ci sia
+  la riga corrispondente nel piano, e viceversa dove l'apply e' interamente
+  statica. Un piano che promette qualcosa di diverso da quello che l'apply fa
+  sarebbe peggio di nessun piano. Ha gia' trovato un percorso di registro
+  sbagliato in `priority`.
+- **Il piano si calcola solo per i tweak da applicare**: per uno gia' ottimale
+  sarebbe una lista vuota pagata con decine di letture del registro; per uno non
+  applicabile una promessa che non si mantiene.
+- In lista compatta la scheda mostra una riga sola (la prima modifica piu' il
+  conteggio delle altre); la tabella completa compare espandendo.
+
+### Added — il lavoro in corso e' una schermata, e si puo' fermare
+- **Schermata di lavoro a tutta finestra** mentre l'agent applica: elenco dei
+  passi con l'esito di ciascuno (fatto, in corso, saltato, **non riuscito col
+  motivo**), barra a una tacca per passo, log dal vivo accanto. Prima l'unico
+  segno che stesse succedendo qualcosa erano due bottoni disabilitati e un
+  riquadro di log alto 140px in fondo alla finestra. E' una modalita', non una
+  scheda: prende la finestra finche' dura e la restituisce quando finisce.
+- **Il job espone i propri passi** (`GET /api/job` porta `steps[]` con
+  `state` per indice, non solo `step`/`total`): e' quello che permette di
+  mostrare una lista invece di una percentuale, e di dire QUALE passo non e'
+  riuscito mentre gli altri andavano avanti. La percentuale di un lavoro fatto
+  di pezzi disuguali — due benchmark da 40s e dieci tweak da mezzo secondo — e'
+  un numero che si inventa.
+- **`POST /api/job/cancel`: "Ferma qui".** Non interrompe il passo in corso —
+  interrompere a meta' una scrittura nel registro sarebbe il modo peggiore di
+  dare il controllo all'utente — ma alza una bandiera che il loop legge fra un
+  passo e l'altro. I passi rimasti si saltano; **i passi di chiusura no**: il
+  backup viene salvato e lo stato riletto, perche' fermarsi non deve voler dire
+  uscire con il registro modificato e nessun modo di tornare indietro. Il
+  benchmark DOPO invece si salta: misurare un'ottimizzazione fermata a meta'
+  produce un confronto che non descrive niente.
+- **Un lavoro fermato non si chiama finito**: lo stato del job diventa
+  `cancelled`, e il riepilogo dice "Fermato a meta'" contando applicati,
+  saltati e non riusciti separatamente.
+- **La schermata compare anche se non e' stata questa pagina ad avviare il
+  lavoro** (finestra ricaricata a ottimizzazione in corso).
+- **Gli errori si vedono dentro il log verde**: le righe `[ERR ]` e `[STOP]`
+  sono rosse. Un errore dentro un muro di verde e' un errore che non si vede.
+
+### Added — Journal: cosa FrameForge ha cambiato su questo PC
+- **I dati dell'undo non stanno piu' in `%TEMP%`.** Backup e journal vivono in
+  `%APPDATA%\FrameForge\` (dove sta gia' `token.dat`). `%TEMP%` lo svuota
+  Windows, lo svuotano i "pulitori" e — soprattutto — lo cancella
+  ricorsivamente `Do-Cleanup`, cioe' il tweak **"Pulizia temp" di questo stesso
+  agent**: bastava sceglierlo per ultimo perche' l'agent cancellasse il proprio
+  backup, e un backup cancellato non e' un file perso, e' un PC che non torna
+  piu' indietro. I percorsi vecchi vengono letti finche' esistono e cancellati
+  solo *dopo* che il nuovo backup e' stato scritto.
+- **Nuovo `%APPDATA%\FrameForge\journal.jsonl`**: un evento per riga, aggiunto
+  in coda, mai riscritto. Il file di backup e' una fotografia del presente —
+  quali chiavi sono modificate adesso — e non sa raccontare cosa e' successo: un
+  tweak annullato ne sparisce, uno fallito non ci e' mai entrato. Il log della
+  GUI quella storia ce l'aveva, ma viveva in memoria e moriva con la finestra.
+  Il journal registra applicazioni, **fallimenti** e annullamenti, con il valore
+  precedente e quello nuovo di ogni chiave toccata. Una riga corrotta costa
+  quella riga, non il file; un journal che non si scrive non ferma
+  un'ottimizzazione.
+- **Valori in chiaro invece che in formato di serializzazione**: `__ABSENT__`
+  diventa "non esisteva", `String|1` diventa `1`, e il GUID del piano energetico
+  diventa il suo nome (`Bilanciato → Prestazioni elevate`). Dove il valore
+  attuale non si rilegge a buon mercato manca del tutto, e la GUI mostra solo il
+  prima: meglio una meta' vera che una freccia inventata.
+- **La scheda "Cosa ho cambiato" diventa "Journal"**, raggruppata per sessione,
+  con il diff per riga e **Annulla per riga**. Ogni giro di ottimizzazione e'
+  una sessione, annullabile in blocco con **"Annulla la sessione"** (nuovo
+  `POST /api/revert-session`, che gira come job a passi come `/api/apply`).
+  Quattro forme distinte per una riga: applicata e ancora attiva, gia'
+  annullata, annullamento, non riuscita ("nessuna chiave e' stata scritta").
+- **Cosa e' ancora annullabile lo decide il backup, non il journal**: il journal
+  e' cronologia e non cambia, il backup e' lo stato di adesso. Senza
+  quell'incrocio un tweak gia' annullato continuerebbe a offrire "Annulla".
+- **Rimosso `GET /api/changes`**, che ricostruiva la cronologia dal solo file di
+  backup: `GET /api/journal` la serve per sessioni, ed e' l'unica fonte.
+
+### Changed — la GUI dell'agent non si blocca piu' mentre applica
+- **`/api/apply` registra un job e risponde subito** (`202`) invece di fare tutto
+  il lavoro dentro la richiesta. Il server locale della GUI e' un `HttpListener`
+  a thread singolo: finche' benchmark PRIMA, N tweak, benchmark DOPO e invio dati
+  giravano dentro la POST, per tutti quei minuti **nessun'altra richiesta veniva
+  servita**. La GUI continuava a chiedere `/api/log` ogni 400 ms senza ricevere
+  risposta, quindi mostrava un log fermo e nessun avanzamento proprio mentre
+  l'agent scriveva nel registro. Anche il flag `applying` era inutile: nessuno
+  poteva leggerlo mentre valeva `true`.
+- **Il loop del listener esegue un passo per giro**, e fra un passo e l'altro
+  serve le richieste. La granularita' e' il singolo tweak, quindi il log non puo'
+  restare indietro piu' di un passo. Tutto resta nello stesso runspace: i passi
+  vedono `$script:BK` e le funzioni del motore come prima, senza runspace
+  paralleli da risincronizzare.
+- **Nuovo `GET /api/job`**: passo corrente, `n/totale`, percentuale ed elenco dei
+  passi falliti. Il log dice cosa e' successo, non a che punto e': il bottone
+  "Applica" ora mostra `Nome del tweak · 3/12` mentre lavora.
+- **Un passo che fallisce non ferma gli altri ma non sparisce piu'**: finisce nel
+  log come `[ERR ]` e in `job.errors`, e il riepilogo finale conta i tweak
+  riusciti ("Applicati in parte") invece di dichiarare applicato tutto quello che
+  era stato chiesto. Prima, con `$ErrorActionPreference = 'SilentlyContinue'`, un
+  tweak fallito era indistinguibile da uno riuscito.
+- **I passi lenti vengono annunciati un giro prima di partire** (tetto 1,5 s),
+  altrimenti la riga "Benchmark PRIMA in corso..." arriverebbe alla GUI solo a
+  misura finita, cioe' quando non serve piu'.
+- **Il backup viene scritto dopo ogni tweak**, non piu' solo a fine giro: ora il
+  lavoro e' interrompibile, e un tweak applicato con sul disco il backup di prima
+  sarebbe un tweak non piu' annullabile. Per lo stesso motivo il loop **non esce
+  finche' un job e' in corso**, nemmeno se la finestra viene chiusa: meglio
+  finire i passi rimasti parlando a nessuno che lasciare il registro a meta'.
+- **Due apply in parallelo non si sovrappongono**: il secondo riceve `409 busy`
+  invece di partire e mangiarsi il backup del primo.
+
 ### Changed — precisione delle misure (Lab v2, `metrics_version: 2`)
 - **Schema appaiato ABBA** come default del test loop: invece di tre run col tweak
   attivo confrontati con un blocco di baseline misurato minuti prima, si alternano

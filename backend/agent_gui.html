@@ -442,24 +442,242 @@
     outline-offset: 2px;
   }
 
-  /* Cosa ho cambiato: la cronologia delle modifiche reversibili */
-  .changes-intro {
-    grid-column: 1 / -1; padding: 12px 14px; margin-bottom: 10px;
-    border: 1px solid var(--border); background: var(--bg2); font-size: 13px;
+  /* ===== Diagnosi: il risultato prima del catalogo ===== */
+  .diag { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 18px; }
+  .diag-hero { display: flex; align-items: flex-start; gap: 40px; }
+  .diag-score { flex: none; width: 320px; }
+  .diag-kicker {
+    font-family: "Consolas", monospace; font-size: 11px;
+    letter-spacing: 0.22em; color: var(--dim); text-transform: uppercase;
   }
-  .changes-intro code { font-size: 11px; color: var(--muted); word-break: break-all; }
-  .change-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-  .change-name { font-weight: 600; }
-  .change-when { font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .change-keys { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
-  .change-key { font-size: 11px; border-left: 2px solid var(--border); padding-left: 10px; }
-  .change-key-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; }
-  /* Il nome del valore e' cio' che e' stato toccato: sta in primo piano. */
-  .change-name-k { color: var(--text); font-weight: 600; word-break: break-all; }
-  /* Il percorso e' la coordinata per ritrovarlo: serve, ma non per primo. */
-  .change-path { color: var(--dim); word-break: break-all; margin-top: 2px; font-size: 11px; }
-  .change-prev { color: var(--muted); margin-left: auto; white-space: nowrap; }
-  .change-prev b { color: var(--warn); font-weight: 600; }
+  .diag-n {
+    font-size: 76px; font-weight: 800; line-height: 1; letter-spacing: -0.04em;
+    color: var(--accent); text-shadow: 0 0 40px rgba(229,255,0,0.25); margin-top: 10px;
+  }
+  .diag-n i {
+    font-family: "Consolas", monospace; font-style: normal;
+    font-size: 15px; color: var(--dim); margin-left: 8px; letter-spacing: 0;
+    text-shadow: none; font-weight: 400;
+  }
+  .diag-bar { display: flex; gap: 3px; margin-top: 14px; }
+  .diag-tick { height: 10px; flex: 1; background: #2a2a16; }
+  .diag-tick.on { background: var(--accent); }
+  .diag-legend { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .diag-legend b { color: var(--text); }
+  .diag-note { font-size: 12px; color: var(--dim); margin-top: 6px; line-height: 1.45; }
+  .diag-side { flex: 1; min-width: 0; padding-top: 22px; }
+  .diag-title {
+    font-size: 24px; font-weight: 700; line-height: 1.3;
+    letter-spacing: -0.01em; text-wrap: pretty;
+  }
+  .diag-title b { color: var(--accent); }
+  .diag-stats { display: flex; gap: 34px; margin-top: 20px; flex-wrap: wrap; }
+  .diag-stat-n { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; }
+  .diag-stat-n.ok { color: var(--ok); }
+  .diag-stat-n.ko { color: var(--danger); }
+  .diag-stat-n.dim { color: var(--dim); }
+  .diag-stat-l {
+    font-family: "Consolas", monospace; font-size: 11px;
+    letter-spacing: 0.14em; color: var(--dim);
+  }
+  .diag-warn {
+    display: flex; align-items: flex-start; gap: 12px; font-size: 13px;
+    background: rgba(255,170,0,0.06); border: 1px solid #4a3a10; padding: 11px 16px;
+  }
+  .diag-warn svg { flex: none; margin-top: 1px; }
+  .diag-hd { display: flex; align-items: center; gap: 12px; }
+  .diag-hr { flex: 1; height: 1px; background: var(--border); }
+  .diag-rows { display: flex; flex-direction: column; gap: 6px; }
+  .diag-row {
+    display: flex; align-items: center; gap: 16px;
+    background: var(--card); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent); padding: 11px 16px;
+  }
+  .diag-row.caution { border-left-color: var(--warn); }
+  .diag-row-txt { flex: 1; min-width: 0; }
+  .diag-row-name { font-weight: 700; font-size: 14px; }
+  .diag-row-meta { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .diag-pill {
+    font-family: "Consolas", monospace; font-size: 11px; letter-spacing: 0.1em;
+    background: var(--warn); color: #000; font-weight: 700; padding: 1px 6px; margin-left: 8px;
+  }
+  .diag-pill.caution { background: transparent; color: var(--warn); border: 1px solid var(--warn); }
+  .diag-diff {
+    font-family: "Consolas", monospace; font-size: 12px; color: var(--dim);
+    flex: 0 1 auto; text-align: right; overflow-wrap: anywhere;
+  }
+  .diag-foot {
+    display: flex; align-items: center; gap: 20px;
+    border-top: 1px solid var(--border); padding-top: 16px;
+  }
+  .diag-foot-txt { flex: 1; font-size: 13px; }
+  .diag-foot-sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  .diag-caution { font-size: 12px; color: var(--muted); }
+  .diag-caution b { color: var(--warn); }
+
+  /* ===== Il piano di un tweak: prima -> dopo, chiave per chiave ===== */
+  .plan { border: 1px solid var(--border); background: var(--bg); margin-top: 10px; }
+  .plan-hd {
+    font-family: "Consolas", monospace; font-size: 11px; letter-spacing: 0.2em;
+    color: var(--dim); padding: 7px 12px; border-bottom: 1px solid var(--border);
+  }
+  .plan-row {
+    display: flex; align-items: baseline; gap: 12px; padding: 5px 12px;
+    font-family: "Consolas", monospace; font-size: 12px;
+  }
+  .plan-row + .plan-row { padding-top: 0; }
+  .plan-what { color: var(--muted); flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+  .plan-diff { flex: 0 1 auto; text-align: right; overflow-wrap: anywhere; }
+  .plan-now { color: var(--muted); text-decoration: line-through; }
+  .plan-absent { color: var(--muted); font-style: italic; }
+  .plan-arrow { color: var(--dim); margin: 0 6px; }
+  .plan-next { color: var(--ok); }
+  .plan-more { color: var(--dim); margin-left: 6px; }
+  .plan-row.same .plan-what { color: var(--dim); }
+  .plan-same { color: var(--dim); }
+  /* In lista compatta la tabella lascia il posto alla riga di riepilogo. */
+  .plan-1 {
+    display: none; font-family: "Consolas", monospace; font-size: 12px;
+    margin-top: 6px; padding-left: 28px;
+  }
+  .card.compact .plan-1 { display: block; }
+  .card.compact .plan { display: none; }
+  .card.compact.expanded .plan-1 { display: none; }
+  .card.compact.expanded .plan { display: block; }
+
+  /* ===== Il lavoro in corso ===== */
+  .run {
+    position: fixed; inset: 0; z-index: 200;
+    background: var(--bg); display: flex; flex-direction: column;
+  }
+  .run[hidden] { display: none; }
+  .run-head {
+    padding: 26px 28px 18px; flex-shrink: 0;
+    background: linear-gradient(180deg, var(--bg2) 0%, var(--bg) 100%);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-end; gap: 20px;
+  }
+  .run-head-txt { flex: 1; min-width: 0; }
+  .run-kicker {
+    font-family: "Consolas", monospace; font-size: 11px;
+    letter-spacing: 0.25em; color: var(--dim); margin-bottom: 8px;
+  }
+  .run-title { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+  .run-sub { font-size: 13px; color: var(--muted); margin-top: 3px; min-height: 20px; }
+  .run-count { text-align: right; flex: none; }
+  .run-count-n {
+    font-family: "Consolas", monospace; font-size: 34px; font-weight: 700;
+    color: var(--accent); line-height: 1;
+  }
+  .run-count-n span { color: var(--dim); font-size: 20px; }
+  .run-count-l {
+    font-family: "Consolas", monospace; font-size: 11px;
+    letter-spacing: 0.18em; color: var(--dim); margin-top: 4px;
+  }
+  /* Una tacca per passo, non una percentuale: la percentuale di un lavoro fatto
+     di pezzi disuguali e' un numero che si inventa. */
+  .run-bar {
+    display: flex; gap: 3px; padding: 0 28px; margin-top: -1px;
+    flex-shrink: 0; background: var(--bg); padding-top: 14px; padding-bottom: 2px;
+  }
+  .run-tick { height: 8px; flex: 1; background: #1c1c26; }
+  .run-tick.ok { background: var(--ok); }
+  .run-tick.failed { background: var(--danger); }
+  .run-tick.current { background: var(--accent); }
+  .run-tick.skipped { background: #3a3a48; }
+  .run-tick.warn { background: var(--warn); }
+  .run-body { flex: 1; display: flex; min-height: 0; }
+  .run-steps-col {
+    width: 560px; flex: none; border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .run-log-col { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+  .run-lbl {
+    font-family: "Consolas", monospace; font-size: 11px;
+    letter-spacing: 0.25em; color: var(--dim); padding: 16px 24px 10px;
+  }
+  .run-steps {
+    flex: 1; overflow-y: auto; padding: 0 24px 16px;
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .run-log { flex: 1; height: auto; margin: 0 24px 16px; }
+  .run-step {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 12px; background: var(--card);
+    border-left: 3px solid transparent;
+  }
+  .run-step-name { flex: 1; font-size: 13px; color: var(--muted); }
+  .run-step.pending { background: transparent; }
+  .run-step.pending .run-step-name { color: var(--dim); }
+  .run-step.current { background: var(--card-hi); border-left-color: var(--accent); padding: 11px 12px; }
+  .run-step.current .run-step-name { color: var(--accent); font-weight: 700; }
+  .run-step.failed { background: #1a0f14; border-left-color: var(--danger); align-items: flex-start; }
+  .run-step.failed .run-step-name { color: var(--text); font-weight: 600; }
+  .run-step.skipped .run-step-name { color: var(--dim); text-decoration: line-through; }
+  .run-step.warn { background: #1a1508; border-left-color: var(--warn); align-items: flex-start; }
+  .run-step.warn .run-step-name { color: var(--text); font-weight: 600; }
+  .run-step.warn .run-step-tag { color: var(--warn); }
+  .run-step-mark { width: 16px; height: 16px; flex: none; display: flex; align-items: center; justify-content: center; }
+  .run-step-box { width: 14px; height: 14px; border: 1px solid var(--border); }
+  .run-step-tag { font-family: "Consolas", monospace; font-size: 11px; color: var(--dim); flex: none; }
+  .run-step.current .run-step-tag { color: var(--accent); }
+  .run-step.failed .run-step-tag { color: var(--danger); }
+  .run-step-err { font-size: 12px; color: var(--muted); padding-left: 28px; margin-top: 3px; }
+  .run-foot {
+    flex-shrink: 0; border-top: 1px solid var(--border); background: var(--bg2);
+    padding: 16px 28px; display: flex; align-items: center; gap: 20px;
+  }
+  .run-foot-txt { flex: 1; font-size: 13px; }
+  .run-foot-sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
+
+  /* Journal: la cronologia su disco, raggruppata per sessione.
+     Righe piene invece di card: qui non si sceglie niente, si legge una storia
+     in ordine di tempo, e le card della griglia spezzavano quell'ordine su piu'
+     colonne. */
+  .jr-intro {
+    grid-column: 1 / -1; padding: 11px 16px; margin-bottom: 12px;
+    border: 1px solid var(--border); background: rgba(0, 224, 255, 0.05);
+    display: flex; align-items: center; gap: 11px; flex-wrap: wrap;
+  }
+  .jr-intro code { font-family: "Consolas", monospace; font-size: 12px; color: var(--info); word-break: break-all; }
+  .jr-intro span { font-size: 12px; color: var(--muted); }
+  .jr-session { grid-column: 1 / -1; margin-bottom: 14px; }
+  .jr-head {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--bg2); border: 1px solid var(--border); padding: 12px 16px;
+  }
+  .jr-title { font-size: 15px; font-weight: 700; }
+  .jr-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .jr-sub b { color: var(--ok); }
+  .jr-sub b.ko { color: var(--danger); }
+  .jr-rows { display: flex; flex-direction: column; gap: 1px; margin-top: 6px; }
+  .jr-row {
+    display: flex; align-items: center; gap: 16px;
+    background: var(--card); border-left: 3px solid var(--ok); padding: 11px 16px;
+  }
+  .jr-row.ko { border-left-color: var(--danger); opacity: 0.78; }
+  .jr-row.undone { border-left-color: var(--dim); opacity: 0.7; }
+  .jr-row.parziale { border-left-color: var(--warn); }
+  .jr-parz { font-family: inherit; font-size: 12px; color: var(--warn); margin-top: 2px; }
+  .jr-via {
+    font-family: "Consolas", monospace; font-size: 11px; letter-spacing: 0.1em;
+    border: 1px solid var(--info); color: var(--info); padding: 0 5px; margin-left: 8px;
+  }
+  .jr-time {
+    font-family: "Consolas", monospace; font-size: 12px; color: var(--dim);
+    width: 52px; flex: none;
+  }
+  .jr-what { width: 250px; flex: none; }
+  .jr-what-name { font-size: 13px; font-weight: 700; }
+  .jr-what-cat { font-size: 11px; color: var(--dim); }
+  .jr-diff { flex: 1; min-width: 0; font-family: "Consolas", monospace; font-size: 12px; }
+  .jr-keys { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .jr-prev { color: var(--muted); text-decoration: line-through; }
+  .jr-arrow { color: var(--dim); margin: 0 6px; }
+  .jr-now { color: var(--ok); }
+  .jr-absent { color: var(--muted); font-style: italic; text-decoration: none; }
+  .jr-err { font-size: 12px; color: var(--muted); font-family: inherit; }
+  .jr-note { font-family: "Consolas", monospace; font-size: 11px; color: var(--dim); flex: none; }
   .btn-revert {
     flex: none; padding: 6px 12px; border: 1px solid var(--accent);
     background: transparent; color: var(--accent); font-family: inherit;
@@ -512,6 +730,9 @@
     padding: 8px 12px; color: var(--ok);
   }
   .log .ts { color: var(--dim); margin-right: 8px; }
+  /* Il log e' verde perche' racconta cose che vanno: un errore dentro un
+     muro di verde e' un errore che non si vede. */
+  .log .err { color: var(--danger); }
   .btn-bar { display: flex; flex-direction: column; gap: 8px; }
   .bench-toggle {
     display: flex; align-items: center; gap: 8px;
@@ -1062,8 +1283,44 @@
     </div>
   </div>
 
+  <!-- Il lavoro in corso e' una MODALITA', non un posto: prende la finestra
+       finche' dura e la restituisce quando finisce. Prima l'unico segno che
+       stesse succedendo qualcosa erano i bottoni disabilitati e un log in fondo
+       alto 140px. -->
+  <div class="run" id="run" data-testid="run-overlay" hidden>
+    <div class="run-head">
+      <div class="run-head-txt">
+        <div class="run-kicker" id="runKicker">// OTTIMIZZAZIONE IN CORSO</div>
+        <div class="run-title" id="runTitle">Preparo il lavoro</div>
+        <div class="run-sub" id="runSub"></div>
+      </div>
+      <div class="run-count">
+        <div class="run-count-n" id="runCount">0<span>/0</span></div>
+        <div class="run-count-l">PASSI</div>
+      </div>
+    </div>
+    <div class="run-bar" id="runBar"></div>
+    <div class="run-body">
+      <div class="run-steps-col">
+        <div class="run-lbl">// PASSI</div>
+        <div class="run-steps" id="runSteps"></div>
+      </div>
+      <div class="run-log-col">
+        <div class="run-lbl">// LOG</div>
+        <div class="log run-log" id="runLog" data-log></div>
+      </div>
+    </div>
+    <div class="run-foot">
+      <div class="run-foot-txt">
+        <div>Puoi chiudere la finestra: il lavoro finisce lo stesso e lo ritrovi nel Journal.</div>
+        <div class="run-foot-sub">Ogni modifica viene salvata appena applicata, non alla fine.</div>
+      </div>
+      <button class="btn-danger" id="runCancel" data-testid="run-cancel">Ferma qui</button>
+    </div>
+  </div>
+
   <footer>
-    <div class="log" id="log"></div>
+    <div class="log" id="log" data-log></div>
     <div class="btn-bar">
       <div class="summary-strip" id="summaryStrip" data-testid="summary-strip">
         Nessun tweak selezionato · scegli i tweak o clicca un preset
@@ -1115,6 +1372,7 @@
     if (location.search.indexOf("tk=") >= 0) history.replaceState(null, "", location.pathname);
   } catch (e) {}
   const CATS = [
+    { key: "diagnosi", label: "Diagnosi" },
     { key: "gaming",  label: "Gaming & FPS" },
     { key: "input",   label: "Latenza & Input" },
     { key: "network", label: "Rete & Streaming" },
@@ -1122,11 +1380,11 @@
     { key: "bloatware", label: "Bloatware" },
     { key: "monitor", label: "Monitor Live" },
     { key: "profiles", label: "Profili Cloud" },
-    { key: "changes",  label: "Cosa ho cambiato" }
+    { key: "journal",  label: "Journal" }
   ];
-  let state = { tweaks: [], hw: {}, admin: false, backup: 0, backup_ids: [], presets: {}, profiles: null, revertable: [], agent: {} };
+  let state = { tweaks: [], hw: {}, admin: false, backup: 0, backup_ids: [], presets: {}, profiles: null, revertable: [], agent: {}, journal: null };
   let selected = new Set();
-  let activeCat = "gaming";
+  let activeCat = "diagnosi";
   let searchQ = "";
   let logSince = 0;
   let applying = false;
@@ -1221,6 +1479,213 @@
   // NON e' applicato — e finiva in verde, contato fra i gia' ottimali. Idem per
   // i tweak GPU, dove "applicabile" veniva letto come "applicato".
   const STATE_CLASSES = { ok: "ok", todo: "todo", na: "na", unknown: "na" };
+  // ===== Diagnosi: il risultato prima del catalogo =====
+  // La prima schermata era un catalogo con le checkbox: un pannello da power
+  // user servito al 90% di gente che vuole un bottone.
+  //
+  // Il punteggio dice UNA cosa sola e la schermata la scrive per intero: quanta
+  // parte delle ottimizzazioni che FrameForge sa fare e' gia' attiva su questo
+  // PC, pesata per l'impatto che ogni tweak dichiara. NON e' un voto alla
+  // macchina, e non finge di esserlo: un numero che promette piu' di quello che
+  // misura e' l'unica cosa che uno strumento come questo non si puo' permettere,
+  // perche' e' la stessa promessa dei "booster" da cui vuole distinguersi.
+  // Per la stessa ragione qui non c'e' nessuna percentuale aggregata messa
+  // insieme sommando le promesse dei tweak: quella stima la dichiara ogni tweak
+  // accanto a se stesso, dove si puo' valutare. Il solo numero grande e' quello
+  // misurato — il benchmark prima/dopo dell'ultima volta — e arriva dal journal.
+  function diagnosi() {
+    const conta = state.tweaks.filter(t => !t.fit.skip && (t.state_code === "ok" || t.state_code === "todo"));
+    const peso = t => Math.max(1, parseImpact(t));
+    const tot = conta.reduce((s, t) => s + peso(t), 0);
+    const fatto = conta.filter(t => t.state_code === "ok").reduce((s, t) => s + peso(t), 0);
+    const daFare = conta.filter(t => t.state_code === "todo");
+    return {
+      conta, daFare, tot,
+      score: tot ? Math.round(100 * fatto / tot) : null,
+      aPosto: conta.filter(t => t.state_code === "ok").length,
+      nonApplicabili: state.tweaks.filter(t => t.fit.skip).length,
+      // Quali scrivono in aree di sistema si DEDUCE dalle chiavi del piano
+      // (HKLM, servizi), non si dichiara a mano: una lista scritta a mano si
+      // sarebbe disallineata al primo tweak nuovo.
+      admin: daFare.filter(t => (t.plan || []).some(r => /^(HKLM:|svc::)/.test(String(r.key || "")))),
+      // Un bottone solo non decide per l'utente sui tweak marcati 'cautela'.
+      consigliati: daFare.filter(t => t.risk !== "caution"),
+      cautela: daFare.filter(t => t.risk === "caution"),
+    };
+  }
+
+  function diagTicks(score) {
+    const n = 20, on = Math.round(n * (score || 0) / 100);
+    return Array.from({ length: n }, (_, i) =>
+      `<div class="diag-tick${i < on ? " on" : ""}"></div>`).join("");
+  }
+
+  function diagRow(t) {
+    const p = planChanging(planOf(t));
+    const diff = p.length
+      ? `<div class="diag-diff">${esc(p[0].what || "")} <span class="diag-diff-v">${planDiff(p[0])}</span></div>`
+      : "";
+    const reboot = needsReboot(t)
+      ? `<span class="diag-pill">RIAVVIO</span>` : "";
+    const caut = t.risk === "caution" ? `<span class="diag-pill caution">CAUTELA</span>` : "";
+    return `<div class="diag-row${t.risk === "caution" ? " caution" : ""}" data-testid="diag-row-${t.id}">
+      <div class="diag-row-txt">
+        <div class="diag-row-name">${esc(t.problem || t.name)}${reboot}${caut}</div>
+        <div class="diag-row-meta">${esc(t.name)} &middot; ${esc(t.impact || "")}</div>
+      </div>
+      ${diff}
+    </div>`;
+  }
+
+  function renderDiagnosi(el) {
+    if (!state.tweaks.length) { el.innerHTML = `<div class="empty">Analisi del PC in corso…</div>`; return; }
+    if (!state.journal) loadJournal();
+    const d = diagnosi();
+    const n = d.consigliati.length;
+    const b = state.journal && state.journal.bench;
+
+    const titolo = d.daFare.length === 0
+      ? `Non ho trovato niente da sistemare. Questo PC ha gi&agrave; tutto quello che so fare.`
+      : `Il PC gira. Restano <b>${d.daFare.length} cos${d.daFare.length === 1 ? "a" : "e"}</b> fra te e tutto quello che questa macchina sa dare.`;
+
+    const misura = b
+      ? `<div class="diag-stat">
+           <div class="diag-stat-n ${b.delta_pct >= 0 ? "ok" : "ko"}">${b.delta_pct >= 0 ? "+" : ""}${b.delta_pct}%</div>
+           <div class="diag-stat-l">MISURATO L'ULTIMA VOLTA (${b.before} &rarr; ${b.after})</div>
+         </div>`
+      : `<div class="diag-stat">
+           <div class="diag-stat-n dim">&mdash;</div>
+           <div class="diag-stat-l">NESSUNA MISURA ANCORA SU QUESTO PC</div>
+         </div>`;
+
+    const avviso = (!state.admin && d.admin.length)
+      ? `<div class="diag-warn" data-testid="diag-admin">
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"></path><path d="M12 17h.01"></path>
+             <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>
+           <div>Stai girando senza privilegi da amministratore: <b>${d.admin.length}</b>
+             ${d.admin.length === 1 ? "modifica scrive" : "modifiche scrivono"} in aree di sistema e
+             ${d.admin.length === 1 ? "fallira'" : "falliranno"}. Riapri l'agent come amministratore per
+             ${d.admin.length === 1 ? "applicarla" : "applicarle"}.</div>
+         </div>` : "";
+
+    el.innerHTML = `
+      <div class="diag" data-testid="diagnosi">
+        <div class="diag-hero">
+          <div class="diag-score">
+            <div class="diag-kicker">// COPERTURA DELLE OTTIMIZZAZIONI</div>
+            <div class="diag-n"><span data-testid="diag-score">${d.score === null ? "—" : d.score}</span><i>/100</i></div>
+            <div class="diag-bar">${diagTicks(d.score)}</div>
+            <div class="diag-legend" data-testid="diag-legend">
+              <b>${d.aPosto}</b> gi&agrave; a posto &middot; <b>${d.daFare.length}</b> da sistemare
+              ${d.nonApplicabili ? `&middot; ${d.nonApplicabili} non applicabili a questo PC, fuori dal conto` : ""}
+            </div>
+            <div class="diag-note">
+              Quanta parte di quello che FrameForge sa fare &egrave; gi&agrave; attiva qui, pesata per l'impatto
+              dichiarato da ogni tweak. Non &egrave; un voto alla macchina.
+            </div>
+          </div>
+          <div class="diag-side">
+            <div class="diag-title">${titolo}</div>
+            <div class="diag-stats">
+              ${misura}
+              <div class="diag-stat">
+                <div class="diag-stat-n">${d.consigliati.filter(needsReboot).length}</div>
+                <div class="diag-stat-l">CHIEDONO IL RIAVVIO</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        ${avviso}
+        ${d.daFare.length ? `
+        <div class="diag-hd">
+          <div class="diag-kicker">// COSA HO TROVATO</div>
+          <div class="diag-hr"></div>
+        </div>
+        <div class="diag-rows">${d.daFare.map(diagRow).join("")}</div>` : ""}
+        <div class="diag-foot">
+          <div class="diag-foot-txt">
+            Ogni modifica viene salvata prima di essere applicata: si annulla una per una dal Journal.
+            <div class="diag-foot-sub">Nessun file di sistema toccato, nessun driver installato.</div>
+          </div>
+          <button class="preset-btn" data-testid="diag-custom" id="diagCustom">Personalizza</button>
+          <button class="btn-primary" data-testid="diag-apply" id="diagApply" ${n ? "" : "disabled"}>
+            ${n ? `Ottimizza &middot; ${n} modific${n === 1 ? "a" : "he"}` : "Niente da fare"}
+          </button>
+        </div>
+        ${d.cautela.length ? `<div class="diag-caution" data-testid="diag-caution">
+          <b>${d.cautela.length}</b> modific${d.cautela.length === 1 ? "a" : "he"} in cautela
+          (${esc(d.cautela.map(t => t.name).join(", "))}) rest${d.cautela.length === 1 ? "a" : "ano"} fuori dal
+          bottone: sono scelte tue, si applicano da Personalizza.</div>` : ""}
+      </div>`;
+
+    const btn = document.getElementById("diagApply");
+    if (btn) btn.onclick = () => {
+      selected = new Set(diagnosi().consigliati.map(t => t.id));
+      updateSummaryStrip();
+      applySelected();
+    };
+    const cust = document.getElementById("diagCustom");
+    if (cust) cust.onclick = () => { activeCat = "gaming"; renderTabs(); renderCards(); };
+  }
+
+  // ===== Il piano: cosa cambia, non cosa fa =====
+  // La descrizione di un tweak vale per tutti i PC; il piano vale per questo.
+  // "Disattiva l'accelerazione del mouse" e "MouseSpeed: 1 -> 0" dicono la
+  // stessa cosa, ma solo la seconda si puo' controllare — e chi accetta che un
+  // programma gli scriva nel registro ha diritto di controllare prima.
+  // Il piano arriva solo per i tweak che hanno davvero qualcosa da cambiare:
+  // dove non c'e', la card resta com'era, con la descrizione.
+  function planOf(t) {
+    const p = t && t.plan;
+    if (!p) return [];
+    return (Array.isArray(p) ? p : [p]).filter(r => r && typeof r === "object" && (r.what || r.next));
+  }
+
+  // Il 'prima' e' letto sulla macchina; quando manca (valori che non si leggono
+  // a buon mercato) si mostra solo il 'dopo', invece di inventare un 'prima'.
+  function planDiff(r) {
+    const now = String(r.now || "");
+    const next = esc(String(r.next || ""));
+    if (!now) return `<span class="plan-arrow">&rarr;</span><span class="plan-next">${next}</span>`;
+    const nowHtml = now === "non impostata"
+      ? `<span class="plan-absent">non impostata</span>`
+      : `<span class="plan-now">${esc(now)}</span>`;
+    return `${nowHtml}<span class="plan-arrow">&rarr;</span><span class="plan-next">${next}</span>`;
+  }
+
+  // Le righe che non cambiano niente restano visibili — fanno vedere tutto
+  // quello che il tweak tocca — ma non si contano fra le modifiche, e non si
+  // mostrano come un prima->dopo che non avverra'.
+  function planChanging(p) { return p.filter(r => !r.same); }
+
+  function planRows(t) {
+    const p = planOf(t);
+    if (!p.length) return "";
+    const n = planChanging(p).length;
+    const hd = n ? `// ${n} ${n === 1 ? "MODIFICA" : "MODIFICHE"}` : "// NIENTE DA CAMBIARE";
+    return `<div class="plan" data-testid="plan-${t.id}">
+      <div class="plan-hd">${hd}</div>
+      ${p.map(r => `<div class="plan-row${r.same ? " same" : ""}">
+        <div class="plan-what">${esc(r.what || "")}</div>
+        <div class="plan-diff">${r.same
+          ? `<span class="plan-same">${esc(String(r.now || ""))} &middot; gia a posto</span>`
+          : planDiff(r)}</div>
+      </div>`).join("")}
+    </div>`;
+  }
+
+  // In lista compatta la tabella non ci sta: la prima riga che cambia davvero
+  // porta il senso, il resto si conta.
+  function planSummary(t) {
+    const p = planChanging(planOf(t));
+    if (!p.length) return "";
+    const extra = p.length > 1
+      ? `<span class="plan-more">&middot; +${p.length - 1} ${p.length === 2 ? "altra" : "altre"}</span>` : "";
+    return `<div class="plan-1"><span class="plan-what">${esc(p[0].what || "")}</span>
+      <span class="plan-diff">${planDiff(p[0])}</span>${extra}</div>`;
+  }
+
   function stateClass(t) {
     // accetta sia il tweak sia la sola stringa (l'harness passa ancora quella)
     const code = t && typeof t === "object" ? t.state_code : null;
@@ -1414,10 +1879,16 @@
       if (c.key === "monitor") {
         return `<button class="tab ${c.key === activeCat ? "active" : ""}" role="tab" aria-selected="${c.key === activeCat}" data-cat="${c.key}" data-testid="tab-${c.key}"><span class="mon-live-dot"></span>${c.label}</button>`;
       }
-      if (c.key === "changes") {
+      if (c.key === "diagnosi") {
+        // Non e' una categoria di tweak: il contatore dice quante cose
+        // restano da sistemare, che e' la ragione per cui si apre.
+        const count = state.tweaks.length ? diagnosi().daFare.length : "…";
+        return `<button class="tab ${c.key === activeCat ? "active" : ""}" role="tab" aria-selected="${c.key === activeCat}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${count}</span></button>`;
+      }
+      if (c.key === "journal") {
         // Non e' una categoria di tweak: il contatore "todo/totale" qui non
         // vuol dire niente. Mostra quante modifiche sono annullabili.
-        const count = state.changes ? (state.changes.items || []).length : (state.revertable || []).length;
+        const count = (state.revertable || []).length;
         return `<button class="tab ${c.key === activeCat ? "active" : ""}" role="tab" aria-selected="${c.key === activeCat}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${count}</span></button>`;
       }
       if (c.key === "bloatware") {
@@ -1433,7 +1904,7 @@
       activeCat = b.dataset.cat;
       if (activeCat === "profiles" && !state.profiles) loadProfiles();
       if (activeCat === "bloatware" && !bloat) loadBloat();
-      if (activeCat === "changes" && !state.changes) loadChanges();
+      if (activeCat === "journal" && !state.journal) loadJournal();
       if (activeCat === "monitor") startMonitor(); else stopMonitor();
       renderTabs();
       renderCards();
@@ -1442,10 +1913,15 @@
 
   function renderCards() {
     const el = document.getElementById("cards");
+    // La Diagnosi ha la propria azione dentro la schermata: lasciare anche la
+    // barra in fondo vorrebbe dire due bottoni che dicono cose diverse.
+    const barra = document.querySelector("footer .btn-bar");
+    if (barra) barra.hidden = (activeCat === "diagnosi");
     if (activeCat === "profiles") { renderProfilesTab(el); return; }
     if (activeCat === "monitor") { renderMonitorTab(el); return; }
     if (activeCat === "bloatware") { renderBloatwareTab(el); return; }
-    if (activeCat === "changes") { renderChangesTab(el); return; }
+    if (activeCat === "diagnosi") { renderDiagnosi(el); return; }
+    if (activeCat === "journal") { renderJournalTab(el); return; }
     let items = state.tweaks.filter(t => t.cat === activeCat).filter(t => {
       if (!searchQ) return true;
       const q = searchQ.toLowerCase();
@@ -1484,10 +1960,11 @@
             ${chevron}
           </div>
           <div class="state ${stateClass(t)}">Stato: ${esc(t.state)}</div>
+          ${planSummary(t)}
           <div class="desc-block">
             <div class="row"><div class="k" title="Problema">&#9888;</div><div class="v">${esc(t.problem)}</div></div>
             <div class="row"><div class="k motivo" title="Motivo">&#8505;</div><div class="v">${esc(t.reason)}</div></div>
-            <div class="row"><div class="k mod" title="Modifica">&#9881;</div><div class="v">${esc(t.desc)}</div></div>
+            ${planRows(t) || `<div class="row"><div class="k mod" title="Modifica">&#9881;</div><div class="v">${esc(t.desc)}</div></div>`}
             <div class="row"><div class="k impatto" title="Impatto">&#128200;</div><div class="v impatto">${esc(t.impact)}</div></div>
           </div>
           ${hint}
@@ -1663,13 +2140,18 @@
       .then(r => r.json())
       .then(d => {
         if (d.logs && d.logs.length) {
-          const el = document.getElementById("log");
-          d.logs.forEach(l => {
-            const div = document.createElement("div");
-            div.innerHTML = `<span class="ts">${l.ts}</span>${esc(l.msg)}`;
-            el.appendChild(div);
+          // Due riquadri di log: quello in fondo alla finestra e quello della
+          // schermata di lavoro. Stessa sorgente e stesso contatore, cosi' non
+          // possono divergere.
+          document.querySelectorAll("[data-log]").forEach(el => {
+            d.logs.forEach(l => {
+              const div = document.createElement("div");
+              if (/^\s*\[(ERR|STOP)/.test(l.msg)) div.className = "err";
+              div.innerHTML = `<span class="ts">${l.ts}</span>${esc(l.msg)}`;
+              el.appendChild(div);
+            });
+            el.scrollTop = el.scrollHeight;
           });
-          el.scrollTop = el.scrollHeight;
           logSince = d.total;
         }
         if (typeof d.applying === "boolean") setApplying(d.applying);
@@ -1679,6 +2161,10 @@
     applying = v;
     document.getElementById("applyBtn").disabled = v;
     document.getElementById("restoreBtn").disabled = v;
+    // Un lavoro puo' essere gia' in corso senza che sia stata questa pagina ad
+    // avviarlo: la finestra e' stata ricaricata, o l'ha avviato un'altra parte
+    // della GUI. La schermata di lavoro deve comparire lo stesso.
+    if (v && !runWatching) waitForJob().then(() => { closeRun(); refreshState(false); });
   }
 
   let _stateRetries = 0;
@@ -1721,29 +2207,198 @@
     if (showToast) toast("\u21bb Aggiornato", "ok");
   }
 
+  // ===== Job asincroni =====
+  // /api/apply non fa piu' il lavoro dentro la richiesta: registra un job e
+  // torna subito, poi l'agent esegue un passo per volta continuando a servire
+  // /api/log e /api/job. Prima questa fetch restava appesa per tutta la durata
+  // (due benchmark + N tweak, minuti), e siccome il server locale e' a thread
+  // singolo in quel buco NIENTE veniva servito: il log restava fermo e la
+  // finestra sembrava piantata proprio mentre l'agent scriveva nel registro.
+  function jobLabel(s) {
+    // Le etichette dei passi sono righe di log ("-> Nome tweak", "<- Nome"):
+    // le frecce servono nel log, non in una lista che e' gia' una sequenza.
+    return String(s || "").replace(/^(->|<-)\s*/, "");
+  }
+
+  const RUN_TESTI = {
+    "apply": "// OTTIMIZZAZIONE IN CORSO",
+    "apply-one": "// OTTIMIZZAZIONE IN CORSO",
+    "revert-session": "// ANNULLAMENTO IN CORSO",
+    "restore-one": "// ANNULLAMENTO IN CORSO",
+    "restore": "// RIPRISTINO IN CORSO",
+    "bloatware": "// RIMOZIONE APP IN CORSO",
+  };
+
+  const RUN_ICONE = {
+    ok: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>`,
+    failed: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>`,
+    current: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"></path><path d="m16.2 7.8 2.9-2.9"></path>
+           <path d="M18 12h4"></path><path d="m16.2 16.2 2.9 2.9"></path><path d="M12 18v4"></path>
+           <path d="m4.9 19.1 2.9-2.9"></path><path d="M2 12h4"></path><path d="m4.9 4.9 2.9 2.9"></path></svg>`,
+    skipped: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round"><path d="m6 4 10 8-10 8"></path></svg>`,
+    warn: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"></path><path d="M12 17h.01"></path>
+           <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>`,
+    pending: `<div class="run-step-box"></div>`,
+  };
+  const RUN_TAG = { failed: "NON RIUSCITO", current: "in corso", skipped: "SALTATO", warn: "IN PARTE" };
+
+  function openRun() {
+    const run = document.getElementById("run");
+    if (!run.hidden) return;
+    // Il log della finestra ha gia' le righe di prima: la schermata di lavoro
+    // riparte da li' invece che da vuota.
+    document.getElementById("runLog").innerHTML = document.getElementById("log").innerHTML;
+    run.hidden = false;
+  }
+  function closeRun() {
+    const run = document.getElementById("run");
+    run.hidden = true;
+    document.getElementById("runLog").innerHTML = "";
+  }
+
+  function renderRun(j) {
+    openRun();
+    const steps = j.steps || [];
+    const corrente = steps.find(s => s.state === "current");
+    document.getElementById("runKicker").textContent =
+      j.cancel ? "// MI STO FERMANDO" : (RUN_TESTI[j.kind] || "// LAVORO IN CORSO");
+    document.getElementById("runTitle").textContent =
+      corrente ? jobLabel(corrente.label) : "Chiudo il lavoro";
+    document.getElementById("runSub").textContent = j.cancel
+      ? "Finisco il passo in corso, poi salto quelli rimasti. Quello gia' applicato resta, e si annulla dal Journal."
+      : (corrente && corrente.slow
+          ? "Ci vuole qualche decina di secondi. Il log continua ad aggiornarsi."
+          : "");
+    document.getElementById("runCount").innerHTML = `${j.step}<span>/${j.total}</span>`;
+    document.getElementById("runBar").innerHTML =
+      steps.map(s => `<div class="run-tick ${s.state}"></div>`).join("");
+    document.getElementById("runSteps").innerHTML = steps.map(s => {
+      const tag = RUN_TAG[s.state] ? `<div class="run-step-tag">${RUN_TAG[s.state]}</div>` : "";
+      const err = s.err && (s.state === "failed" || s.state === "warn")
+        ? `<div class="run-step-err">${esc(s.err)}${s.state === "failed"
+            ? " · Nulla e' stato scritto per questo passo." : ""}</div>` : "";
+      return `<div class="run-step ${s.state}" data-testid="run-step">
+        <div style="display:flex;align-items:center;gap:12px;width:100%">
+          <div class="run-step-mark">${RUN_ICONE[s.state] || ""}</div>
+          <div class="run-step-name">${esc(jobLabel(s.label))}</div>
+          ${tag}
+        </div>
+        ${err}
+      </div>`;
+    }).join("");
+    const cur = document.querySelector(".run-step.current");
+    if (cur) cur.scrollIntoView({ block: "nearest" });
+    document.getElementById("runCancel").disabled = !!j.cancel;
+    document.getElementById("runCancel").textContent = j.cancel ? "Mi sto fermando…" : "Ferma qui";
+    // Il bottone in fondo resta aggiornato per quando la schermata si chiude.
+    const btn = document.getElementById("applyBtn");
+    if (btn && j.total) btn.textContent = `${jobLabel(j.current) || "In corso"} · ${j.step}/${j.total}`;
+  }
+
+  async function cancelRun() {
+    document.getElementById("runCancel").disabled = true;
+    try { await api("/api/job/cancel", { method: "POST", headers: { "X-FF-Token": TOKEN } }); }
+    catch (e) { reportClientError("cancelRun: " + (e && e.message || e)); }
+  }
+
+  // Risolve con il job finito, o con null se l'agent non ne conosce piu' uno
+  // (agent riavviato: si ricade su una rilettura dello stato).
+  let runWatching = false;
+  function waitForJob() {
+    runWatching = true;
+    return new Promise(resolve => {
+      const fine = (v) => { runWatching = false; resolve(v); };
+      const tick = async () => {
+        let j;
+        try { j = await api("/api/job"); }
+        catch (e) { return setTimeout(tick, 800); }
+        if (!j || j.state === "idle") return fine(null);
+        if (j.state === "running") { safeRender("renderRun", () => renderRun(j)); return setTimeout(tick, 400); }
+        fine(j);
+      };
+      tick();
+    });
+  }
+
+  // Ogni lavoro passa di qui: parte il job, la schermata di lavoro lo segue,
+  // e alla fine i bottoni tornano vivi. Prima ogni chiamante ripeteva le stesse
+  // sei righe, e ognuno le ripeteva un po' diverse.
+  async function runJob(path, corpo) {
+    setApplying(true);
+    const opts = { method: "POST", headers: { "X-FF-Token": TOKEN } };
+    if (corpo) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(corpo); }
+    let started;
+    try { started = await api(path, opts); }
+    catch (e) { started = null; }
+    if (!started || started.ok === false) {
+      setApplying(false);
+      toast(started && started.err === "busy"
+        ? "\u26a0 C'e' gia' un'operazione in corso"
+        : "\u26a0 Non sono riuscito ad avviare il lavoro", "warn");
+      return null;
+    }
+    const job = await waitForJob();
+    closeRun();
+    setApplying(false);
+    return job;
+  }
+
+  // Lo stato che ogni lavoro restituisce quando ha finito.
+  function applicaRisultato(d) {
+    if (!d || !d.tweaks) return false;
+    state.tweaks = d.tweaks;
+    state.backup = typeof d.backup === "number" ? d.backup : state.backup;
+    if (d.backup_ids) state.backup_ids = d.backup_ids;
+    if (d.revertable) state.revertable = d.revertable;
+    // La cronologia e' cambiata: si rilegge alla prossima occasione.
+    state.journal = null;
+    renderHeader(); renderTabs(); renderCards(); renderProgressRing();
+    return true;
+  }
+
   async function applySelected() {
     if (!selected.size) { toast("⚠ Seleziona almeno un tweak", "warn"); return; }
-    setApplying(true);
     const bench = document.getElementById("benchToggle").checked;
     const appliedIds = Array.from(selected);
     const picks = state.tweaks.filter(t => selected.has(t.id));
     const rebootCount = picks.filter(needsReboot).length;
-    const d = await api("/api/apply", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ ids: appliedIds, benchmark: bench }) });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; if (d.revertable) state.revertable = d.revertable; renderHeader(); renderCards(); renderProgressRing(); }
+    const job = await runJob("/api/apply", { ids: appliedIds, benchmark: bench });
+    if (!job) { updateSummaryStrip(); return; }
+    const d = job.result || {};
+    // Un passo riuscito a meta' non e' un passo fallito: contarlo fra i
+    // fallimenti direbbe che non e' successo niente, e invece qualcosa e'
+    // passato ed e' annullabile.
+    const tuttiErr = Array.isArray(job.errors) ? job.errors : [];
+    const failed = tuttiErr.filter(e => !e.warn).length;
+    const parziali = tuttiErr.filter(e => e.warn).length;
+    const saltati = (job.steps || []).filter(s => s.state === "skipped").length;
+    applicaRisultato(d);
     selected.clear();
     updateSummaryStrip();
-    setApplying(false);
     // K. Big toast post-apply
     appliedIds.forEach(id => {
       const c = document.querySelector(`.card[data-id="${id}"]`);
       if (c) { c.classList.add("just-applied"); setTimeout(() => c.classList.remove("just-applied"), 1000); }
     });
-    const level = rebootCount > 0 ? "warn" : null;
-    const parts = [`<b>${appliedIds.length}</b> tweak applicati`];
+    // Un passo che fallisce non ferma piu' gli altri, ma non deve nemmeno
+    // sparire dal riepilogo: si contano i tweak riusciti, non quelli chiesti.
+    const failedTweaks = tuttiErr.filter(e => !e.warn && String(e.step || "").startsWith("->")).length;
+    const okCount = appliedIds.length - failedTweaks;
+    const fermato = job.state === "cancelled";
+    const level = (rebootCount > 0 || failed > 0 || parziali > 0 || fermato) ? "warn" : null;
+    const parts = [`<b>${okCount}</b> tweak applicati`];
+    if (saltati > 0) parts.push(`<b>${saltati}</b> saltati`);
+    if (failed > 0) parts.push(`<b>${failed}</b> passo/i non riuscito/i, vedi log`);
+    if (parziali > 0) parts.push(`<b>${parziali}</b> riuscito/i solo in parte`);
     if (rebootCount > 0) parts.push(`<b>${rebootCount}</b> richiede/richiedono riavvio`);
     bigToast({
       level,
-      title: rebootCount > 0 ? "\u26a0 Applicati · Riavvio consigliato" : "\u2713 Ottimizzazioni applicate",
+      title: fermato ? "\u26a0 Fermato a meta'" : (failed > 0 ? "\u26a0 Applicati in parte" : (rebootCount > 0 ? "\u26a0 Applicati · Riavvio consigliato" : "\u2713 Ottimizzazioni applicate")),
       body: parts.join(" \u00b7 ") + " \u00b7 Backup salvato",
       actions: rebootCount > 0 ? [
         { label: "Ricorda dopo", onClick: () => {} },
@@ -1752,11 +2407,30 @@
     });
   }
   async function applyOne(id) {
-    setApplying(true);
     const t = state.tweaks.find(x => x.id === id);
-    const d = await api("/api/apply-one", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ id }) });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || state.backup; if (d.backup_ids) state.backup_ids = d.backup_ids; if (d.revertable) state.revertable = d.revertable; renderHeader(); renderCards(); renderProgressRing(); }
-    setApplying(false);
+    const job = await runJob("/api/apply-one", { id });
+    if (!job) return;
+    applicaRisultato(job.result || {});
+    // Un tweak solo, ma l'esito ha le stesse tre forme di dodici.
+    const err = (job.errors || [])[0];
+    if (err && !err.warn) {
+      bigToast({
+        level: "warn",
+        title: "\u26a0 Non riuscito",
+        body: `<b>${esc(t ? t.name : id)}</b> non e' stato applicato: ${esc(err.err || "motivo non registrato")}.`,
+        actions: [{ label: "OK", primary: true, onClick: () => {} }],
+      });
+      return;
+    }
+    if (err && err.warn) {
+      bigToast({
+        level: "warn",
+        title: "\u26a0 Applicato in parte",
+        body: `<b>${esc(t ? t.name : id)}</b>: ${esc(err.err || "")}.`,
+        actions: [{ label: "OK", primary: true, onClick: () => {} }],
+      });
+      return;
+    }
     // Pulse animation on the just-applied card
     const c = document.querySelector(`.card[data-id="${id}"]`);
     if (c) { c.classList.add("just-applied"); setTimeout(() => c.classList.remove("just-applied"), 1000); }
@@ -1776,88 +2450,163 @@
   }
   async function doRestore() {
     if (!confirm("Ripristinare TUTTE le modifiche dal backup?")) return;
-    setApplying(true);
-    const d = await api("/api/restore", { method: "POST", headers:{"X-FF-Token":TOKEN} });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = 0; state.backup_ids = []; state.revertable = []; renderHeader(); renderCards(); renderProgressRing(); }
-    setApplying(false);
+    const job = await runJob("/api/restore", null);
+    if (!job) return;
+    applicaRisultato(job.result || {});
     toast("\u21a9 Ripristinato", "ok");
   }
 
-  // ===== Cosa ho cambiato su questo PC =====
-  // La reversibilita' e' la cosa che distingue questo strumento da un "booster":
-  // ogni modifica ha un backup e si annulla da sola. Ma il log della GUI vive in
-  // memoria e muore con la finestra, quindi finora "cosa mi ha toccato, quando,
-  // e come lo rimetto com'era" non era rispondibile da nessuna parte. Il dato
-  // c'era gia' tutto nel file di backup: mancava la schermata.
-  function fmtWhen(iso) {
-    if (!iso) return "Data non registrata (backup di una versione precedente)";
+  // ===== Journal =====
+  // Il log della finestra racconta la sessione in corso e muore con la finestra.
+  // Questo legge il file su disco: sopravvive alla chiusura, allo spegnimento e
+  // alla disinstallazione dell'agent, ed e' l'unico posto dove "cosa mi hai
+  // fatto al PC?" ha una risposta il giorno dopo.
+  async function loadJournal() {
+    try { state.journal = await api("/api/journal"); }
+    catch (e) { state.journal = { err: true }; }
+    if (activeCat === "journal" || activeCat === "diagnosi") { renderTabs(); renderCards(); }
+  }
+
+  function jrSessionTitle(iso) {
     const d = new Date(iso);
-    if (isNaN(d)) return "Data non registrata";
-    return d.toLocaleString("it-IT", { day: "2-digit", month: "short", year: "numeric",
-                                       hour: "2-digit", minute: "2-digit" });
+    if (isNaN(d)) return "Sessione senza data";
+    const oggi = new Date();
+    const stesso = d.toDateString() === oggi.toDateString();
+    const ora = d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+    if (stesso) return `Oggi, ${ora}`;
+    return d.toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" }) + ", " + ora;
   }
 
-  async function loadChanges() {
-    try { state.changes = await api("/api/changes"); }
-    catch (e) { state.changes = { err: true }; }
-    if (activeCat === "changes") { renderTabs(); renderCards(); }
+  // Una riga di diff per chiave. `current` puo' mancare (valori che non si
+  // rileggono a buon mercato): allora si mostra solo il prima, senza freccia,
+  // invece di inventare una meta'.
+  function jrDiff(ch) {
+    const prev = String(ch.previous || "");
+    const now = String(ch.current || "");
+    const prevHtml = prev === "non esisteva"
+      ? `<span class="jr-absent">la chiave non esisteva</span>`
+      : `<span class="jr-prev">${esc(prev)}</span>`;
+    if (!now) return prevHtml;
+    return `${prevHtml}<span class="jr-arrow">&rarr;</span><span class="jr-now">${esc(now)}</span>`;
   }
 
-  function renderChangesTab(el) {
-    const c = state.changes;
-    if (!c) { el.innerHTML = `<div class="empty">Leggo il registro delle modifiche…</div>`; loadChanges(); return; }
-    if (c.err) { el.innerHTML = `<div class="empty">Registro non leggibile.</div>`; return; }
-    const items = (c.items || []).slice().sort((a, b) => String(b.applied_at).localeCompare(String(a.applied_at)));
-    if (!items.length) {
-      el.innerHTML = `<div class="empty">FrameForge non ha ancora modificato niente su questo PC.
-        Quando applicherai un'ottimizzazione, qui troverai cosa e' stato cambiato, quando, e come rimetterlo com'era.</div>`;
+  function jrKeyName(k) {
+    const i = String(k).lastIndexOf("::");
+    return i > 0 ? String(k).slice(i + 2) : String(k);
+  }
+
+  function renderJournalTab(el) {
+    const j = state.journal;
+    if (!j) { el.innerHTML = `<div class="empty">Leggo il journal…</div>`; loadJournal(); return; }
+    if (j.err) { el.innerHTML = `<div class="empty">Journal non leggibile.</div>`; return; }
+    const sessions = j.sessions || [];
+    const intro = `<div class="jr-intro" data-testid="journal-file">
+        <code>${esc(j.file || "")}</code>
+        <span>&mdash; scritto a ogni modifica: resta anche se chiudi la finestra, spegni il PC o disinstalli l'agent.</span>
+      </div>`;
+    if (!sessions.length) {
+      el.innerHTML = intro + `<div class="empty">FrameForge non ha ancora cambiato niente su questo PC.</div>`;
       return;
     }
-    el.innerHTML = `
-      <div class="changes-intro">
-        <b>${items.length}</b> ottimizzazion${items.length === 1 ? "e applicata" : "i applicate"} da FrameForge su questo PC.
-        Ogni voce si annulla singolarmente: il valore precedente e' salvato in <code>${esc(c.backup_file || "")}</code>.
-      </div>` +
-      items.map(it => `
-        <div class="card change-card" data-testid="change-${esc(it.id)}">
-          <div class="change-head">
-            <div>
-              <div class="change-name">${esc(it.name)}</div>
-              <div class="change-when">${it.applied_at ? "Applicata il " : ""}${esc(fmtWhen(it.applied_at))}</div>
-            </div>
-            <button class="btn-revert" data-revert="${esc(it.id)}" data-testid="revert-${esc(it.id)}">Annulla</button>
+    el.innerHTML = intro + sessions.map(s => {
+      const parti = [];
+      if (s.applied) parti.push(`<b>${s.applied}</b> applicate`);
+      if (s.failed) parti.push(`<b class="ko">${s.failed}</b> non riuscite`);
+      if (s.reverted) parti.push(`${s.reverted} annullate`);
+      const nRev = (s.revertable || []).length;
+      return `<div class="jr-session" data-testid="journal-session">
+        <div class="jr-head">
+          <div>
+            <div class="jr-title">${esc(jrSessionTitle(s.started))}</div>
+            <div class="jr-sub">${parti.join(" &middot; ") || "nessuna modifica"}</div>
           </div>
-          <div class="change-keys">
-            ${(it.keys || []).map(k => {
-              // "HKLM:\Percorso\Lungo::NomeValore" -> il nome e' l'informazione,
-              // il percorso e' la coordinata. Prima erano la stessa riga di
-              // monospace indistinta, lunga il doppio della card.
-              const i = k.key.lastIndexOf("::");
-              const perc = i > 0 ? k.key.slice(0, i) : "";
-              const nome = i > 0 ? k.key.slice(i + 2) : k.key;
-              return `<div class="change-key">
-                <div class="change-key-row"><code class="change-name-k">${esc(nome)}</code>
-                  <span class="change-prev">prima: <b>${esc(k.previous)}</b></span></div>
-                ${perc ? `<div class="change-path">${esc(perc)}</div>` : ""}
-              </div>`;
-            }).join("")}
-          </div>
-        </div>`).join("");
+          <div style="flex:1"></div>
+          ${nRev ? `<button class="btn-danger" data-revert-session="${esc(s.id)}"
+                      data-testid="revert-session-${esc(s.id)}">Annulla la sessione</button>` : ""}
+        </div>
+        <div class="jr-rows">${(s.entries || []).slice().reverse().map(e => jrRow(e)).join("")}</div>
+      </div>`;
+    }).join("");
     el.querySelectorAll("[data-revert]").forEach(b => {
       b.addEventListener("click", () => revertOne(b.getAttribute("data-revert")));
     });
+    el.querySelectorAll("[data-revert-session]").forEach(b => {
+      b.addEventListener("click", () => revertSession(b.getAttribute("data-revert-session")));
+    });
+  }
+
+  function jrRow(e) {
+    const t = new Date(e.ts);
+    const ora = isNaN(t) ? "--:--" : t.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+    // Tre stati, tre bordi: applicata e ancora attiva, non riuscita, annullata.
+    let cls = "", coda = "", corpo = "";
+    if (e.event === "revert") {
+      cls = "undone";
+      corpo = `<span class="jr-err">Annullato: il valore precedente e' stato rimesso.</span>`;
+      coda = `<div class="jr-note">RIMESSO COM'ERA</div>`;
+    } else if (!e.ok) {
+      cls = "ko";
+      corpo = `<span class="jr-err">Non riuscito: ${esc(e.err || "motivo non registrato")}.
+               <span style="color:var(--dim)">Nessuna chiave e' stata scritta.</span></span>`;
+      coda = `<div class="jr-note">NULLA DA ANNULLARE</div>`;
+    } else {
+      const ch = e.changes || [];
+      const parz = (e.partial || []).length;
+      corpo = ch.length
+        ? `<div class="jr-keys">${esc(ch.map(c => jrKeyName(c.key)).join(" · "))}</div>
+           <div>${jrDiff(ch[0])}${ch.length > 1 ? `<span style="color:var(--dim)"> &middot; +${ch.length - 1} chiav${ch.length === 2 ? "e" : "i"}</span>` : ""}</div>`
+        : `<span class="jr-err">Applicato.</span>`;
+      coda = e.revertable
+        ? `<button class="btn-revert" data-revert="${esc(e.tweak)}" data-testid="revert-${esc(e.tweak)}">Annulla</button>`
+        : `<div class="jr-note">GIA' ANNULLATO</div>`;
+      if (!e.revertable) cls = "undone";
+      if (parz) {
+        cls = "parziale";
+        corpo += `<div class="jr-parz">Applicato in parte: ${parz} di ${e.checked}
+                  ${parz === 1 ? "modifica non risulta scritta" : "modifiche non risultano scritte"}
+                  (${esc((e.partial || []).join(", "))}).</div>`;
+      }
+    }
+    return `<div class="jr-row ${cls}" data-testid="journal-row">
+      <div class="jr-time">${ora}</div>
+      <div class="jr-what">
+        <div class="jr-what-name">${esc(e.name || e.tweak)}${e.via === "cli"
+        ? `<span class="jr-via" title="Applicato da riga di comando, non dalla finestra">CLI</span>` : ""}</div>
+        <div class="jr-what-cat">${esc(e.cat || "")}</div>
+      </div>
+      <div class="jr-diff">${corpo}</div>
+      ${coda}
+    </div>`;
+  }
+
+  async function revertSession(id) {
+    if (!confirm("Annullare tutte le modifiche ancora attive di questa sessione?")) return;
+    setApplying(true);
+    const started = await api("/api/revert-session", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ id }) });
+    if (!started || started.ok === false) {
+      setApplying(false);
+      toast("⚠ Niente da annullare in questa sessione", "warn");
+      return;
+    }
+    const job = await waitForJob();
+    closeRun();
+    const d = (job && job.result) || {};
+    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || 0; state.backup_ids = d.backup_ids || []; state.revertable = d.revertable || []; renderHeader(); renderProgressRing(); }
+    state.journal = null;
+    setApplying(false);
+    updateSummaryStrip();
+    if (activeCat === "journal") loadJournal(); else renderCards();
+    toast("↩ Sessione annullata", "ok");
   }
 
   // ===== v0.7.7 — Revert singolo tweak =====
   async function revertOne(id) {
     const t = state.tweaks.find(x => x.id === id);
     if (!confirm(`Ripristinare "${t ? t.name : id}" al valore precedente?`)) return;
-    setApplying(true);
-    const d = await api("/api/restore-one", { method: "POST", headers:{"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ id }) });
-    if (d.tweaks) { state.tweaks = d.tweaks; state.backup = d.backup || 0; state.backup_ids = d.backup_ids || []; state.revertable = d.revertable || []; renderHeader(); renderTabs(); renderCards(); renderProgressRing(); }
-    state.changes = null;   // la cronologia e' cambiata: si rilegge
-    if (activeCat === "changes") loadChanges();
-    setApplying(false);
+    const job = await runJob("/api/restore-one", { id });
+    if (!job) return;
+    applicaRisultato(job.result || {});
+    if (activeCat === "journal") loadJournal();
     toast("\u21a9 Tweak ripristinato", "ok");
   }
 
@@ -2003,16 +2752,23 @@
     bloatBusy = true;
     const btn = document.getElementById("bloatRemoveBtn");
     if (btn) { btn.disabled = true; btn.textContent = "Rimozione in corso..."; }
-    try {
-      const d = await api("/api/bloatware/remove", { method: "POST", headers: {"Content-Type":"application/json","X-FF-Token":TOKEN}, body: JSON.stringify({ names: Array.from(bloatSel) }) });
-      bloat = { apps: (d && d.apps) || [] };
+    const job = await runJob("/api/bloatware/remove", { names: Array.from(bloatSel) });
+    if (job) {
+      const d = job.result || {};
+      bloat = { apps: d.apps || [] };
       bloatSel = new Set();
+      // Una app che non si e' lasciata rimuovere lo dice: prima spariva dal
+      // conteggio e basta.
+      const ko = (job.errors || []).filter(e => !e.warn).length;
       bigToast({
-        title: "\u2713 Bloatware rimosso",
-        body: `<b>${(d && d.removed) || 0}</b> app rimosse dal sistema. Reinstallabili in qualsiasi momento dal Microsoft Store.`,
+        level: ko ? "warn" : null,
+        title: ko ? "\u26a0 Rimosse in parte" : "\u2713 Bloatware rimosso",
+        body: `<b>${d.removed || 0}</b> app rimosse dal sistema` +
+              (ko ? `, <b>${ko}</b> non si sono lasciate rimuovere (vedi log)` : "") +
+              `. Reinstallabili in qualsiasi momento dal Microsoft Store.`,
         actions: [{ label: "OK", primary: true, onClick: () => {} }],
       });
-    } catch (e) { toast("✗ Rimozione non riuscita", "err"); }
+    }
     bloatBusy = false;
     renderTabs();
     if (activeCat === "bloatware") renderCards();
@@ -2071,6 +2827,7 @@
   });
   document.getElementById("applyBtn").onclick = applySelected;
   document.getElementById("restoreBtn").onclick = doRestore;
+  document.getElementById("runCancel").onclick = cancelRun;
   document.getElementById("searchBox").oninput = e => { searchQ = e.target.value; renderCards(); };
 
   // A. Density toggle (Compact/Detailed)
