@@ -12,10 +12,10 @@
 // mano e' gia' costato una versione di deriva (la dashboard offriva la v0.8.0
 // mentre l'ultima release era la v0.8.1). Vanno cambiati insieme, finche' questa
 // pagina non legge direttamente /api/agent/latest-version.
-export const AGENT_EXE_URL = "https://github.com/WjRKO/ForgeFPS/releases/download/v0.8.1/forgefps-agent.zip";
-export const AGENT_EXE_SHA256 = "386271c41808f565e655090ff0fa77f5750cee6ba508d70909120e378b42e4a8";
-export const AGENT_EXE_VERSION = "v0.8.1";
-export const AGENT_EXE_DATE = "2026-08-01";
+export const AGENT_EXE_URL = "https://github.com/WjRKO/ForgeFPS/releases/download/v0.9.0/forgefps-agent.zip";
+export const AGENT_EXE_SHA256 = "b88679a9e27e6420bee9f1b59c1b5d2acdaad9cc5100fd3570eefb69a104df7e";
+export const AGENT_EXE_VERSION = "v0.9.0";
+export const AGENT_EXE_DATE = "2026-08-22";
 export const AGENT_EXE_FORMAT = "zip"; // "zip" (onedir) | legacy: "exe" (onefile)
 export const AGENT_RELEASES_URL = "https://github.com/WjRKO/ForgeFPS/releases";
 export const AGENT_REPO_URL = "https://github.com/WjRKO/ForgeFPS";
