@@ -88,7 +88,7 @@ def test_il_bottone_non_decide_sui_tweak_in_cautela():
 def test_chi_serve_amministratore_si_deduce_dalle_chiavi():
     """Una lista scritta a mano si sarebbe disallineata al primo tweak nuovo: le
     chiavi del piano dicono gia' chi scrive in HKLM o sui servizi."""
-    assert 'admin: daFare.filter(t => (t.plan || []).some(r => /^(HKLM:|svc::)/.test(String(r.key || "")))),' in BLOCCO
+    assert 'admin: daFare.filter(t => planOf(t).some(r => /^(HKLM:|svc::)/.test(String(r.key || "")))),' in BLOCCO
     assert 'data-testid="diag-admin"' in BLOCCO
 
 

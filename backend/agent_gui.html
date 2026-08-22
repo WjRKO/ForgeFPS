@@ -1469,6 +1469,72 @@
     t.className = "toast show" + (cls ? " " + cls : "");
     clearTimeout(t._h); t._h = setTimeout(() => t.className = "toast", 2400);
   }
+  // ===== PowerShell e gli array di un elemento =====
+  // ConvertTo-Json (PS 5.1) serializza un array di UN elemento come scalare:
+  // `@('x') | ConvertTo-Json` da' `"x"`, non `["x"]`. Quindi OGNI lista che
+  // arriva dall'agent puo' presentarsi come oggetto singolo — un piano con una
+  // chiave sola, una sessione sola nel journal, un errore solo — e chi ci chiama
+  // sopra .map/.filter/.some esplode. Oppure, peggio, non esplode: `.length` di
+  // un oggetto e' undefined, quindi "1 passo fallito" diventa "nessun problema".
+  //
+  // Si normalizza alle porte d'ingresso (refreshState, applicaRisultato,
+  // waitForJob, loadJournal), non ai punti d'uso: sono quattro invece di
+  // quindici, e uno nuovo non puo' dimenticarsene.
+  function lista(x) {
+    if (Array.isArray(x)) return x;
+    if (x === null || x === undefined || x === "") return [];
+    return [x];
+  }
+
+  // Un tweak come lo vuole il render: fit sempre presente, stato sempre
+  // stringa, piano sempre lista.
+  function normalizzaTweak(t) {
+    if (!t.fit || typeof t.fit !== "object") t.fit = { ok: true, warn: false, note: false, skip: false, hint: "" };
+    if (typeof t.state !== "string") t.state = t.state == null ? "n/d" : String(t.state);
+    t.plan = lista(t.plan).filter(r => r && typeof r === "object");
+    return t;
+  }
+  function normalizzaTweaks(v) {
+    return lista(v).filter(t => t && typeof t === "object").map(normalizzaTweak);
+  }
+
+  function normalizzaJob(j) {
+    if (!j || typeof j !== "object") return j;
+    j.steps = lista(j.steps);
+    j.errors = lista(j.errors);
+    if (j.result && typeof j.result === "object") {
+      if (j.result.tweaks !== undefined) j.result.tweaks = normalizzaTweaks(j.result.tweaks);
+      j.result.backup_ids = lista(j.result.backup_ids);
+      j.result.revertable = lista(j.result.revertable);
+      if (j.result.apps !== undefined) j.result.apps = lista(j.result.apps);
+    }
+    return j;
+  }
+
+  // Il proxy /api/profiles-cloud rimanda la risposta del cloud attraverso
+  // ConvertTo-Json: chi aveva UN profilo solo se lo vedeva sparire.
+  function normalizzaProfili(p) {
+    if (!p || typeof p !== "object") return p;
+    p.profiles = lista(p.profiles);
+    p.templates = lista(p.templates);
+    p.catalog = lista(p.catalog);
+    return p;
+  }
+
+  function normalizzaJournal(j) {
+    if (!j || typeof j !== "object") return j;
+    j.sessions = lista(j.sessions).map(s => {
+      s.revertable = lista(s.revertable);
+      s.entries = lista(s.entries).map(e => {
+        e.changes = lista(e.changes).filter(c => c && typeof c === "object");
+        e.partial = lista(e.partial);
+        return e;
+      });
+      return s;
+    });
+    return j;
+  }
+
   function esc(s) {
     return String(s || "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
   }
@@ -1507,7 +1573,7 @@
       // Quali scrivono in aree di sistema si DEDUCE dalle chiavi del piano
       // (HKLM, servizi), non si dichiara a mano: una lista scritta a mano si
       // sarebbe disallineata al primo tweak nuovo.
-      admin: daFare.filter(t => (t.plan || []).some(r => /^(HKLM:|svc::)/.test(String(r.key || "")))),
+      admin: daFare.filter(t => planOf(t).some(r => /^(HKLM:|svc::)/.test(String(r.key || "")))),
       // Un bottone solo non decide per l'utente sui tweak marcati 'cautela'.
       consigliati: daFare.filter(t => t.risk !== "caution"),
       cautela: daFare.filter(t => t.risk === "caution"),
@@ -1637,9 +1703,8 @@
   // Il piano arriva solo per i tweak che hanno davvero qualcosa da cambiare:
   // dove non c'e', la card resta com'era, con la descrizione.
   function planOf(t) {
-    const p = t && t.plan;
-    if (!p) return [];
-    return (Array.isArray(p) ? p : [p]).filter(r => r && typeof r === "object" && (r.what || r.next));
+    // `lista` per i tweak che non passano da normalizzaTweak (test, dati vecchi).
+    return lista(t && t.plan).filter(r => r && typeof r === "object" && (r.what || r.next));
   }
 
   // Il 'prima' e' letto sulla macchina; quando manca (valori che non si leggono
@@ -1888,11 +1953,11 @@
       if (c.key === "journal") {
         // Non e' una categoria di tweak: il contatore "todo/totale" qui non
         // vuol dire niente. Mostra quante modifiche sono annullabili.
-        const count = (state.revertable || []).length;
+        const count = lista(state.revertable).length;
         return `<button class="tab ${c.key === activeCat ? "active" : ""}" role="tab" aria-selected="${c.key === activeCat}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${count}</span></button>`;
       }
       if (c.key === "bloatware") {
-        const count = bloat ? (bloat.apps || []).length : "…";
+        const count = bloat ? lista(bloat.apps).length : "…";
         return `<button class="tab ${c.key === activeCat ? "active" : ""}" role="tab" aria-selected="${c.key === activeCat}" data-cat="${c.key}" data-testid="tab-${c.key}">${c.label}<span class="count">${count}</span></button>`;
       }
       const inCat = state.tweaks.filter(t => t.cat === c.key && !t.fit.skip);
@@ -2013,7 +2078,7 @@
     if (activeCat === "profiles") el.innerHTML = `<div class="empty">Caricamento profili dal cloud…</div>`;
     try {
       const d = await api("/api/profiles-cloud");
-      state.profiles = d && !d.err ? d : { profiles: [], templates: [], catalog: [], err: d?.err };
+      state.profiles = d && !d.err ? normalizzaProfili(d) : { profiles: [], templates: [], catalog: [], err: d?.err };
     } catch (e) {
       state.profiles = { profiles: [], templates: [], catalog: [], err: "network" };
     }
@@ -2025,10 +2090,10 @@
     if (!p) { el.innerHTML = `<div class="empty">Caricamento profili…</div>`; loadProfiles(); return; }
     if (p.err) { el.innerHTML = `<div class="empty">Cloud non raggiungibile. Verifica la connessione internet e riprova.</div>`; return; }
     const catalogMap = {};
-    (p.catalog || []).forEach(c => { catalogMap[c.id] = c.name; });
+    lista(p.catalog).forEach(c => { catalogMap[c.id] = c.name; });
     const cardHtml = (item, opts) => {
       const isTemplate = !!opts.template;
-      const tweakIds = item.tweak_ids || [];
+      const tweakIds = lista(item.tweak_ids);
       const names = tweakIds.map(id => catalogMap[id]).filter(Boolean).slice(0, 6);
       const extra = tweakIds.length > 6 ? ` <span>+${tweakIds.length - 6}</span>` : "";
       const meta = isTemplate ? `📚 Template community · ${tweakIds.length} tweak` : `👤 Il tuo profilo · ${tweakIds.length} tweak`;
@@ -2041,15 +2106,15 @@
       </div>`;
     };
     let html = "";
-    if ((p.profiles || []).length) {
+    if (lista(p.profiles).length) {
       html += `<div class="profile-section-title" data-testid="section-my-profiles">// I MIEI PROFILI</div>`;
-      html += p.profiles.map(pr => cardHtml(pr, { template: false })).join("");
+      html += lista(p.profiles).map(pr => cardHtml(pr, { template: false })).join("");
     } else {
       html += `<div class="profile-section-title">// I MIEI PROFILI</div><div class="empty" style="grid-column: 1 / -1;">Nessun profilo personale ancora. Crea preset gaming su forgefps.dev &rarr; Gaming.</div>`;
     }
-    if ((p.templates || []).length) {
+    if (lista(p.templates).length) {
       html += `<div class="profile-section-title" data-testid="section-templates">// TEMPLATE COMMUNITY</div>`;
-      html += p.templates.map(t => cardHtml(t, { template: true })).join("");
+      html += lista(p.templates).map(t => cardHtml(t, { template: true })).join("");
     }
     el.innerHTML = html;
   }
@@ -2186,16 +2251,12 @@
     // di array (1 elemento) o campi mancanti. Il render non deve MAI rompersi per
     // un dato inatteso (bug storico: griglia vuota all'avvio finche' non si
     // cliccava un filtro).
-    state.tweaks = d.tweaks.filter(t => t && typeof t === "object").map(t => {
-      if (!t.fit || typeof t.fit !== "object") t.fit = { ok: true, warn: false, note: false, skip: false, hint: "" };
-      if (typeof t.state !== "string") t.state = t.state == null ? "n/d" : String(t.state);
-      return t;
-    });
+    state.tweaks = normalizzaTweaks(d.tweaks);
     state.hw = d.hw || {}; state.admin = !!d.admin;
     state.backup = d.backup || 0;
-    state.backup_ids = Array.isArray(d.backup_ids) ? d.backup_ids : (d.backup_ids ? [d.backup_ids] : []);
+    state.backup_ids = lista(d.backup_ids);
     state.presets = d.presets || {};
-    state.revertable = Array.isArray(d.revertable) ? d.revertable : (d.revertable ? [d.revertable] : []);
+    state.revertable = lista(d.revertable);
     state.agent = d.agent || {};
     safeRender("renderHeader", renderHeader);
     safeRender("renderTabs", renderTabs);
@@ -2315,7 +2376,7 @@
       const fine = (v) => { runWatching = false; resolve(v); };
       const tick = async () => {
         let j;
-        try { j = await api("/api/job"); }
+        try { j = normalizzaJob(await api("/api/job")); }
         catch (e) { return setTimeout(tick, 800); }
         if (!j || j.state === "idle") return fine(null);
         if (j.state === "running") { safeRender("renderRun", () => renderRun(j)); return setTimeout(tick, 400); }
@@ -2351,10 +2412,10 @@
   // Lo stato che ogni lavoro restituisce quando ha finito.
   function applicaRisultato(d) {
     if (!d || !d.tweaks) return false;
-    state.tweaks = d.tweaks;
+    state.tweaks = normalizzaTweaks(d.tweaks);
     state.backup = typeof d.backup === "number" ? d.backup : state.backup;
-    if (d.backup_ids) state.backup_ids = d.backup_ids;
-    if (d.revertable) state.revertable = d.revertable;
+    if (d.backup_ids !== undefined) state.backup_ids = lista(d.backup_ids);
+    if (d.revertable !== undefined) state.revertable = lista(d.revertable);
     // La cronologia e' cambiata: si rilegge alla prossima occasione.
     state.journal = null;
     renderHeader(); renderTabs(); renderCards(); renderProgressRing();
@@ -2373,10 +2434,10 @@
     // Un passo riuscito a meta' non e' un passo fallito: contarlo fra i
     // fallimenti direbbe che non e' successo niente, e invece qualcosa e'
     // passato ed e' annullabile.
-    const tuttiErr = Array.isArray(job.errors) ? job.errors : [];
+    const tuttiErr = lista(job.errors);
     const failed = tuttiErr.filter(e => !e.warn).length;
     const parziali = tuttiErr.filter(e => e.warn).length;
-    const saltati = (job.steps || []).filter(s => s.state === "skipped").length;
+    const saltati = lista(job.steps).filter(s => s.state === "skipped").length;
     applicaRisultato(d);
     selected.clear();
     updateSummaryStrip();
@@ -2412,7 +2473,7 @@
     if (!job) return;
     applicaRisultato(job.result || {});
     // Un tweak solo, ma l'esito ha le stesse tre forme di dodici.
-    const err = (job.errors || [])[0];
+    const err = lista(job.errors)[0];
     if (err && !err.warn) {
       bigToast({
         level: "warn",
@@ -2462,7 +2523,7 @@
   // alla disinstallazione dell'agent, ed e' l'unico posto dove "cosa mi hai
   // fatto al PC?" ha una risposta il giorno dopo.
   async function loadJournal() {
-    try { state.journal = await api("/api/journal"); }
+    try { state.journal = normalizzaJournal(await api("/api/journal")); }
     catch (e) { state.journal = { err: true }; }
     if (activeCat === "journal" || activeCat === "diagnosi") { renderTabs(); renderCards(); }
   }
@@ -2499,7 +2560,7 @@
     const j = state.journal;
     if (!j) { el.innerHTML = `<div class="empty">Leggo il journal…</div>`; loadJournal(); return; }
     if (j.err) { el.innerHTML = `<div class="empty">Journal non leggibile.</div>`; return; }
-    const sessions = j.sessions || [];
+    const sessions = lista(j.sessions);
     const intro = `<div class="jr-intro" data-testid="journal-file">
         <code>${esc(j.file || "")}</code>
         <span>&mdash; scritto a ogni modifica: resta anche se chiudi la finestra, spegni il PC o disinstalli l'agent.</span>
@@ -2513,7 +2574,7 @@
       if (s.applied) parti.push(`<b>${s.applied}</b> applicate`);
       if (s.failed) parti.push(`<b class="ko">${s.failed}</b> non riuscite`);
       if (s.reverted) parti.push(`${s.reverted} annullate`);
-      const nRev = (s.revertable || []).length;
+      const nRev = lista(s.revertable).length;
       return `<div class="jr-session" data-testid="journal-session">
         <div class="jr-head">
           <div>
@@ -2524,7 +2585,7 @@
           ${nRev ? `<button class="btn-danger" data-revert-session="${esc(s.id)}"
                       data-testid="revert-session-${esc(s.id)}">Annulla la sessione</button>` : ""}
         </div>
-        <div class="jr-rows">${(s.entries || []).slice().reverse().map(e => jrRow(e)).join("")}</div>
+        <div class="jr-rows">${lista(s.entries).slice().reverse().map(e => jrRow(e)).join("")}</div>
       </div>`;
     }).join("");
     el.querySelectorAll("[data-revert]").forEach(b => {
@@ -2550,8 +2611,8 @@
                <span style="color:var(--dim)">Nessuna chiave e' stata scritta.</span></span>`;
       coda = `<div class="jr-note">NULLA DA ANNULLARE</div>`;
     } else {
-      const ch = e.changes || [];
-      const parz = (e.partial || []).length;
+      const ch = lista(e.changes);
+      const parz = lista(e.partial).length;
       corpo = ch.length
         ? `<div class="jr-keys">${esc(ch.map(c => jrKeyName(c.key)).join(" · "))}</div>
            <div>${jrDiff(ch[0])}${ch.length > 1 ? `<span style="color:var(--dim)"> &middot; +${ch.length - 1} chiav${ch.length === 2 ? "e" : "i"}</span>` : ""}</div>`
@@ -2564,7 +2625,7 @@
         cls = "parziale";
         corpo += `<div class="jr-parz">Applicato in parte: ${parz} di ${e.checked}
                   ${parz === 1 ? "modifica non risulta scritta" : "modifiche non risultano scritte"}
-                  (${esc((e.partial || []).join(", "))}).</div>`;
+                  (${esc(lista(e.partial).join(", "))}).</div>`;
       }
     }
     return `<div class="jr-row ${cls}" data-testid="journal-row">
@@ -2689,7 +2750,7 @@
     if (activeCat === "bloatware") document.getElementById("cards").innerHTML = `<div class="empty">Scansione app installate in corso...</div>`;
     try {
       const d = await api("/api/bloatware");
-      bloat = { apps: d.apps || [] };
+      bloat = { apps: lista(d.apps) };
     } catch (e) { bloat = { apps: [], err: true }; }
     bloatSel = new Set();
     renderTabs();
@@ -2701,7 +2762,7 @@
   }
   function renderBloatwareTab(el) {
     if (!bloat) { el.innerHTML = `<div class="empty">Scansione app installate in corso...</div>`; return; }
-    const apps = bloat.apps || [];
+    const apps = lista(bloat.apps);
     if (bloat.err) { el.innerHTML = `<div class="empty">Errore durante la scansione. Riapri la tab per riprovare.</div>`; bloat = null; return; }
     if (!apps.length) { el.innerHTML = `<div class="empty">&#10003; Nessun bloatware rilevato: il tuo sistema e gia pulito.</div>`; return; }
     const rows = apps.map(a => `
@@ -2755,11 +2816,11 @@
     const job = await runJob("/api/bloatware/remove", { names: Array.from(bloatSel) });
     if (job) {
       const d = job.result || {};
-      bloat = { apps: d.apps || [] };
+      bloat = { apps: lista(d.apps) };
       bloatSel = new Set();
       // Una app che non si e' lasciata rimuovere lo dice: prima spariva dal
       // conteggio e basta.
-      const ko = (job.errors || []).filter(e => !e.warn).length;
+      const ko = lista(job.errors).filter(e => !e.warn).length;
       bigToast({
         level: ko ? "warn" : null,
         title: ko ? "\u26a0 Rimosse in parte" : "\u2713 Bloatware rimosso",

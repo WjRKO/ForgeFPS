@@ -153,6 +153,6 @@ def test_la_schermata_compare_anche_se_il_lavoro_non_l_ha_avviato_questa_pagina(
 
 
 def test_il_riepilogo_finale_distingue_saltati_e_falliti():
-    assert 'const saltati = (job.steps || []).filter(s => s.state === "skipped").length;' in GUI
+    assert 'const saltati = lista(job.steps).filter(s => s.state === "skipped").length;' in GUI
     assert "saltati > 0" in GUI
     assert "Fermato a meta'" in GUI
