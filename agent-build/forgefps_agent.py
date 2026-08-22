@@ -79,12 +79,38 @@ _hide_console_if_silent(_args.uri)
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
 AGENT_VERSION = "0.8.1"
-# v0.7.3+: rinominato da boostpc_backup.json → forgefps_backup.json.
-# Fallback lettura del vecchio nome per una release per non perdere il backup
-# degli utenti che aggiornano dalla v0.7.2 o precedenti.
-_BACKUP_DIR = os.path.dirname(os.path.abspath(__file__))
-BACKUP_FILE = os.path.join(_BACKUP_DIR, "forgefps_backup.json")
-_LEGACY_BACKUP_FILE = os.path.join(_BACKUP_DIR, "boostpc_backup.json")
+# ---------------------------------------------------------------------------
+# Backup e journal: gli stessi file dell'agent PowerShell
+# ---------------------------------------------------------------------------
+# Il backup stava accanto all'.exe. Se l'exe e' in Program Files quella cartella
+# non e' scrivibile, se sta in Download sparisce col primo riordino, e ogni
+# reinstallazione ci passa sopra: il file che serve ad annullare le modifiche
+# era il piu' fragile del prodotto.
+#
+# E soprattutto era un SECONDO backup. I due agent hanno cataloghi di tweak
+# diversi (qui 'tcp-nagle-off', di la' 'network') ma scrivono le stesse chiavi
+# di registro nello stesso formato: erano due file che non si parlavano, quindi
+# "Ripristina" da riga di comando non annullava quello che aveva fatto la
+# finestra, e viceversa. La domanda "cosa mi hai fatto al PC" non puo' avere due
+# risposte diverse a seconda di come si e' aperto il programma.
+_FF_HOME = os.path.join(os.environ.get("APPDATA") or tempfile.gettempdir(), "FrameForge")
+try:
+    os.makedirs(_FF_HOME, exist_ok=True)
+except Exception:
+    pass
+BACKUP_FILE = os.path.join(_FF_HOME, "backup.json")
+JOURNAL_FILE = os.path.join(_FF_HOME, "journal.jsonl")
+# I percorsi di prima: si leggono finche' esistono e si fondono nel condiviso.
+_OLD_BACKUPS = [
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "forgefps_backup.json"),
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "boostpc_backup.json"),
+]
+# Chiavi che non sono modifiche da annullare ma metadati dell'altro motore: si
+# preservano quando si riscrive il file, si saltano quando si ripristina.
+_META_KEYS = ("__tweak_keys__", "__applied_at__", "tweaks")
+# Una sessione per esecuzione, come di la': e' il raggruppamento con cui la
+# schermata Journal racconta "quella volta".
+_SESSION = "s-" + time.strftime("%Y%m%d-%H%M%S")
 
 
 # ---------------------------------------------------------------------------
@@ -723,20 +749,83 @@ def get_nv():
 
 # ---------------- Backup / registry helpers ----------------
 def _load_backup():
-    # v0.7.3+: fallback lettura vecchio nome per un upgrade indolore.
-    path = BACKUP_FILE if os.path.exists(BACKUP_FILE) else (
-        _LEGACY_BACKUP_FILE if os.path.exists(_LEGACY_BACKUP_FILE) else None
-    )
-    if path:
+    bk = {}
+    if os.path.exists(BACKUP_FILE):
         try:
-            return json.load(open(path))
+            bk = json.load(open(BACKUP_FILE, encoding="utf-8"))
         except Exception:
-            return {}
-    return {}
+            bk = {}
+    # Un backup vecchio accanto all'exe non si abbandona: le sue chiavi entrano
+    # in quello condiviso senza sovrascrivere niente — chi c'e' gia' e' stato
+    # scritto dopo — e il file vecchio se ne va al primo salvataggio riuscito.
+    for old in _OLD_BACKUPS:
+        if not os.path.exists(old):
+            continue
+        try:
+            vecchio = json.load(open(old, encoding="utf-8"))
+        except Exception:
+            continue
+        for k, v in vecchio.items():
+            if k not in bk:
+                bk[k] = v
+    return bk
 
 
 def _save_backup(bk):
-    json.dump(bk, open(BACKUP_FILE, "w"), indent=2)
+    # I metadati dell'altro motore (__tweak_keys__, __applied_at__) viaggiano
+    # dentro `bk` e vengono riscritti insieme al resto: se li perdessimo, di la'
+    # sparirebbe la possibilita' di annullare un singolo tweak.
+    with open(BACKUP_FILE, "w", encoding="utf-8") as f:
+        json.dump(bk, f, indent=2)
+    for old in _OLD_BACKUPS:
+        try:
+            if os.path.exists(old):
+                os.remove(old)
+        except Exception:
+            pass
+
+
+def _journal(event, tweak_id, name, cat, ok, err=""):
+    """Una riga nel journal condiviso: quello che si fa da riga di comando deve
+    comparire nella stessa cronologia di quello che si fa dalla finestra,
+    altrimenti quella schermata dice di essere il registro completo e non lo e'.
+    `via` dice da quale dei due motori e' passato."""
+    try:
+        rec = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "session": _SESSION,
+            "event": event,
+            "tweak": str(tweak_id),
+            "name": str(name),
+            "cat": str(cat),
+            "ok": bool(ok),
+            "via": "cli",
+        }
+        if err:
+            rec["err"] = str(err)
+        with open(JOURNAL_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        # Un journal che non si scrive non deve impedire un'ottimizzazione.
+        pass
+
+
+def _journal_esiti(selezionati, bk, event="apply"):
+    """Legge gli esiti che apply_selected ha gia' marcato in bk['tweaks'] e ne
+    scrive una riga ciascuno. Cosi' il journal riporta il verdetto vero del
+    Recipe System (applicato / applicato ma non verificato / fallito) invece di
+    un totale."""
+    esiti = (bk or {}).get("tweaks") or {}
+    for t in selezionati:
+        e = esiti.get(t.id) or {}
+        applicato = bool(e.get("applied"))
+        verificato = bool(e.get("verified"))
+        err = ""
+        if not applicato:
+            err = "l'apply non e' riuscito"
+        elif not verificato:
+            err = "applicato ma la verifica non conferma il valore atteso"
+        _journal(event, t.id, t.name, getattr(t, "category", ""), applicato and verificato, err)
 
 
 def _reg_cli_path(path):
@@ -1199,6 +1288,7 @@ def apply_all_tweaks():
     prog = Progress(total=len(selected), title=title)
     stats = apply_selected(selected, ctx, bk, progress=prog)
     _save_backup(bk)
+    _journal_esiti(selected, bk)
 
     prog.done(
         f"Applicati {stats['applied']}/{len(selected)} · verificati {stats['verified']} · "
@@ -1221,6 +1311,7 @@ def apply_tweak_by_id(tweak_id: str) -> bool:
     prog = Progress(total=1, title=f"Applico: {one.name}")
     stats = apply_selected([one], ctx, bk, progress=prog)
     _save_backup(bk)
+    _journal_esiti([one], bk)
     prog.done(f"{stats['applied']} applicati, {stats['verified']} verificati")
     return stats["applied"] > 0
 
@@ -1339,14 +1430,20 @@ def launch_silent_mode(mode: str) -> bool:
 
 def restore_tweaks():
     print("\n[STEP] Ripristino impostazioni dal backup...")
-    if not (os.path.exists(BACKUP_FILE) or os.path.exists(_LEGACY_BACKUP_FILE)):
-        print("       Nessun backup trovato.")
-        return
     bk = _load_backup()
+    if not [k for k in bk if k not in _META_KEYS]:
+        print("       Nessun backup trovato: FrameForge non ha modifiche da annullare su questo PC.")
+        return
+    print("       Backup: %s" % BACKUP_FILE)
     if bk.get("power_plan"):
         run("powercfg -setactive %s" % bk["power_plan"])
     for k, v in bk.items():
         if k == "power_plan":
+            continue
+        # Metadati dell'altro motore: non sono chiavi da riscrivere. Prima
+        # finivano nel ramo generico e producevano comandi `reg add` su percorsi
+        # inventati, che fallivano in silenzio.
+        if k in _META_KEYS:
             continue
         if k.startswith("svc::"):
             name = k[5:]
@@ -1367,7 +1464,13 @@ def restore_tweaks():
             t = "REG_DWORD" if tp == "DWord" else "REG_SZ"
             run('reg add "%s" /v "%s" /t %s /d "%s" /f' % (cli, name, t, vv))
     run("netsh int tcp set global autotuninglevel=normal")
-    for _p in (BACKUP_FILE, _LEGACY_BACKUP_FILE):
+    # Una riga per tweak tracciato dall'altro motore, cosi' la cronologia sa
+    # che quelle modifiche non sono piu' attive.
+    for _tid in list((bk.get("__tweak_keys__") or {}).keys()):
+        _journal("revert", _tid, _tid, "", True)
+    for _tid, _info in list((bk.get("tweaks") or {}).items()):
+        _journal("revert", _tid, _tid, "", True)
+    for _p in [BACKUP_FILE] + _OLD_BACKUPS:
         try:
             if os.path.exists(_p):
                 os.remove(_p)

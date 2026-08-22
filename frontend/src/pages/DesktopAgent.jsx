@@ -124,7 +124,9 @@ function CmdRow({ label, cmd, testid, accent }) {
 const SECURE = {
   it: {
     exe_badge: "Nuovo", exe_title: "App desktop con un click", exe_desc: "Scarica lo ZIP dell'app Windows, estrailo e avvia forgefps-agent.exe. Da v0.6.7 usiamo il pacchetto onedir: niente falso positivo su Windows Defender.",
-    exe_btn: "Scarica FrameForge (ZIP)", exe_run: "Estrai lo ZIP, entra nella cartella e doppio click su Avvia-FrameForge.bat — oppure da terminale:", exe_sha: "SHA256 del ZIP", exe_vt: "Verifica questo file su VirusTotal",
+    exe_btn: "Scarica FrameForge (ZIP)", exe_run: "Estrai lo ZIP, entra nella cartella e doppio click su Avvia-FrameForge.bat — oppure da terminale:", exe_sha: "SHA256 del pacchetto originale su GitHub", exe_vt: "Verifica il pacchetto originale su VirusTotal",
+    exe_sha_note: "Il bottone qui sopra scarica lo stesso pacchetto con dentro il tuo token, quindi il suo hash e' diverso: per confrontarlo scarica il file originale dalla release.",
+    exe_sha_link: "Scarica il pacchetto originale",
     exe_personalized_hint: "Il ZIP contiene il tuo token già dentro: estrai, apri la cartella e doppio click su Avvia-FrameForge.bat — la GUI parte senza incollare nulla.",
     bat_btn: "Scarica solo launcher (.bat)", bat_hint: "Se hai già il ZIP generico dal repo pubblico: mettilo accanto e doppio click.",
     warn_title: "Importante: a quale server si collega l'app?",
@@ -143,7 +145,9 @@ const SECURE = {
   },
   en: {
     exe_badge: "New", exe_title: "One-click desktop app", exe_desc: "Download the Windows app ZIP, extract it and run forgefps-agent.exe. Since v0.6.7 we ship an onedir bundle: no more Windows Defender false positive.",
-    exe_btn: "Download FrameForge (ZIP)", exe_run: "Extract the ZIP, open the folder and double-click Avvia-FrameForge.bat — or from a terminal:", exe_sha: "ZIP SHA256", exe_vt: "Check this file on VirusTotal",
+    exe_btn: "Download FrameForge (ZIP)", exe_run: "Extract the ZIP, open the folder and double-click Avvia-FrameForge.bat — or from a terminal:", exe_sha: "SHA256 of the original package on GitHub", exe_vt: "Check the original package on VirusTotal",
+    exe_sha_note: "The button above downloads the same package with your token inside, so its hash differs: to compare it, download the original file from the release.",
+    exe_sha_link: "Download the original package",
     exe_personalized_hint: "The ZIP has your token baked in: extract, open the folder and double-click Avvia-FrameForge.bat — GUI opens with zero prompts.",
     bat_btn: "Download launcher only (.bat)", bat_hint: "If you already have the public generic ZIP: drop this next to it and double-click.",
     warn_title: "Important: which server does the app connect to?",
@@ -373,10 +377,21 @@ export default function DesktopAgent() {
                 <FileCheck2 size={11} className="text-[#00FF66]" /> {s.exe_sha}
               </div>
               <code className="block text-[11px] text-zinc-400 font-mono break-all leading-relaxed" data-testid="exe-sha256">{AGENT_EXE_SHA256}</code>
-              <a href={`https://www.virustotal.com/gui/file/${AGENT_EXE_SHA256}`} target="_blank" rel="noreferrer" data-testid="exe-virustotal"
-                className="inline-flex items-center gap-1 mt-1.5 text-[11px] text-[#00FF66] hover:underline">
-                <ShieldCheck size={12} /> {s.exe_vt} <ExternalLink size={9} />
-              </a>
+              {/* Il bottone di download serve un pacchetto RIPACCHETTATO con dentro
+                  Avvia-FrameForge.bat e il token dell'utente: e' piu' grande dell'asset
+                  di release e ha un altro hash. Chi faceva la cosa giusta — scaricare,
+                  calcolare l'hash, confrontare — trovava sempre una discrepanza. */}
+              <div className="text-[11px] text-zinc-500 mt-1.5 leading-relaxed" data-testid="exe-sha256-note">{s.exe_sha_note}</div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5">
+                <a href={AGENT_EXE_URL} data-testid="exe-original-download"
+                  className="inline-flex items-center gap-1 text-[11px] text-zinc-300 hover:text-[#E5FF00] hover:underline">
+                  <FileCheck2 size={12} /> {s.exe_sha_link} <ExternalLink size={9} />
+                </a>
+                <a href={`https://www.virustotal.com/gui/file/${AGENT_EXE_SHA256}`} target="_blank" rel="noreferrer" data-testid="exe-virustotal"
+                  className="inline-flex items-center gap-1 text-[11px] text-[#00FF66] hover:underline">
+                  <ShieldCheck size={12} /> {s.exe_vt} <ExternalLink size={9} />
+                </a>
+              </div>
             </div>
 
             <div className="mt-4 pt-3 border-t border-[#2A2A35]">

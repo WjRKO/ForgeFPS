@@ -66,26 +66,30 @@ def test_annullare_un_tweak_ne_dimentica_la_data():
 
 
 def test_esiste_l_endpoint_della_cronologia():
-    assert "$path -eq '/api/changes'" in PS
-    assert "applied_at = " in PS
+    """Era /api/changes, che ricostruiva la cronologia dal file di backup e
+    quindi sapeva solo cosa e' modificato ADESSO. Ora la cronologia e' un file
+    suo (vedi test_agent_journal.py) e l'endpoint la serve per sessioni."""
+    assert "$path -eq '/api/journal'" in PS
+    assert "$path -eq '/api/changes'" not in PS
     # il valore precedente va mostrato in chiaro, non come '__ABSENT__'
     assert "'non esisteva'" in PS
 
 
 def test_la_gui_ha_la_scheda_delle_modifiche():
-    assert '{ key: "changes",  label: "Cosa ho cambiato" }' in GUI
-    assert "function renderChangesTab" in GUI
-    assert "loadChanges" in GUI
+    assert '{ key: "journal",  label: "Journal" }' in GUI
+    assert "function renderJournalTab" in GUI
+    assert "loadJournal" in GUI
 
 
 def test_annullare_invalida_la_cronologia_in_memoria():
     """Altrimenti la scheda continua a mostrare un tweak appena rimosso."""
-    assert "state.changes = null;" in GUI
+    assert "state.journal = null;" in GUI
 
 
 def test_la_scheda_dice_dove_sta_il_backup():
     """La reversibilita' va mostrata, non promessa: il file e' verificabile."""
-    assert "backup_file" in GUI and "backup_file" in PS
+    assert 'data-testid="journal-file"' in GUI
+    assert 'file = "$JOURNAL"' in PS
 
 
 # ---------- tastiera e token ----------

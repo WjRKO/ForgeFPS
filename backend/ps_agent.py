@@ -18,8 +18,26 @@ $ErrorActionPreference = 'SilentlyContinue'
 $BACKEND = '__BACKEND_URL__'
 $TOKEN   = $Token
 $MODE    = $Mode
-$BACKUP  = Join-Path $env:TEMP 'forgefps_backup.json'
-$BACKUP_LEGACY = Join-Path $env:TEMP 'boostpc_backup.json'  # v0.7.3+: fallback lettura vecchio nome
+# I dati che rendono reversibile un'ottimizzazione NON possono stare in %TEMP%.
+# Lo svuota Windows, lo svuotano i "pulitori" di sistema e — soprattutto — lo
+# cancella ricorsivamente Do-Cleanup, cioe' il tweak 'Pulizia temp' di questo
+# stesso agent: bastava sceglierlo per ultimo perche' l'agent cancellasse il
+# proprio backup, e un backup cancellato non e' un file perso, e' un PC che non
+# torna piu' indietro. %APPDATA%\FrameForge esiste gia' (ci vive token.dat) e
+# non lo pulisce nessuno.
+$FF_HOME = if ($env:APPDATA) { Join-Path $env:APPDATA 'FrameForge' } else { Join-Path $env:TEMP 'FrameForge' }
+if (-not (Test-Path $FF_HOME)) { New-Item -ItemType Directory -Path $FF_HOME -Force | Out-Null }
+$BACKUP  = Join-Path $FF_HOME 'backup.json'
+# Il journal: un evento per riga, aggiunto in coda, mai riscritto. Il backup
+# dice cosa e' modificato ADESSO; il journal dice cosa e' successo e quando.
+$JOURNAL = Join-Path $FF_HOME 'journal.jsonl'
+# Percorsi vecchi: letti finche' esistono, cancellati al primo salvataggio nuovo.
+$BACKUP_OLD = @((Join-Path $env:TEMP 'forgefps_backup.json'), (Join-Path $env:TEMP 'boostpc_backup.json'))
+function Get-BackupPath {
+  if (Test-Path $BACKUP) { return $BACKUP }
+  foreach ($p in $BACKUP_OLD) { if (Test-Path $p) { return $p } }
+  return ''
+}
 $script:PROFILE = @(__PROFILE_IDS__)
 $INSTALLED_VER = '__INSTALLED_AGENT_VER__'
 $LATEST_VER    = '__LATEST_AGENT_VER__'
@@ -75,7 +93,7 @@ function Test-Admin {
 # ---------------- Backup helpers ----------------
 $script:BK = @{}
 # v0.7.3+: fallback lettura vecchio nome per upgrade indolore
-$__bkFile = if (Test-Path $BACKUP) { $BACKUP } elseif (Test-Path $BACKUP_LEGACY) { $BACKUP_LEGACY } else { '' }
+$__bkFile = Get-BackupPath
 if ($__bkFile) { try { $script:BK = Get-Content $__bkFile -Raw | ConvertFrom-Json | ConvertTo-HashtableSafe } catch { $script:BK = @{} } }
 # v0.7.7: mappa tweak-id -> chiavi di backup che quel tweak ha creato (per revert granulare)
 $script:TWKEYS = @{}
@@ -136,20 +154,257 @@ function Save-Backup {
   if ($script:TWKEYS.Count -gt 0) { $__out['__tweak_keys__'] = $script:TWKEYS }
   if ($script:TWAT.Count -gt 0) { $__out['__applied_at__'] = $script:TWAT }
   $__out | ConvertTo-Json -Depth 6 | Set-Content $BACKUP
-  # v0.7.3+: se esiste ancora il legacy, rimuovilo (dopo il primo save su nuovo path)
-  if (Test-Path $BACKUP_LEGACY) { Remove-Item $BACKUP_LEGACY -ErrorAction SilentlyContinue }
+  # I file vecchi si rimuovono solo DOPO che il nuovo e' stato scritto: se il
+  # salvataggio fallisce, il backup di prima e' ancora l'unica via di ritorno.
+  foreach ($__old in $BACKUP_OLD) { if (Test-Path $__old) { Remove-Item $__old -ErrorAction SilentlyContinue } }
+}
+
+# ---------------------------------------------------------------------------
+# Journal: la storia, non solo lo stato
+# ---------------------------------------------------------------------------
+# Il file di backup e' una fotografia del PRESENTE: quali chiavi sono modificate
+# adesso e con che valore rimetterle. Non sa raccontare cosa e' successo — un
+# tweak annullato ne sparisce, uno fallito non ci e' mai entrato, e il "quando"
+# e' un campo appiccicato di lato. Il log della GUI, che quella storia ce
+# l'aveva, vive in memoria e muore con la finestra.
+# Cosi' "cosa mi hai fatto al PC?" non e' rispondibile il giorno dopo, ed e' la
+# domanda da cui dipende la fiducia in uno strumento che scrive nel registro.
+# Il journal e' un file a righe: un evento per riga, aggiunto in coda, mai
+# riscritto. Una riga corrotta costa quella riga, non il file.
+$script:SESSION = 's-' + (Get-Date).ToString('yyyyMMdd-HHmmss')
+
+function Get-TweakById($id) {
+  foreach ($t in $script:TWEAKS) { if ($t.id -eq $id) { return $t } }
+  return @{ id = "$id"; name = "$id"; cat = '' }
+}
+
+function Get-PowerPlanName($guid) {
+  # Il backup del piano energetico salva il GUID, che e' l'unica cosa con cui si
+  # rimette a posto — ma "381b4222-f694-..." nella cronologia non dice niente a
+  # nessuno, e il piano energetico e' il tweak piu' visibile del prodotto.
+  try {
+    foreach ($l in (powercfg /list)) {
+      if ("$l" -match [regex]::Escape("$guid") -and "$l" -match '\(([^)]+)\)') { return $matches[1] }
+    }
+  } catch {}
+  return ''
+}
+
+function Format-BkValue($v, $k = '') {
+  $s = "$v"
+  if ($s -eq '__ABSENT__') { return 'non esisteva' }
+  if ($k -eq 'power_plan') {
+    $n = Get-PowerPlanName $s
+    if ($n) { return $n }
+  }
+  # Le chiavi di registro sono salvate come 'Tipo|Valore': all'utente serve il
+  # valore, il tipo e' un dettaglio di come lo rimettiamo a posto.
+  $p = $s -split '\|', 2
+  if ($p.Count -eq 2 -and ($p[0] -eq 'DWord' -or $p[0] -eq 'String')) { return $p[1] }
+  return $s
+}
+
+function Get-KeyNow($k) {
+  # Il valore ATTUALE della chiave, per poter mostrare 'prima -> adesso'. Dove
+  # non si legge a buon mercato si torna stringa vuota e la GUI mostra solo il
+  # prima: meglio una meta' vera che una freccia inventata.
+  try {
+    if ($k -eq 'power_plan') {
+      $o = powercfg /getactivescheme
+      if ("$o" -match '\(([^)]+)\)') { return $matches[1] }
+      return ''
+    }
+    if ($k.StartsWith('svc::')) {
+      $s = Get-Service $k.Substring(5) -ErrorAction SilentlyContinue
+      if ($s) { return "$($s.StartType)" }
+      return ''
+    }
+    if ($k.StartsWith('dns::')) {
+      $d = (Get-DnsClientServerAddress -InterfaceAlias $k.Substring(5) -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses
+      if ($d) { return ($d -join ', ') }
+      return ''
+    }
+    $p = $k -split '::', 2
+    if ($p.Count -ne 2) { return '' }
+    $v = Get-RegVal $p[0] $p[1]
+    if ($null -eq $v) { return 'rimossa' }
+    return "$v"
+  } catch { return '' }
+}
+
+function Write-Journal($event, $t, $keys, $ok, $err, $extra = $null) {
+  try {
+    $rec = [ordered]@{
+      ts      = (Get-Date).ToString('o')
+      session = "$script:SESSION"
+      event   = "$event"
+      tweak   = "$($t.id)"
+      name    = "$($t.name)"
+      cat     = "$($t.cat)"
+      ok      = [bool]$ok
+    }
+    if ($err) { $rec['err'] = "$err" }
+    $ch = @()
+    foreach ($k in @($keys)) {
+      if (-not $k) { continue }
+      $ch += [ordered]@{ key = "$k"; previous = (Format-BkValue $script:BK[$k] $k); current = (Get-KeyNow $k) }
+    }
+    if ($ch.Count -gt 0) { $rec['changes'] = @($ch) }
+    if ($extra) { foreach ($k in $extra.Keys) { $rec[$k] = $extra[$k] } }
+    Add-Content -Path $JOURNAL -Value ($rec | ConvertTo-Json -Depth 5 -Compress) -Encoding UTF8
+  } catch {
+    # Un journal che non si scrive non deve impedire un'ottimizzazione: e' un
+    # registratore, non un partecipante.
+  }
+}
+
+function Read-Journal([int]$max = 400) {
+  if (-not (Test-Path $JOURNAL)) { return @() }
+  $lines = @(Get-Content $JOURNAL -ErrorAction SilentlyContinue)
+  if ($lines.Count -gt $max) { $lines = $lines[($lines.Count - $max)..($lines.Count - 1)] }
+  $out = @()
+  foreach ($l in $lines) {
+    if (-not "$l".Trim()) { continue }
+    try { $out += ($l | ConvertFrom-Json) } catch { }
+  }
+  return $out
+}
+
+function Get-JournalDto {
+  $rec = Read-Journal
+  # Chi puo' ancora essere annullato lo dice il BACKUP, non il journal: il
+  # journal e' cronologia e non cambia, il backup e' lo stato di adesso. Senza
+  # questo incrocio un tweak gia' annullato continuerebbe a offrire 'Annulla'.
+  $live = @{}
+  foreach ($id in @($script:TWKEYS.Keys)) { $live["$id"] = $true }
+
+  $ordine = New-Object System.Collections.ArrayList
+  $perSessione = @{}
+  foreach ($r in $rec) {
+    $sid = "$($r.session)"
+    if (-not $sid) { $sid = 's-ignota' }
+    if (-not $perSessione.ContainsKey($sid)) {
+      $perSessione[$sid] = @{ id = $sid; started = "$($r.ts)"; entries = (New-Object System.Collections.ArrayList) }
+      [void]$ordine.Add($sid)
+    }
+    [void]$perSessione[$sid].entries.Add(@{
+      ts = "$($r.ts)"; event = "$($r.event)"; tweak = "$($r.tweak)"; name = "$($r.name)"
+      cat = "$($r.cat)"; ok = [bool]$r.ok; err = "$($r.err)"
+      changes = @($r.changes)
+      # Applicato in parte: quante modifiche erano verificabili e quali non
+      # risultano scritte. Senza, la cronologia direbbe 'applicato' anche dove
+      # meta' del tweak non e' passata.
+      checked = [int]$r.checked; partial = @($r.partial)
+      # Da quale dei due motori arriva la riga: l'exe scrive 'cli'. Una
+      # cronologia che non lo dice fa sembrare che la finestra abbia fatto cose
+      # che non ha fatto.
+      via = "$($r.via)"
+      revertable = ([bool]$r.ok -and "$($r.event)" -eq 'apply' -and $live.ContainsKey("$($r.tweak)"))
+    })
+  }
+
+  # Le sessioni escono dalla piu' recente: e' l'ordine in cui si cerca "cosa e'
+  # successo poco fa", che e' il motivo per cui si apre questa schermata.
+  $arr = @()
+  for ($i = $ordine.Count - 1; $i -ge 0; $i--) {
+    $s = $perSessione[$ordine[$i]]
+    $ap = 0; $ko = 0; $rv = 0; $ids = @()
+    foreach ($e in $s.entries) {
+      if ("$($e.event)" -eq 'apply' -and $e.ok) { $ap++ }
+      elseif ("$($e.event)" -eq 'apply') { $ko++ }
+      elseif ("$($e.event)" -eq 'revert') { $rv++ }
+      if ($e.revertable) { $ids += "$($e.tweak)" }
+    }
+    $arr += @{
+      id = $s.id; started = $s.started
+      applied = $ap; failed = $ko; reverted = $rv
+      revertable = @($ids)
+      entries = @($s.entries)
+    }
+  }
+  # L'ultima misura prima/dopo: e' l'unico numero misurato su questa macchina,
+  # e vale piu' di qualsiasi stima messa in cima a una schermata.
+  $bench = $null
+  foreach ($r in $rec) {
+    if ("$($r.event)" -eq 'bench' -and $r.after) {
+      $bench = @{ ts = "$($r.ts)"; before = [int]$r.before; after = [int]$r.after; delta_pct = [int]$r.delta_pct }
+    }
+  }
+  return @{ ok = $true; file = "$JOURNAL"; sessions = @($arr); live = @($script:TWKEYS.Keys); bench = $bench }
+}
+
+# ---------------------------------------------------------------------------
+# L'esito di un tweak si verifica guardando la macchina, non gli errori
+# ---------------------------------------------------------------------------
+# Questo script gira con $ErrorActionPreference = 'SilentlyContinue' dalla prima
+# riga, e non puo' non girarci: meta' delle sonde interrogano cose che su molti
+# PC non esistono, e ogni cmdlet che fallisce in silenzio e' voluto. Il prezzo
+# era che un tweak che non scriveva niente — permessi negati, chiave protetta,
+# criterio di dominio — risultava applicato esattamente come uno riuscito, e
+# finiva nel journal e nel riepilogo come tale.
+#
+# La domanda giusta non e' "il codice ha sollevato un errore?" ma "la macchina
+# e' cambiata?". La risposta ce l'abbiamo gia': il piano dichiara, chiave per
+# chiave, quale valore ci deve essere dopo. Si rilegge, e le righe che dovevano
+# cambiare devono risultare a posto. Un test statico tiene i valori del piano
+# uguali a quelli che l'apply scrive, altrimenti la verifica direbbe il falso
+# nella direzione opposta (tweak riusciti dichiarati falliti).
+#
+# Quello che il piano non sa leggere (powercfg, netsh, fsutil) resta non
+# verificabile: non lo si conta e non lo si spaccia per verificato.
+function Test-TweakApplied($t, $attesi) {
+  if (@($attesi).Count -eq 0) { return @() }
+  $ora = @{}
+  foreach ($r in (Get-TwPlan $t)) { if ($r.key) { $ora["$($r.key)"] = $r } }
+  $restate = @()
+  foreach ($k in @($attesi)) {
+    $r = $ora["$k"]
+    if ($r -and -not $r.same) { $restate += "$($r.what)" }
+  }
+  return @($restate)
 }
 
 # v0.7.7: applica un tweak tracciando quali chiavi di backup ha creato -> revert granulare
 function Invoke-ApplyTracked($t) {
   $__pre = @($script:BK.Keys)
-  & $t.apply
+  # Il piano PRIMA di toccare qualsiasi cosa: e' la specifica di cosa deve
+  # cambiare, ed e' l'unico modo di sapere dopo se e' cambiato davvero.
+  $__attesi = @()
+  foreach ($r in (Get-TwPlan $t)) { if ($r.key -and -not $r.same) { $__attesi += "$($r.key)" } }
+  $script:LAST_APPLY = @{ checked = 0; partial = @() }
+  try {
+    & $t.apply
+  } catch {
+    # Il tentativo fallito e' esattamente il pezzo di storia che il backup non
+    # puo' registrare: non lascia chiavi, quindi non lascia traccia. Ed e' la
+    # prima cosa che si cerca quando qualcosa non ha funzionato.
+    Write-Journal 'apply' $t @() $false "$($_.Exception.Message)"
+    throw
+  }
   $__new = @($script:BK.Keys | Where-Object { $__pre -notcontains $_ })
+  $__restate = @(Test-TweakApplied $t $__attesi)
+
+  if ($__attesi.Count -gt 0 -and $__restate.Count -eq $__attesi.Count) {
+    # Non e' cambiato NIENTE di quello che doveva cambiare: il tweak non e'
+    # stato applicato, qualunque cosa dica l'assenza di errori. Le chiavi di
+    # backup appena create vanno via con lui — il backup deve contenere solo
+    # cio' che e' stato davvero modificato, altrimenti "Annulla" rimette valori
+    # che nessuno ha mai toccato.
+    foreach ($k in $__new) { $script:BK.Remove($k) }
+    $__msg = "nessuna delle {0} modifiche previste risulta scritta ({1})" -f $__attesi.Count, ($__restate -join '; ')
+    Write-Journal 'apply' $t @() $false $__msg
+    throw $__msg
+  }
+
   if ($__new.Count -gt 0) {
     $__ex = @(); if ($script:TWKEYS.ContainsKey($t.id)) { $__ex = @($script:TWKEYS[$t.id]) }
     $script:TWKEYS[$t.id] = @(@($__ex + $__new) | Select-Object -Unique)
   }
   $script:TWAT[$t.id] = (Get-Date).ToString('o')
+  $script:LAST_APPLY = @{ checked = $__attesi.Count; partial = @($__restate) }
+  $__extra = @{ checked = $__attesi.Count }
+  if ($__restate.Count -gt 0) { $__extra['partial'] = @($__restate) }
+  Write-Journal 'apply' $t $__new $true '' $__extra
 }
 function Get-RevertableIds { return @($script:TWKEYS.Keys) }
 function Get-BackupIds { if ($script:TWKEYS.Count -gt 0) { return @($script:TWKEYS.Keys) } return @($script:BK.Keys) }
@@ -169,10 +424,72 @@ function Get-RegVal($path, $name) { return (Get-ItemProperty -Path $path -Name $
 # 'applicabile' veniva letto come 'applicato'.
 #
 # L'etichetta resta quella di prima: cambia solo che accanto viaggia il codice.
-function Tw($code, $label) { return @{ code = "$code"; label = "$label" } }
+$script:TW_WORDS = @{
+  ok = 'Ottimale'; todo = 'Da applicare'; na = 'Non applicabile'; unknown = 'Sconosciuto'
+}
+function Tw($code, $detail = '') {
+  # Quattro parole per quattro stati, scritte in un posto solo. Prima ogni tweak
+  # sceglieva la propria: 'Attivo', 'Disattivato', 'Prestazioni', 'TRIM attivo'
+  # e 'Gia disattivata' dicevano tutte "e' a posto" con cinque facce diverse, e
+  # l'utente doveva tradurre ogni volta.
+  # Il dettaglio resta libero, ma e' un'informazione in piu' (quanti MB, quale
+  # DNS), non un modo alternativo di dire lo stato.
+  $w = $script:TW_WORDS[$code]
+  if (-not $w) { $w = 'Sconosciuto' }
+  $label = if ($detail) { "$w - $detail" } else { $w }
+  return @{ code = "$code"; label = $label; detail = "$detail" }
+}
+
+# ---- Il piano: cosa cambierebbe, prima di cambiarlo ----
+# Una descrizione dice cosa fa un tweak; un piano dice cosa succede a QUESTA
+# macchina. E' la differenza fra "disattiva l'accelerazione del mouse" e
+# "MouseSpeed: 1 -> 0": la seconda si puo' controllare, e chi accetta che un
+# programma gli scriva nel registro ha diritto di controllare prima, non dopo.
+#
+# Il 'prima' non si dichiara MAI: si legge adesso, sulla macchina vera. Il
+# 'dopo' e' l'unico pezzo scritto a mano, e un test statico verifica che ogni
+# Set-Reg con argomenti letterali dentro l'apply abbia la sua riga nel piano —
+# un piano che promette qualcosa di diverso da quello che l'apply fa sarebbe
+# peggio di nessun piano.
+#
+# `now` vuoto = valore che non si legge a buon mercato (powercfg, fsutil, chiavi
+# sparse su tutte le schede di rete): la GUI mostra solo il 'dopo', invece di
+# inventare un 'prima'.
+# `same` = questa riga NON cambiera' niente, il valore e' gia' quello giusto.
+# Lo stato di un tweak lo decide una chiave sola, ma il tweak ne scrive
+# parecchie: senza questo, il piano prometteva "0 -> 0", cioe' un cambiamento
+# che non sarebbe avvenuto. La riga resta visibile — serve a far vedere tutto
+# quello che il tweak tocca — ma non si conta fra le modifiche.
+function Pl($what, $now, $next) {
+  return @{ what = "$what"; now = "$now"; next = "$next"; key = ''; same = $false }
+}
+
+function PlReg($path, $name, $next, $what = '') {
+  $cur = Get-RegVal $path $name
+  $now = if ($null -eq $cur) { 'non impostata' } else { "$cur" }
+  if (-not $what) { $what = "$name" }
+  return @{ what = "$what"; now = "$now"; next = "$next"; key = "$path::$name"
+            same = ($null -ne $cur -and "$cur" -eq "$next") }
+}
+
+function PlSvc($name, $what = '') {
+  $s = Get-Service $name -ErrorAction SilentlyContinue
+  $now = if ($s) { "$($s.StartType), $($s.Status)" } else { 'non installato' }
+  if (-not $what) { $what = "Servizio $name" }
+  return @{ what = "$what"; now = "$now"; next = 'Disabilitato, fermo'; key = "svc::$name"
+            same = ($null -ne $s -and "$($s.StartType)" -eq 'Disabled' -and "$($s.Status)" -eq 'Stopped') }
+}
+
+function Get-TwPlan($t) {
+  # Il piano si calcola solo per i tweak che hanno qualcosa da cambiare: per uno
+  # gia' ottimale il piano e' vuoto per definizione, e calcolarlo vorrebbe dire
+  # leggere il registro trentacinque volte per non mostrare niente.
+  if (-not $t.plan) { return @() }
+  try { return @(& $t.plan) } catch { return @() }
+}
 
 function Get-TwState($t) {
-  try { $r = & $t.state } catch { return (Tw 'unknown' 'n/d') }
+  try { $r = & $t.state } catch { return (Tw 'unknown') }
   if ($r -is [hashtable] -and $r.ContainsKey('code')) { return $r }
   # Un tweak che ritorna ancora una stringa libera: si mostra, ma senza fingere
   # di sapere cosa significhi.
@@ -2275,35 +2592,69 @@ $script:TWEAKS = @(
      impact='+3-8% FPS medi e 1% low piu stabili, meno micro-stutter. Consuma piu energia (irrilevante su desktop).';
      risk='safe';
      fit={ if($script:HW.laptop){'note:Laptop rilevato: applico High Performance (non Ultimate) per proteggere batteria e temperature'}else{'ok'} };
-     state={ $p=(powercfg /getactivescheme); if($p -match 'high|ultimate|prestazioni elevate'){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-Power } }
+     plan={ @(
+       (Pl 'Schema energetico attivo' (Get-KeyNow 'power_plan') $(if ($script:HW.laptop) { 'Prestazioni elevate' } else { 'Prestazioni eccellenti (Ultimate)' })),
+       (Pl 'Processore: minimo e massimo' '' '100%'),
+       $(if (-not $script:HW.laptop) { (Pl 'Parcheggio dei core CPU' '' 'disattivato') }),
+       $(if (-not $script:HW.laptop) { (Pl 'Sospensione selettiva USB' '' 'disattivata') }),
+       $(if (-not $script:HW.laptop) { (Pl 'Risparmio energia PCIe (ASPM)' '' 'disattivato') })
+     ) };
+     state={ $p=(powercfg /getactivescheme); if($p -match 'high|ultimate|prestazioni elevate'){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Power } }
   @{ cat='gaming'; id='gaming'; name='Boost gaming (Game Mode, HAGS, Game DVR off)';
      problem='Game DVR registra in background e la GPU scheduling hardware potrebbe essere disattivata.';
      reason='Il Game DVR ruba CPU/GPU durante il gioco; HAGS riduce la latenza di pianificazione dei frame.';
      desc='Attiva Game Mode + Hardware GPU Scheduling, disattiva Game DVR/registrazione in background.';
      impact='+2-5% FPS e frametime piu costante, meno overhead durante il gioco.';
      risk='safe';
-     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode') -eq 1){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-Gaming } }
+     plan={ @(
+       (PlReg 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode' '1' 'Game Mode'),
+       (PlReg 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'HwSchMode' '2' 'Hardware GPU Scheduling'),
+       (PlReg 'HKCU:\System\GameConfigStore' 'GameDVR_Enabled' '0' 'Game DVR'),
+       (PlReg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR' 'AllowGameDVR' '0' 'Game DVR da criteri di sistema')
+     ) };
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode') -eq 1){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Gaming } }
   @{ cat='gaming'; id='priority'; name='Priorita GPU/CPU ai giochi (MMCSS)';
      problem='Windows assegna le stesse risorse ai processi in background e al gioco in primo piano.';
      reason='MMCSS/SystemResponsiveness a 0 da priorita reale ai task multimediali e ai giochi attivi.';
      desc='Imposta SystemResponsiveness=0 e priorita GPU/CPU ai giochi in primo piano.';
      impact='Frametime piu regolare, meno spike quando ci sono app in background.';
      risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' 'SystemResponsiveness') -eq 0){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-Priority } }
+     plan={ @(
+       (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' 'SystemResponsiveness' '0' 'Quota CPU riservata ai servizi'),
+       (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' 'NetworkThrottlingIndex' '4294967295' 'Limite di rete per i multimediali'),
+       (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games' 'GPU Priority' '8' 'Priorita GPU dei giochi'),
+       (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games' 'Priority' '6' 'Priorita CPU dei giochi'),
+       (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games' 'Scheduling Category' 'High' 'Categoria di scheduling'),
+       (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games' 'SFIO Priority' 'High' 'Priorita I/O dei giochi'),
+       (PlReg 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' 'Win32PrioritySeparation' '26' 'Quanto CPU per il programma in primo piano')
+     ) };
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' 'SystemResponsiveness') -eq 0){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Priority } }
   @{ cat='gaming'; id='mpo'; name='Disabilita MPO (Multi-Plane Overlay)';
      problem='Il Multi-Plane Overlay causa flickering, stutter e SCHERMO NERO in OBS Game Capture.';
      reason='MPO ha bug noti con molti driver: interferisce con la cattura schermo e il DWM.';
      desc='Imposta OverlayTestMode=5 per disattivare MPO nel Desktop Window Manager.';
      impact='Elimina flickering/schermo nero in OBS, meno stutter sul desktop. Richiede riavvio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows\Dwm' 'OverlayTestMode') -eq 5){(Tw 'ok' 'Disabilitato')}else{(Tw 'todo' 'Attivo (da disabilitare)')} }; apply={ Do-Mpo } }
+     plan={ @(
+       (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows\Dwm' 'OverlayTestMode' '5' 'MPO (Multi-Plane Overlay)')
+     ) };
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows\Dwm' 'OverlayTestMode') -eq 5){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Mpo } }
   @{ cat='gaming'; id='gpu_msi'; name='GPU: MSI mode ON (latenza DPC)';
      problem='La GPU usa interrupt line-based, che aumentano la latenza DPC e causano micro-stutter.';
      reason='I Message Signaled Interrupts (MSI) riducono la latenza di interrupt della GPU.';
      desc='Attiva MSISupported=1 nel ramo Interrupt Management della GPU (NVIDIA/AMD).';
      impact='Latenza DPC piu bassa, input piu reattivo. Richiede riavvio.';
      risk='safe';
-     state={ $pnp=Get-GpuPnp; if($pnp){ $v=Get-RegVal "HKLM:\SYSTEM\CurrentControlSet\Enum\$pnp\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties" 'MSISupported'; if($v -eq 1){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da attivare')} }else{(Tw 'unknown' 'n/d')} }; apply={ Do-GpuMsi } }
+     plan={ @(
+       $(
+         $__pnp = Get-GpuPnp
+         if ($__pnp) {
+           $__p = "HKLM:\SYSTEM\CurrentControlSet\Enum\$__pnp\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties"
+           (PlReg $__p 'MSISupported' '1' 'MSI mode della GPU')
+         } else { (Pl 'MSI mode della GPU' 'GPU non rilevata' 'attivato') }
+       )
+     ) };
+     state={ $pnp=Get-GpuPnp; if($pnp){ $v=Get-RegVal "HKLM:\SYSTEM\CurrentControlSet\Enum\$pnp\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties" 'MSISupported'; if($v -eq 1){(Tw 'ok')}else{(Tw 'todo')} }else{(Tw 'unknown')} }; apply={ Do-GpuMsi } }
   @{ cat='gaming'; id='amd_ulps'; name='AMD: disabilita ULPS';
      problem='Le Radeon abbassano troppo il clock in idle (Ultra Low Power State), causando stutter.';
      reason='ULPS mette la GPU in stato a bassissimo consumo, con risvegli lenti che generano scatti.';
@@ -2311,7 +2662,10 @@ $script:TWEAKS = @(
      impact='Meno stutter e latenza su schede AMD, clock piu stabile.';
      risk='safe';
      fit={ if($script:HW.gpu -eq 'AMD'){'ok'}else{"skip:Solo GPU AMD (rilevata $($script:HW.gpu))"} };
-     state={ if((Get-GpuVendor) -eq 'AMD'){(Tw 'todo' 'GPU AMD: applicabile')}else{(Tw 'na' 'Solo GPU AMD')} }; apply={ Do-AmdUlps } }
+     plan={ @(
+       (Pl 'ULPS sulle schede AMD rilevate' '' 'disattivato (EnableUlps 0)')
+     ) };
+     state={ if((Get-GpuVendor) -eq 'AMD'){(Tw 'todo')}else{(Tw 'na' 'solo su GPU AMD')} }; apply={ Do-AmdUlps } }
   @{ cat='gaming'; id='nvidia_tel'; name='NVIDIA: disabilita telemetria';
      problem='I driver NVIDIA installano task/servizi di telemetria che girano in background.';
      reason='La telemetria consuma CPU e rete senza alcun beneficio per il gaming.';
@@ -2319,7 +2673,11 @@ $script:TWEAKS = @(
      impact='Meno processi in background, CPU leggermente piu libera.';
      risk='safe';
      fit={ if($script:HW.gpu -eq 'NVIDIA'){'ok'}else{"skip:Solo GPU NVIDIA (rilevata $($script:HW.gpu))"} };
-     state={ if((Get-GpuVendor) -eq 'NVIDIA'){(Tw 'todo' 'GPU NVIDIA: applicabile')}else{(Tw 'na' 'Solo GPU NVIDIA')} }; apply={ Do-NvidiaTel } }
+     plan={ @(
+       (PlSvc 'NvTelemetryContainer' 'Servizio telemetria NVIDIA'),
+       (Pl 'Attivita pianificate NVIDIA (NvTmRep, NvProfileUpdater...)' '' 'disattivate')
+     ) };
+     state={ if((Get-GpuVendor) -eq 'NVIDIA'){(Tw 'todo')}else{(Tw 'na' 'solo su GPU NVIDIA')} }; apply={ Do-NvidiaTel } }
   @{ cat='gaming'; id='hibernate'; name='Disabilita ibernazione';
      problem='Il file hiberfil.sys occupa diversi GB di disco anche se non usi mai la sospensione.';
      reason='Su desktop l ibernazione e raramente usata; il file pesa quanto la RAM installata.';
@@ -2327,7 +2685,11 @@ $script:TWEAKS = @(
      impact='Libera 4-32 GB su disco. Perdi la sospensione ibrida/avvio rapido.';
      risk='caution';
      fit={ if($script:HW.laptop){'warn:Su laptop l ibernazione e utile a batteria scarica: disattivala solo se non la usi mai'}else{'ok'} };
-     state={ (Tw 'todo' 'Applica per liberare spazio') }; apply={ Do-Hibernate } }
+     plan={ @(
+       (Pl 'Ibernazione' 'attiva' 'disattivata'),
+       (Pl 'File hiberfil.sys' 'occupa spazio pari alla RAM' 'rimosso')
+     ) };
+     state={ (Tw 'todo') }; apply={ Do-Hibernate } }
   # LATENZA & INPUT
   @{ cat='input'; id='mouse'; name='Accelerazione mouse OFF (raw input)';
      problem='L Enhance Pointer Precision di Windows accelera il mouse in modo imprevedibile.';
@@ -2335,14 +2697,22 @@ $script:TWEAKS = @(
      desc='Disattiva MouseSpeed/Threshold per un input 1:1 (raw).';
      impact='Mira piu precisa e costante negli sparatutto. Nessun rischio.';
      risk='safe';
-     state={ if("$(Get-RegVal 'HKCU:\Control Panel\Mouse' 'MouseSpeed')" -eq '0'){(Tw 'ok' 'Gia disattivata')}else{(Tw 'todo' 'Attiva (da disattivare)')} }; apply={ Do-Mouse } }
+     plan={ @(
+       (PlReg 'HKCU:\Control Panel\Mouse' 'MouseSpeed' '0' 'Accelerazione del puntatore'),
+       (PlReg 'HKCU:\Control Panel\Mouse' 'MouseThreshold1' '0' 'Prima soglia di accelerazione'),
+       (PlReg 'HKCU:\Control Panel\Mouse' 'MouseThreshold2' '0' 'Seconda soglia di accelerazione')
+     ) };
+     state={ if("$(Get-RegVal 'HKCU:\Control Panel\Mouse' 'MouseSpeed')" -eq '0'){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Mouse } }
   @{ cat='input'; id='timer'; name='Timer resolution globale';
      problem='Su Windows 11 la timer resolution puo essere variabile, con scheduling meno preciso.';
      reason='Una timer resolution alta e costante rende piu regolari i frametime e la latenza.';
      desc='Attiva GlobalTimerResolutionRequests=1 (richiesta timer globale).';
      impact='Frametime piu costante, meno stutter. Richiede riavvio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel' 'GlobalTimerResolutionRequests') -eq 1){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da attivare')} }; apply={ Do-Timer } }
+     plan={ @(
+       (PlReg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel' 'GlobalTimerResolutionRequests' '1' 'Timer resolution globale')
+     ) };
+     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel' 'GlobalTimerResolutionRequests') -eq 1){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Timer } }
   @{ cat='input'; id='usb'; name='USB power management OFF';
      problem='Windows sospende le porte USB per risparmiare energia, causando cali di polling.';
      reason='Se il mouse/tastiera vanno in standby, si hanno input drop e micro-freeze.';
@@ -2350,21 +2720,32 @@ $script:TWEAKS = @(
      impact='Input di mouse/tastiera piu stabile, niente drop. Nessun rischio.';
      risk='safe';
      fit={ if($script:HW.laptop){'warn:Su laptop aumenta il consumo della batteria: attiva solo se giochi collegato alla corrente'}else{'ok'} };
-     state={ (Tw 'todo' 'Applica per input stabile') }; apply={ Do-Usb } }
+     plan={ @(
+       (Pl 'Risparmio energia su tutte le porte USB' '' 'disattivato (EnhancedPowerManagementEnabled 0)')
+     ) };
+     state={ (Tw 'todo') }; apply={ Do-Usb } }
   @{ cat='input'; id='stickykeys'; name='Sticky/Filter/Toggle Keys OFF';
      problem='Premendo Shift ripetutamente compare il popup delle Sticky Keys che ti butta fuori dal gioco.';
      reason='Le funzioni di accessibilita tastiera si attivano per errore durante il gioco.';
      desc='Disattiva Sticky/Filter/Toggle Keys.';
      impact='Niente piu popup che rubano il focus in game. Nessun rischio.';
      risk='safe';
-     state={ if("$(Get-RegVal 'HKCU:\Control Panel\Accessibility\StickyKeys' 'Flags')" -eq '506'){(Tw 'ok' 'Disattivati')}else{(Tw 'todo' 'Attivi (da disattivare)')} }; apply={ Do-StickyKeys } }
+     plan={ @(
+       (PlReg 'HKCU:\Control Panel\Accessibility\StickyKeys' 'Flags' '506' 'Tasti permanenti'),
+       (PlReg 'HKCU:\Control Panel\Accessibility\Keyboard Response' 'Flags' '122' 'Filtro tasti'),
+       (PlReg 'HKCU:\Control Panel\Accessibility\ToggleKeys' 'Flags' '58' 'Segnali acustici dei tasti')
+     ) };
+     state={ if("$(Get-RegVal 'HKCU:\Control Panel\Accessibility\StickyKeys' 'Flags')" -eq '506'){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-StickyKeys } }
   @{ cat='input'; id='startupdelay'; name='Startup delay app ridotto';
      problem='Windows ritarda artificialmente l avvio delle app in autostart.';
      reason='Il delay serve a non sovraccaricare l avvio, ma rallenta l accesso al desktop utile.';
      desc='Imposta StartupDelayInMSec=0 per avviare subito le app.';
      impact='Desktop e app pronti prima dopo l accensione. Nessun rischio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize' 'StartupDelayInMSec') -eq 0){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-StartupDelay } }
+     plan={ @(
+       (PlReg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize' 'StartupDelayInMSec' '0' 'Ritardo di avvio delle app')
+     ) };
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize' 'StartupDelayInMSec') -eq 0){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-StartupDelay } }
   # RETE & STREAMING
   @{ cat='network'; id='network'; name='Rete: Nagle OFF + TCP tuning';
      problem='L algoritmo di Nagle accumula piccoli pacchetti, aggiungendo latenza nei giochi online.';
@@ -2372,35 +2753,61 @@ $script:TWEAKS = @(
      desc='Disattiva Nagle sulla scheda attiva e regola autotuning/ECN/RSS.';
      impact='Ping piu basso e stabile online. Reversibile con Ripristina.';
      risk='safe';
-     state={ (Tw 'todo' 'Applica per meno lag online') }; apply={ Do-Network } }
+     plan={ @(
+       (Pl 'Nagle su tutte le schede (TcpAckFrequency, TCPNoDelay)' '' 'disattivato'),
+       (Pl 'Autotuning della finestra TCP' '' 'normal'),
+       (Pl 'ECN' '' 'attivo'),
+       (Pl 'RSS (receive side scaling)' '' 'attivo')
+     ) };
+     state={ (Tw 'todo') }; apply={ Do-Network } }
   @{ cat='network'; id='dns'; name='DNS veloci (Cloudflare 1.1.1.1)';
      problem='I DNS del provider sono spesso lenti e possono rallentare la risoluzione dei domini.';
      reason='DNS piu veloci riducono i tempi di connessione a server di gioco e matchmaking.';
      desc='Imposta 1.1.1.1 / 1.0.0.1 sulla scheda attiva (reversibile a DHCP).';
      impact='Connessioni piu rapide. Reversibile in un click.';
      risk='safe';
-     state={ $a=Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1; if($a){ $d=(Get-DnsClientServerAddress -InterfaceAlias $a.Name -AddressFamily IPv4).ServerAddresses -join ','; if($d -match '1.1.1.1'){(Tw 'ok' 'Gia Cloudflare')}else{(Tw 'todo' "Attuale: $d")} }else{(Tw 'unknown' 'n/d')} }; apply={ Do-Dns } }
+     plan={ @(
+       $(
+         $__a = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
+         $__now = ''
+         if ($__a) { $__now = ((Get-DnsClientServerAddress -InterfaceAlias $__a.Name -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses -join ', ') }
+         if (-not $__now) { $__now = 'assegnati dal router (DHCP)' }
+         (Pl "Server DNS della scheda $(if ($__a) { $__a.Name } else { 'attiva' })" $__now '1.1.1.1, 1.0.0.1')
+       )
+     ) };
+     state={ $a=Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1; if($a){ $d=(Get-DnsClientServerAddress -InterfaceAlias $a.Name -AddressFamily IPv4).ServerAddresses -join ','; if($d -match '1.1.1.1'){(Tw 'ok' 'gia su Cloudflare')}else{(Tw 'todo' "Attuale: $d")} }else{(Tw 'unknown')} }; apply={ Do-Dns } }
   @{ cat='network'; id='qos'; name='Rimuovi 20% banda riservata QoS';
      problem='Windows riserva fino al 20% della banda per il QoS di sistema.';
      reason='Recuperando quella banda hai piu throughput reale per download e streaming.';
      desc='Imposta NonBestEffortLimit=0.';
      impact='Piu banda disponibile per gioco/stream. Nessun rischio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit') -eq 0){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-Qos } }
+     plan={ @(
+       (PlReg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit' '0' 'Banda riservata al QoS di sistema')
+     ) };
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit') -eq 0){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Qos } }
   @{ cat='network'; id='deliveryopt'; name='Delivery Optimization P2P OFF';
      problem='Windows usa la tua banda in upload per distribuire aggiornamenti ad altri PC (P2P).';
      reason='Durante lo streaming quell upload occupa banda e destabilizza il bitrate.';
      desc='Imposta DODownloadMode=0 (nessun P2P).';
      impact='Upload piu libero, stream piu stabile. Nessun rischio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode') -eq 0){(Tw 'ok' 'Disattivato')}else{(Tw 'todo' 'Attivo (da disattivare)')} }; apply={ Do-DeliveryOpt } }
+     plan={ @(
+       (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode' '0' 'Condivisione P2P degli aggiornamenti'),
+       (PlReg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' 'DODownloadMode' '0' 'Condivisione P2P da criteri di sistema')
+     ) };
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode') -eq 0){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-DeliveryOpt } }
   @{ cat='network'; id='obs_priority'; name='OBS ad alta priorita';
      problem='OBS gira a priorita normale e puo perdere frame in encoding sotto carico.';
      reason='Alzando la priorita CPU di OBS l encoding resta fluido anche con la CPU occupata dal gioco.';
      desc='Imposta CpuPriorityClass alta per obs64/obs32.exe (via Image File Execution Options).';
      impact='Meno frame persi in registrazione/stream. Nessun rischio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\obs64.exe\PerfOptions' 'CpuPriorityClass') -eq 3){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da attivare')} }; apply={ Do-ObsPriority } }
+     plan={ @(
+       (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\obs64.exe\PerfOptions' 'CpuPriorityClass' '3' 'Priorita CPU di OBS 64 bit'),
+       (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\obs32.exe\PerfOptions' 'CpuPriorityClass' '3' 'Priorita CPU di OBS 32 bit')
+     ) };
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\obs64.exe\PerfOptions' 'CpuPriorityClass') -eq 3){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-ObsPriority } }
   # SISTEMA & DEBLOAT
   @{ cat='system'; id='clean'; name='Pulizia temp + cache Windows Update';
      problem='File temporanei e cache degli aggiornamenti si accumulano e occupano spazio.';
@@ -2408,6 +2815,11 @@ $script:TWEAKS = @(
      desc='Rimuove temp utente/sistema, cache Windows Update e svuota il DNS.';
      impact='Libera spazio su disco. Nessun file personale toccato.';
      risk='safe';
+     plan={ @(
+       (Pl 'Cartella dei file temporanei' '' 'svuotata'),
+       (Pl 'Cache di Windows Update' '' 'svuotata'),
+       (Pl 'Cache DNS' '' 'svuotata')
+     ) };
      state={ $mb=0; Get-ChildItem $env:TEMP -Recurse -File -Force 2>$null | ForEach-Object { $mb+=$_.Length }; (Tw 'todo' "$([math]::Round($mb/1MB)) MB da pulire") }; apply={ Do-Cleanup } }
   @{ cat='system'; id='visual'; name='Effetti visivi: modalita prestazioni';
      problem='Animazioni e trasparenze consumano GPU/CPU e rendono la UI meno reattiva.';
@@ -2415,49 +2827,74 @@ $script:TWEAKS = @(
      desc='Imposta VisualFXSetting=2 (prestazioni).';
      impact='UI piu snella e reattiva. Estetica leggermente piu spartana.';
      risk='safe';
-     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' 'VisualFXSetting') -eq 2){(Tw 'ok' 'Prestazioni')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-Visual } }
+     plan={ @(
+       (PlReg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' 'VisualFXSetting' '2' 'Effetti visivi di Windows')
+     ) };
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' 'VisualFXSetting') -eq 2){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Visual } }
   @{ cat='system'; id='telemetry'; name='Telemetria (DiagTrack) OFF';
      problem='Il servizio DiagTrack invia dati di diagnostica e gira sempre in background.';
      reason='Disattivarlo riduce l uso di CPU e rete senza impatti sulle funzioni essenziali.';
      desc='Ferma e disabilita il servizio DiagTrack (Connected User Experiences).';
      impact='Meno CPU/rete in background. NON tocca Defender ne la sicurezza.';
      risk='caution';
-     state={ $s=Get-Service DiagTrack -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){(Tw 'todo' 'Attiva (da disattivare)')}else{(Tw 'ok' 'Disattivata')} }; apply={ Do-Telemetry } }
+     plan={ @(
+       (PlSvc 'DiagTrack' 'Servizio di telemetria Windows')
+     ) };
+     state={ $s=Get-Service DiagTrack -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){(Tw 'todo')}else{(Tw 'ok')} }; apply={ Do-Telemetry } }
   @{ cat='system'; id='ads'; name='Suggerimenti/ads di Windows OFF';
      problem='Windows mostra app suggerite e contenuti promozionali nel menu Start e altrove.';
      reason='Sono distrazioni e consumano risorse per scaricare i contenuti suggeriti.';
      desc='Disattiva SilentInstalledApps, suggerimenti e Consumer Features.';
      impact='Start piu pulito, niente app installate a sorpresa. Nessun rischio.';
      risk='safe';
-     state={ (Tw 'todo' 'Applica per rimuovere ads') }; apply={ Do-Ads } }
+     plan={ @(
+       (PlReg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager' 'SilentInstalledAppsEnabled' '0' 'App installate in silenzio'),
+       (PlReg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager' 'SystemPaneSuggestionsEnabled' '0' 'Suggerimenti nel menu Start'),
+       (PlReg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' 'DisableWindowsConsumerFeatures' '1' 'Contenuti promozionali di Windows')
+     ) };
+     state={ (Tw 'todo') }; apply={ Do-Ads } }
   @{ cat='system'; id='bgapps'; name='App in background OFF (globale)';
      problem='Le app UWP restano attive in background consumando CPU/RAM e rete.';
      reason='Bloccarle libera risorse per il gioco senza disinstallare nulla.';
      desc='Imposta GlobalUserDisabled=1 e LetAppsRunInBackground.';
      impact='Meno consumo di CPU/RAM in background. Alcune notifiche UWP potrebbero ritardare.';
      risk='safe';
-     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' 'GlobalUserDisabled') -eq 1){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-BgApps } }
+     plan={ @(
+       (PlReg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' 'GlobalUserDisabled' '1' 'App in background per questo utente'),
+       (PlReg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy' 'LetAppsRunInBackground' '2' 'App in background da criteri di sistema')
+     ) };
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' 'GlobalUserDisabled') -eq 1){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-BgApps } }
   @{ cat='system'; id='gamebar_rec'; name='Xbox Game Bar recording OFF';
      problem='La Game Bar registra in background per la funzione clip, usando risorse.';
      reason='Se non usi le clip Xbox, la registrazione continua e uno spreco di CPU/GPU.';
      desc='Disattiva GameDVR_Enabled e AppCaptureEnabled.';
      impact='Meno overhead in game. Perdi la registrazione automatica Xbox.';
      risk='safe';
-     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled') -eq 0){(Tw 'ok' 'Disattivato')}else{(Tw 'todo' 'Attivo (da disattivare)')} }; apply={ Do-GamebarRec } }
+     plan={ @(
+       (PlReg 'HKCU:\System\GameConfigStore' 'GameDVR_Enabled' '0' 'Registrazione della Game Bar'),
+       (PlReg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled' '0' 'Cattura in background')
+     ) };
+     state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled') -eq 0){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-GamebarRec } }
   @{ cat='system'; id='debloat'; name='Debloat app superflue (UWP)';
      problem='Windows preinstalla app come Candy Crush, Solitaire, Bing, 3D Builder che non usi.';
      reason='Occupano spazio e alcune girano in background inutilmente.';
      desc='Rimuove una lista curata di app UWP (reinstallabili dallo Store).';
      impact='Sistema piu pulito. Puoi reinstallarle in qualsiasi momento dallo Store.';
      risk='caution';
-     state={ $n=0; foreach($p in $script:BLOAT){ if(Get-AppxPackage -Name $p -ErrorAction SilentlyContinue){$n++} }; if($n -eq 0){(Tw 'ok' 'Nessuna app da rimuovere')}else{(Tw 'todo' "$n app rimovibili")} }; apply={ Do-Debloat } }
+     plan={ @(
+       (Pl 'App UWP superflue installate su questo PC' '' 'rimosse, reinstallabili dallo Store')
+     ) };
+     state={ $n=0; foreach($p in $script:BLOAT){ if(Get-AppxPackage -Name $p -ErrorAction SilentlyContinue){$n++} }; if($n -eq 0){(Tw 'ok' 'nessuna app da rimuovere')}else{(Tw 'todo' "$n app rimovibili")} }; apply={ Do-Debloat } }
   @{ cat='system'; id='search_index'; name='Windows Search indexing OFF (invasivo)';
      problem='Il servizio di indicizzazione della ricerca puo generare carico su disco/CPU.';
      reason='Su alcuni PC l indicizzazione rallenta il sistema, ma serve alla ricerca file veloce.';
      desc='Ferma e disabilita il servizio WSearch.';
      impact='Meno carico su disco/CPU, MA la ricerca file diventa piu lenta. Reversibile.';
      risk='caution';
-     state={ $s=Get-Service WSearch -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){(Tw 'todo' 'Attivo')}else{(Tw 'ok' 'Disattivato')} }; apply={ Do-SearchIndex } }
+     plan={ @(
+       (PlSvc 'WSearch' 'Servizio di indicizzazione Windows Search')
+     ) };
+     state={ $s=Get-Service WSearch -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){(Tw 'todo')}else{(Tw 'ok')} }; apply={ Do-SearchIndex } }
   # NUOVI TWEAK (motore adattivo)
   @{ cat='gaming'; id='fse'; name='Fullscreen Optimizations OFF';
      problem='Windows forza il fullscreen ottimizzato (borderless) invece del fullscreen esclusivo reale.';
@@ -2465,7 +2902,13 @@ $script:TWEAKS = @(
      desc='Imposta FSEBehaviorMode=2 e HonorUserFSEBehavior nel GameConfigStore.';
      impact='Input lag ridotto nei giochi a schermo intero. Nessun rischio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKCU:\System\GameConfigStore' 'GameDVR_FSEBehaviorMode') -eq 2){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-Fse } }
+     plan={ @(
+       (PlReg 'HKCU:\System\GameConfigStore' 'GameDVR_FSEBehaviorMode' '2' 'Ottimizzazioni schermo intero'),
+       (PlReg 'HKCU:\System\GameConfigStore' 'GameDVR_HonorUserFSEBehaviorMode' '1' 'Rispetta la scelta utente'),
+       (PlReg 'HKCU:\System\GameConfigStore' 'GameDVR_DXGIHonorFSEWindowsCompatible' '1' 'Compatibilita DXGI'),
+       (PlReg 'HKCU:\System\GameConfigStore' 'GameDVR_EFSEFeatureFlags' '0' 'Flag delle ottimizzazioni')
+     ) };
+     state={ if((Get-RegVal 'HKCU:\System\GameConfigStore' 'GameDVR_FSEBehaviorMode') -eq 2){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Fse } }
   @{ cat='gaming'; id='power_throttling'; name='Power throttling CPU OFF';
      problem='Windows rallenta (throttla) i processi che considera poco importanti per risparmiare energia.';
      reason='A volte il throttling colpisce anche giochi, OBS o launcher, causando cali improvvisi.';
@@ -2473,14 +2916,20 @@ $script:TWEAKS = @(
      impact='CPU sempre reattiva per giochi e streaming. Consuma un po piu di energia.';
      risk='safe';
      fit={ if($script:HW.laptop){'warn:Su laptop il power throttling risparmia batteria: attiva solo se giochi sempre collegato alla corrente'}else{'ok'} };
-     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling' 'PowerThrottlingOff') -eq 1){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-PowerThrottling } }
+     plan={ @(
+       (PlReg 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling' 'PowerThrottlingOff' '1' 'Power throttling della CPU')
+     ) };
+     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling' 'PowerThrottlingOff') -eq 1){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-PowerThrottling } }
   @{ cat='gaming'; id='standby_clear'; name='Svuota RAM standby (azione istantanea)';
      problem='Windows tiene in RAM una cache standby che a volte non viene liberata abbastanza in fretta.';
      reason='Svuotare la standby list prima di giocare rende la memoria subito disponibile per il gioco.';
      desc='Purge della standby memory list via API di sistema (richiede Amministratore). Nessuna modifica permanente.';
      impact='RAM libera immediata prima della sessione di gioco. Azione una tantum, sempre sicura.';
      risk='safe';
-     state={ $o=Get-CimInstance Win32_OperatingSystem; (Tw 'todo' "$([math]::Round($o.FreePhysicalMemory/1MB,1)) GB RAM libera ora") }; apply={ Clear-StandbyList } }
+     plan={ @(
+       (Pl 'RAM in standby' '' 'liberata subito. Azione istantanea: non lascia niente da annullare')
+     ) };
+     state={ $o=Get-CimInstance Win32_OperatingSystem; (Tw 'todo' "ora $([math]::Round($o.FreePhysicalMemory/1MB,1)) GB liberi") }; apply={ Clear-StandbyList } }
   @{ cat='network'; id='nic_power'; name='Scheda di rete a piena potenza';
      problem='Windows puo spegnere la scheda di rete per risparmiare energia e usa interrupt moderation che aggiunge latenza.';
      reason='Il risparmio energetico della NIC causa micro-disconnessioni; la moderazione degli interrupt ritarda i pacchetti.';
@@ -2488,7 +2937,11 @@ $script:TWEAKS = @(
      impact='Ping piu stabile, niente drop di connessione in game. Richiede riavvio o riconnessione.';
      risk='safe';
      fit={ if($script:HW.laptop){'warn:Su laptop la scheda di rete sempre attiva consuma piu batteria'}else{'ok'} };
-     state={ $a=Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1; if(-not $a){(Tw 'unknown' 'n/d')}else{ $ok=$false; Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | ForEach-Object { $p=Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if($p.NetCfgInstanceId -eq $a.InterfaceGuid -and $p.PnPCapabilities -eq 24){$ok=$true} }; if($ok){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} } }; apply={ Do-NicPower } }
+     plan={ @(
+       (Pl 'Risparmio energia della scheda di rete attiva' '' 'disattivato (PnPCapabilities 24)'),
+       (Pl 'Interrupt moderation' '' 'disattivata, dove supportata')
+     ) };
+     state={ $a=Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1; if(-not $a){(Tw 'unknown')}else{ $ok=$false; Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | ForEach-Object { $p=Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if($p.NetCfgInstanceId -eq $a.InterfaceGuid -and $p.PnPCapabilities -eq 24){$ok=$true} }; if($ok){(Tw 'ok')}else{(Tw 'todo')} } }; apply={ Do-NicPower } }
   @{ cat='system'; id='paging_exec'; name='Kernel sempre in RAM (16GB+)';
      problem='Windows puo spostare parti del kernel e dei driver nel file di paging su disco.';
      reason='Con abbastanza RAM, tenere il kernel in memoria elimina micro-attese di paging.';
@@ -2496,7 +2949,10 @@ $script:TWEAKS = @(
      impact='Sistema piu scattante sotto carico. Consigliato solo con 16 GB o piu.';
      risk='safe';
      fit={ if($script:HW.ram -ge 16){'ok'}else{"skip:Richiede almeno 16 GB di RAM (rilevati $($script:HW.ram) GB)"} };
-     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' 'DisablePagingExecutive') -eq 1){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-PagingExec } }
+     plan={ @(
+       (PlReg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' 'DisablePagingExecutive' '1' 'Kernel paginabile su disco')
+     ) };
+     state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' 'DisablePagingExecutive') -eq 1){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-PagingExec } }
   @{ cat='system'; id='sysmain'; name='SysMain/Superfetch OFF (solo SSD)';
      problem='SysMain precarica app in RAM analizzando l uso del disco: su SSD e superfluo e consuma CPU/disco.';
      reason='Gli SSD sono gia velocissimi in lettura casuale: il preload di SysMain non serve e genera carico.';
@@ -2504,7 +2960,10 @@ $script:TWEAKS = @(
      impact='Meno attivita disco/CPU in background su SSD. Su HDD invece va lasciato attivo.';
      risk='caution';
      fit={ if($script:HW.ssd){'ok'}else{'skip:Solo con SSD: su HDD SysMain velocizza i caricamenti, meglio lasciarlo attivo'} };
-     state={ $s=Get-Service SysMain -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){(Tw 'todo' 'Attivo (da disattivare)')}else{(Tw 'ok' 'Disattivato')} }; apply={ Do-SysMain } }
+     plan={ @(
+       (PlSvc 'SysMain' 'Servizio SysMain / Superfetch')
+     ) };
+     state={ $s=Get-Service SysMain -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){(Tw 'todo')}else{(Tw 'ok')} }; apply={ Do-SysMain } }
   @{ cat='system'; id='trim'; name='Verifica TRIM SSD attivo';
      problem='Se il TRIM e disattivato, l SSD rallenta progressivamente con l uso.';
      reason='Il TRIM permette all SSD di riorganizzare le celle libere mantenendo le prestazioni di scrittura.';
@@ -2512,21 +2971,31 @@ $script:TWEAKS = @(
      impact='SSD sempre alla massima velocita nel tempo. Nessun rischio.';
      risk='safe';
      fit={ if($script:HW.ssd){'ok'}else{'skip:Solo per SSD: il TRIM non si applica agli HDD'} };
-     state={ $q=(fsutil behavior query DisableDeleteNotify) -join ' '; if($q -match 'DisableDeleteNotify\s*=\s*0'){(Tw 'ok' 'TRIM attivo')}else{(Tw 'todo' 'Da attivare')} }; apply={ Do-Trim } }
+     plan={ @(
+       (Pl 'TRIM sugli SSD (DisableDeleteNotify)' '' 'attivo')
+     ) };
+     state={ $q=(fsutil behavior query DisableDeleteNotify) -join ' '; if($q -match 'DisableDeleteNotify\s*=\s*0'){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Trim } }
   @{ cat='system'; id='ntfs'; name='NTFS: last-access timestamp OFF';
      problem='NTFS aggiorna la data di ultimo accesso di ogni file letto, generando scritture inutili.';
      reason='Disattivarlo riduce le scritture su disco a ogni lettura di file (utile anche per la vita dell SSD).';
      desc='Esegue fsutil behavior set disablelastaccess 1 (con backup del valore precedente).';
      impact='Meno I/O su disco nelle operazioni quotidiane. Nessun rischio.';
      risk='safe';
-     state={ $q=(fsutil behavior query disablelastaccess) -join ' '; if($q -match '=\s*[13]'){(Tw 'ok' 'Attivo')}else{(Tw 'todo' 'Da ottimizzare')} }; apply={ Do-Ntfs } }
+     plan={ @(
+       (Pl 'Timestamp di ultimo accesso NTFS' '' 'disattivato')
+     ) };
+     state={ $q=(fsutil behavior query disablelastaccess) -join ' '; if($q -match '=\s*[13]'){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Ntfs } }
   @{ cat='system'; id='edge_preload'; name='Edge preload/background OFF';
      problem='Microsoft Edge si precarica all avvio e resta in background anche se non lo usi.';
      reason='Lo startup boost di Edge occupa RAM e CPU all accensione per un browser che magari non apri mai.';
      desc='Imposta StartupBoostEnabled=0 e BackgroundModeEnabled=0 via policy.';
      impact='Avvio piu pulito e RAM libera se non usi Edge. Nessun rischio.';
      risk='safe';
-     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' 'StartupBoostEnabled') -eq 0){(Tw 'ok' 'Disattivato')}else{(Tw 'todo' 'Attivo (da disattivare)')} }; apply={ Do-EdgePreload } }
+     plan={ @(
+       (PlReg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' 'StartupBoostEnabled' '0' 'Avvio rapido di Edge in background'),
+       (PlReg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' 'BackgroundModeEnabled' '0' 'Edge sempre in esecuzione')
+     ) };
+     state={ if((Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' 'StartupBoostEnabled') -eq 0){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-EdgePreload } }
 )
 
 $script:PRESETS = @{
@@ -2572,12 +3041,14 @@ function Invoke-RestoreTweak($id) {
   $script:TWAT.Remove($id)
   if ($id -eq 'network') { netsh int tcp set global autotuninglevel=normal 2>$null | Out-Null }
   Save-Backup
+  # L'annullamento e' un evento come l'applicazione: se sparisse dal journal, la
+  # cronologia direbbe che quel tweak e' ancora attivo.
+  Write-Journal 'revert' (Get-TweakById $id) @() $true ''
   return 'Tweak ripristinato al valore precedente.'
 }
 
 function Invoke-Restore {
-  # v0.7.3+: legge anche dal file legacy se il nuovo non esiste
-  $__rf = if (Test-Path $BACKUP) { $BACKUP } elseif (Test-Path $BACKUP_LEGACY) { $BACKUP_LEGACY } else { '' }
+  $__rf = Get-BackupPath
   if (-not $__rf) { return 'Nessun backup trovato.' }
   $b = Get-Content $__rf -Raw | ConvertFrom-Json | ConvertTo-HashtableSafe
   foreach ($k in $b.Keys) {
@@ -2585,8 +3056,12 @@ function Invoke-Restore {
     Restore-OneKey $k $b[$k]
   }
   netsh int tcp set global autotuninglevel=normal 2>$null | Out-Null
+  # Il journal PRIMA di svuotare TWKEYS: dopo non si sa piu' cosa e' stato
+  # annullato, e una riga per tweak e' cio' che rende la cronologia leggibile
+  # tanto quanto lo sarebbe stata la lista dei tweak applicati.
+  foreach ($id in @($script:TWKEYS.Keys)) { Write-Journal 'revert' (Get-TweakById $id) @() $true '' }
   Remove-Item $BACKUP -ErrorAction SilentlyContinue
-  Remove-Item $BACKUP_LEGACY -ErrorAction SilentlyContinue
+  foreach ($__old in $BACKUP_OLD) { Remove-Item $__old -ErrorAction SilentlyContinue }
   $script:BK = @{}
   $script:TWKEYS = @{}
   return 'Impostazioni ripristinate ai valori precedenti.'
@@ -2649,6 +3124,195 @@ function Show-WebGui {
   try { $listener.Start() } catch { Say-Warn ("Server GUI locale non avviabile: {0}" -f $_.Exception.Message); return $false }
 
   function WebLog($m) { [void]$script:WEBLOG.Add(@{ ts=(Get-Date).ToString("HH:mm:ss"); msg=$m }) }
+
+  # ---------------- Job cooperativi: un passo per giro del loop ----------------
+  # /api/apply faceva tutto il lavoro DENTRO la richiesta: benchmark PRIMA, N
+  # tweak, benchmark DOPO, invio dati. Il listener e' a thread singolo, quindi
+  # per tutti quei minuti non serviva nessun'altra richiesta: /api/log restava
+  # in coda e la GUI mostrava un log fermo e nessun avanzamento proprio mentre
+  # l'agent scriveva nel registro — il momento in cui l'utente ha piu' bisogno
+  # di vedere che sta succedendo qualcosa. Anche $script:APPLYING era inutile:
+  # nessuno poteva leggerlo mentre valeva $true.
+  #
+  # Ora la richiesta registra un job e torna subito; il loop esegue UN passo per
+  # giro e fra un passo e l'altro serve le richieste. La granularita' e' il
+  # singolo tweak, quindi il log non puo' restare indietro piu' di un passo.
+  #
+  # Tutto resta in questo runspace: i passi sono scriptblock invocati da qui, e
+  # vedono $script:BK, $script:TWKEYS e le funzioni del motore esattamente come
+  # prima. Niente runspace paralleli da risincronizzare, e nessuna variabile
+  # catturata: i dati del passo arrivano come argomento ($arg), perche' quelle
+  # del loop vengono sovrascritte dalla richiesta successiva.
+  $script:JOB = $null
+  $script:JOBSEQ = 0
+
+  function New-JobStep($label, $run, $arg, [bool]$slow = $false, [bool]$final = $false) {
+    # `slow` = passo che blocca il loop per decine di secondi (i benchmark,
+    # l'invio dati). Vedi Step-GuiJob: quelli vengono annunciati un giro prima
+    # di partire, altrimenti la riga "sto misurando" arriverebbe alla GUI solo
+    # a misura finita, cioe' quando non serve piu'.
+    # `final` = passo di chiusura, che gira ANCHE se l'utente ferma il lavoro:
+    # salvare il backup e rileggere lo stato non sono parte dell'ottimizzazione,
+    # sono cio' che la lascia in un punto sano. Fermarsi prima di quelli
+    # significherebbe uscire con il registro modificato e la GUI che mostra i
+    # valori di prima.
+    return @{ label = "$label"; run = $run; arg = $arg; slow = $slow; final = $final }
+  }
+
+  function Start-GuiJob($kind, $steps) {
+    $script:JOBSEQ++
+    # Ogni giro e' una sessione del journal: e' il raggruppamento con cui
+    # l'utente si ricorda cosa ha fatto ("quella volta di ieri sera"), e
+    # l'unita' con cui puo' annullare tutto in un colpo.
+    $script:SESSION = 's-' + (Get-Date).ToString('yyyyMMdd-HHmmss')
+    $script:JOB = @{
+      id = "j$($script:JOBSEQ)"; kind = "$kind"; state = 'running'
+      steps = @($steps); i = 0; total = @($steps).Count
+      current = ''; announced = $false; announce_ts = (Get-Date); seen = $false
+      result = @{}; errors = @(); started = (Get-Date).ToString('o'); ended = ''
+      # L'esito di ogni passo, per indice: e' cio' che permette alla schermata
+      # di mostrare una lista invece di una percentuale, e di dire QUALE passo
+      # non e' riuscito mentre gli altri andavano avanti.
+      outcome = @{}; cancel = $false
+    }
+    $script:APPLYING = $true
+    return $script:JOB
+  }
+
+  function Get-JobDto {
+    if (-not $script:JOB) { return @{ state = 'idle' } }
+    $j = $script:JOB
+    $pct = 0; if ($j.total -gt 0) { $pct = [int][math]::Round(100 * $j.i / $j.total) }
+    # Il risultato viaggia solo a job finito: durante la corsa il client guarda
+    # l'avanzamento, e rispedire il payload completo (tutti i tweak + i due
+    # benchmark) a ogni poll sarebbe una serializzazione grossa ogni 400ms.
+    $res = @{}
+    if ($j.state -ne 'running') { $res = $j.result }
+    # La lista dei passi col proprio esito: e' quello che trasforma "sto
+    # lavorando, 5/12" in una schermata che dice cosa e' gia' andato, cosa sta
+    # andando adesso e cosa non e' riuscito. Sono una dozzina di stringhe
+    # corte: costano meno di quanto costerebbe al client indovinarle dal log.
+    $steps = @()
+    for ($n = 0; $n -lt $j.total; $n++) {
+      $stato = $j.outcome["$n"]
+      if (-not $stato) {
+        if ($n -eq $j.i -and $j.state -eq 'running') { $stato = 'current' } else { $stato = 'pending' }
+      }
+      $err = ''
+      foreach ($e in $j.errors) { if ($e.i -eq $n) { $err = "$($e.err)" } }
+      $steps += @{ i = $n; label = "$($j.steps[$n].label)"; slow = [bool]$j.steps[$n].slow; state = "$stato"; err = $err }
+    }
+    return @{
+      id = $j.id; kind = $j.kind; state = $j.state
+      step = $j.i; total = $j.total; pct = $pct; current = "$($j.current)"
+      cancel = [bool]$j.cancel
+      steps = @($steps)
+      errors = @($j.errors); result = $res
+    }
+  }
+
+  function Step-GuiJob {
+    $j = $script:JOB
+    if (-not $j -or $j.state -ne 'running') { return }
+    if ($j.i -ge $j.total) { Complete-GuiJob; return }
+    $st = $j.steps[$j.i]
+    # Fermato dall'utente: i passi rimasti si saltano, i passi di chiusura no.
+    # Fermarsi a meta' e' legittimo; uscire senza salvare il backup e senza
+    # rileggere lo stato non lo e'.
+    if ($j.cancel -and -not $st.final) {
+      $j.outcome["$($j.i)"] = 'skipped'
+      $j.i++
+      $j.announced = $false
+      if ($j.i -ge $j.total) { Complete-GuiJob }
+      return
+    }
+    if (-not $j.announced) {
+      $j.current = $st.label
+      if ($st.label) { WebLog $st.label }
+      $j.announced = $true; $j.announce_ts = (Get-Date); $j.seen = $false
+      if ($st.slow) { return }
+    }
+    # Passo lento: si parte quando il client ha ricevuto l'annuncio (una
+    # qualsiasi richiesta servita nel frattempo), col tetto di 1.5s perche' una
+    # GUI chiusa o bloccata non deve fermare un'ottimizzazione gia' iniziata.
+    if ($st.slow -and -not $j.seen -and ((Get-Date) - $j.announce_ts).TotalMilliseconds -lt 1500) { return }
+    try {
+      & $st.run $j $st.arg | Out-Null
+      # 'ok' e' il default, non un verdetto: un passo che ha gia' detto com'e'
+      # andato (riuscito a meta') non deve essere promosso a pieno successo.
+      if (-not $j.outcome["$($j.i)"]) { $j.outcome["$($j.i)"] = 'ok' }
+    }
+    catch {
+      # Un passo che fallisce non ferma gli altri (era gia' cosi': con
+      # $ErrorActionPreference = 'SilentlyContinue' il vecchio foreach tirava
+      # dritto). La differenza e' che ora il fallimento si vede, invece di
+      # essere indistinguibile da un successo.
+      $j.outcome["$($j.i)"] = 'failed'
+      $j.errors += @{ i = $j.i; step = "$($st.label)"; err = "$($_.Exception.Message)" }
+      WebLog ("[ERR ] {0}: {1}" -f $st.label, $_.Exception.Message)
+    }
+    $j.i++
+    $j.announced = $false
+    if ($j.i -ge $j.total) { Complete-GuiJob }
+  }
+
+  function Complete-GuiJob {
+    if (-not $script:JOB) { return }
+    # Un lavoro fermato non e' un lavoro finito: chiamarlo 'done' farebbe dire
+    # alla GUI "applicate 12 modifiche" dopo che l'utente ne ha fermate 8.
+    $script:JOB.state = if ($script:JOB.cancel) { 'cancelled' } else { 'done' }
+    $script:JOB.current = ''
+    $script:JOB.ended = (Get-Date).ToString('o')
+    $script:APPLYING = $false
+  }
+
+  # ---- I passi che tutti i gestori costruiscono allo stesso modo ----
+  # Erano ricopiati a mano in ogni endpoint: applicare un tweak da /api/apply e
+  # applicarlo da /api/apply-one facevano cose leggermente diverse, e la
+  # differenza non la voleva nessuno.
+  function New-TweakStep($t) {
+    return (New-JobStep ("-> {0}" -f $t.name) {
+      param($j, $a)
+      Invoke-ApplyTracked $a
+      # Backup su file dopo ogni tweak, non piu' solo a fine giro: il lavoro e'
+      # interrompibile, e un tweak applicato con sul disco il backup di prima e'
+      # un tweak che l'utente non puo' piu' annullare.
+      Save-Backup
+      # Applicato in parte: alcune chiavi non risultano scritte. Non e' un
+      # fallimento (qualcosa e' passato) e non e' un successo pieno.
+      $__r = $script:LAST_APPLY
+      if ($__r -and @($__r.partial).Count -gt 0) {
+        $__q = @($__r.partial) -join '; '
+        $j.outcome["$($j.i)"] = 'warn'
+        $j.errors += @{ i = $j.i; step = "$($a.name)"; warn = $true
+                        err = ("{0} di {1} modifiche non risultano scritte: {2}" -f @($__r.partial).Count, $__r.checked, $__q) }
+        WebLog ("[WARN] {0}: {1} su {2} non risultano scritte ({3})" -f $a.name, @($__r.partial).Count, $__r.checked, $__q)
+      }
+    } $t)
+  }
+
+  function New-RevertStep($id) {
+    $tw = $script:TWMAP["$id"]
+    $nome = if ($tw) { $tw.name } else { "$id" }
+    return (New-JobStep ("<- {0}" -f $nome) {
+      param($j, $a) WebLog ('  ' + (Invoke-RestoreTweak $a))
+    } "$id")
+  }
+
+  # Il passo di chiusura: rilegge lo stato e lo consegna al client. E' `final`,
+  # quindi gira anche se l'utente ferma il lavoro — fermarsi non deve lasciare
+  # la GUI a mostrare i valori di prima.
+  function New-StateStep($label) {
+    return (New-JobStep $label {
+      param($j, $a)
+      $j.result.ok = $true
+      $j.result.tweaks = Get-TweakDto
+      $j.result.backup = $script:BK.Count
+      $j.result.backup_ids = (Get-BackupIds)
+      $j.result.revertable = (Get-RevertableIds)
+    } $null $false $true)
+  }
+
   function Send-Json { param($ctx, $obj, [int]$status=200)
     $json = $obj | ConvertTo-Json -Depth 8 -Compress
     $bytes = [Text.Encoding]::UTF8.GetBytes($json)
@@ -2716,6 +3380,10 @@ function Show-WebGui {
         # `state` resta il testo per l'utente, `state_code` e' quello su cui la
         # GUI decide colore e conteggi: prima li deduceva dal testo con una regex.
         state = $st.label; state_code = $st.code
+        # Il piano si calcola solo per chi ha qualcosa da cambiare: per un tweak
+        # gia' ottimale sarebbe una lista vuota pagata con letture di registro,
+        # e per uno non applicabile una promessa che non si mantiene.
+        plan = $(if ($st.code -eq 'todo' -and -not $skip) { @(Get-TwPlan $t) } else { @() })
         fit = @{ ok = (-not $skip); warn = [bool]$warn; note = [bool]$note; skip = [bool]$skip; hint = $hint }
       }
     }
@@ -2786,15 +3454,30 @@ __GUI_HTML__
   $ar = $listener.BeginGetContext($null, $null)
   $lastActivity = Get-Date
   while ($listener.IsListening) {
+    $jobRunning = ($script:JOB -and $script:JOB.state -eq 'running')
+    # Un job in corso E' attivita': senza questa riga un passo lungo (i
+    # benchmark durano decine di secondi) sfonderebbe il timeout di inattivita'
+    # e il loop uscirebbe con l'ottimizzazione a meta'.
+    if ($jobRunning) { $lastActivity = Get-Date }
     # Uscita: se ho un process reale e non e' piu' attivo, oppure inattivita' > 30s
     $edgeAlive = if ($realEdge) { -not $realEdge.HasExited } else { ((Get-Date) - $lastActivity).TotalSeconds -lt 30 }
-    if (-not $edgeAlive) { break }
-    if ($ar.AsyncWaitHandle.WaitOne(180)) {
+    # Finche' un job e' in corso non si esce, nemmeno se la finestra e' stata
+    # chiusa: il lavoro adesso e' interrompibile, e interromperlo a meta'
+    # significherebbe lasciare il registro modificato. Meglio finire i passi
+    # rimasti (e scrivere il backup) parlando a nessuno.
+    if (-not $edgeAlive -and -not $jobRunning) { break }
+    # Con un job in corso non si sta ad aspettare le richieste: il giro serve a
+    # eseguire il passo successivo appena la coda e' vuota.
+    $waitMs = 180; if ($jobRunning) { $waitMs = 5 }
+    if ($ar.AsyncWaitHandle.WaitOne($waitMs)) {
       try {
         $ctx = $listener.EndGetContext($ar)
       } catch { break }
       $ar = $listener.BeginGetContext($null, $null)
       $lastActivity = Get-Date
+      # Qualcosa e' stato servito: se il job aveva appena annunciato un passo
+      # lento, l'annuncio e' arrivato e il passo puo' partire.
+      if ($jobRunning) { $script:JOB.seen = $true }
       $req = $ctx.Request
       $path = $req.Url.AbsolutePath
       $method = $req.HttpMethod
@@ -2837,72 +3520,139 @@ __GUI_HTML__
           Send-Json $ctx @{ logs = $slice; total = $script:WEBLOG.Count; applying = $script:APPLYING; live_sync = $script:LIVE_SYNC }
         }
         elseif ($path -eq '/api/apply' -and $method -eq 'POST') {
+          # Registra il job e torna subito: il lavoro lo fa il loop, un passo
+          # per giro. Il client segue l'avanzamento su /api/job e il racconto su
+          # /api/log, che ora restano raggiungibili per tutta la durata.
           $body = Read-Body $ctx | ConvertFrom-Json
-          $script:APPLYING = $true
-          $ids = @($body.ids)
-          $bench = [bool]$body.benchmark
-          $before = $null; $after = $null
-          if ($bench) { WebLog 'Benchmark PRIMA in corso...'; $before = Run-Benchmark; WebLog ("  Performance Score PRIMA: {0}" -f $before.overall) }
-          foreach ($id in $ids) {
-            $t = $script:TWMAP[$id]; if (-not $t) { continue }
-            WebLog ("-> {0}" -f $t.name); Invoke-ApplyTracked $t
+          if ($script:JOB -and $script:JOB.state -eq 'running') {
+            Send-Json $ctx @{ ok = $false; err = 'busy'; job = (Get-JobDto) } 409
+          } else {
+            $bench = [bool]$body.benchmark
+            $steps = New-Object System.Collections.ArrayList
+            if ($bench) {
+              [void]$steps.Add((New-JobStep 'Benchmark PRIMA in corso...' {
+                param($j, $a)
+                $j.result.before = Run-Benchmark
+                WebLog ("  Performance Score PRIMA: {0}" -f $j.result.before.overall)
+              } $null $true))
+            }
+            foreach ($id in @($body.ids)) {
+              $t = $script:TWMAP[$id]; if (-not $t) { continue }
+              # Un passo per tweak: e' la granularita' che rende il log vivo, ed
+              # e' anche quella con cui si sa QUALE tweak ha fallito.
+              [void]$steps.Add((New-TweakStep $t))
+            }
+            # Il backup si salva anche se l'utente ferma tutto: e' cio' che
+            # rende annullabile quello che ha gia' fatto in tempo ad applicarsi.
+            [void]$steps.Add((New-JobStep 'Salvo il backup delle impostazioni.' {
+              param($j, $a) Save-Backup
+            } $null $false $true))
+            if ($bench) {
+              [void]$steps.Add((New-JobStep 'Benchmark DOPO in corso...' {
+                param($j, $a)
+                $after = Run-Benchmark
+                $j.result.after = $after
+                $before = $j.result.before
+                $pct = 0; if ($before -and $before.overall) { $pct = [math]::Round(($after.overall - $before.overall) / $before.overall * 100) }
+                WebLog ("  Performance Score DOPO: {0}  (variazione {1}%)" -f $after.overall, $pct)
+                Send-Benchmark @{ before = $before; after = $after; ts = (Get-Date).ToString('o') }
+                # Anche nel journal, non solo verso il cloud: e' l'unico numero
+                # MISURATO su questa macchina, e la Diagnosi ha bisogno di poter
+                # mostrare un guadagno vero invece di una stima.
+                Write-Journal 'bench' @{ id = '__bench__'; name = 'Benchmark prima/dopo'; cat = '' } @() $true '' @{
+                  before = [int]$before.overall; after = [int]$after.overall; delta_pct = [int]$pct
+                }
+              } $null $true))
+            }
+            # Ultimo passo: invio dati e confezionamento del risultato. Il
+            # payload e' identico a quello che /api/apply restituiva quando era
+            # sincrono, cosi' il client lo consuma con lo stesso codice.
+            [void]$steps.Add((New-JobStep 'Invio i dati aggiornati a FrameForge...' {
+              param($j, $a)
+              Send-Data (Get-Specs) (Get-Health) (Get-StartupList)
+              WebLog '[ OK ] Ottimizzazioni applicate. Dati inviati a FrameForge. Riavvio consigliato.'
+              $j.result.ok = $true
+              $j.result.tweaks = Get-TweakDto
+              $j.result.backup = $script:BK.Count
+              $j.result.backup_ids = (Get-BackupIds)
+              $j.result.revertable = (Get-RevertableIds)
+            } $null $true $true))
+            [void](Start-GuiJob 'apply' $steps)
+            Send-Json $ctx @{ ok = $true; job = (Get-JobDto) } 202
           }
-          Save-Backup
-          if ($bench) {
-            WebLog 'Benchmark DOPO in corso...'; $after = Run-Benchmark
-            $pct = 0; if ($before.overall) { $pct = [math]::Round(($after.overall - $before.overall) / $before.overall * 100) }
-            WebLog ("  Performance Score DOPO: {0}  (variazione {1}%)" -f $after.overall, $pct)
-            Send-Benchmark @{ before = $before; after = $after; ts = (Get-Date).ToString('o') }
+        }
+        elseif ($path -eq '/api/job' -and $method -eq 'GET') {
+          Send-Json $ctx (Get-JobDto)
+        }
+        elseif ($path -eq '/api/job/cancel' -and $method -eq 'POST') {
+          # Non interrompe il passo in corso: alza una bandiera che il loop
+          # legge fra un passo e l'altro. Interrompere a meta' una scrittura nel
+          # registro sarebbe il modo peggiore di dare all'utente il controllo.
+          if ($script:JOB -and $script:JOB.state -eq 'running') {
+            $script:JOB.cancel = $true
+            WebLog '[STOP] Fermo appena finisce il passo in corso. I passi rimasti vengono saltati.'
+            Send-Json $ctx @{ ok = $true; job = (Get-JobDto) }
+          } else {
+            Send-Json $ctx @{ ok = $false; err = 'no_job' } 409
           }
-          Send-Data (Get-Specs) (Get-Health) (Get-StartupList)
-          WebLog '[ OK ] Ottimizzazioni applicate. Dati inviati a FrameForge. Riavvio consigliato.'
-          $script:APPLYING = $false
-          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = (Get-BackupIds); revertable = (Get-RevertableIds); before = $before; after = $after }
+        }
+        elseif ($path -eq '/api/journal' -and $method -eq 'GET') {
+          Send-Json $ctx (Get-JournalDto)
+        }
+        elseif ($path -eq '/api/revert-session' -and $method -eq 'POST') {
+          # Annullare una sessione intera e' N revert: stessa macchineria
+          # dell'apply, un passo per tweak, cosi' il log resta vivo e un revert
+          # che fallisce non porta via gli altri.
+          $body = Read-Body $ctx | ConvertFrom-Json
+          if ($script:JOB -and $script:JOB.state -eq 'running') {
+            Send-Json $ctx @{ ok = $false; err = 'busy'; job = (Get-JobDto) } 409
+          } else {
+            $sid = "$($body.id)"
+            $target = @()
+            foreach ($s in @((Get-JournalDto).sessions)) { if ($s.id -eq $sid) { $target = @($s.revertable) } }
+            if ($target.Count -eq 0) {
+              Send-Json $ctx @{ ok = $false; err = 'nothing_to_revert' } 400
+            } else {
+              $steps = New-Object System.Collections.ArrayList
+              foreach ($id in $target) { [void]$steps.Add((New-RevertStep $id)) }
+              [void]$steps.Add((New-StateStep 'Sessione annullata.'))
+              [void](Start-GuiJob 'revert-session' $steps)
+              Send-Json $ctx @{ ok = $true; job = (Get-JobDto) } 202
+            }
+          }
         }
         elseif ($path -eq '/api/apply-one' -and $method -eq 'POST') {
+          # Un tweak solo dura meno di dodici, ma non abbastanza meno: il
+          # benchmark non c'e', pero' un servizio da fermare o una scansione di
+          # tutte le schede di rete bloccavano il server locale lo stesso. E da
+          # quando un tweak puo' fallire davvero, farlo dentro la richiesta
+          # voleva dire rispondere 500 invece di raccontarlo.
           $body = Read-Body $ctx | ConvertFrom-Json
           $t = $script:TWMAP[$body.id]
-          if ($t) { WebLog ("-> {0}" -f $t.name); Invoke-ApplyTracked $t; Save-Backup }
-          Send-Json $ctx @{ ok = $true; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = (Get-BackupIds); revertable = (Get-RevertableIds) }
-        }
-        elseif ($path -eq '/api/changes' -and $method -eq 'GET') {
-          # Cronologia delle modifiche fatte da FrameForge su questo PC.
-          # Il dato c'era gia' tutto nel file di backup: cosa e' stato cambiato,
-          # con che valore precedente, e da quale tweak. Mancava solo un posto
-          # dove leggerlo — il log della GUI vive in memoria e muore con la
-          # finestra, quindi "cosa mi ha toccato e come lo annullo" non era
-          # rispondibile da nessuna parte.
-          $items = @()
-          foreach ($id in @($script:TWKEYS.Keys)) {
-            $tw = $script:TWMAP[$id]
-            $keys = @()
-            foreach ($k in @($script:TWKEYS[$id])) {
-              $prev = "$($script:BK[$k])"
-              $parts = $prev.Split('|', 2)
-              $keys += @{
-                key = "$k"
-                previous = if ($prev -eq '__ABSENT__') { 'non esisteva' } else { $parts[-1] }
-              }
-            }
-            $items += @{
-              id = "$id"
-              name = if ($tw) { $tw.name } else { "$id" }
-              cat = if ($tw) { $tw.cat } else { '' }
-              applied_at = "$($script:TWAT[$id])"
-              keys = $keys
-            }
+          if ($script:JOB -and $script:JOB.state -eq 'running') {
+            Send-Json $ctx @{ ok = $false; err = 'busy'; job = (Get-JobDto) } 409
+          } elseif (-not $t) {
+            Send-Json $ctx @{ ok = $false; err = 'unknown_tweak' } 400
+          } else {
+            $steps = New-Object System.Collections.ArrayList
+            [void]$steps.Add((New-TweakStep $t))
+            [void]$steps.Add((New-StateStep 'Fatto.'))
+            [void](Start-GuiJob 'apply-one' $steps)
+            Send-Json $ctx @{ ok = $true; job = (Get-JobDto) } 202
           }
-          Send-Json $ctx @{ ok = $true; items = $items; backup_file = "$BACKUP" }
         }
         elseif ($path -eq '/api/restore-one' -and $method -eq 'POST') {
           # v0.7.7: revert granulare di un singolo tweak dalle chiavi tracciate
           $body = Read-Body $ctx | ConvertFrom-Json
-          $t = $script:TWMAP[$body.id]
-          $tname = if ($t) { $t.name } else { "$($body.id)" }
-          WebLog ("Ripristino singolo tweak: {0}" -f $tname)
-          $msg = Invoke-RestoreTweak "$($body.id)"
-          WebLog ('  ' + $msg)
-          Send-Json $ctx @{ ok = $true; message = $msg; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = (Get-BackupIds); revertable = (Get-RevertableIds) }
+          if ($script:JOB -and $script:JOB.state -eq 'running') {
+            Send-Json $ctx @{ ok = $false; err = 'busy'; job = (Get-JobDto) } 409
+          } else {
+            $steps = New-Object System.Collections.ArrayList
+            [void]$steps.Add((New-RevertStep "$($body.id)"))
+            [void]$steps.Add((New-StateStep 'Ripristinato.'))
+            [void](Start-GuiJob 'restore-one' $steps)
+            Send-Json $ctx @{ ok = $true; job = (Get-JobDto) } 202
+          }
         }
         elseif ($path -eq '/api/telemetry-local' -and $method -eq 'GET') {
           # v0.7.7: sample telemetria per il pannello Monitor Live della GUI
@@ -2915,21 +3665,39 @@ __GUI_HTML__
           Send-Json $ctx @{ apps = $apps }
         }
         elseif ($path -eq '/api/bloatware/remove' -and $method -eq 'POST') {
+          # Una app per passo: Remove-AppxPackage ci mette secondi, e con
+          # quindici app selezionate la richiesta durava minuti con il server
+          # locale fermo. Ora ogni rimozione e' un passo, e una che non riesce
+          # lo dice invece di sparire nel conteggio finale.
           $body = Read-Body $ctx | ConvertFrom-Json
-          $names = @($body.names)
-          $removed = 0
-          foreach ($n in $names) {
-            $n = "$n"
-            if (-not $n -or (Test-BloatProtected $n)) { continue }
-            $app = Get-AppxPackage -Name $n -ErrorAction SilentlyContinue
-            if ($app) {
-              WebLog ("Rimuovo bloatware: {0}" -f $n)
-              $app | Remove-AppxPackage -ErrorAction SilentlyContinue
-              if (-not (Get-AppxPackage -Name $n -ErrorAction SilentlyContinue)) { $removed++ }
+          if ($script:JOB -and $script:JOB.state -eq 'running') {
+            Send-Json $ctx @{ ok = $false; err = 'busy'; job = (Get-JobDto) } 409
+          } else {
+            $steps = New-Object System.Collections.ArrayList
+            foreach ($n in @($body.names)) {
+              $n = "$n"
+              if (-not $n -or (Test-BloatProtected $n)) { continue }
+              [void]$steps.Add((New-JobStep ("-> {0}" -f $n) {
+                param($j, $a)
+                $app = Get-AppxPackage -Name $a -ErrorAction SilentlyContinue
+                if (-not $app) { WebLog ("  {0}: non installata, niente da fare" -f $a); return }
+                $app | Remove-AppxPackage -ErrorAction SilentlyContinue
+                # Anche qui l'esito si guarda, non si deduce dall'assenza di errori.
+                if (Get-AppxPackage -Name $a -ErrorAction SilentlyContinue) {
+                  throw "la app risulta ancora installata"
+                }
+                $j.result.removed = [int]$j.result.removed + 1
+              } $n))
             }
+            [void]$steps.Add((New-JobStep 'App aggiornate.' {
+              param($j, $a)
+              $j.result.ok = $true
+              $j.result.apps = (Get-BloatCandidates)
+              WebLog ("[ OK ] Bloatware: {0} app rimosse (reinstallabili dallo Store)." -f [int]$j.result.removed)
+            } $null $false $true))
+            [void](Start-GuiJob 'bloatware' $steps)
+            Send-Json $ctx @{ ok = $true; job = (Get-JobDto) } 202
           }
-          WebLog ("[ OK ] Bloatware: {0}/{1} app rimosse (reinstallabili dallo Store)." -f $removed, $names.Count)
-          Send-Json $ctx @{ ok = $true; removed = $removed; apps = (Get-BloatCandidates) }
         }
         elseif ($path -eq '/api/client-error' -and $method -eq 'POST') {
           # GUI v3.1: gli errori JS della GUI finiscono nel log visibile (debug remoto)
@@ -3004,8 +3772,23 @@ __GUI_HTML__
           Send-Json $ctx @{ ok = $true }
         }
         elseif ($path -eq '/api/restore' -and $method -eq 'POST') {
-          WebLog 'Ripristino dal backup...'; $msg = Invoke-Restore; WebLog ('  ' + $msg)
-          Send-Json $ctx @{ ok = $true; message = $msg; tweaks = Get-TweakDto; backup = $script:BK.Count; backup_ids = (Get-BackupIds); revertable = (Get-RevertableIds) }
+          # Rimettere tutto com'era puo' voler dire venti tweak, servizi da
+          # riavviare e DNS da resettare: dentro la richiesta era il blocco piu'
+          # lungo dopo l'apply. Un passo per tweak tracciato, poi una spazzata
+          # finale per le chiavi che nessun tweak rivendica (backup vecchi,
+          # applicati da versioni che non tracciavano).
+          if ($script:JOB -and $script:JOB.state -eq 'running') {
+            Send-Json $ctx @{ ok = $false; err = 'busy'; job = (Get-JobDto) } 409
+          } else {
+            $steps = New-Object System.Collections.ArrayList
+            foreach ($id in @($script:TWKEYS.Keys)) { [void]$steps.Add((New-RevertStep $id)) }
+            [void]$steps.Add((New-JobStep 'Ripristino il resto del backup.' {
+              param($j, $a) WebLog ('  ' + (Invoke-Restore))
+            } $null $false $true))
+            [void]$steps.Add((New-StateStep 'Tutto rimesso com era.'))
+            [void](Start-GuiJob 'restore' $steps)
+            Send-Json $ctx @{ ok = $true; job = (Get-JobDto) } 202
+          }
         }
         elseif ($path -eq '/api/close') {
           Send-Json $ctx @{ ok = $true }
@@ -3033,6 +3816,9 @@ __GUI_HTML__
         try { Send-Json $ctx @{ err = $_.ToString() } 500 } catch {}
       }
     }
+    # Un passo per giro, dopo aver servito l'eventuale richiesta: il job avanza
+    # anche mentre la GUI continua a leggere log e stato.
+    if ($script:JOB -and $script:JOB.state -eq 'running') { Step-GuiJob }
   }
   try { $listener.Stop() } catch {}
   try { $listener.Close() } catch {}
