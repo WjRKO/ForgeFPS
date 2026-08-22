@@ -9,6 +9,8 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 
 _Prossime feature in sviluppo — vedi `/app/memory/ROADMAP.md`._
 
+## [0.9.0] — 2026-08-22
+
 ### Fixed — un tweak che fallisce in silenzio non risulta piu' applicato
 - **L'esito di un tweak si verifica guardando la macchina, non gli errori.** Lo
   script gira con `$ErrorActionPreference = 'SilentlyContinue'` dalla prima riga
