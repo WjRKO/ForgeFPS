@@ -76,6 +76,9 @@ const MOCK_JOURNAL = { ok: true, file: 'C:\\\\Users\\\\tester\\\\AppData\\\\Roam
   // di una stima.
   bench: { ts:'2026-08-22T14:34:00+02:00', before:104, after:113, delta_pct:9 },
   sessions: [
+    // Sessione con UNA voce e UNA chiave cambiata: dopo comePowerShell arrivano
+    // come oggetti singoli, non come liste. E' esattamente cio' che ha rotto la
+    // Diagnosi al primo avvio su una macchina vera.
     { id:'s-20260823-090000', started:'2026-08-23T09:00:00+02:00',
       applied:0, failed:0, reverted:1, revertable:[],
       entries:[
@@ -140,6 +143,19 @@ const PASSI_APPLY = ['Benchmark PRIMA in corso...', '-> Piano energetico prestaz
                      '-> GPU: MSI mode ON', '-> DNS veloci (Cloudflare)', '-> Timer resolution globale',
                      'Salvo il backup delle impostazioni.', 'Benchmark DOPO in corso...',
                      'Invio i dati aggiornati a FrameForge...'];
+// ConvertTo-Json (PS 5.1) serializza un array di UN elemento come scalare.
+// L'harness lo riproduce su ogni risposta: e' il difetto piu' sottile che
+// l'agent vero possa presentare — la GUI esplodeva sul primo PC con una sola
+// sessione nel journal — e un mock che manda sempre array non lo vedrebbe mai.
+function comePowerShell(v) {
+  if (Array.isArray(v)) return v.length === 1 ? comePowerShell(v[0]) : v.map(comePowerShell);
+  if (v && typeof v === 'object') {
+    const o = {};
+    for (const k of Object.keys(v)) o[k] = comePowerShell(v[k]);
+    return o;
+  }
+  return v;
+}
 window.fetch = function(url, opts) {
   const u = String(url);
   let body = { ok: true };
@@ -185,7 +201,8 @@ window.fetch = function(url, opts) {
     body = { ok: true, job: MOCK_JOB };
   }
   else if (u.indexOf('/api/client-error') >= 0) { try { window.__reported.push(JSON.parse(opts.body).msg); } catch(e){} }
-  return new Promise(res => setTimeout(() => res({ json: () => Promise.resolve(body), ok: true, status: 200 }), delay));
+  const servito = comePowerShell(body);
+  return new Promise(res => setTimeout(() => res({ json: () => Promise.resolve(servito), ok: true, status: 200 }), delay));
 };
 </script>
 """

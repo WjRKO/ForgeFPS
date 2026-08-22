@@ -9,6 +9,23 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 
 _Prossime feature in sviluppo — vedi `/app/memory/ROADMAP.md`._
 
+### Fixed — la GUI non si rompe piu' sugli array di un elemento
+- `ConvertTo-Json` (PS 5.1) serializza un array di UN elemento come scalare:
+  `@('x')` diventa `"x"`, non `["x"]`. La Diagnosi chiamava `.some` sul piano di
+  un tweak e si rompeva al primo avvio su una macchina con un tweak che tocca una
+  chiave sola. Lo stesso valeva per il journal alla prima sessione, per un passo
+  fallito solo e per chi ha un solo profilo cloud — a volte con un errore, a
+  volte peggio: `.length` di un oggetto e' `undefined`, quindi "1 passo non
+  riuscito" diventava "nessun problema".
+- La normalizzazione (`lista()`) sta ora alle cinque porte d'ingresso — stato,
+  risultato di un lavoro, job, journal, profili — invece che ai quaranta punti
+  d'uso. Un test vieta il modo di scrivere che ha causato il guasto:
+  `(x || []).map` non protegge da niente, perche' se `x` e' un oggetto il `||`
+  non scatta.
+- **L'harness di test ora collassa gli array di un elemento come PowerShell.**
+  Un mock che manda sempre array veri non poteva vedere questo difetto: la GUI
+  passava tutte le prove e si rompeva sul primo PC.
+
 ## [0.9.0] — 2026-08-22
 
 ### Fixed — un tweak che fallisce in silenzio non risulta piu' applicato
