@@ -78,7 +78,7 @@ _hide_console_if_silent(_args.uri)
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.8.1"
+AGENT_VERSION = "0.9.0"
 # ---------------------------------------------------------------------------
 # Backup e journal: gli stessi file dell'agent PowerShell
 # ---------------------------------------------------------------------------
@@ -1487,10 +1487,34 @@ def _menu_logout():
     print("\n[ OK ] Token rimosso. Al prossimo avvio verra' richiesto un nuovo token.")
 
 
+def _migra_backup_vecchio():
+    """Porta nel backup condiviso quello che stava accanto all'.exe.
+
+    _load_backup() fonde gia' i file vecchi, ma la fusione resta su disco solo
+    quando qualcosa salva — cioe' quando si applica un tweak da riga di comando.
+    Chi aggiorna e poi usa solo la finestra avrebbe modifiche registrate in un
+    file che l'agent PowerShell non sa dove cercare: non perse, ma invisibili
+    nel Journal a tempo indefinito. Qui la migrazione avviene a ogni avvio,
+    qualunque cosa l'utente stia per fare, e una volta sola: dopo il salvataggio
+    i file vecchi non ci sono piu'.
+    """
+    try:
+        if not any(os.path.exists(p) for p in _OLD_BACKUPS):
+            return
+        bk = _load_backup()
+        if bk:
+            _save_backup(bk)
+    except Exception:
+        # Una migrazione che non riesce non deve impedire di avviare l'agent:
+        # il file vecchio resta dov'e' e si riprova al prossimo giro.
+        pass
+
+
 if __name__ == "__main__":
     if not sys.platform.startswith("win"):
         print("Questo agent e' progettato per Windows.")
         sys.exit(1)
+    _migra_backup_vecchio()
     # Registrazione esplicita e uscita (es. installer / repair)
     if _args.register_protocol:
         ok = register_frameforge_protocol(silent=False)

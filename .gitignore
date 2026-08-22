@@ -29,6 +29,10 @@ next-env.d.ts
 /build
 dist/
 dist
+# Artefatti di PyInstaller: build.ps1 li ricrea da zero a ogni giro.
+# `/build` copre solo la radice, e la cartella dell'agent e' un livello sotto.
+agent-build/build/
+agent-build/*.spec
 
 # Environment files (comprehensive coverage)
 
