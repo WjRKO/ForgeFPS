@@ -70,9 +70,16 @@ AGENT_ZIP_UPSTREAM = os.environ.get(
 # scaricato non corrisponde. Finche' l'eseguibile non e' firmato, questo e'
 # l'unico controllo di integrita' che sta fra una release e le macchine degli
 # utenti — quindi va aggiornato INSIEME all'URL, mai dopo.
+#
+# L'hash va preso dall'allegato PUBBLICATO, non da una build locale. Creare la
+# release crea il tag, il tag fa partire .github/workflows/build.yml, e quella
+# CI RISCRIVE l'allegato con la propria build: un hash calcolato prima resta
+# valido per una manciata di secondi e poi diventa quello del file sbagliato.
+# Con l'hash sbagliato il backend rifiuta di distribuire il pacchetto e la
+# pagina Download smette di funzionare — e' successo con la 0.9.0.
 AGENT_ZIP_SHA256 = os.environ.get(
     "AGENT_ZIP_SHA256",
-    "b88679a9e27e6420bee9f1b59c1b5d2acdaad9cc5100fd3570eefb69a104df7e",
+    "ee9131506b2b210b53feaa0e4b2b50a181e4ab1649edb7c1d63d0c47198c28e9",
 ).lower()
 # La directory temporanea va chiesta al sistema: con "/tmp" scritto a mano il
 # download dell'agent falliva con FileNotFoundError fuori da un container Linux.
