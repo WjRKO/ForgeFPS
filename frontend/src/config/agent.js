@@ -12,8 +12,11 @@
 // mano e' gia' costato una versione di deriva (la dashboard offriva la v0.8.0
 // mentre l'ultima release era la v0.8.1). Vanno cambiati insieme, finche' questa
 // pagina non legge direttamente /api/agent/latest-version.
+// L'hash va preso dall'allegato PUBBLICATO: il tag fa partire la CI, che
+// riscrive l'allegato con la propria build. Vedi il commento piu' lungo
+// sopra AGENT_ZIP_SHA256 in backend/routers/pc.py.
 export const AGENT_EXE_URL = "https://github.com/WjRKO/ForgeFPS/releases/download/v0.9.0/forgefps-agent.zip";
-export const AGENT_EXE_SHA256 = "b88679a9e27e6420bee9f1b59c1b5d2acdaad9cc5100fd3570eefb69a104df7e";
+export const AGENT_EXE_SHA256 = "ee9131506b2b210b53feaa0e4b2b50a181e4ab1649edb7c1d63d0c47198c28e9";
 export const AGENT_EXE_VERSION = "v0.9.0";
 export const AGENT_EXE_DATE = "2026-08-22";
 export const AGENT_EXE_FORMAT = "zip"; // "zip" (onedir) | legacy: "exe" (onefile)
