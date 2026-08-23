@@ -9,6 +9,234 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 
 _Prossime feature in sviluppo — vedi `/app/memory/ROADMAP.md`._
 
+### Removed — una sola rilevazione hardware, non tre
+
+`agent-build/forgefps_agent.py` aveva un `collect_specs()` / `collect_health()` /
+`collect_startup()` che scriveva sugli **stessi endpoint** dello script
+PowerShell servito dal backend, ma con dati piu' poveri: refresh preso dal
+massimo fra i controller invece che dallo schermo primario, risoluzione dal primo
+controller della lista grezza, RAM descritta dal primo modulo, nessun
+`hw_confidence`, nessuna temperatura via LibreHardwareMonitor.
+
+Quale delle due girasse dipendeva da **come** era stato avviato l'agent:
+
+| strada | prima | ora |
+|---|---|---|
+| bottone «Sincronizza ora» (silent via URI) | script servito | script servito |
+| doppio-click / `--mode sync` | rilevazione locale dell'exe | script servito |
+
+Lo stesso PC scriveva due specs diverse nello stesso documento a seconda del
+percorso, e nessuna delle due sapeva dell'altra — quindi le correzioni di
+precisione appena fatte allo script arrivavano solo a meta' degli utenti.
+
+- `--mode sync` passa ora da `run_ps_mode_inline()`, che esegue lo script
+  **nella console corrente e aspetta che finisca**: `launch_secure_gui` e
+  `launch_silent_mode` lanciano e tornano subito, quindi l'exe stamperebbe
+  «Premi INVIO per chiudere» mentre lo script sta ancora partendo.
+- Come effetto collaterale il sync da doppio-click ora invia anche le cose che
+  solo lo script raccoglie: giochi rilevati, app in background, diagnostica dei
+  sensori.
+- Lo script si scarica da **un posto solo** (`_download_agent_script`): le stesse
+  dieci righe stavano in due funzioni e con la mode inline sarebbero diventate
+  tre copie della stessa richiesta HTTP.
+- 214 righe in meno nel sorgente dell'exe.
+
+**Nota di rilascio**: la versione dell'agent non e' stata toccata. Perche' questo
+arrivi agli utenti servono i passi di release consueti — build, upload dello ZIP
+e aggiornamento di `AGENT_ZIP_UPSTREAM`/`AGENT_ZIP_SHA256`, da cui
+`LATEST_AGENT_VERSION` viene derivata.
+
+Lo stesso trattamento e' andato a **`backend/desktop_agent.py`**, lo script
+`.py` che la pagina «FrameForge Agent» offre in download: era la terza copia e la
+piu' silenziosa, perche' nessuna schermata segnalava che quei dati fossero di
+qualita' diversa. La voce 7 del menu interattivo e il nuovo `--mode sync` passano
+ora dallo script servito, e anche li' il download e' uno solo invece di due.
+
+- In entrambi gli agent `_clean` **e' rimasto**: sembrava morto insieme ai
+  collector, ma nell'exe viene passato dentro `TweakContext` (e `tweaks.py` lo
+  chiama una decina di volte) e nel `.py` lo usa `apply_all_tweaks`. Toglierlo
+  avrebbe rotto l'applicazione dei tweak, non la rilevazione - e non al build, al
+  primo click su «Applica».
+- 407 righe rimosse fra i due file, 136 aggiunte.
+
+### Fixed — risoluzione e refresh non vengono piu' da schermi diversi
+
+Tre campi erano presi da tre insiemi diversi e nessuno li appaiava: la
+**risoluzione** dal PRIMO `Win32_VideoController` della lista grezza (non
+ordinata e non filtrata, quindi anche un adattatore virtuale o la iGPU mentre
+`gpu` riportava la discreta), il **refresh corrente** dal MASSIMO fra tutti i
+controller, il **refresh massimo** dal MASSIMO fra tutti i monitor via EDID.
+
+Su una macchina reale con due schermi — 1920x1080 @ 240Hz primario e 2560x1440 @
+165Hz secondario, **entrambi gia' al loro massimo** — il risultato memorizzato
+era `refresh_hz=239` (WMI arrotonda male) e `max_refresh_hz=75` (l'EDID di quel
+pannello non elenca i modi veloci). Due numeri veri di due pannelli diversi che
+insieme non descrivono nessun computer esistente, e che finivano nel contesto
+dell'AI advisor e nella regola che consiglia di alzare il refresh.
+
+Ora `Get-DisplayInfo` chiede a `EnumDisplayDevices`/`EnumDisplaySettings` il modo
+corrente e i modi supportati **dello stesso dispositivo**, e i campi vengono
+dallo schermo **primario** — quello su cui il gioco parte. Il massimo si cerca
+solo fra i modi della risoluzione attuale: un pannello che fa 240Hz a 1080p ma
+144Hz a 1440p non sta andando piano se e' a 1440p. Sulla stessa macchina il
+risultato e' ora `240 / 240 Hz`. Nuovi campi `monitor_count` e `monitors`.
+
+- Il ripiego, se l'API display non risponde, usa la lista di controller **gia'
+  ordinata e filtrata** e accetta il massimo EDID **solo con un monitor solo**,
+  perche' con due si tornerebbe ad appaiare pannelli diversi.
+- Trappola di marshalling documentata sul posto: in PowerShell `$null` passato a
+  un parametro `string` diventa una stringa **vuota**, ed `EnumDisplayDevices`
+  con stringa vuota fallisce. Senza `[NullString]::Value` la funzione trova zero
+  schermi e il ripiego copre il buco in silenzio.
+
+### Fixed — la RAM non si descrive piu' col primo banco
+
+`ram_speed_mhz`, `ram_type` e `ram_manufacturer` uscivano tutti dal primo modulo.
+Un kit misto — che e' esattamente il caso che vale la pena segnalare, perche'
+costa prestazioni vere — veniva descritto dal banco in slot 1 e nessuno se ne
+accorgeva. Ora i moduli si guardano tutti: la frequenza riportata e' quella del
+**piu' lento** (che e' quella a cui gira il canale), tipi e produttori vengono
+uniti, e un nuovo campo `ram_mismatch` dichiara la discordanza invece di
+appianarla. La pagina lo mostra accanto alla RAM.
+
+### Changed — `hw_confidence` dice se le fonti erano d'accordo
+
+Era un conteggio, e un conteggio non e' una confidenza: due fonti che si
+contraddicono valevano quanto due che confermano. Il conflitto veniva poi risolto
+da una regola implicita — per la CPU **vinceva la stringa piu' lunga** — quindi
+il disaccordo spariva senza lasciare traccia proprio nei casi in cui il dato e'
+meno affidabile.
+
+Ogni componente porta ora `{ sources, agree, conflict }`:
+
+- **CPU**: WMI e registro confrontati dopo normalizzazione (`Intel(R) Core(TM)
+  i7-12700K CPU @ 3.60GHz` e `12th Gen Intel Core i7-12700K` sono lo stesso
+  pezzo di silicio). Il registro resta preferito, ma il disaccordo si vede.
+- **GPU**: `nvidia-smi` confrontato con il controller WMI primario. Quando
+  discordano di solito e' un portatile ibrido in cui lo schermo lo pilota la
+  iGPU: chi legge le specs merita di saperlo.
+- **RAM**: `$ramSources = 2  # le due fonti concordano` era un **commento**, non
+  un controllo. Ora la somma delle capacita' dei moduli viene confrontata col
+  totale di sistema, e se un banco non viene riportato il conto non torna.
+- **Storage**: `agree` resta **nullo**, cioe' "non verificabile" — dichiararlo
+  concorde senza due fonti da confrontare sarebbe la stessa bugia di prima.
+
+Il badge nella pagina diventa rosso col dettaglio del conflitto nel tooltip, e
+accetta ancora la forma vecchia (un numero) dagli agent non aggiornati, che vale
+"accordo non verificato".
+
+- Il nome della CPU viene ripulito dal padding: `ProcessorNameString` arriva
+  imbottito di spazi, e quel padding finiva nella pagina, nei prompt dell'AI e
+  nella chiave con cui si aggregano i PC simili della flotta.
+- `cpu_clock_ghz` e' `MaxClockSpeed`, cioe' il clock **base**: scritto "3.4GHz"
+  accanto al nome della CPU veniva letto come la frequenza in gioco. Ora la
+  pagina scrive "3.4GHz base".
+
+### Fixed — un sync aggiornava due pannelli su sei
+
+«Il mio PC» monta sei pannelli che leggono dal backend **una volta sola**, al
+mount, senza ricevere prop. Dopo un sync riuscito la pagina aggiornava solo la
+griglia specs e quella della salute; gli altri quattro restavano fermi sui dati
+di prima. L'effetto era assurdo in due casi:
+
+- attivi XMP nel BIOS, riavvii, sincronizzi: la griglia mostra la RAM a 6000 MHz
+  e **subito sotto resta il cartello «la tua RAM gira a 4800 MHz, attiva XMP»**;
+- il grafico che disegna i sync non conteneva il sync appena fatto.
+
+Un contatore `syncVersion`, alzato quando il sync arriva (e quando si cambia PC
+attivo dal toast), fa da `key` a `DevicesPanel`, `DeviceCompare`,
+`HwInsightsPanel`, `HealthHistoryCard`, `WhatChangedCard` e `SyncTimeline`: sono
+pannelli di sola lettura senza stato da conservare, quindi il rimontaggio e' la
+via onesta. L'alternativa - farli pollare ognuno per conto suo - sarebbe stata
+sei sorgenti di verita' sulla stessa domanda.
+
+### Added — il sync dice cosa e' cambiato, non solo che e' finito
+
+«Sync completato. Dati aggiornati.» e' vero e non dice niente: chi preme il
+pulsante vuole sapere se qualcosa e' cambiato, e nel caso piu' frequente - non e'
+cambiato niente - restava col dubbio di aver premuto invano. Il diff fra due sync
+il backend lo calcola gia' (`system_changes.py`) e lo serve su `/api/pc/changes`.
+
+- `useSilentLaunch` ha ora `summarize`, gemello di `diagnose` sul ramo riuscito:
+  il toast diventa **«Sync completato · Driver GPU: 566.36 → 572.16»**, oppure
+  **«nessuna modifica rilevata dall'ultima volta»**, che e' una risposta e non un
+  silenzio. Oltre due cambiamenti si contano gli altri.
+- Le etichette dei campi sorvegliati passano da `WhatChangedCard` a
+  `frontend/src/lib/changeLabels.js`: adesso le mostrano in due punti, e due
+  mappe della stessa cosa sono due mappe che divergeranno.
+
+### Changed — «Aggiorna» non sta piu' accanto a «Sincronizza ora»
+
+Nella stessa barra c'erano due pulsanti con la **stessa icona** `RefreshCw`: uno
+accende l'agent e impegna il PC per un minuto, l'altro rilegge il database in un
+istante. Non c'era modo di indovinare quale fosse quale, e chi voleva dati nuovi
+premeva quello sbagliato la meta' delle volte. Il ricarica manuale si sposta
+accanto alla riga «Ultimo sync: 3 min fa», dove il suo significato si capisce da
+solo; l'icona di aggiornamento resta a un pulsante solo.
+
+### Fixed — «Sincronizza ora» smette di dare la colpa al token
+
+Il pulsante lancia l'agent via `frameforge://` e poi fa polling su
+`/api/pc-specs` cercando un `updated_at` diverso. Ma `/api/pc-specs` legge il
+**device attivo** (quello scelto nel pannello PC), mentre l'agent scrive sul PC
+**su cui gira**: se non coincidono il sync riesce, la pagina non lo vede mai, e
+dopo 60 secondi l'utente legge «il token locale e' disallineato». Scenario
+normale per chi ha desktop + laptop, cioe' proprio chi paga per il multi-PC.
+
+- Alla scadenza il pulsante ora **confronta le specs di tutti i PC**
+  (`/api/devices/compare` -> `specs_updated_at`) contro una fotografia presa al
+  click. Se il sync e' arrivato altrove lo dice con i nomi dei due PC e offre il
+  rimedio nel toast: «Passa a DESKTOP-MIRKO», che chiama `/activate` e ricarica.
+- Se invece non si e' mosso niente, il messaggio **elenca le cause plausibili**
+  invece di sceglierne una: non installato, versione vecchia, token di un altro
+  account. Se i PC collegati hanno saturato il limite del piano lo aggiunge, che
+  e' il caso in cui `resolve_device` risponde 402 e l'agent muore in silenzio.
+- Il fallimento della richiesta a `/agent/launch-uri` non e' piu' lo stesso
+  messaggio: li' la richiesta non e' nemmeno uscita dal browser, e parlare del
+  token dell'agent significa accusare una macchina non interrogata.
+- Il messaggio dice **«entro 60 secondi»** invece di «non risponde»: il primo e'
+  un fatto, il secondo un'impressione. Il numero viene dalla stessa costante che
+  fa da timeout, ora dichiarata una volta sola.
+
+### Fixed — il badge di freschezza parlava italiano anche in inglese
+
+`useAutoSync` passava quattro etichette vuote per non mostrare toast, ma l'hook
+le risolveva con `labels.starting || "Avvio in corso..."` e `""` in JavaScript
+e' falso: chiedere silenzio restituiva i default **hardcoded in italiano**. Il
+badge e il pulsante fanno la stessa cosa e rispondevano in modo diverso, uno dei
+due nella lingua sbagliata. Ora la risoluzione usa `??` (una stringa vuota resta
+silenzio, per chi la vuole davvero) e le etichette stanno in
+`frontend/src/lib/syncLabels.js`, da cui pescano entrambi i punti di lancio.
+
+- Tre stringhe della pagina «Il mio PC» (`services_done`, `services_show_ok`,
+  `services_hide_ok`) esistevano **solo in italiano**: aggiunte in inglese. Le
+  ha trovate il test nuovo, non una segnalazione.
+
+### Removed — euristiche e impalcature che non facevano niente
+
+- L'«app non installata» si deduceva dal fatto che la tab non perdesse mai il
+  focus. Il ramo `if` era **vuoto** in `useSilentLaunch` e alzava un flag che
+  nessuno leggeva in `OneClickLaunchButton`, mentre il JSDoc prometteva un hint
+  dopo 3 secondi che non e' mai esistito: si aspettavano comunque i 60 secondi
+  pieni. E il segnale era anche invertito, perche' in modalita' `silent=1`
+  l'agent non prende **mai** il focus: acceso com'era, avrebbe detto «non
+  installato» proprio quando funzionava.
+- In `useAutoSync` restava l'impalcatura dei trigger automatici spenti in
+  v0.7.4: il debounce `canAutoSync()` definito e mai chiamato, il timestamp
+  dell'ultimo idle scritto in localStorage e mai riletto «per potenziali future
+  analytics», le costanti che li taravano.
+- `error` e l'etichetta `notInstalled` di `useSilentLaunch`: scritti a ogni
+  timeout, non letti da nessun chiamante.
+
+### Changed — si puo' annullare, e si sonda meno
+
+- Il toast «in corso» ha un bottone **Annulla**: prima il pulsante restava
+  disabilitato fino a 60 secondi anche a chi aveva gia' capito che non sarebbe
+  partito. E' lo stesso `cancel` esposto dall'hook, cosi' non ci sono due strade
+  che mostrano due toast diversi.
+- Sondaggio ogni 2s per i primi 12s, poi ogni 4s: un'attesa piena passa da ~30 a
+  ~18 richieste, senza rendere piu' lenta la rilevazione nel caso normale.
+
 ### Fixed — l'Auto-Pilot non applica piu' tweak che aspettano un riavvio
 
 L'Auto-Pilot misura la salute, applica ogni tweak `safe` non ancora attivo,

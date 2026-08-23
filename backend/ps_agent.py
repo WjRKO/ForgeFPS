@@ -869,6 +869,109 @@ function Get-PrimaryStorage {
   return $r
 }
 
+# ---------------- Display: un solo schermo per volta ----------------
+# La risoluzione veniva dal PRIMO Win32_VideoController (lista grezza: poteva
+# essere un adattatore virtuale, o la iGPU mentre `gpu` diceva la discreta), il
+# refresh corrente dal MASSIMO fra tutti i controller e il refresh massimo dal
+# MASSIMO fra tutti i monitor via EDID. Tre numeri presi da tre insiemi diversi:
+# con due schermi i due massimi potevano venire da pannelli diversi, e
+# "sei a 100Hz su un 240Hz" descriveva la TV in salotto, non il monitor da gioco.
+#
+# EnumDisplayDevices/EnumDisplaySettings chiedono al driver il modo CORRENTE e i
+# modi supportati dello STESSO dispositivo: e' l'unico confronto che significhi
+# qualcosa. In piu' il driver risponde 240 dove WMI arrotonda a 239.
+function Get-DisplayInfo {
+  $out = @()
+  try {
+    if (-not ('FFDisp' -as [type])) {
+      Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class FFDisp {
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Auto)]
+  public struct DISPLAY_DEVICE {
+    [MarshalAs(UnmanagedType.U4)] public int cb;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)] public string DeviceName;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst=128)] public string DeviceString;
+    [MarshalAs(UnmanagedType.U4)] public int StateFlags;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst=128)] public string DeviceID;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst=128)] public string DeviceKey;
+  }
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Auto)]
+  public struct DEVMODE {
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)] public string dmDeviceName;
+    public short dmSpecVersion; public short dmDriverVersion; public short dmSize; public short dmDriverExtra;
+    public int dmFields;
+    public int dmPositionX; public int dmPositionY; public int dmDisplayOrientation; public int dmDisplayFixedOutput;
+    public short dmColor; public short dmDuplex; public short dmYResolution; public short dmTTOption; public short dmCollate;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst=32)] public string dmFormName;
+    public short dmLogPixels; public int dmBitsPerPel; public int dmPelsWidth; public int dmPelsHeight;
+    public int dmDisplayFlags; public int dmDisplayFrequency;
+    public int dmICMMethod; public int dmICMIntent; public int dmMediaType; public int dmDitherType;
+    public int dmReserved1; public int dmReserved2; public int dmPanningWidth; public int dmPanningHeight;
+  }
+  [DllImport("user32.dll", CharSet=CharSet.Auto)]
+  public static extern bool EnumDisplayDevices(string dev, uint num, ref DISPLAY_DEVICE d, uint flags);
+  [DllImport("user32.dll", CharSet=CharSet.Auto)]
+  public static extern bool EnumDisplaySettings(string dev, int mode, ref DEVMODE dm);
+}
+"@ 2>$null
+    }
+    $i = 0
+    while ($i -lt 32) {
+      $dd = New-Object FFDisp+DISPLAY_DEVICE
+      $dd.cb = [System.Runtime.InteropServices.Marshal]::SizeOf($dd)
+      # $null diventa una stringa VUOTA nel marshalling di PowerShell, ed
+      # EnumDisplayDevices con stringa vuota fallisce: serve [NullString]::Value.
+      if (-not [FFDisp]::EnumDisplayDevices([NullString]::Value, $i, [ref]$dd, 0)) { break }
+      $i++
+      if (($dd.StateFlags -band 0x1) -eq 0) { continue }   # non attaccato al desktop
+      if (($dd.StateFlags -band 0x8) -ne 0) { continue }   # driver di mirroring
+      $cur = New-Object FFDisp+DEVMODE
+      $cur.dmSize = [System.Runtime.InteropServices.Marshal]::SizeOf($cur)
+      if (-not [FFDisp]::EnumDisplaySettings($dd.DeviceName, -1, [ref]$cur)) { continue }
+      $w = [int]$cur.dmPelsWidth; $h = [int]$cur.dmPelsHeight; $hz = [int]$cur.dmDisplayFrequency
+      if ($w -le 0 -or $h -le 0) { continue }
+      # Il massimo si cerca solo FRA I MODI DELLA RISOLUZIONE ATTUALE: un pannello
+      # che fa 240Hz a 1080p ma 144Hz a 1440p non sta andando piano se e' a 1440p.
+      $maxHz = $hz; $m = 0
+      while ($m -lt 4000) {
+        $md = New-Object FFDisp+DEVMODE
+        $md.dmSize = [System.Runtime.InteropServices.Marshal]::SizeOf($md)
+        if (-not [FFDisp]::EnumDisplaySettings($dd.DeviceName, $m, [ref]$md)) { break }
+        $m++
+        if ([int]$md.dmPelsWidth -eq $w -and [int]$md.dmPelsHeight -eq $h) {
+          $f = [int]$md.dmDisplayFrequency
+          if ($f -gt $maxHz -and $f -le 600) { $maxHz = $f }
+        }
+      }
+      # DeviceString a livello adattatore e' la GPU; il monitor sta un livello sotto.
+      $nome = "$($dd.DeviceString)".Trim()
+      $mon = New-Object FFDisp+DISPLAY_DEVICE
+      $mon.cb = [System.Runtime.InteropServices.Marshal]::SizeOf($mon)
+      if ([FFDisp]::EnumDisplayDevices($dd.DeviceName, 0, [ref]$mon, 0) -and "$($mon.DeviceString)".Trim()) {
+        $nome = "$($mon.DeviceString)".Trim()
+      }
+      $out += @{ name = $nome; width = $w; height = $h; hz = $hz; max_hz = $maxHz
+                 primary = (($dd.StateFlags -band 0x4) -ne 0) }
+    }
+  } catch {}
+  return ,@($out)
+}
+
+# Nomi hardware confrontabili: WMI, registro e nvidia-smi scrivono lo stesso
+# pezzo di silicio in tre modi ("Intel(R) Core(TM) i7-12700K CPU @ 3.60GHz" e
+# "12th Gen Intel Core i7-12700K"). Senza normalizzare, "le fonti concordano"
+# sarebbe sempre falso e il dato non guadagnerebbe niente.
+function Get-HwNameKey($n) {
+  $x = "$n".ToLower()
+  $x = $x -replace '\(r\)|\(tm\)|\(c\)', ' '
+  $x = $x -replace '@.*$', ' '
+  $x = $x -replace '\b(cpu|processor|processore|gpu|graphics|nvidia|amd|intel|corporation|inc\.?|ltd\.?)\b', ' '
+  $x = $x -replace '[^a-z0-9]+', ' '
+  return $x.Trim()
+}
+
 function Get-Specs {
   $s = @{}
   $os = Get-CimInstance Win32_OperatingSystem
@@ -882,19 +985,36 @@ function Get-Specs {
   # v0.7.7: cross-check CPU name da Registry (fallback + validation).
   $cpuReg = Get-CpuFromRegistry
   $cpuSources = 1
+  $cpuAgree = $null; $cpuConflict = ''
   if ($cpuReg) {
     $cpuSources = 2
-    # WMI a volte tronca / restituisce nomi generici — se Registry ha una stringa piu' lunga, preferiscila.
+    # "Due fonti" non voleva dire "due fonti d'accordo": il conflitto veniva
+    # risolto in silenzio prendendo la stringa piu' lunga, e un disaccordo vero
+    # (WMI che riporta una CPU generica) usciva come massima confidenza.
+    $kw = Get-HwNameKey $s.cpu
+    $kr = Get-HwNameKey $cpuReg
+    if ($kw -and $kr) {
+      $cpuAgree = ($kw -eq $kr -or $kw.StartsWith($kr) -or $kr.StartsWith($kw))
+      if (-not $cpuAgree) { $cpuConflict = "WMI: $($s.cpu) | registro: $cpuReg" }
+    }
+    # Il registro resta la fonte preferita: WMI tronca e generalizza piu' spesso.
     if ((-not $s.cpu) -or ($cpuReg.Length -gt "$($s.cpu)".Length)) { $s.cpu = $cpuReg }
   }
+  # ProcessorNameString arriva imbottito di spazi ("...8-Core Processor      ") e
+  # WMI a volte ne mette due di fila: quel padding finisce tal quale nella pagina,
+  # nei prompt dell'AI e nella chiave con cui si aggregano i PC simili della flotta.
+  if ($s.cpu) { $s.cpu = ("$($s.cpu)" -replace '\s+', ' ').Trim() }
   # Rilevamento GPU: nvidia-smi > WMI (multi-adapter aware) > Registry.
   # v0.7.7: su laptop ibridi preferiamo sempre la GPU discreta e riportiamo anche la secondaria.
   $gpuSources = 0
+  $nvName = ''
+  $gpuAgree = $null; $gpuConflict = ''
   $nv = & nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader,nounits 2>$null
   if ($nv) {
     $p = ($nv | Select-Object -First 1).Split(',')
     $s.gpu = $p[0].Trim(); $s.gpu_vram_gb = "$([math]::Round([double]$p[1].Trim()/1024))"; $s.gpu_driver_version = $p[2].Trim()
     $s.gpu_provider = 'NVIDIA'
+    $nvName = $s.gpu
     $gpuSources++
     # PCIe link reale + stato Resizable BAR (BAR1 ~ VRAM => ReBAR ON, 256MB => OFF)
     try {
@@ -926,6 +1046,17 @@ function Get-Specs {
   $vcPrimary = $vcSorted | Select-Object -First 1
   if ($vcPrimary) {
     $gpuSources++
+    # Se nvidia-smi e WMI hanno risposto entrambi, confrontarli e' gratis: quando
+    # discordano di solito e' un laptop ibrido dove il driver NVIDIA c'e' ma lo
+    # schermo lo pilota la iGPU, e chi legge le specs merita di saperlo.
+    if ($nvName) {
+      $kn = Get-HwNameKey $nvName
+      $kv = Get-HwNameKey $vcPrimary.Name
+      if ($kn -and $kv) {
+        $gpuAgree = ($kn -eq $kv -or $kn.StartsWith($kv) -or $kv.StartsWith($kn))
+        if (-not $gpuAgree) { $gpuConflict = "nvidia-smi: $nvName | WMI: $($vcPrimary.Name)" }
+      }
+    }
     if (-not $s.gpu) {
       $s.gpu = $vcPrimary.Name; $s.gpu_driver_version = $vcPrimary.DriverVersion
       $vram = Get-GpuVramGb
@@ -948,20 +1079,46 @@ function Get-Specs {
   # Registry cross-check
   $regGpus = Get-GpuAdaptersFromRegistry
   if ($regGpus.Count -gt 0) { $gpuSources++ }
-  $s.refresh_hz = "$((Get-CimInstance Win32_VideoController | Where-Object {$_.CurrentRefreshRate -gt 0} | Sort-Object CurrentRefreshRate -Descending | Select-Object -First 1).CurrentRefreshRate)"
   $ram = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB)
   $s.ram = "$ram GB"
-  $pm = Get-CimInstance Win32_PhysicalMemory
-  $pm1 = $pm | Select-Object -First 1
-  $s.ram_speed_mhz = "$(if ($pm1.ConfiguredClockSpeed -and $pm1.ConfiguredClockSpeed -gt 0) { $pm1.ConfiguredClockSpeed } else { $pm1.Speed })"
-  $s.ram_modules = "$(($pm | Measure-Object).Count)"
-  $s.ram_type = @{ '20'='DDR'; '21'='DDR2'; '24'='DDR3'; '26'='DDR4'; '34'='DDR5' }["$($pm1.SMBIOSMemoryType)"]
-  # v0.7.7: RAM manufacturer (utile per identificare Corsair/G.Skill/Kingston etc)
-  $ramMfg = "$($pm1.Manufacturer)".Trim()
-  if ($ramMfg -and $ramMfg -notmatch '(?i)^(unknown|to be filled|manufacturer)$' -and $ramMfg.Length -gt 1) {
-    $s.ram_manufacturer = $ramMfg
+  $pmAll = @(Get-CimInstance Win32_PhysicalMemory)
+  # Velocita', tipo e produttore venivano tutti dal PRIMO modulo. Un kit misto e'
+  # esattamente il caso che varrebbe la pena segnalare - costa prestazioni vere -
+  # e descriverlo con il primo banco lo nascondeva. La frequenza a cui gira il
+  # canale e' quella del modulo piu' lento, non quella del banco in slot 1.
+  $ramCfg = @($pmAll | ForEach-Object {
+    if ($_.ConfiguredClockSpeed -and $_.ConfiguredClockSpeed -gt 0) { [int]$_.ConfiguredClockSpeed }
+    elseif ($_.Speed -and $_.Speed -gt 0) { [int]$_.Speed }
+  } | Where-Object { $_ -gt 0 })
+  if ($ramCfg.Count -gt 0) { $s.ram_speed_mhz = "$(($ramCfg | Measure-Object -Minimum).Minimum)" }
+  $ramNom = @($pmAll | ForEach-Object { [int]$_.Speed } | Where-Object { $_ -gt 0 })
+  if ($ramNom.Count -gt 0) { $s.ram_speed_nominal_mhz = "$(($ramNom | Measure-Object -Minimum).Minimum)" }
+  $s.ram_modules = "$($pmAll.Count)"
+  $ramTipi = @($pmAll | ForEach-Object { @{ '20'='DDR'; '21'='DDR2'; '24'='DDR3'; '26'='DDR4'; '34'='DDR5' }["$($_.SMBIOSMemoryType)"] } | Where-Object { $_ } | Select-Object -Unique)
+  if ($ramTipi.Count -gt 0) { $s.ram_type = ($ramTipi -join ' + ') }
+  $ramMfgs = @($pmAll | ForEach-Object { "$($_.Manufacturer)".Trim() } |
+    Where-Object { $_ -and $_ -notmatch '(?i)^(unknown|to be filled|manufacturer)$' -and $_.Length -gt 1 } |
+    Select-Object -Unique)
+  if ($ramMfgs.Count -gt 0) { $s.ram_manufacturer = ($ramMfgs -join ' + ') }
+  # Un disaccordo fra i moduli e' informazione, non rumore da appianare.
+  $ramDisc = @()
+  if (@($ramCfg | Select-Object -Unique).Count -gt 1) { $ramDisc += "frequenze diverse ($((@($ramCfg | Sort-Object -Unique)) -join '/') MHz)" }
+  if ($ramTipi.Count -gt 1) { $ramDisc += 'tipi diversi' }
+  if ($ramMfgs.Count -gt 1) { $ramDisc += 'produttori diversi' }
+  if ($ramDisc.Count -gt 0) { $s.ram_mismatch = ($ramDisc -join ', ') }
+  # "Le due fonti concordano" era un commento, non un controllo: ora la somma
+  # delle capacita' dei moduli viene confrontata con il totale di sistema. Se un
+  # banco non viene riportato, il conto non torna e si vede.
+  $ramSources = 1
+  $ramAgree = $null; $ramConflict = ''
+  $capSum = 0.0
+  foreach ($mm in $pmAll) { $capSum += [double]$mm.Capacity }
+  if ($capSum -gt 0) {
+    $ramSources = 2
+    $capGb = [math]::Round($capSum / 1GB)
+    $ramAgree = ([math]::Abs($capGb - $ram) -le 1)
+    if (-not $ramAgree) { $ramConflict = "moduli $capGb GB, sistema $ram GB" }
   }
-  $ramSources = 2  # Win32_ComputerSystem + Win32_PhysicalMemory concordano
   $b = Get-CimInstance Win32_BaseBoard | Where-Object { $_.Product -and $_.Product -notmatch 'Base Board|Default string|To be filled|None' } | Select-Object -First 1
   if (-not $b) { $b = Get-CimInstance Win32_BaseBoard | Select-Object -First 1 }
   $mfg = "$($b.Manufacturer)"
@@ -981,25 +1138,48 @@ function Get-Specs {
       '^(Z590|B560|H570|H510|Z490|B460|H470)$' { $s.cpu_socket = 'LGA1200' }
     }
   }
-  $v = Get-CimInstance Win32_VideoController | Select-Object -First 1
-  if ($v.CurrentHorizontalResolution) { $s.resolution = "$($v.CurrentHorizontalResolution)x$($v.CurrentVerticalResolution)" }
 
   # ----- v0.7.7 Hardware Insights: dati extra per consigli mirati -----
-  # (a) velocita' nominale RAM (per check XMP: nominale vs configurata)
-  if ($pm1.Speed -and $pm1.Speed -gt 0) { $s.ram_speed_nominal_mhz = "$($pm1.Speed)" }
-  # (c) refresh massimo supportato dal monitor (EDID)
-  try {
-    $maxHz = 0
-    Get-CimInstance -Namespace root\wmi -ClassName WmiMonitorListedSupportedSourceModes -ErrorAction SilentlyContinue | ForEach-Object {
-      foreach ($m in $_.MonitorSourceModes) {
-        if ($m.VerticalRefreshRateNumerator -and $m.VerticalRefreshRateDenominator -gt 0) {
-          $hz = [math]::Round($m.VerticalRefreshRateNumerator / $m.VerticalRefreshRateDenominator)
-          if ($hz -gt $maxHz -and $hz -le 600) { $maxHz = $hz }
-        }
-      }
+  # (c) schermi: risoluzione e refresh presi dallo STESSO pannello
+  $disp = Get-DisplayInfo
+  if ($disp.Count -gt 0) {
+    $primario = @($disp | Where-Object { $_.primary }) | Select-Object -First 1
+    if (-not $primario) { $primario = $disp[0] }
+    # Lo schermo primario e' quello su cui il gioco parte: e' il suo refresh che
+    # conta, non il massimo fra tutti (che poteva venire dalla TV in salotto).
+    $s.resolution = "$($primario.width)x$($primario.height)"
+    $s.refresh_hz = "$($primario.hz)"
+    $s.max_refresh_hz = "$($primario.max_hz)"
+    $s.monitor_count = "$($disp.Count)"
+    $s.monitors = @($disp | ForEach-Object {
+      @{ name = $_.name; resolution = "$($_.width)x$($_.height)"; hz = $_.hz; max_hz = $_.max_hz; primary = [bool]$_.primary }
+    })
+  } else {
+    # Ripiego se l'API display non risponde. La risoluzione esce dalla lista gia'
+    # ordinata e filtrata (niente adattatori virtuali), non dal primo elemento
+    # grezzo; e l'EDID, che da' un massimo su TUTTI i monitor, si usa soltanto
+    # quando di schermi ce n'e' uno - altrimenti si appaiano pannelli diversi.
+    $vcRes = @($vcSorted | Where-Object { $_.CurrentHorizontalResolution -gt 0 }) | Select-Object -First 1
+    if (-not $vcRes) { $vcRes = @($vcAll | Where-Object { $_.CurrentHorizontalResolution -gt 0 }) | Select-Object -First 1 }
+    if ($vcRes) {
+      $s.resolution = "$($vcRes.CurrentHorizontalResolution)x$($vcRes.CurrentVerticalResolution)"
+      if ($vcRes.CurrentRefreshRate -gt 0) { $s.refresh_hz = "$($vcRes.CurrentRefreshRate)" }
     }
-    if ($maxHz -gt 0) { $s.max_refresh_hz = "$maxHz" }
-  } catch {}
+    try {
+      $edid = @(Get-CimInstance -Namespace root\wmi -ClassName WmiMonitorListedSupportedSourceModes -ErrorAction SilentlyContinue)
+      $s.monitor_count = "$($edid.Count)"
+      if ($edid.Count -eq 1) {
+        $maxHz = 0
+        foreach ($m in $edid[0].MonitorSourceModes) {
+          if ($m.VerticalRefreshRateNumerator -and $m.VerticalRefreshRateDenominator -gt 0) {
+            $hz = [math]::Round($m.VerticalRefreshRateNumerator / $m.VerticalRefreshRateDenominator)
+            if ($hz -gt $maxHz -and $hz -le 600) { $maxHz = $hz }
+          }
+        }
+        if ($maxHz -gt 0) { $s.max_refresh_hz = "$maxHz" }
+      }
+    } catch {}
+  }
   # (d) dischi fissi: tipo (NVMe/SATA SSD/HDD), dimensione e spazio libero
   try {
     $disks = @()
@@ -1069,13 +1249,22 @@ function Get-Specs {
     if ($dd) { $storageSources++ }
   } catch {}
 
-  # v0.7.7: hw_confidence — quante fonti indipendenti hanno confermato ogni componente.
-  # Il frontend usa questi valori per mostrare un badge "2/2 fonti" o "1/2 fonti" (giallo).
+  # hw_confidence: quante fonti hanno risposto E se erano d'accordo.
+  #
+  # Prima era solo un conteggio, e un conteggio non e' una confidenza: due fonti
+  # che si contraddicono valevano quanto due che confermano. Il conflitto veniva
+  # poi risolto da una regola implicita - per la CPU vinceva la stringa piu'
+  # lunga - quindi il disaccordo spariva senza lasciare traccia proprio nei casi
+  # in cui il dato e' meno affidabile.
+  #
+  # `agree = $null` vuol dire "non verificabile", che e' diverso da "verificato
+  # e concorde": lo storage non ha due fonti da confrontare sullo stesso valore,
+  # e dichiararlo concorde sarebbe la stessa bugia di prima.
   $s.hw_confidence = @{
-    cpu     = $cpuSources
-    gpu     = $gpuSources
-    ram     = $ramSources
-    storage = $storageSources
+    cpu     = @{ sources = $cpuSources;     agree = $cpuAgree; conflict = $cpuConflict }
+    gpu     = @{ sources = $gpuSources;     agree = $gpuAgree; conflict = $gpuConflict }
+    ram     = @{ sources = $ramSources;     agree = $ramAgree; conflict = $ramConflict }
+    storage = @{ sources = $storageSources; agree = $null;     conflict = '' }
   }
 
   return $s

@@ -14,8 +14,23 @@ import { PageHeader } from "@/components/hud";
 import { DevicesPanel } from "@/components/DevicesPanel";
 import { DeviceCompare } from "@/components/DeviceCompare";
 import { useSilentLaunch } from "@/hooks/useSilentLaunch";
+import { syncLabels, SYNC_TIMEOUT_MS } from "@/lib/syncLabels";
+import { changeSummary } from "@/lib/changeLabels";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
 import { MissionContextStrip } from "@/components/MissionContextStrip";
+
+// hw_confidence: l'agent mandava un numero (quante fonti avevano risposto), ora
+// manda { sources, agree, conflict }. Gli agent vecchi restano in giro, quindi si
+// accettano entrambe le forme - ma un numero da solo non puo' dire se le fonti
+// erano d'accordo, e infatti la vecchia forma vale "accordo non verificato".
+function hwConf(valore) {
+  if (valore == null) return null;
+  if (typeof valore === "number") return { sources: valore, agree: null, conflict: "" };
+  if (typeof valore === "object") {
+    return { sources: Number(valore.sources) || 0, agree: valore.agree ?? null, conflict: valore.conflict || "" };
+  }
+  return null;
+}
 
 const SPEC_KEYS = ["os", "cpu", "gpu", "ram", "disk", "motherboard", "resolution"];
 const specLabel = (t, k) => ({ os: t("mypcpage.sl_os"), cpu: "CPU", gpu: "GPU", ram: "RAM", disk: t("mypcpage.sl_disk"), motherboard: t("mypcpage.sl_mb"), resolution: t("mypcpage.sl_res") }[k]);
@@ -27,7 +42,9 @@ function composeSpec(key, d) {
     const x = [];
     if (d.cpu_cores) x.push(`${d.cpu_cores}C`);
     if (d.cpu_threads) x.push(`${d.cpu_threads}T`);
-    if (d.cpu_clock_ghz) x.push(`${d.cpu_clock_ghz}GHz`);
+    // MaxClockSpeed di WMI e' il clock BASE, non il boost: scritto "3.4GHz"
+    // accanto al nome della CPU veniva letto come la frequenza in gioco.
+    if (d.cpu_clock_ghz) x.push(`${d.cpu_clock_ghz}GHz base`);
     return x.length ? `${v} · ${x.join(" / ")}` : v;
   }
   if (key === "gpu") {
@@ -43,6 +60,9 @@ function composeSpec(key, d) {
     if (d.ram_speed_mhz) x.push(`${d.ram_speed_mhz}MHz`);
     if (d.ram_modules) x.push(`${d.ram_modules}×`);
     if (d.ram_manufacturer) x.push(d.ram_manufacturer);
+    // Moduli che non si somigliano: il canale gira alla velocita' del piu'
+    // lento, quindi e' un difetto da vedere, non un dettaglio da appianare.
+    if (d.ram_mismatch) x.push(d.ram_mismatch);
     return x.length ? `${v} · ${x.join(" · ")}` : v;
   }
   if (key === "disk") {
@@ -264,6 +284,13 @@ export default function MyPc() {
   const [err, setErr] = useState("");
   const [showOff, setShowOff] = useState(false);
   const [editing, setEditing] = useState(false);
+  // I pannelli qui sotto leggono dal backend una volta sola, al mount. Dopo un
+  // sync mostravano ancora i dati di prima: la griglia specs diceva RAM a 6000
+  // MHz e subito sotto restava il cartello "attiva XMP", e il grafico dei sync
+  // non conteneva il sync appena fatto. Cambiare la `key` li rimonta: sono di
+  // sola lettura, non hanno stato da conservare, e l'alternativa - farli pollare
+  // per conto loro - sarebbe sei sorgenti di verita' sulla stessa domanda.
+  const [syncVersion, setSyncVersion] = useState(0);
 
   const load = async () => {
     try { const { data } = await api.get("/pc-specs"); setSpecs(data); } catch (e) { console.error("load pc-specs failed", e); }
@@ -278,22 +305,97 @@ export default function MyPc() {
 
   const syncLaunch = useSilentLaunch({
     mode: "sync",
-    timeoutMs: 60000,
-    labels: {
-      starting: t("mypcpage.silent_sync_start", { defaultValue: "Sincronizzazione in avvio..." }),
-      running: t("mypcpage.silent_sync_running", { defaultValue: "Sincronizzazione hardware in corso..." }),
-      done: t("mypcpage.silent_sync_done", { defaultValue: "Sync completato. Dati aggiornati." }),
-      failed: t("mypcpage.silent_sync_failed", { defaultValue: "Sync non completato. Se hai gia' usato FrameForge con un altro account, il token locale e' disallineato: vai su 'FrameForge Agent' → 'L'agent potrebbe essere collegato ad un altro account' e scarica il launcher .bat." }),
-      notInstalled: t("mypcpage.silent_not_installed", { defaultValue: "Non hai ancora installato FrameForge? Vai su 'FrameForge Agent'." }),
+    timeoutMs: SYNC_TIMEOUT_MS,
+    labels: syncLabels(t),
+    // Fotografia di quando ogni PC ha aggiornato le sue specs. Serve solo se il
+    // sync non si vede arrivare: allora dice se non e' successo niente oppure
+    // se e' successo su un altro PC.
+    beforeLaunch: async () => {
+      const { data } = await api.get("/devices/compare");
+      const perPc = {};
+      for (const d of data?.devices || []) perPc[d.device_id] = d.specs_updated_at || null;
+      return { perPc, prima: baselineRef.current.updatedAt };
     },
     detectDone: async () => {
       const { data } = await api.get("/pc-specs");
       if (data.updated_at && data.updated_at !== baselineRef.current.updatedAt) {
         setSpecs(data);
         try { const { data: h } = await api.get("/pc-health"); setHealth(h.available ? h : null); } catch (e) { console.error("post-sync health reload", e); }
+        setSyncVersion((v) => v + 1);
         return true;
       }
       return false;
+    },
+    // "Sync completato. Dati aggiornati." e' vero e non dice niente: chi preme il
+    // pulsante vuole sapere se qualcosa e' cambiato, e nel caso piu' comune - non
+    // e' cambiato niente - resta col dubbio di aver premuto invano. Il diff fra
+    // due sync il backend lo calcola gia' e lo salva in system_changes.
+    summarize: async (foto) => {
+      const prima = foto?.prima;
+      if (!prima) return null;
+      try {
+        const { data } = await api.get("/pc/changes?days=1");
+        const nuovi = (data?.changes || []).filter((c) => c.created_at && c.created_at > prima);
+        if (!nuovi.length) return t("mypcpage.sync_no_changes");
+        const lang = (i18n.resolvedLanguage || i18n.language || "it").startsWith("en") ? "en" : "it";
+        const testa = nuovi.slice(0, 2).map((c) => changeSummary(c, lang)).join(" · ");
+        const resto = nuovi.length - Math.min(2, nuovi.length);
+        return resto > 0
+          ? t("mypcpage.sync_changed_more", { changes: testa, n: resto })
+          : t("mypcpage.sync_changed", { changes: testa });
+      } catch (e) {
+        console.error("riepilogo cambiamenti non calcolato", e);
+        return null;
+      }
+    },
+    // Il silenzio non e' una diagnosi. `/pc-specs` legge il DEVICE ATTIVO, ma
+    // l'agent scrive sul PC su cui gira: se sono diversi il sync riesce e la
+    // pagina non lo vede mai. Confrontando le specs di tutti i PC si distingue
+    // "non e' partito niente" da "e' partito, ma altrove" - e nel secondo caso
+    // il rimedio e' un click, non un paragrafo di spiegazioni.
+    diagnose: async (foto) => {
+      try {
+        const [{ data: cmp }, { data: reg }] = await Promise.all([
+          api.get("/devices/compare"),
+          api.get("/devices"),
+        ]);
+        const elenco = cmp?.devices || [];
+        const attivo = reg?.active || null;
+        const perPc = foto?.perPc || {};
+        const altrove = elenco.find(
+          (d) => d.device_id !== attivo && d.specs_updated_at && d.specs_updated_at !== perPc[d.device_id]
+        );
+        if (altrove) {
+          const nome = altrove.name || altrove.device_id;
+          const nomeAttivo = (elenco.find((d) => d.device_id === attivo) || {}).name || attivo || "-";
+          return {
+            message: t("mypcpage.sync_wrong_device", { device: nome, active: nomeAttivo }),
+            action: {
+              label: t("mypcpage.sync_switch_to", { device: nome }),
+              onClick: async () => {
+                try {
+                  await api.post(`/devices/${altrove.device_id}/activate`);
+                  await load();
+                  setSyncVersion((v) => v + 1);
+                  toast.success(t("mypcpage.sync_switched", { device: nome }));
+                } catch (e) {
+                  console.error("device activate failed", e);
+                }
+              },
+            },
+          };
+        }
+        let msg = t("mypcpage.silent_sync_failed", { sec: Math.round(SYNC_TIMEOUT_MS / 1000) });
+        const collegati = (reg?.devices || []).length;
+        const limite = Number(reg?.limit ?? 0);
+        if (limite > 0 && collegati >= limite) {
+          msg += t("mypcpage.sync_limit_hint", { limit: limite });
+        }
+        return msg;
+      } catch (e) {
+        console.error("diagnose sync failed", e);
+        return null;
+      }
     },
   });
 
@@ -342,14 +444,13 @@ export default function MyPc() {
           </button>
           <button data-testid="edit-specs-btn" onClick={() => setEditing(true)} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><Pencil size={15} /> {t("mypcpage.edit")}</button>
           <Link to="/app/upgrade" data-testid="to-upgrade-btn" className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><Rocket size={15} /> {t("mypcpage.upgrade")}</Link>
-          <button data-testid="refresh-pc-btn" onClick={load} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><RefreshCw size={15} /> {t("mypcpage.refresh")}</button>
         </>} />
 
       <MissionContextStrip metrics={["services_done", "startup_done", "health_score", "optimize_total"]} />
 
-      <DevicesPanel />
+      <DevicesPanel key={`dev-${syncVersion}`} />
 
-      <DeviceCompare />
+      <DeviceCompare key={`cmp-${syncVersion}`} />
 
       {specs?.updated_at && (() => {
         let diffSec = 0;
@@ -376,6 +477,15 @@ export default function MyPc() {
               })()}
             </span>
             {justNow && <span className="text-[#00FF66] font-bold">· {t("mypcpage.sync_ok", { defaultValue: "aggiornato!" })}</span>}
+            {/* "Aggiorna" stava nella barra in alto accanto a "Sincronizza ora",
+                con la STESSA icona: uno rilegge il database in un istante, l'altro
+                accende l'agent per un minuto, e non c'era modo di indovinare quale
+                fosse quale. Qui, attaccato all'ora dell'ultimo sync, dice da solo
+                cosa fa. */}
+            <button data-testid="refresh-pc-btn" onClick={load}
+              className="underline underline-offset-2 hover:text-[#E5FF00] transition-colors">
+              {t("mypcpage.refresh")}
+            </button>
           </div>
         );
       })()}
@@ -446,33 +556,47 @@ export default function MyPc() {
         </div>
       )}
 
-      <HwInsightsPanel />
+      <HwInsightsPanel key={`hw-${syncVersion}`} />
 
-      <HealthHistoryCard />
+      <HealthHistoryCard key={`hh-${syncVersion}`} />
 
-      <WhatChangedCard />
+      <WhatChangedCard key={`wc-${syncVersion}`} />
 
-      <SyncTimeline days={7} />
+      <SyncTimeline key={`st-${syncVersion}`} days={7} />
 
       <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick mb-4">
         <div className="p-5 border-b border-[#2A2A35] text-xs uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2"><Cpu size={14} className="text-[#E5FF00]" /> {t("mypcpage.hardware")}</div>
         <div className="grid sm:grid-cols-2 gap-px bg-[#1A1A24]">
           {shownSpecKeys.map((k) => {
             const conf = specs.data?.hw_confidence || {};
-            const cKey = k === "disk" ? "storage" : k;
-            const cVal = conf[cKey];
-            const badgeCls = cVal >= 2 ? "text-[#00FF66] border-[#00FF66]/30" : cVal === 1 ? "text-[#E5FF00] border-[#E5FF00]/30" : "text-zinc-600 border-zinc-800";
+            const c = hwConf(conf[k === "disk" ? "storage" : k]);
+            // Il disaccordo e' l'informazione piu' importante delle tre e prima
+            // non era rappresentabile: due fonti che si contraddicono facevano
+            // lo stesso badge verde di due che confermano.
+            const badgeCls = c?.agree === false
+              ? "text-[#FF3B30] border-[#FF3B30]/40"
+              : c?.sources >= 2
+                ? "text-[#00FF66] border-[#00FF66]/30"
+                : c?.sources === 1
+                  ? "text-[#E5FF00] border-[#E5FF00]/30"
+                  : "text-zinc-600 border-zinc-800";
+            const badgeTxt = c?.agree === false ? `${c.sources} ⚠` : `${c?.sources ?? 0}×`;
+            const badgeTitle = c?.agree === false
+              ? t("mypcpage.hw_sources_conflict", { detail: c.conflict, defaultValue: "Le fonti non concordano: {{detail}}" })
+              : c?.agree === true
+                ? t("mypcpage.hw_sources_agree", { n: c.sources, defaultValue: "{{n}} fonti indipendenti, concordi" })
+                : t("mypcpage.hw_sources_tooltip", "Numero di fonti indipendenti (WMI + Registry + nvidia-smi) che hanno confermato questo componente");
             return (
               <div key={k} className="bg-[#0F0F12] p-4" data-testid={`spec-${k}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs uppercase tracking-widest text-zinc-500">{specLabel(t, k)}</div>
-                  {cVal != null && (
+                  {c != null && (
                     <span
                       className={`text-[11px] font-mono font-bold px-1.5 py-0.5 border ${badgeCls}`}
-                      title={t("mypcpage.hw_sources_tooltip", "Numero di fonti indipendenti (WMI + Registry + nvidia-smi) che hanno confermato questo componente")}
+                      title={badgeTitle}
                       data-testid={`hw-conf-${k}`}
                     >
-                      {cVal}/2
+                      {badgeTxt}
                     </span>
                   )}
                 </div>
