@@ -32,6 +32,28 @@ function hwConf(valore) {
   return null;
 }
 
+// Un campo che l'ultima scansione non ha confermato: il valore resta - non
+// cancellarlo e' il punto di data_meta - ma non e' fresco come gli altri, e
+// mostrarlo identico sarebbe spacciare per misurato di adesso qualcosa che
+// arriva da giorni fa.
+function nonConfermato(specs, campo) {
+  const at = specs?.data_meta?.[campo]?.at;
+  if (!at || !specs?.updated_at) return null;
+  return at === specs.updated_at ? null : at;
+}
+
+// Il PC di questa postazione, imparato una volta e ricordato dal browser.
+//
+// `/pc-specs` legge il device ATTIVO, che l'utente sceglie a mano e che spesso
+// non e' la macchina davanti a cui e' seduto: da li' veniva il caso in cui il
+// sync riusciva e la pagina non lo vedeva mai. Il legame si impara dal lancio
+// precedente - chi ha risposto, era questo PC - e da allora il pulsante puo'
+// mettere a fuoco il device giusto PRIMA di partire, invece di spiegare dopo.
+// localStorage e' la sede giusta: e' per-browser, cioe' per-macchina.
+const LS_PC_LOCALE = "ff_local_device";
+const pcLocale = () => { try { return window.localStorage.getItem(LS_PC_LOCALE) || null; } catch { return null; } };
+const ricordaPcLocale = (id) => { try { window.localStorage.setItem(LS_PC_LOCALE, id); } catch (e) { console.error("LS write failed", e); } };
+
 const SPEC_KEYS = ["os", "cpu", "gpu", "ram", "disk", "motherboard", "resolution"];
 const specLabel = (t, k) => ({ os: t("mypcpage.sl_os"), cpu: "CPU", gpu: "GPU", ram: "RAM", disk: t("mypcpage.sl_disk"), motherboard: t("mypcpage.sl_mb"), resolution: t("mypcpage.sl_res") }[k]);
 
@@ -291,6 +313,7 @@ export default function MyPc() {
   // sola lettura, non hanno stato da conservare, e l'alternativa - farli pollare
   // per conto loro - sarebbe sei sorgenti di verita' sulla stessa domanda.
   const [syncVersion, setSyncVersion] = useState(0);
+  const launchIdRef = useRef(null);
 
   const load = async () => {
     try { const { data } = await api.get("/pc-specs"); setSpecs(data); } catch (e) { console.error("load pc-specs failed", e); }
@@ -310,7 +333,26 @@ export default function MyPc() {
     // Fotografia di quando ogni PC ha aggiornato le sue specs. Serve solo se il
     // sync non si vede arrivare: allora dice se non e' successo niente oppure
     // se e' successo su un altro PC.
+    onLaunchInfo: (d) => { launchIdRef.current = d?.launch_id || null; },
     beforeLaunch: async () => {
+      // Se sappiamo qual e' il PC di questa postazione e la pagina ne sta
+      // guardando un altro, si mette a fuoco quello giusto adesso: il sync
+      // riuscirebbe comunque, ma su un documento che nessuno sta guardando.
+      const locale = pcLocale();
+      if (locale) {
+        try {
+          const { data: reg } = await api.get("/devices");
+          const suo = (reg?.devices || []).find((x) => x.device_id === locale);
+          if (suo && reg?.active !== locale) {
+            await api.post(`/devices/${locale}/activate`);
+            await load();
+            setSyncVersion((v) => v + 1);
+            toast.info(t("mypcpage.sync_focus_local", { device: suo.name || locale }));
+          }
+        } catch (e) {
+          console.error("messa a fuoco del PC locale fallita", e);
+        }
+      }
       const { data } = await api.get("/devices/compare");
       const perPc = {};
       for (const d of data?.devices || []) perPc[d.device_id] = d.specs_updated_at || null;
@@ -334,6 +376,15 @@ export default function MyPc() {
       const prima = foto?.prima;
       if (!prima) return null;
       try {
+        // Chi ha risposto a questo lancio e' il PC di questa postazione.
+        if (launchIdRef.current) {
+          try {
+            const { data: lan } = await api.get(`/agent/launch/${launchIdRef.current}`);
+            if (lan?.device_id) ricordaPcLocale(lan.device_id);
+          } catch (e) {
+            console.error("PC locale non appreso", e);
+          }
+        }
         const { data } = await api.get("/pc/changes?days=1");
         const nuovi = (data?.changes || []).filter((c) => c.created_at && c.created_at > prima);
         if (!nuovi.length) return t("mypcpage.sync_no_changes");
@@ -581,6 +632,7 @@ export default function MyPc() {
                   ? "text-[#E5FF00] border-[#E5FF00]/30"
                   : "text-zinc-600 border-zinc-800";
             const badgeTxt = c?.agree === false ? `${c.sources} ⚠` : `${c?.sources ?? 0}×`;
+            const vecchio = nonConfermato(specs, k === "disk" ? "storage_model" : k);
             const badgeTitle = c?.agree === false
               ? t("mypcpage.hw_sources_conflict", { detail: c.conflict, defaultValue: "Le fonti non concordano: {{detail}}" })
               : c?.agree === true
@@ -600,7 +652,13 @@ export default function MyPc() {
                     </span>
                   )}
                 </div>
-                <div className="text-sm text-zinc-100 mt-1">{composeSpec(k, specs.data)}</div>
+                <div className={`text-sm mt-1 ${vecchio ? "text-zinc-400" : "text-zinc-100"}`}>{composeSpec(k, specs.data)}</div>
+                {vecchio && (
+                  <div className="text-[10px] font-mono text-zinc-600 mt-0.5" data-testid={`spec-stale-${k}`}
+                    title={t("mypcpage.spec_stale_title", { defaultValue: "L'ultima sincronizzazione non ha rilevato questo campo: il valore mostrato viene da una scansione precedente." })}>
+                    {t("mypcpage.spec_stale", { defaultValue: "non confermato dall'ultimo sync" })}
+                  </div>
+                )}
               </div>
             );
           })}

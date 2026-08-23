@@ -9,6 +9,86 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 
 _Prossime feature in sviluppo — vedi `/app/memory/ROADMAP.md`._
 
+### Fixed — misurare meglio un campo non e' vederlo cambiare
+
+Il fix sulla precisione cambia il **valore** di campi che `system_changes.py`
+sorveglia. Alla prima sincronizzazione dopo l'aggiornamento, `diff_specs` avrebbe
+confrontato il vecchio valore (misurato male) col nuovo (misurato bene) e
+registrato un cambiamento mai avvenuto — il caso piu' comune «Refresh del
+monitor: 59 → 60», perche' WMI arrotondava per difetto.
+
+Non sarebbe stata solo una riga di troppo nella cronologia: `correlate()` incrocia
+i cambiamenti con l'andamento delle prestazioni, quindi su un PC che sta andando
+peggio per altri motivi il refresh sarebbe comparso **fra i sospetti**. Un dato
+inventato dentro la funzione che esiste per spiegare i cali.
+
+L'agent dichiara ora `specs_schema`, e `REMEASURED_IN` elenca per ogni versione i
+campi la cui misura e' cambiata. La soppressione vale **una volta sola**, nel
+passaggio fra due versioni: dal sync successivo ogni differenza torna a essere un
+cambiamento vero. Un test lega i due numeri, perche' alzare lo schema senza dire
+cosa e' cambiato renderebbe la protezione silenziosamente inutile.
+
+### Fixed — un campo assente non cancella piu' un campo presente
+
+I due percorsi che scrivono `pc_specs` avevano semantiche opposte: l'agent
+sostituiva `data` in blocco, il form manuale fondeva campo per campo. La
+sostituzione perdeva dati in silenzio — una scansione degradata (agent senza
+privilegi, `nvidia-smi` assente, WMI che singhiozza) produce meno campi, e quei
+campi non diventavano vecchi, diventavano **vuoti**: il PC aveva meno hardware di
+ieri.
+
+Ora entrambi i percorsi passano da `backend/specs_merge.py`, che ha una regola
+sola: un campo assente lascia il valore precedente, e `data_meta` registra **per
+campo** da quale fonte e in che momento e' stato visto l'ultima volta. Cosi'
+«vecchio» e «sparito» smettono di somigliarsi. La pagina «Il mio PC» marca i
+campi che l'ultimo sync non ha confermato.
+
+- `False` e `0` sono valori, non assenze: `hvci_on = False` e
+  `scan_context.admin = False` sono i casi in cui il dato conta di piu', e un
+  controllo di verita' li avrebbe scartati come vuoti.
+- `source` viene scritto anche dal percorso agent: prima lo scriveva solo il form
+  manuale, quindi dopo un sync il documento dichiarava una provenienza non piu'
+  vera.
+- Prezzo dichiarato: un componente rimosso davvero resta finche' qualcosa non lo
+  sovrascrive, con una data sempre piu' vecchia. E' il lato giusto del
+  compromesso — `diff_specs` gia' non segnala i campi che spariscono.
+
+### Added — le condizioni in cui la misura e' stata fatta
+
+L'agent sapeva se girava come amministratore e se l'Integrita' della memoria
+stava bloccando i sensori, ma **non lo diceva a nessuno**: lo mostrava in console
+e lo passava alla GUI locale. Il backend riceveva una fotografia senza sapere se
+era stata scattata al buio, e non poteva distinguere «questo PC non ha sensori»
+da «l'agent girava senza privilegi» — due dati identici che significano cose
+opposte.
+
+`scan_context` porta ora admin, blocklist driver, se `nvidia-smi` ha risposto,
+versione dell'agent e durata della scansione. Serve all'AI advisor per non
+leggere una temperatura assente come «PC freddo», al Laboratorio per rifiutare
+una baseline raccolta in condizioni diverse dal test, e soprattutto
+all'aggregazione di flotta per smettere di mescolare scansioni degradate con
+scansioni pulite — il punto in cui un dato sbagliato su un PC diventa una
+raccomandazione sbagliata per tutti.
+
+### Added — il pulsante sa qual e' il PC di questa postazione
+
+`/api/pc-specs` legge il device **attivo**, che l'utente sceglie a mano e che
+spesso non e' la macchina davanti a cui e' seduto: da li' veniva il caso in cui
+il sync riusciva e la pagina non lo vedeva mai. Finora se ne accorgeva solo dopo
+i 60 secondi di timeout.
+
+Ogni lancio lascia ora una traccia (`agent_launches`), e il primo agent che
+riporta dati per quell'utente entro dieci minuti viene legato a quel lancio. Il
+browser lo memorizza in `localStorage` — che e' per-browser, cioe' per-macchina —
+e dalla volta dopo mette a fuoco il device giusto **prima** di partire, dicendolo:
+«Passo a DESKTOP-MIRKO, il PC di questa postazione».
+
+Non e' una prova ma una correlazione, quindi si lega solo quando la richiesta in
+attesa e' **una sola**: con due lanci aperti non si puo' dire quale abbia
+risposto, e attribuirne uno a caso rifarebbe il messaggio falso che si voleva
+togliere. Nell'ambiguita' si preferisce non sapere.
+
+
 ### Removed — una sola rilevazione hardware, non tre
 
 `agent-build/forgefps_agent.py` aveva un `collect_specs()` / `collect_health()` /

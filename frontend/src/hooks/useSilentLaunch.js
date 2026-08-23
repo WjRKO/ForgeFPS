@@ -63,6 +63,7 @@ export function useSilentLaunch({
   beforeLaunch,
   diagnose,
   summarize,
+  onLaunchInfo,
   onDone,
   timeoutMs = 90000,
   labels = {},
@@ -119,6 +120,9 @@ export function useSilentLaunch({
 
       const { data } = await api.get(`/agent/launch-uri?mode=${encodeURIComponent(mode)}&silent=1`);
       if (!data?.uri) throw new Error("no uri");
+      // Il backend lascia una traccia del lancio: serve a chi ci chiama per
+      // scoprire, dopo, QUALE PC ha risposto.
+      onLaunchInfo?.(data);
       window.location.href = data.uri;
 
       mostra(toast.loading, l.running, {
@@ -172,7 +176,7 @@ export function useSilentLaunch({
     } finally {
       setRunning(false);
     }
-  }, [mode, detectDone, beforeLaunch, diagnose, summarize, onDone, timeoutMs, running, labels, cancel]);
+  }, [mode, detectDone, beforeLaunch, diagnose, summarize, onLaunchInfo, onDone, timeoutMs, running, labels, cancel]);
 
   return { launch, cancel, running };
 }
