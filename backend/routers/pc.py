@@ -27,6 +27,7 @@ from plan_gate import require_pro, require_streamer, get_entitlements, plan_402
 from devices import resolve_device, device_filter
 from hardware import cpu_family as _cpu_family, gpu_family as _gpu_family
 from system_changes import build_change_events, analyze_trend, correlate
+import specs_merge
 
 logger = logging.getLogger("boostpc.pc")
 
@@ -378,6 +379,31 @@ def build(get_current_user):
             raise HTTPException(status_code=404, detail="No specs yet")
         return doc
 
+    # Finestra entro cui un report puo' essere attribuito a un lancio: un sync
+    # completo puo' metterci un paio di minuti su una macchina lenta, ma piu' si
+    # allarga e piu' cresce la probabilita' di attribuire il report sbagliato.
+    _LAUNCH_BIND_WINDOW_S = 600
+
+    async def _bind_launch_device(uid: str, did: str) -> None:
+        """Lega il lancio in attesa al PC che ha appena riportato dati.
+
+        Si lega solo se la richiesta in attesa e' UNA: con due lanci aperti non
+        si puo' dire quale dei due abbia risposto, e attribuirne uno a caso
+        farebbe dire al pulsante "stai guardando il PC sbagliato" a chi non lo
+        sta facendo - cioe' esattamente il messaggio falso che si voleva togliere.
+        """
+        try:
+            taglio = (datetime.now(timezone.utc) - timedelta(seconds=_LAUNCH_BIND_WINDOW_S)).isoformat()
+            aperti = await db.agent_launches.find(
+                {"user_id": uid, "device_id": None, "created_at": {"$gte": taglio}},
+                {"_id": 0, "launch_id": 1}).to_list(3)
+            if len(aperti) != 1:
+                return
+            await db.agent_launches.update_one(
+                {"launch_id": aperti[0]["launch_id"]}, {"$set": {"device_id": did, "bound_at": now_iso()}})
+        except Exception as exc:
+            logger.debug("lancio non associato al device: %s", exc)
+
     @r.post("/agent/report-specs")
     async def report_specs(data: SpecsInput, x_agent_token: str = Header(default=""), x_device: str = Header(default="")):
         rec = await db.agent_tokens.find_one({"token": x_agent_token})
@@ -385,6 +411,8 @@ def build(get_current_user):
             raise HTTPException(status_code=401, detail="Token agent non valido")
         uid = rec["user_id"]
         did = await resolve_device(db, uid, x_device)
+        if did:
+            await _bind_launch_device(uid, did)
         dflt = {"user_id": uid, **({"device_id": did} if did else {})}
         fields = {"user_id": uid, "updated_at": now_iso()}
         if did:
@@ -395,9 +423,18 @@ def build(get_current_user):
             # quindi questo e' l'unico punto in cui esistono insieme vecchio e nuovo.
             prev = await db.pc_specs.find_one(
                 dflt,
-                {"_id": 0, "data": 1, "startup": 1, "services_audit": 1, "startup_done": 1, "services_done": 1})
+                {"_id": 0, "data": 1, "data_meta": 1, "startup": 1, "services_audit": 1,
+                 "startup_done": 1, "services_done": 1})
         if data.data:
-            fields["data"] = data.data
+            # Fondere, non sostituire: una scansione degradata produce meno campi,
+            # e sostituendo quei campi non diventavano vecchi, diventavano vuoti.
+            # `source` viene scritto anche qui: prima lo scriveva solo il form
+            # manuale, quindi dopo un sync il documento dichiarava una
+            # provenienza che non era piu' vera.
+            fields["data"], fields["data_meta"] = specs_merge.merge_specs(
+                (prev or {}).get("data"), (prev or {}).get("data_meta"), data.data,
+                source=specs_merge.SOURCE_AGENT, at=fields["updated_at"])
+            fields["source"] = specs_merge.SOURCE_AGENT
         if data.health is not None:
             fields["health"] = data.health
             _h = compute_health(data.health)
@@ -1107,11 +1144,16 @@ def build(get_current_user):
     async def save_specs(payload: PcSpecsInput, user: dict = Depends(get_current_user)):
         uid = str(user["_id"])
         existing = await db.pc_specs.find_one(await device_filter(db, uid))
-        base = (existing or {}).get("data", {}) if existing else {}
-        merged = {**base, **{k: v for k, v in payload.data.items() if v not in (None, "")}}
+        ora = now_iso()
+        # Stessa politica di fusione del percorso agent: i due percorsi scrivevano
+        # lo stesso documento con semantiche diverse, e una delle due perdeva dati.
+        merged, meta = specs_merge.merge_specs(
+            (existing or {}).get("data"), (existing or {}).get("data_meta"), payload.data,
+            source=payload.source or specs_merge.SOURCE_MANUAL, at=ora)
         await db.pc_specs.update_one(
             await device_filter(db, uid),
-            {"$set": {"user_id": uid, "data": merged, "source": payload.source, "updated_at": now_iso()}},
+            {"$set": {"user_id": uid, "data": merged, "data_meta": meta,
+                      "source": payload.source, "updated_at": ora}},
             upsert=True)
         return await db.pc_specs.find_one(await device_filter(db, uid), {"_id": 0})
 
@@ -1546,6 +1588,39 @@ def build(get_current_user):
         msg = f"{uri_mode}|{ts}".encode("utf-8")
         sig = hmac.new(token.encode("utf-8"), msg, hashlib.sha256).hexdigest()
         uri = f"frameforge://launch?mode={uri_mode}&silent={silent_flag}&ts={ts}&sig={sig}"
-        return {"uri": uri, "mode": mode, "silent": bool(silent_flag), "ts": ts, "expires_in": 60}
+        # Traccia del lancio, per imparare QUALE PC e' l'agent di questo browser.
+        #
+        # Il browser non puo' saperlo da solo: `/pc-specs` legge il device attivo,
+        # che l'utente sceglie a mano e che spesso non e' la macchina davanti a
+        # cui e' seduto. Finora se ne accorgeva solo dopo il timeout. Il legame si
+        # impara per correlazione: il prossimo agent che riporta dati per questo
+        # utente, entro la finestra qui sotto, e' quasi certamente quello appena
+        # lanciato. Non e' una prova - un sync spontaneo puo' cadere nella
+        # finestra - quindi si lega solo quando la richiesta e' UNA sola, e
+        # nell'ambiguita' si preferisce non sapere.
+        launch_id = str(uuid.uuid4())
+        try:
+            await db.agent_launches.insert_one({
+                "launch_id": launch_id, "user_id": str(user["_id"]), "mode": mode,
+                "device_id": None, "created_at": now_iso()})
+        except Exception as exc:
+            logger.debug("traccia del lancio non registrata: %s", exc)
+        return {"uri": uri, "mode": mode, "silent": bool(silent_flag), "ts": ts,
+                "expires_in": 60, "launch_id": launch_id}
+
+    @r.get("/agent/launch/{launch_id}")
+    async def agent_launch_device(launch_id: str, user: dict = Depends(get_current_user)):
+        """Quale PC ha risposto a quel lancio. `device_id` nullo = non ancora, o
+        non e' stato possibile dirlo senza ambiguita'."""
+        rec = await db.agent_launches.find_one(
+            {"launch_id": launch_id, "user_id": str(user["_id"])}, {"_id": 0})
+        if not rec:
+            raise HTTPException(status_code=404, detail="Lancio non trovato")
+        did = rec.get("device_id")
+        nome = None
+        if did:
+            dev = await db.devices.find_one({"user_id": str(user["_id"]), "device_id": did}, {"_id": 0, "name": 1})
+            nome = (dev or {}).get("name") or did
+        return {"launch_id": launch_id, "device_id": did, "name": nome}
 
     return r

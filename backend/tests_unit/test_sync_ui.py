@@ -159,3 +159,52 @@ def test_le_etichette_dei_cambiamenti_stanno_in_un_posto_solo():
     card = _leggi("components", "WhatChangedCard.jsx")
     assert "changeLabel" in card
     assert "const LABELS = {" not in card, "la mappa e' tornata a vivere in due posti"
+
+
+# ---------- provenienza per campo ----------
+
+def test_la_pagina_dichiara_i_campi_non_confermati():
+    """data_meta serve a distinguere "vecchio" da "sparito": se poi la pagina
+    mostra i due casi identici, la distinzione resta solo nel database."""
+    src = _leggi("pages", "MyPc.jsx")
+    assert "function nonConfermato" in src
+    assert "data_meta" in src
+    assert "spec_stale" in src
+
+
+def test_le_chiavi_del_marcatore_esistono_in_entrambe_le_lingue():
+    for chiave in ("spec_stale", "spec_stale_title"):
+        for blocco in _chiavi_mypcpage():
+            assert chiave in blocco, "manca %s in una delle due lingue" % chiave
+
+
+# ---------- il PC di questa postazione ----------
+
+def test_il_lancio_lascia_una_traccia_e_il_report_la_lega():
+    """Il browser non puo' sapere da solo quale PC e' il suo agent: `/pc-specs`
+    legge il device attivo, scelto a mano. Il legame si impara per correlazione."""
+    percorso = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "routers", "pc.py")
+    with open(percorso, encoding="utf-8") as f:
+        src = f.read()
+    assert "agent_launches" in src
+    assert '"launch_id": launch_id' in src
+    assert "_bind_launch_device" in src
+    i = src.index("async def _bind_launch_device")
+    corpo = src[i:src.index("\n    @r.post", i)]
+    assert "len(aperti) != 1" in corpo, \
+        "con due lanci aperti non si puo' dire quale abbia risposto: attribuirne uno a caso rifa' il messaggio falso"
+
+
+def test_la_pagina_impara_e_mette_a_fuoco_il_pc_locale():
+    src = _leggi("pages", "MyPc.jsx")
+    assert "ff_local_device" in src, "il PC locale deve restare noto fra una visita e l'altra"
+    assert "/agent/launch/" in src, "senza leggere chi ha risposto non si impara niente"
+    assert "sync_focus_local" in src
+    i = src.index("beforeLaunch:")
+    prima = src[i:src.index("detectDone:", i)]
+    assert "/activate" in prima, "la messa a fuoco deve avvenire PRIMA del lancio, non dopo il timeout"
+
+
+def test_le_chiavi_della_messa_a_fuoco_esistono_in_entrambe_le_lingue():
+    for blocco in _chiavi_mypcpage():
+        assert "sync_focus_local" in blocco

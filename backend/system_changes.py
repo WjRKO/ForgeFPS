@@ -38,6 +38,52 @@ WATCHED_FIELDS: dict[str, tuple[str, str]] = {
 # Quante voci di avvio elencare per esteso nell'evento (il conteggio resta completo).
 MAX_STARTUP_NAMES = 5
 
+# Versione della rilevazione hardware dell'agent, in `pc_specs.data.specs_schema`.
+# Serve a una cosa sola: distinguere "il valore e' cambiato" da "e' cambiato il
+# modo di misurarlo".
+SPECS_SCHEMA = 2
+
+# Per ogni versione, i campi la cui MISURA e' cambiata rispetto alla precedente.
+#
+# Alla v2 la risoluzione e il refresh hanno smesso di venire da tre insiemi
+# diversi (primo controller / massimo fra i controller / massimo fra i monitor
+# EDID) e vengono dallo schermo primario via EnumDisplaySettings; la velocita'
+# RAM e' passata dal primo modulo al piu' lento; il nome CPU ha perso il padding.
+#
+# Senza questa lista, alla prima sincronizzazione dopo l'aggiornamento ogni PC
+# registrerebbe cambiamenti che non sono mai avvenuti - il caso piu' comune e'
+# "Refresh del monitor: 59 -> 60", perche' WMI arrotondava per difetto. Non
+# sarebbe solo una riga di troppo nella cronologia: `correlate()` incrocia i
+# cambiamenti con l'andamento delle prestazioni, quindi su un PC che sta andando
+# peggio per altri motivi il refresh comparirebbe fra i sospetti. Un dato
+# inventato dentro la funzione che esiste per spiegare i cali.
+REMEASURED_IN: dict[int, tuple[str, ...]] = {
+    2: ("refresh_hz", "resolution", "ram_speed_mhz", "cpu"),
+}
+
+
+def _schema(data: dict | None) -> int:
+    try:
+        return int((data or {}).get("specs_schema") or 1)
+    except (TypeError, ValueError):
+        return 1
+
+
+def remeasured_fields(prev_data: dict | None, new_data: dict | None) -> set[str]:
+    """I campi da non trattare come cambiamenti, perche' e' cambiato il metodo.
+
+    Vale solo nel passaggio DA una versione a una piu' alta, e una volta sola:
+    dal sync successivo entrambi gli snapshot hanno lo stesso schema e ogni
+    differenza torna a essere un cambiamento vero.
+    """
+    vecchio, nuovo = _schema(prev_data), _schema(new_data)
+    if nuovo <= vecchio:
+        return set()
+    saltati: set[str] = set()
+    for versione in range(vecchio + 1, nuovo + 1):
+        saltati.update(REMEASURED_IN.get(versione, ()))
+    return saltati
+
 # Soglia oltre la quale una variazione di performance e' considerata reale e non
 # rumore di misura: i benchmark ripetuti sullo stesso PC ballano di qualche punto.
 REGRESSION_PCT = 5.0
@@ -121,7 +167,8 @@ def build_change_events(prev: dict | None, new_data: dict | None,
     `new_data` / `new_startup` sono i valori in arrivo, gia' normalizzati.
     """
     prev = prev or {}
-    events = diff_specs(prev.get("data"), new_data)
+    saltati = remeasured_fields(prev.get("data"), new_data)
+    events = [e for e in diff_specs(prev.get("data"), new_data) if e["kind"] not in saltati]
     events += diff_startup(prev.get("startup"), new_startup)
     return events
 

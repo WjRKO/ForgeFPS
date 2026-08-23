@@ -973,6 +973,7 @@ function Get-HwNameKey($n) {
 }
 
 function Get-Specs {
+  $__specsT0 = Get-Date
   $s = @{}
   $os = Get-CimInstance Win32_OperatingSystem
   $s.os = $os.Caption; $s.os_build = "$($os.BuildNumber)"
@@ -1248,6 +1249,30 @@ function Get-Specs {
     $dd = Get-CimInstance Win32_DiskDrive | Where-Object { $_.MediaType -match '(?i)Fixed|SSD|Solid' } | Select-Object -First 1
     if ($dd) { $storageSources++ }
   } catch {}
+
+  # Le condizioni in cui la fotografia e' stata scattata.
+  #
+  # Senza, il backend non puo' distinguere "questo PC non ha i sensori" da
+  # "l'agent girava senza privilegi": due dati identici che significano cose
+  # opposte. Serve a tre cose - l'AI advisor smette di leggere una temperatura
+  # assente come "PC freddo", il Laboratorio puo' rifiutare una baseline raccolta
+  # in condizioni diverse dal test, e l'aggregazione di flotta smette di
+  # mescolare scansioni degradate con scansioni pulite, che e' il punto in cui
+  # un dato sbagliato su un PC diventa una raccomandazione sbagliata per tutti.
+  $s.scan_context = @{
+    admin            = [bool](Test-Admin)
+    driver_blocklist = [bool](Test-VulnerableDriverBlocklist)
+    nvidia_smi       = [bool]$nvName
+    agent_version    = "$INSTALLED_VER"
+    duration_s       = [math]::Round(((Get-Date) - $__specsT0).TotalSeconds, 1)
+  }
+
+  # Versione della rilevazione. La legge system_changes.py per NON registrare
+  # come "cambiamento" un campo che e' soltanto misurato meglio di prima: alla
+  # prima sincronizzazione dopo un aggiornamento dell'agent, "Refresh del
+  # monitor: 59 -> 60" non e' successo niente sul PC, e' cambiato il metodo.
+  # Va alzata insieme a REMEASURED_IN quando cambia come si misura un campo.
+  $s.specs_schema = 2
 
   # hw_confidence: quante fonti hanno risposto E se erano d'accordo.
   #

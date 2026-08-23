@@ -212,3 +212,50 @@ def test_cambiamento_molto_dopo_la_misura_e_scartato():
 
 def test_correlate_senza_trend_non_accusa_nessuno():
     assert sc.correlate(None, [_cambio(5, "gpu_driver_version", "high")]) == []
+
+
+# ---------- rimisure: il metodo cambia, l'hardware no ----------
+
+def test_un_campo_misurato_meglio_non_e_un_cambiamento():
+    """Alla v2 il refresh ha smesso di venire dal massimo fra i controller (dove
+    WMI arrotondava per difetto) e viene dallo schermo primario. Al primo sync
+    dopo l'aggiornamento ogni PC avrebbe registrato "59 -> 60" senza che sul PC
+    fosse successo niente - e `correlate()` avrebbe messo quel finto cambiamento
+    fra i sospetti di un eventuale calo di prestazioni."""
+    prev = {"data": {"refresh_hz": "59", "gpu_driver_version": "566.36"}}
+    nuovo = {"refresh_hz": "60", "gpu_driver_version": "572.16", "specs_schema": 2}
+    tipi = {e["kind"] for e in sc.build_change_events(prev, nuovo, None)}
+    assert "refresh_hz" not in tipi
+    assert "gpu_driver_version" in tipi, "i cambiamenti veri devono passare lo stesso"
+
+
+def test_dal_sync_dopo_il_refresh_torna_un_cambiamento_vero():
+    """La soppressione vale una volta sola: quando entrambi gli snapshot hanno
+    lo stesso schema, una differenza e' di nuovo una differenza."""
+    prev = {"data": {"refresh_hz": "240", "specs_schema": 2}}
+    nuovo = {"refresh_hz": "60", "specs_schema": 2}
+    tipi = {e["kind"] for e in sc.build_change_events(prev, nuovo, None)}
+    assert "refresh_hz" in tipi
+
+
+def test_senza_schema_si_assume_la_versione_uno():
+    """Gli snapshot scritti prima che lo schema esistesse non hanno il campo."""
+    assert sc._schema(None) == 1
+    assert sc._schema({}) == 1
+    assert sc._schema({"specs_schema": "2"}) == 2
+    assert sc._schema({"specs_schema": "boh"}) == 1
+
+
+def test_l_agent_dichiara_lo_schema_che_il_backend_si_aspetta():
+    """Se l'agent smette di stampare `specs_schema`, la soppressione non scatta
+    e il falso segnale torna: i due numeri devono restare allineati."""
+    import ps_agent
+    assert "$s.specs_schema = %d" % sc.SPECS_SCHEMA in ps_agent.PS_SCRIPT
+
+
+def test_una_versione_nuova_porta_con_se_i_campi_rimisurati():
+    """Alzare SPECS_SCHEMA senza dire quali campi cambiano metodo rende la
+    protezione silenziosamente inutile."""
+    for versione in range(2, sc.SPECS_SCHEMA + 1):
+        assert sc.REMEASURED_IN.get(versione), \
+            "SPECS_SCHEMA=%d ma REMEASURED_IN non dice cosa e' cambiato nella v%d" % (sc.SPECS_SCHEMA, versione)
