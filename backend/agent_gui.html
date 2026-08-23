@@ -1784,8 +1784,18 @@
     return 2; // default
   }
 
-  // Simple time/reboot detection from various text fields
+  // Il riavvio e' un campo del catalogo, non una frase da riconoscere.
+  //
+  // Prima si deduceva cercando "richiede riavvio" dentro desc/impact/problem/
+  // reason: funzionava perche' quei quattro tweak lo dicevano con quelle parole,
+  // e sarebbe smesso di funzionare alla prima riscrittura in "serve un riavvio".
+  // Da li' dipendono il filtro "No riavvio", la pillola del tempo, il conteggio
+  // del riepilogo e il dialogo finale col bottone "Riavvia ora": una virgola
+  // spostata li spegneva tutti in silenzio.
+  //
+  // La regex resta come ripiego per gli agent che inviano un DTO senza il campo.
   function needsReboot(t) {
+    if (typeof t.requires_reboot === "boolean") return t.requires_reboot;
     const s = ((t.desc || "") + " " + (t.impact || "") + " " + (t.problem || "") + " " + (t.reason || "")).toLowerCase();
     return /richiede\s+riavvio|require[s]?\s+reboot|riavvio\s+richiest/i.test(s);
   }

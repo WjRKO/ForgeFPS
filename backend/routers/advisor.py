@@ -15,6 +15,7 @@ from models import ChatMessageInput
 import hardware
 import fleet_evidence
 import lab_stats
+import tweak_catalog
 from plan_gate import require_pro
 
 logger = logging.getLogger("boostpc.advisor")
@@ -31,13 +32,61 @@ COMMUNITY_MIN_APPLIERS = 2
 
 # ---------------- Gameplay Doctor (strati 1-2: firme frametime + correlatore) ----------------
 
-_GD_GUI_TWEAKS = (
-    "power=Piano energetico prestazioni massime; gaming=Boost gaming (Game Mode, HAGS, Game DVR off); "
-    "priority=Priorita GPU/CPU ai giochi (MMCSS); timer=Timer resolution stabile; fse=Fullscreen optimizations off; "
-    "mpo=MPO off; mouse=Precisione puntatore off; network=Ottimizzazione rete gaming; dns=DNS veloce; "
-    "qos=QoS/throttling rete off; sysmain=SysMain off; bgapps=App in background off; debloat=Debloat servizi; "
-    "clean=Pulizia file temporanei; visual=Effetti visivi minimi"
-)
+# Il catalogo che il modello puo' citare in `gui_tweak`. Era una stringa scritta
+# a mano con 15 dei 35 tweak, e i 20 assenti erano assenti per dimenticanza, non
+# per scelta: fra questi `gpu_msi` e `standby_clear`, cioe' i due tweak che
+# curano micro-stutter e latenza DPC, che sono due delle diagnosi che questo
+# stesso prompt deve produrre. Diagnosi giusta, fix non proponibile.
+_GD_GUI_TWEAKS = tweak_catalog.advisor_catalog_line()
+
+_GD_TWEAK_NAMES = {t["id"]: t["name"] for t in tweak_catalog.TWEAKS}
+
+
+def _gd_risolvi_tweak(passo):
+    """`gui_tweak` e' un id scelto dal modello: qui diventa un tweak che esiste.
+
+    Nessuno lo controllava. Un id inventato, o rimasto indietro dopo una
+    rinomina, finiva nel referto salvato e da li' sull'etichetta del bottone,
+    dove all'utente veniva mostrata una sigla che non corrisponde a niente.
+    Un id ignoto vale quanto nessun id, quindi diventa None e il bottone non
+    viene disegnato: il consiglio testuale resta, la promessa che non si puo'
+    mantenere no.
+
+    Per gli id validi il referto si porta dietro anche il nome, cosi' il bottone
+    dice "Piano energetico prestazioni massime" invece di "power". Il nome e'
+    quello del catalogo, in italiano anche in inglese: e' gia' cosi' che la
+    pagina Profili mostra i tweak, e un id grezzo non e' piu' internazionale,
+    e' solo piu' opaco.
+    """
+    if not isinstance(passo, dict):
+        return
+    tid = str(passo.get("gui_tweak") or "").strip()
+    nome = _GD_TWEAK_NAMES.get(tid)
+    passo["gui_tweak"] = tid if nome else None
+    passo["gui_tweak_name"] = nome
+
+
+def _gd_normalizza(report):
+    """Risolve ogni `gui_tweak` del referto, primario e alternativi.
+
+    Vale sia in scrittura sia in lettura: i referti salvati prima di questo
+    controllo hanno id mai verificati, e riaprirne uno non deve rimettere in
+    pagina un bottone che mente.
+    """
+    if not isinstance(report, dict):
+        return report
+    issues = report.get("issues")
+    for issue in issues if isinstance(issues, list) else []:
+        if not isinstance(issue, dict):
+            continue
+        fix = issue.get("fix")
+        if not isinstance(fix, dict):
+            continue
+        _gd_risolvi_tweak(fix.get("primary"))
+        alternative = fix.get("alternatives")
+        for alt in alternative if isinstance(alternative, list) else []:
+            _gd_risolvi_tweak(alt)
+    return report
 
 
 def _gd_parse_ts(v):
@@ -853,7 +902,7 @@ def build(get_current_user):
                 raise HTTPException(status_code=500, detail="AI non ha restituito JSON valido")
         doc = {
             "id": str(uuid.uuid4()), "user_id": uid,
-            "stats": stats, "report": report,
+            "stats": stats, "report": _gd_normalizza(report),
             "timeline": timeline, "baseline": baseline, "resolved": resolved,
             "created_at": now_iso(),
         }
@@ -864,6 +913,8 @@ def build(get_current_user):
     @r.get("/gameplay-doctor/latest")
     async def gameplay_doctor_latest(user: dict = Depends(get_current_user)):
         row = await db.gameplay_reports.find_one({"user_id": str(user["_id"])}, {"_id": 0}, sort=[("created_at", -1)])
+        if isinstance(row, dict):
+            row["report"] = _gd_normalizza(row.get("report"))
         return {"report": row}
 
     @r.get("/planned-actions")

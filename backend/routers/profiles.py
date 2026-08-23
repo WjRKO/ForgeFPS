@@ -2,47 +2,16 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 
+import tweak_catalog
 from database import db, now_iso
 from models import ProfileInput
 
-# Canonical tweak catalogue (ids match ps_agent.py $script:TWEAKS)
-TWEAK_CATALOG = [
-    {"id": "power", "name": "Piano energetico prestazioni massime", "cat": "gaming"},
-    {"id": "gaming", "name": "Boost gaming (Game Mode, HAGS, Game DVR off)", "cat": "gaming"},
-    {"id": "priority", "name": "Priorità GPU/CPU ai giochi (MMCSS)", "cat": "gaming"},
-    {"id": "mpo", "name": "Disabilita MPO (fix schermo nero OBS)", "cat": "gaming"},
-    {"id": "gpu_msi", "name": "GPU: MSI mode ON (latenza DPC)", "cat": "gaming"},
-    {"id": "amd_ulps", "name": "AMD: disabilita ULPS", "cat": "gaming"},
-    {"id": "nvidia_tel", "name": "NVIDIA: disabilita telemetria", "cat": "gaming"},
-    {"id": "hibernate", "name": "Disabilita ibernazione", "cat": "gaming"},
-    {"id": "mouse", "name": "Accelerazione mouse OFF (raw input)", "cat": "input"},
-    {"id": "timer", "name": "Timer resolution globale", "cat": "input"},
-    {"id": "usb", "name": "USB power management OFF", "cat": "input"},
-    {"id": "stickykeys", "name": "Sticky/Filter/Toggle Keys OFF", "cat": "input"},
-    {"id": "startupdelay", "name": "Startup delay app ridotto", "cat": "input"},
-    {"id": "network", "name": "Rete: Nagle OFF + TCP tuning", "cat": "network"},
-    {"id": "dns", "name": "DNS veloci (Cloudflare)", "cat": "network"},
-    {"id": "qos", "name": "Rimuovi 20% banda riservata QoS", "cat": "network"},
-    {"id": "deliveryopt", "name": "Delivery Optimization P2P OFF", "cat": "network"},
-    {"id": "obs_priority", "name": "OBS ad alta priorità", "cat": "network"},
-    {"id": "clean", "name": "Pulizia temp + cache Windows Update", "cat": "system"},
-    {"id": "visual", "name": "Effetti visivi: modalità prestazioni", "cat": "system"},
-    {"id": "telemetry", "name": "Telemetria (DiagTrack) OFF", "cat": "system"},
-    {"id": "ads", "name": "Suggerimenti/ads di Windows OFF", "cat": "system"},
-    {"id": "bgapps", "name": "App in background OFF (globale)", "cat": "system"},
-    {"id": "gamebar_rec", "name": "Xbox Game Bar recording OFF", "cat": "system"},
-    {"id": "debloat", "name": "Debloat app superflue (UWP)", "cat": "system"},
-    {"id": "search_index", "name": "Windows Search indexing OFF", "cat": "system"},
-    {"id": "fse", "name": "Fullscreen Optimizations OFF", "cat": "gaming"},
-    {"id": "power_throttling", "name": "Power throttling CPU OFF", "cat": "gaming"},
-    {"id": "standby_clear", "name": "Svuota RAM standby (istantaneo)", "cat": "gaming"},
-    {"id": "nic_power", "name": "Scheda di rete a piena potenza", "cat": "network"},
-    {"id": "paging_exec", "name": "Kernel sempre in RAM (16GB+)", "cat": "system"},
-    {"id": "sysmain", "name": "SysMain/Superfetch OFF (solo SSD)", "cat": "system"},
-    {"id": "trim", "name": "Verifica TRIM SSD attivo", "cat": "system"},
-    {"id": "ntfs", "name": "NTFS: last-access timestamp OFF", "cat": "system"},
-    {"id": "edge_preload", "name": "Edge preload/background OFF", "cat": "system"},
-]
+# Il catalogo non si ricopia: e' quello di tweak_catalog.py, l'unico posto in
+# cui id, nome e categoria di un tweak esistono. Questa lista ne era una copia a
+# mano che aveva gia' preso strade sue (qui `mpo` si chiamava "fix schermo nero
+# OBS", nell'agent "Multi-Plane Overlay"), e i profili di gioco degli utenti
+# sono fatti di quegli id: uno sbagliato qui e' un tweak che non viene applicato.
+TWEAK_CATALOG = tweak_catalog.web_catalog()
 
 _FPS_COMP = ["power", "gaming", "priority", "mpo", "gpu_msi", "amd_ulps", "nvidia_tel", "hibernate",
              "mouse", "timer", "usb", "stickykeys", "network", "qos", "bgapps", "gamebar_rec",
