@@ -42,6 +42,15 @@ function Get-BackupPath {
   return ''
 }
 $script:PROFILE = @(__PROFILE_IDS__)
+
+# Cosa NON e' un gioco anche se disegna sullo schermo.
+#
+# La lista esisteva in due copie dentro i rilevatori (finestra in primo piano e
+# gioco a schermo intero) e NON era applicata a Get-Fps, che sceglie in base a
+# chi presenta piu' frame: senza filtro, con nessun gioco aperto, il vincitore
+# era semplicemente il browser - e da li' finiva nel campo `game` del campione,
+# nella card degli FPS e perfino fra i "giochi rilevati" dei trofei.
+$script:NON_GIOCHI = '(?i)^(explorer|dwm|powershell|pwsh|WindowsTerminal|cmd|chrome|msedge|firefox|opera|brave|Code|devenv|obs64|obs32|Taskmgr|SearchHost|ShellExperienceHost|ApplicationFrameHost|LockApp|vlc|Photos|Netflix|Spotify|Discord|Teams|Slack|WhatsApp|Skype|OneDrive|GoogleDriveFS|Dropbox|WINWORD|EXCEL|POWERPNT|Acrobat|SnippingTool|Notepad|Notepad\+\+|steam|steamwebhelper|EpicGamesLauncher|GalaxyClient|Battle\.net|EADesktop|UbisoftConnect|msedgewebview2|WebView2|forgefps-agent)$'
 $INSTALLED_VER = '__INSTALLED_AGENT_VER__'
 $LATEST_VER    = '__LATEST_AGENT_VER__'
 $AGENT_DL_URL  = '__AGENT_DL_URL__'
@@ -2231,8 +2240,7 @@ public static class FFGDWin {
     $gp = [uint32]0; [void][FFGDWin]::GetWindowThreadProcessId($h, [ref]$gp)
     $p = Get-Process -Id $gp -ErrorAction SilentlyContinue
     if (-not $p) { return $null }
-    $skipRe = '(?i)^(explorer|dwm|powershell|pwsh|WindowsTerminal|cmd|chrome|msedge|firefox|opera|brave|Code|devenv|obs64|obs32|Taskmgr|SearchHost|ShellExperienceHost|ApplicationFrameHost|LockApp|vlc|Photos|Netflix|Spotify|Discord|Teams|Slack|WhatsApp|Skype|OneDrive|GoogleDriveFS|Dropbox|WINWORD|EXCEL|POWERPNT|Acrobat|SnippingTool|Notepad|Notepad\+\+|steam|steamwebhelper|EpicGamesLauncher|GalaxyClient|Battle\.net|EADesktop|UbisoftConnect)$'
-    if ($p.Name -match $skipRe) { return $null }
+        if ($p.Name -match $script:NON_GIOCHI) { return $null }
     $exeName = "$($p.Name).exe".ToLower()
     $map = Get-InstalledGamesMap
     if ($map.ContainsKey($exeName)) {
@@ -2258,16 +2266,23 @@ public static class FFGDWin {
   } catch { return $null }
 }
 
-function Get-CurrentGame {
+function Get-CurrentGame($fps = $null, $fpsGiaLetto = $false) {
   # Orchestratore: Steam registry > Foreground fullscreen > PresentMon (Get-Fps).
   # Ritorna @{name, appid?, source, exe?, is_fullscreen?} o $null.
+  #
+  # `$fps` e' il risultato di Get-Fps quando il chiamante lo ha GIA' letto.
+  # Get-Fps consuma le righe nuove di PresentMon e sposta il segnalibro: se lo
+  # chiamasse anche questa funzione, il chiamante troverebbe il vuoto. Era il
+  # caso del ciclo del monitor, dove il rilevatore teneva solo il nome del gioco
+  # e buttava FPS, latenza e frametime che sarebbero dovuti finire nel campione.
   $g = Get-SteamRunningGame
   if ($g) { return $g }
   $g = Get-ForegroundGame
   if ($g) { return $g }
   # PresentMon fallback: se sta gia' catturando FPS, quel processo E' un gioco.
   try {
-    $f = Get-Fps
+    $f = $fps
+    if (-not $fpsGiaLetto) { $f = Get-Fps }
     if ($f -and $f.game -and $f.fps -ge 10) {
       $exeName = "$($f.game).exe".ToLower()
       $map = Get-InstalledGamesMap
@@ -2284,7 +2299,7 @@ function Get-CurrentGame {
   return $null
 }
 
-function Get-TelemetrySample {
+function Get-TelemetrySample($fps = $null, $fpsGiaLetto = $false) {
   $s = @{ ts = (Get-Date).ToString('o') }
   # Contatore di prestazione invece di Win32_Processor.LoadPercentage: quello e'
   # aggiornato di rado e mediato su una finestra che non controlliamo, ed e' il
@@ -2324,7 +2339,7 @@ function Get-TelemetrySample {
   }
   # v0.7.7: Universal Game Detector — Steam registry / foreground fullscreen / PresentMon
   try {
-    $cg = Get-CurrentGame
+    $cg = Get-CurrentGame $fps $fpsGiaLetto
     if ($cg) {
       $s.game_name = $cg.name
       if ($cg.appid) { $s.steam_appid = $cg.appid }
@@ -2335,6 +2350,19 @@ function Get-TelemetrySample {
   } catch {}
   return $s
 }
+function Add-FpsToSample($s, $f) {
+  # Il travaso stava scritto dentro il ciclo del monitor; ora serve anche a
+  # Push-LiveSample, e due copie di questo elenco di campi divergerebbero.
+  if (-not $f) { return }
+  $s.fps = $f.fps; $s.game = $f.game
+  if ($null -ne $f.latency_ms) { $s.latency_ms = $f.latency_ms }
+  if ($f.gd) {
+    $s.ft_p99 = $f.gd.ft_p99; $s.ft_worst = $f.gd.ft_worst; $s.hitches = $f.gd.hitches; $s.pace_dev = $f.gd.pace_dev
+    $s.ft_cv = $f.gd.ft_cv; $s.hitch_thr = $f.gd.hitch_thr
+    if ($f.gd.hist) { $s.ft_hist = $f.gd.hist; $s.ft_n = $f.gd.hist_n }
+  }
+}
+
 function Send-Telemetry($sample) {
   $body = @{ sample = $sample } | ConvertTo-Json -Depth 5 -Compress
   try {
@@ -2349,14 +2377,33 @@ function Push-LiveSample {
   # Lightweight sample sent to cloud when Live Sync toggle is ON.
   # Reuses Get-TelemetrySample which already handles CPU/GPU/RAM/temps via WMI+LHM.
   try {
-    $sample = Get-TelemetrySample
-    if ($sample) { Send-Telemetry $sample | Out-Null }
+    $f = Get-Fps
+    $sample = Get-TelemetrySample $f $true
+    if ($sample) {
+      Add-FpsToSample $sample $f
+      Send-Telemetry $sample | Out-Null
+    }
   } catch {}
 }
 
 # ---------------- FPS via PresentMon (opzionale, richiede admin) ----------------
-$script:PM_EXE = Join-Path $env:TEMP 'PresentMon.exe'
-$script:PM_CSV = Join-Path $env:TEMP 'boostpc_fps.csv'
+# PresentMon vive in %APPDATA%\FrameForge, non in %TEMP%.
+#
+# In %TEMP% ci scrive qualunque processo che gira come l'utente, e il codice
+# vecchio faceva `if (-not (Test-Path $PM_EXE)) { scarica }` e poi eseguiva: un
+# file gia' presente con quel nome veniva lanciato senza un solo controllo, e se
+# l'agent era elevato veniva lanciato elevato. Bastava depositare un
+# PresentMon.exe li' dentro. E' la stessa ragione per cui il backup non sta in
+# %TEMP% (vedi in cima allo script): quella cartella non e' un posto sicuro.
+#
+# Non basta spostarlo - anche %APPDATA% e' scrivibile dall'utente - quindi si
+# esegue SOLO un file di cui conosciamo l'impronta, registrata da noi quando lo
+# abbiamo scaricato. Chi puo' riscrivere sia l'exe sia il file dell'impronta puo'
+# gia' riscrivere l'agent stesso: la difesa che si guadagna e' contro il file di
+# passaggio in una cartella condivisa, che e' il caso reale.
+$script:PM_EXE = Join-Path $FF_HOME 'PresentMon.exe'
+$script:PM_SHA = Join-Path $FF_HOME 'presentmon.sha256'
+$script:PM_CSV = Join-Path $FF_HOME 'boostpc_fps.csv'
 $script:PM_OUT = Join-Path $env:TEMP 'boostpc_pm_out.log'
 $script:PM_ERR = Join-Path $env:TEMP 'boostpc_pm_err.log'
 $script:PM_ON  = $false
@@ -2431,6 +2478,49 @@ function Enable-FpsPermission {
   } catch { return $false }
 }
 
+function Get-FileSha256($path) {
+  try { return (Get-FileHash -Path $path -Algorithm SHA256 -ErrorAction Stop).Hash.ToUpper() } catch { return '' }
+}
+
+function Confirm-PresentMon {
+  # Garantisce che l'exe da lanciare sia quello che abbiamo scaricato noi.
+  # Prima si eseguiva qualunque file si trovasse al percorso atteso. Qui invece
+  # l'impronta viene registrata al momento del download e ricontrollata a ogni
+  # avvio: un file diverso - sostituito, troncato a meta' da un download
+  # interrotto, o messo li' da qualcun altro - non viene eseguito, viene
+  # ributtato via e riscaricato.
+  $atteso = ''
+  if (Test-Path $script:PM_SHA) { try { $atteso = (Get-Content $script:PM_SHA -Raw).Trim().ToUpper() } catch {} }
+
+  if ((Test-Path $script:PM_EXE) -and $atteso) {
+    if ((Get-FileSha256 $script:PM_EXE) -eq $atteso) { return $true }
+    Say-Warn '   PresentMon non corrisponde a quello scaricato: lo sostituisco.' 'FPS'
+  }
+  Remove-Item $script:PM_EXE -Force -ErrorAction SilentlyContinue
+
+  Say-Info '   Scarico PresentMon...' 'FPS'
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest $script:PM_URL -OutFile $script:PM_EXE -UseBasicParsing
+  } catch { Say-Warn ('   Download PresentMon fallito: ' + $_.Exception.Message) 'FPS'; return $false }
+  if (-not (Test-Path $script:PM_EXE)) { Say-Warn '   PresentMon non scaricato.' 'FPS'; return $false }
+
+  $impronta = Get-FileSha256 $script:PM_EXE
+  if (-not $impronta) { Say-Warn '   Impronta di PresentMon non calcolabile: non lo eseguo.' 'FPS'; return $false }
+  Set-Content -Path $script:PM_SHA -Value $impronta -Encoding ASCII
+
+  # La firma non decide se eseguire - se un giorno la release uscisse non
+  # firmata la cattura FPS smetterebbe di funzionare per tutti senza che nessuno
+  # capisca perche' - ma viene detta, perche' e' l'informazione che serve a
+  # capire cosa si sta eseguendo.
+  try {
+    $sig = Get-AuthenticodeSignature $script:PM_EXE
+    if ($sig.Status -eq 'Valid') { Say-Info ('   PresentMon firmato da: ' + $sig.SignerCertificate.Subject.Split(',')[0]) 'FPS' }
+    else { Say-Warn ('   PresentMon senza firma valida (' + $sig.Status + '): scaricato da ' + $script:PM_URL) 'FPS' }
+  } catch {}
+  return $true
+}
+
 function Start-Fps {
   $cap = Test-FpsCapable
   if ($cap -eq 'relogon') {
@@ -2441,13 +2531,7 @@ function Start-Fps {
     Say-Warn '   Cattura FPS non disponibile: apri una volta la GUI FrameForge (doppio click su forgefps-agent.exe -> Ottimizza, con conferma amministratore) per attivare i permessi in automatico, poi riavvia il PC.' 'FPS'
     return
   }
-  if (-not (Test-Path $script:PM_EXE)) {
-    Say-Info '   Scarico PresentMon (una volta sola)...' 'FPS'
-    try {
-      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-      Invoke-WebRequest $script:PM_URL -OutFile $script:PM_EXE -UseBasicParsing
-    } catch { Say-Warn ('   Download PresentMon fallito: ' + $_.Exception.Message) 'FPS'; return }
-  }
+  if (-not (Confirm-PresentMon)) { return }
   Remove-Item $script:PM_CSV, $script:PM_OUT, $script:PM_ERR -ErrorAction SilentlyContinue
   try {
     $script:PM_PROC = Start-Process -FilePath $script:PM_EXE `
@@ -2524,7 +2608,13 @@ function Get-Fps {
     }
   }
   if ($byApp.Count -eq 0) { return $null }
-  $top = $byApp.GetEnumerator() | Sort-Object { $_.Value.n } -Descending | Select-Object -First 1
+  # Chi presenta di piu' non e' automaticamente un gioco: PresentMon riporta ogni
+  # processo che disegna, browser e overlay compresi. Se non resta niente non ci
+  # sono FPS di gioco da riportare - che e' la risposta giusta, non un ripiego
+  # sul primo processo disponibile.
+  $giochi = @($byApp.GetEnumerator() | Where-Object { ($_.Key -replace '\.exe$', '') -notmatch $script:NON_GIOCHI })
+  if ($giochi.Count -eq 0) { return $null }
+  $top = $giochi | Sort-Object { $_.Value.n } -Descending | Select-Object -First 1
   $avg = $top.Value.sum / $top.Value.n
   if ($avg -le 0) { return $null }
   $lat = if ($top.Value.ln -gt 0) { [int]([math]::Round($top.Value.lsum / $top.Value.ln)) } else { $null }
@@ -2533,6 +2623,14 @@ function Get-Fps {
   # sessione (60 bucket) per 1% / 0.1% low ESATTI lato backend.
   $gd = $null
   $fr = $top.Value.fr
+  # L'istogramma cumulativo serve a calcolare 1% e 0.1% low su tutta la sessione,
+  # ma i frametime di due applicazioni diverse non stanno nella stessa
+  # distribuzione: con un gioco e un video aperti insieme il vincitore cambiava
+  # di secondo in secondo e le due nuvole finivano mescolate.
+  if ($script:GD_APP -ne $top.Key) {
+    $script:GD_APP = $top.Key
+    $script:GD_HIST = $null
+  }
   if ($fr -and $fr.Count -ge 10) {
     # Istogramma a 306 bucket (stessa scala del Lab e di lab_stats.py). Quello
     # a 1 ms usato prima aveva senso a 60 FPS, ma a 200 FPS un frame dura 5 ms:
@@ -5159,16 +5257,14 @@ if ($MODE -eq 'monitor') {
   $noFpsCount = 0
   try {
     while ($true) {
-      $s = Get-TelemetrySample
+      # Una lettura sola per giro, e passata a chi serve: Get-Fps svuota cio'
+      # che legge, quindi la seconda chiamata nello stesso secondo trova il
+      # vuoto. Prima ne partivano due, e il rilevatore del gioco - che chiama la
+      # prima - teneva solo il nome e buttava FPS, latenza e frametime.
       $f = Get-Fps
+      $s = Get-TelemetrySample $f $true
       if ($f) {
-        $s.fps = $f.fps; $s.game = $f.game
-        if ($null -ne $f.latency_ms) { $s.latency_ms = $f.latency_ms }
-        if ($f.gd) {
-          $s.ft_p99 = $f.gd.ft_p99; $s.ft_worst = $f.gd.ft_worst; $s.hitches = $f.gd.hitches; $s.pace_dev = $f.gd.pace_dev
-          $s.ft_cv = $f.gd.ft_cv; $s.hitch_thr = $f.gd.hitch_thr
-          if ($f.gd.hist) { $s.ft_hist = $f.gd.hist; $s.ft_n = $f.gd.hist_n }
-        }
+        Add-FpsToSample $s $f
         $noFpsCount = 0
       }
       elseif ($script:PM_ON) { $noFpsCount++; if ($noFpsCount -eq 10) { Show-FpsDiag } }
@@ -5254,8 +5350,7 @@ public static class FFWin {
       $gp = [uint32]0; [void][FFWin]::GetWindowThreadProcessId($h, [ref]$gp)
       $p = Get-Process -Id $gp -ErrorAction SilentlyContinue
       if (-not $p) { return $null }
-      $skipRe = 'explorer|dwm|powershell|pwsh|WindowsTerminal|cmd|chrome|msedge|firefox|opera|brave|Code|devenv|obs64|obs32|Taskmgr|SearchHost|ShellExperienceHost|ApplicationFrameHost|LockApp|vlc|Photos|Netflix|Spotify'
-      if ($p.Name -match $skipRe) { return $null }
+            if ($p.Name -match $script:NON_GIOCHI) { return $null }
       return $p
     } catch { return $null }
   }

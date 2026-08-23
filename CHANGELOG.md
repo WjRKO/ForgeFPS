@@ -9,6 +9,85 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 
 _Prossime feature in sviluppo — vedi `/app/memory/ROADMAP.md`._
 
+### Security — l'agent non esegue piu' un binario che non ha messo lui
+
+`Start-Fps` scaricava PresentMon in `%TEMP%\PresentMon.exe` e lo lanciava, con
+un solo controllo: se il file esiste, non riscaricarlo. Quindi un file **gia'
+presente** con quel nome veniva eseguito senza verifiche — e con l'agent elevato,
+eseguito elevato. In `%TEMP%` scrive qualunque processo che gira come l'utente:
+e' la stessa ragione per cui il backup dell'agent non sta li', scritta nei
+commenti in cima allo script e mai applicata a questo caso.
+
+- L'eseguibile vive ora in `%APPDATA%\FrameForge` accanto a backup e journal.
+- Si esegue **solo** il file di cui conosciamo l'impronta, registrata da noi al
+  momento del download e ricontrollata a ogni avvio: un file diverso — sostituito,
+  o troncato da un download interrotto — viene rimosso e riscaricato.
+- La firma Authenticode viene **raccontata ma non decide**: se una release
+  uscisse non firmata, un blocco spegnerebbe la cattura FPS per tutti senza che
+  nessuno capisca perche'.
+
+Limite dichiarato nel codice: chi puo' riscrivere sia l'exe sia il file
+dell'impronta puo' gia' riscrivere l'agent. La difesa che si guadagna e' contro
+il file di passaggio in una cartella condivisa, che e' il caso reale.
+
+### Fixed — lo Stop del monitor riguarda un PC, non l'account
+
+`monitor_control` era indicizzato sul solo `user_id` mentre la telemetria era
+gia' salvata per device: premere Stop per il desktop fermava **anche il
+portatile**, e avviare il monitor sul portatile azzerava il flag che il desktop
+stava per leggere.
+
+E il flag non si spegneva quando l'agent lo eseguiva: lo azzerava solo
+`/monitor/reset`, chiamato dalla sola pagina Live. Chi riavviava il monitor dal
+link `frameforge://` copiato o dal comando manuale — due strade che la pagina
+stessa offre — vedeva la finestra aprirsi e **chiudersi al primo giro**, senza
+spiegazioni. Ora il segnale si spegne quando viene consegnato.
+
+### Fixed — il gioco mostrato non era sempre quello misurato
+
+Tre difetti distinti nella catena che porta dal monitor alla card del gioco.
+
+- **Il rilevatore mangiava i frame.** `Get-Fps` consuma le righe nuove di
+  PresentMon e sposta il segnalibro, e il ciclo del monitor lo chiamava **due
+  volte**: la prima dentro `Get-CurrentGame`, che teneva solo il nome del gioco e
+  buttava FPS, latenza e frametime; la seconda trovava il vuoto. Nel ramo in cui
+  il rilevatore arriva a PresentMon — gioco non-Steam, o non riconosciuto a
+  schermo intero, caso sistematico per chi gioca su un monitor secondario piu'
+  piccolo del primario — il campione partiva con il nome del gioco e **senza una
+  sola misura**. Ora si legge una volta per giro e il risultato viene passato.
+- **Chi disegna di piu' non e' automaticamente un gioco.** `Get-Fps` sceglieva il
+  processo con piu' frame senza alcun filtro: senza giochi aperti il vincitore
+  era il browser, e finiva nel campo `game`, nella card degli FPS e fra i
+  «giochi rilevati» dei trofei. La lista per escluderli esisteva gia' in due
+  copie dentro gli altri rilevatori: ora e' una sola e vale anche qui. Se non
+  resta nessun gioco la risposta e' «niente FPS», non «il primo processo».
+- **L'istogramma cumulativo mescolava applicazioni diverse.** Serve a calcolare
+  1% e 0.1% low sulla sessione, ma i frametime di un gioco e di un video non
+  stanno nella stessa distribuzione: ora si azzera quando cambia l'applicazione.
+- La card dichiara quando **nome e misure non vengono dallo stesso processo**:
+  «Gli FPS mostrati sono di chrome, non di questo gioco».
+
+### Changed — cosa costa un secondo di monitoraggio
+
+- `/api/pc-telemetry` leggeva l'intero documento — fino a **1800 campioni** — per
+  restituirne 60, una volta al secondo per ogni scheda Live aperta. Ora il taglio
+  e' nella proiezione (`$slice`), come si fa gia' in `/devices/compare`.
+- Il nome del PC per gli alert termici veniva cercato nel database **prima** di
+  guardare le soglie: una query al secondo per una stringa che serve quando un
+  alert scatta davvero, cioe' quasi mai.
+- Indici per `monitor_control` e `alert_settings`, interrogate a ogni campione, e
+  per `agent_launches`, che in piu' ora **scade da sola**. Il TTL sta su un campo
+  di tipo data: su una stringa ISO un indice TTL non da' errore, semplicemente
+  non cancella niente.
+- La pagina Live rallenta a un sondaggio ogni 5 secondi quando il monitor e'
+  fermo: una scheda dimenticata aperta faceva 3.600 richieste all'ora per non
+  mostrare nulla. E l'insieme dei campioni gia' visti, che cresceva di un
+  elemento al secondo senza essere mai potato, ora ha un tetto.
+- Il tetto dei campioni conservati ha un nome e una spiegazione: a un campione al
+  secondo sono trenta minuti, ed e' anche il limite di cio' che il Gameplay
+  Doctor puo' analizzare, perche' legge da li'.
+
+
 ### Fixed — misurare meglio un campo non e' vederlo cambiare
 
 Il fix sulla precisione cambia il **valore** di campi che `system_changes.py`

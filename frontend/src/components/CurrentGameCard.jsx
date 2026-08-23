@@ -20,7 +20,18 @@ const SOURCE_LABEL = {
   presentmon: "DX/VK",
 };
 
-export default function CurrentGameCard({ appid, gameName, source, exe, fullscreen }) {
+// Il nome del gioco e gli FPS arrivano da due catene indipendenti: il
+// rilevatore (registro Steam / finestra in primo piano / mappa dei giochi
+// installati) e PresentMon, che riporta chi disegna piu' frame. Quando non
+// coincidono la pagina mostrava il nome di un gioco e i numeri di un altro
+// processo, senza che niente lo segnalasse. Il confronto onesto e' fra due nomi
+// di eseguibile: `exe` dal rilevatore, `fpsApp` da PresentMon.
+const stessoProcesso = (a, b) => {
+  const n = (x) => String(x || "").toLowerCase().replace(/\.exe$/, "").trim();
+  return !n(a) || !n(b) || n(a) === n(b);
+};
+
+export default function CurrentGameCard({ appid, gameName, source, exe, fullscreen, fpsApp }) {
   const { t } = useTranslation();
   const [info, setInfo] = useState(null);
 
@@ -35,6 +46,7 @@ export default function CurrentGameCard({ appid, gameName, source, exe, fullscre
 
   if (!gameName) return null;
   const displayName = info?.name || gameName;
+  const discorde = !stessoProcesso(exe, fpsApp);
   const sourceLabel = SOURCE_LABEL[source] || (source || "").toUpperCase();
 
   return (
@@ -96,6 +108,11 @@ export default function CurrentGameCard({ appid, gameName, source, exe, fullscre
               <span className="font-mono text-zinc-600">{exe}.exe</span>
             )}
           </div>
+          {discorde && (
+            <div className="text-[11px] text-[#E5FF00] mt-1" data-testid="current-game-mismatch">
+              {t("live.game_fps_mismatch", { app: fpsApp, defaultValue: "Gli FPS mostrati sono di {{app}}, non di questo gioco." })}
+            </div>
+          )}
         </div>
         {appid && (
           <a

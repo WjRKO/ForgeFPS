@@ -165,6 +165,20 @@ async def _ensure_indexes():
     await db.perf_watchdogs.create_index([("user_id", 1), ("created_at", -1)])
     await db.benchmarks.create_index([("user_id", 1), ("created_at", -1)])
     await db.pc_telemetry.create_index([("user_id", 1), ("device_id", 1)])
+    # Interrogate a ogni campione di telemetria, cioe' una volta al secondo per
+    # utente che monitora: senza indice erano due scansioni di collezione al
+    # secondo. `monitor_control` e' anche diventata per-device.
+    await db.monitor_control.create_index([("user_id", 1), ("device_id", 1)])
+    await db.alert_settings.create_index("user_id")
+    # Traccia dei lanci dell'agent: si interroga a ogni report e cresce di un
+    # documento per click. Serve l'indice e serve che scadano da sole - la
+    # finestra di correlazione e' di dieci minuti, un giorno e' abbondante.
+    await db.agent_launches.create_index([("user_id", 1), ("device_id", 1), ("created_at", -1)])
+    # Il TTL di Mongo agisce solo su un BSON Date: `created_at` qui e' una
+    # stringa ISO come nel resto del progetto, quindi la scadenza sta su un
+    # campo suo. Un indice TTL su una stringa non da' errore, semplicemente
+    # non cancella niente - e non se ne accorgerebbe nessuno.
+    await db.agent_launches.create_index("expires_at", expireAfterSeconds=0)
     await db.net_results.create_index([("user_id", 1), ("created_at", -1)])
     await db.boost_sessions.create_index("user_id")
     await db.notifications.create_index([("user_id", 1), ("read", 1)])
