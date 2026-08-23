@@ -16,6 +16,12 @@ import MonitorLiveControl from "@/components/MonitorLiveControl";
 import BottleneckDetector from "@/components/BottleneckDetector";
 import PlanUpgradeBanner from "@/components/PlanUpgradeBanner";
 
+// Ogni quanto si chiede al backend lo stato del monitor. A monitor spento non
+// c'e' niente da vedere e un secondo e' solo traffico: una scheda Live lasciata
+// aperta faceva 3.600 richieste all'ora per non mostrare nulla.
+const POLL_LIVE_MS = 1000;
+const POLL_FERMO_MS = 5000;
+
 const freshAcc = () => ({ startTs: null, lastTs: null, fps: [], cpuTempMax: 0, gpuTempMax: 0, cpuSum: 0, cpuN: 0, gpuSum: 0, gpuN: 0, latSum: 0, latN: 0, latMax: 0, games: {}, samples: 0 });
 
 const buildSummary = (a) => {
@@ -217,9 +223,16 @@ export default function Live() {
       try {
         const { data } = await api.get("/pc-telemetry");
         setData(data);
+        pianifica(data?.live ? POLL_LIVE_MS : POLL_FERMO_MS);
         for (const s of (data.samples || [])) {
           if (!s.ts || seenRef.current.has(s.ts)) continue;
           seenRef.current.add(s.ts);
+          // L'insieme cresceva di un elemento al secondo e non veniva mai
+          // potato: quattro ore di scheda aperta erano ~14.000 stringhe tenute
+          // per riconoscere doppioni fra gli ultimi 60 campioni.
+          if (seenRef.current.size > 300) {
+            seenRef.current = new Set(Array.from(seenRef.current).slice(-120));
+          }
           // New session if a gap > 30s between samples (agent restarted / older data).
           if (acc.current.lastTs && (new Date(s.ts) - new Date(acc.current.lastTs)) > 30000) acc.current = freshAcc();
           const b = acc.current;
@@ -236,8 +249,17 @@ export default function Live() {
         setSummary(buildSummary(acc.current));
       } catch (e) { console.error("telemetry poll failed", e); }
     };
+    // Il ritmo si adatta: un secondo mentre il monitor trasmette, cinque quando
+    // e' fermo. Il primo campione che arriva riporta subito a un secondo.
+    let ritmo = null;
+    const pianifica = (ms) => {
+      if (ritmo === ms) return;
+      ritmo = ms;
+      clearInterval(timer.current);
+      timer.current = setInterval(load, ms);
+    };
     load();
-    timer.current = setInterval(load, 1000);
+    pianifica(POLL_LIVE_MS);
     return () => clearInterval(timer.current);
   }, [planInfo]);
 
@@ -346,6 +368,7 @@ export default function Live() {
         source={last.game_source}
         exe={last.game_exe}
         fullscreen={last.game_fullscreen}
+        fpsApp={last.game}
       />
 
       {/* ===== 4 BENTO METRIC CARDS ===== */}

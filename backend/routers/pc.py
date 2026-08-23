@@ -1012,6 +1012,14 @@ def build(get_current_user):
         await db.boost_reports.delete_one({"user_id": str(user["_id"])})
         return {"ok": True}
 
+    # Quanti campioni restano nel documento e quanti ne legge la pagina Live.
+    # A un campione al secondo, 1800 sono trenta minuti: e' anche il limite di
+    # cio' che il Gameplay Doctor puo' analizzare, perche' legge da qui. Su una
+    # sessione di due ore vede l'ultima mezz'ora, e finora il tetto era un numero
+    # scritto dentro la query senza che dicesse questo a nessuno.
+    _TELEMETRY_KEEP = 1800
+    _LIVE_SAMPLES = 60
+
     @r.post("/agent/telemetry")
     async def agent_telemetry(payload: TelemetryInput, x_agent_token: str = Header(default=""), x_device: str = Header(default="")):
         rec = await db.agent_tokens.find_one({"token": x_agent_token})
@@ -1024,7 +1032,7 @@ def build(get_current_user):
         await db.pc_telemetry.update_one(
             dflt,
             {"$set": {**dflt, "updated_at": now_iso()},
-             "$push": {"samples": {"$each": [sample], "$slice": -1800}}},
+             "$push": {"samples": {"$each": [sample], "$slice": -_TELEMETRY_KEEP}}},
             upsert=True)
         await _check_temp_alerts(rec["user_id"], sample, _did)
         # v0.7.7 Milestones: track distinct games (Universal Game Detector)
@@ -1037,8 +1045,22 @@ def build(get_current_user):
             logger.debug("gioco rilevato non registrato: %s", exc)
         # Return stop signal: the agent's monitor loop reads this and exits cleanly
         # when the user clicks "Stop" on the web dashboard.
-        ctrl = await db.monitor_control.find_one({"user_id": rec["user_id"]}, {"_id": 0}) or {}
-        return {"ok": True, "stop": bool(ctrl.get("stop_requested"))}
+        # Lo stop e' di UN PC, non dell'account. La telemetria era gia' salvata
+        # per device, il segnale di stop no: premere Stop per il desktop fermava
+        # anche il portatile, e avviare il monitor sul portatile azzerava il flag
+        # che il desktop stava per leggere.
+        chiave = {"user_id": rec["user_id"], **({"device_id": _did} if _did else {})}
+        ctrl = await db.monitor_control.find_one(chiave, {"_id": 0}) or {}
+        fermati = bool(ctrl.get("stop_requested"))
+        if fermati:
+            # Il messaggio e' stato consegnato: il flag si spegne qui. Prima
+            # restava acceso finche' la pagina Live non chiamava /monitor/reset,
+            # quindi chi riavviava il monitor dal link copiato o dal comando
+            # manuale - due strade che la pagina stessa offre - vedeva la
+            # finestra aprirsi e chiudersi al primo giro, senza spiegazioni.
+            await db.monitor_control.update_one(
+                chiave, {"$set": {"stop_requested": False, "acked_at": now_iso()}})
+        return {"ok": True, "stop": fermati}
 
     @r.post("/monitor/stop")
     async def monitor_stop(user: dict = Depends(get_current_user)):
@@ -1048,9 +1070,10 @@ def build(get_current_user):
         (delivered fresh on every launch via /api/agent/script, so no .exe
         rebuild is needed)."""
         uid = str(user["_id"])
+        chiave = await device_filter(db, uid)
         await db.monitor_control.update_one(
-            {"user_id": uid},
-            {"$set": {"user_id": uid, "stop_requested": True, "requested_at": now_iso()}},
+            chiave,
+            {"$set": {**chiave, "stop_requested": True, "requested_at": now_iso()}},
             upsert=True)
         return {"ok": True}
 
@@ -1059,16 +1082,17 @@ def build(get_current_user):
         """Clears the stop flag before starting a new monitor session so the
         agent doesn't exit immediately if the previous stop was never acked."""
         uid = str(user["_id"])
+        chiave = await device_filter(db, uid)
         await db.monitor_control.update_one(
-            {"user_id": uid},
-            {"$set": {"user_id": uid, "stop_requested": False, "reset_at": now_iso()}},
+            chiave,
+            {"$set": {**chiave, "stop_requested": False, "reset_at": now_iso()}},
             upsert=True)
         return {"ok": True}
 
     @r.get("/monitor/state")
     async def monitor_state(user: dict = Depends(get_current_user)):
         uid = str(user["_id"])
-        doc = await db.monitor_control.find_one({"user_id": uid},
+        doc = await db.monitor_control.find_one(await device_filter(db, uid),
                                                 {"_id": 0, "user_id": 0}) or {}
         return {"stop_requested": bool(doc.get("stop_requested")),
                 "requested_at": doc.get("requested_at"),
@@ -1076,7 +1100,13 @@ def build(get_current_user):
 
     @r.get("/pc-telemetry")
     async def pc_telemetry(user: dict = Depends(require_pro_dep)):
-        doc = await db.pc_telemetry.find_one(await device_filter(db, str(user["_id"])), {"_id": 0})
+        # `$slice` nella proiezione: il documento contiene fino a 1800 campioni
+        # (mezz'ora a un campione al secondo) e ne servono 60. Prima venivano
+        # letti tutti da Mongo, trasferiti e deserializzati per buttarne il 97%,
+        # una volta al secondo per ogni scheda Live aperta.
+        doc = await db.pc_telemetry.find_one(
+            await device_filter(db, str(user["_id"])),
+            {"_id": 0, "updated_at": 1, "samples": {"$slice": -_LIVE_SAMPLES}})
         if not doc:
             return {"samples": [], "updated_at": None, "live": False}
         live = False
@@ -1085,26 +1115,37 @@ def build(get_current_user):
             live = (datetime.now(timezone.utc) - datetime.fromisoformat(doc["updated_at"])).total_seconds() < 12
         except Exception:
             live = False
-        return {"samples": doc.get("samples", [])[-60:], "updated_at": doc.get("updated_at"), "live": live}
+        return {"samples": doc.get("samples", []), "updated_at": doc.get("updated_at"), "live": live}
 
     async def _check_temp_alerts(uid, sample, did=None):
         cfg = await db.alert_settings.find_one({"user_id": uid}) or {}
         if not cfg.get("enabled", True):
             return
+        suffix = f"_{did}" if did else ""
+        cpu_max = cfg.get("cpu_max", 90)
+        gpu_max = cfg.get("gpu_max", 85)
+        superate = []
+        ct, gt = sample.get("cpu_temp"), sample.get("gpu_temp")
+        if ct and ct >= cpu_max and _iso_age(cfg.get(f"last_cpu_alert{suffix}", "")) > 300:
+            superate.append(("cpu", ct, cpu_max))
+        if gt and gt >= gpu_max and _iso_age(cfg.get(f"last_gpu_alert{suffix}", "")) > 300:
+            superate.append(("gpu", gt, gpu_max))
+        if not superate:
+            return
+        # Il nome del PC si cerca solo adesso. Prima veniva letto PRIMA di
+        # guardare le soglie: una query al database ogni secondo per comporre una
+        # stringa che serve quando un alert scatta davvero, cioe' quasi mai
+        # (c'e' pure un silenzio di 300s fra due alert dello stesso tipo).
         dev_label = ""
         if did:
             _dev = await db.devices.find_one({"user_id": uid, "device_id": did}, {"name": 1})
             if _dev and _dev.get("name"):
                 dev_label = f"[{_dev['name']}] "
-        suffix = f"_{did}" if did else ""
-        cpu_max = cfg.get("cpu_max", 90)
-        gpu_max = cfg.get("gpu_max", 85)
-        to_send = []
-        ct, gt = sample.get("cpu_temp"), sample.get("gpu_temp")
-        if ct and ct >= cpu_max and _iso_age(cfg.get(f"last_cpu_alert{suffix}", "")) > 300:
-            to_send.append(("cpu", f"{dev_label}CPU a {ct}°C (soglia {cpu_max}°C). Riduci il carico o controlla il raffreddamento."))
-        if gt and gt >= gpu_max and _iso_age(cfg.get(f"last_gpu_alert{suffix}", "")) > 300:
-            to_send.append(("gpu", f"{dev_label}GPU a {gt}°C (soglia {gpu_max}°C). Riduci il carico o controlla il raffreddamento."))
+        to_send = [
+            (metric, f"{dev_label}{metric.upper()} a {val}°C (soglia {soglia}°C). "
+                     "Riduci il carico o controlla il raffreddamento.")
+            for metric, val, soglia in superate
+        ]
         for metric, body in to_send:
             try:
                 await push.send_push_to_user(db, uid, {"title": "🔥 Temperatura critica!", "body": body, "url": "/app/live"})
@@ -1602,7 +1643,9 @@ def build(get_current_user):
         try:
             await db.agent_launches.insert_one({
                 "launch_id": launch_id, "user_id": str(user["_id"]), "mode": mode,
-                "device_id": None, "created_at": now_iso()})
+                "device_id": None, "created_at": now_iso(),
+                # Campo a parte, di tipo data: e' l'unico su cui il TTL di Mongo agisce.
+                "expires_at": datetime.now(timezone.utc) + timedelta(days=1)})
         except Exception as exc:
             logger.debug("traccia del lancio non registrata: %s", exc)
         return {"uri": uri, "mode": mode, "silent": bool(silent_flag), "ts": ts,
