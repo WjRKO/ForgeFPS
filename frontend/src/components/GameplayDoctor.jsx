@@ -68,7 +68,7 @@ function Issue({ issue, t, expanded, onToggle, onApply }) {
             <details className="text-xs text-zinc-500">
               <summary className="cursor-pointer text-zinc-400">{t("live.gd_alt_fixes")} ({alts.length})</summary>
               <ul className="mt-1 space-y-1 list-disc pl-4">
-                {alts.map((a, i) => <li key={i}>{a.text}{a.gui_tweak ? ` [${a.gui_tweak}]` : ""}</li>)}
+                {alts.map((a, i) => <li key={i}>{a.text}{a.gui_tweak_name ? ` [${a.gui_tweak_name}]` : ""}</li>)}
               </ul>
             </details>
           )}
@@ -78,10 +78,13 @@ function Issue({ issue, t, expanded, onToggle, onApply }) {
         {issue.fix?.primary?.text && (
           <span className="text-xs text-zinc-300 flex-1 min-w-[200px]">→ {issue.fix.primary.text}</span>
         )}
-        {issue.fix?.primary?.gui_tweak && (
+        {/* Il nome, non l'id: "power" non dice niente a nessuno, e un id che il
+            catalogo non conosce non merita un bottone - il consiglio testuale
+            qui sopra resta comunque. Il backend risolve e verifica entrambi. */}
+        {issue.fix?.primary?.gui_tweak_name && (
           <button onClick={() => onApply(issue.fix.primary.gui_tweak)} data-testid={`gd-apply-${issue.id || issue.type}`}
-            className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest bg-[#E5FF00] text-black px-3 py-1.5 hover:bg-[#c9e000] transition-colors">
-            <Wrench size={11} /> {t("live.gd_apply_gui")}: {issue.fix.primary.gui_tweak}
+            className="inline-flex items-center gap-1.5 text-left text-[11px] font-bold uppercase tracking-widest bg-[#E5FF00] text-black px-3 py-1.5 hover:bg-[#c9e000] transition-colors">
+            <Wrench size={11} className="shrink-0" /> {t("live.gd_apply_gui")}: {issue.fix.primary.gui_tweak_name}
           </button>
         )}
         {issue.fix?.impact_estimate && (

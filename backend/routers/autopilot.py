@@ -1,8 +1,13 @@
 """FrameForge Auto-Pilot router — /api/autopilot/*
 
-Un click: l'agent applica tutti i tweak sicuri non ancora attivi, misura
-prima/dopo (health, temperature) e riporta il rapporto sul dashboard.
+Un click: l'agent applica i tweak sicuri non ancora attivi, misura prima/dopo
+(health, temperature) e riporta il rapporto sul dashboard.
 Quota: Free 1 esecuzione/settimana, Pro/Streamer illimitato.
+
+Restano fuori i tweak con `requires_reboot`: il "dopo" si misura due secondi
+dopo l'apply, quindi un tweak che si attiva al riavvio finirebbe fra gli
+applicati e dentro un confronto in cui non era ancora attivo. L'agent li elenca
+a fine corsa perche' l'utente sappia che dalla GUI puo' applicarli lo stesso.
 """
 from __future__ import annotations
 

@@ -17,6 +17,7 @@ import logging
 import math
 import re
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Header
 
@@ -825,7 +826,8 @@ def build(get_current_user):
         return {"session": _public(sess)}
 
     @r.get("/lab/registry")
-    async def lab_registry(risk_level: str = "medium", include_reboot: bool = True, user: dict = Depends(get_current_user)):
+    async def lab_registry(risk_level: Literal["safe", "medium"] = "medium", include_reboot: bool = True,
+                           user: dict = Depends(get_current_user)):
         specs = await db.pc_specs.find_one({"user_id": str(user["_id"])}) or {}
         candidates, skipped = select_candidates(specs.get("data") or {}, risk_level, include_reboot)
         hw = _hw_class(specs.get("data") or {})

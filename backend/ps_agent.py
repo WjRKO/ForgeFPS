@@ -11,7 +11,10 @@ Modes:
   restore   -> revert every tweak from the backup file
 All reg/service/DNS/power tweaks are backed up before being applied so `restore` reverts them."""
 
+import json as _json
 from pathlib import Path as _Path
+
+import tweak_catalog
 
 PS_SCRIPT = r'''Param([string]$Token = '', [string]$Mode = 'sync')
 $ErrorActionPreference = 'SilentlyContinue'
@@ -2585,12 +2588,7 @@ function Get-BloatCandidates {
 # ---------------- Tweak catalogue (cat / id / name / desc / state / apply) ----------------
 $script:TWEAKS = @(
   # GAMING & FPS
-  @{ cat='gaming'; id='power'; name='Piano energetico prestazioni massime';
-     problem='Windows usa un piano energetico bilanciato che rallenta CPU/GPU e parcheggia i core per risparmiare.';
-     reason='Con il core parking e il throttling la CPU non gira mai al 100% quando serve, causando cali di FPS e stutter.';
-     desc='Attiva Ultimate/High Performance, disattiva core parking, processore al 100%, USB suspend e PCIe ASPM off.';
-     impact='+3-8% FPS medi e 1% low piu stabili, meno micro-stutter. Consuma piu energia (irrilevante su desktop).';
-     risk='safe';
+  @{ id='power';
      fit={ if($script:HW.laptop){'note:Laptop rilevato: applico High Performance (non Ultimate) per proteggere batteria e temperature'}else{'ok'} };
      plan={ @(
        (Pl 'Schema energetico attivo' (Get-KeyNow 'power_plan') $(if ($script:HW.laptop) { 'Prestazioni elevate' } else { 'Prestazioni eccellenti (Ultimate)' })),
@@ -2600,12 +2598,7 @@ $script:TWEAKS = @(
        $(if (-not $script:HW.laptop) { (Pl 'Risparmio energia PCIe (ASPM)' '' 'disattivato') })
      ) };
      state={ $p=(powercfg /getactivescheme); if($p -match 'high|ultimate|prestazioni elevate'){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Power } }
-  @{ cat='gaming'; id='gaming'; name='Boost gaming (Game Mode, HAGS, Game DVR off)';
-     problem='Game DVR registra in background e la GPU scheduling hardware potrebbe essere disattivata.';
-     reason='Il Game DVR ruba CPU/GPU durante il gioco; HAGS riduce la latenza di pianificazione dei frame.';
-     desc='Attiva Game Mode + Hardware GPU Scheduling, disattiva Game DVR/registrazione in background.';
-     impact='+2-5% FPS e frametime piu costante, meno overhead durante il gioco.';
-     risk='safe';
+  @{ id='gaming';
      plan={ @(
        (PlReg 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode' '1' 'Game Mode'),
        (PlReg 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'HwSchMode' '2' 'Hardware GPU Scheduling'),
@@ -2613,12 +2606,7 @@ $script:TWEAKS = @(
        (PlReg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR' 'AllowGameDVR' '0' 'Game DVR da criteri di sistema')
      ) };
      state={ if((Get-RegVal 'HKCU:\Software\Microsoft\GameBar' 'AllowAutoGameMode') -eq 1){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Gaming } }
-  @{ cat='gaming'; id='priority'; name='Priorita GPU/CPU ai giochi (MMCSS)';
-     problem='Windows assegna le stesse risorse ai processi in background e al gioco in primo piano.';
-     reason='MMCSS/SystemResponsiveness a 0 da priorita reale ai task multimediali e ai giochi attivi.';
-     desc='Imposta SystemResponsiveness=0 e priorita GPU/CPU ai giochi in primo piano.';
-     impact='Frametime piu regolare, meno spike quando ci sono app in background.';
-     risk='safe';
+  @{ id='priority';
      plan={ @(
        (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' 'SystemResponsiveness' '0' 'Quota CPU riservata ai servizi'),
        (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' 'NetworkThrottlingIndex' '4294967295' 'Limite di rete per i multimediali'),
@@ -2629,22 +2617,12 @@ $script:TWEAKS = @(
        (PlReg 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' 'Win32PrioritySeparation' '26' 'Quanto CPU per il programma in primo piano')
      ) };
      state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' 'SystemResponsiveness') -eq 0){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Priority } }
-  @{ cat='gaming'; id='mpo'; name='Disabilita MPO (Multi-Plane Overlay)';
-     problem='Il Multi-Plane Overlay causa flickering, stutter e SCHERMO NERO in OBS Game Capture.';
-     reason='MPO ha bug noti con molti driver: interferisce con la cattura schermo e il DWM.';
-     desc='Imposta OverlayTestMode=5 per disattivare MPO nel Desktop Window Manager.';
-     impact='Elimina flickering/schermo nero in OBS, meno stutter sul desktop. Richiede riavvio.';
-     risk='safe';
+  @{ id='mpo';
      plan={ @(
        (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows\Dwm' 'OverlayTestMode' '5' 'MPO (Multi-Plane Overlay)')
      ) };
      state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows\Dwm' 'OverlayTestMode') -eq 5){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Mpo } }
-  @{ cat='gaming'; id='gpu_msi'; name='GPU: MSI mode ON (latenza DPC)';
-     problem='La GPU usa interrupt line-based, che aumentano la latenza DPC e causano micro-stutter.';
-     reason='I Message Signaled Interrupts (MSI) riducono la latenza di interrupt della GPU.';
-     desc='Attiva MSISupported=1 nel ramo Interrupt Management della GPU (NVIDIA/AMD).';
-     impact='Latenza DPC piu bassa, input piu reattivo. Richiede riavvio.';
-     risk='safe';
+  @{ id='gpu_msi';
      plan={ @(
        $(
          $__pnp = Get-GpuPnp
@@ -2655,35 +2633,20 @@ $script:TWEAKS = @(
        )
      ) };
      state={ $pnp=Get-GpuPnp; if($pnp){ $v=Get-RegVal "HKLM:\SYSTEM\CurrentControlSet\Enum\$pnp\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties" 'MSISupported'; if($v -eq 1){(Tw 'ok')}else{(Tw 'todo')} }else{(Tw 'unknown')} }; apply={ Do-GpuMsi } }
-  @{ cat='gaming'; id='amd_ulps'; name='AMD: disabilita ULPS';
-     problem='Le Radeon abbassano troppo il clock in idle (Ultra Low Power State), causando stutter.';
-     reason='ULPS mette la GPU in stato a bassissimo consumo, con risvegli lenti che generano scatti.';
-     desc='Disattiva ULPS nelle chiavi di registro AMD (solo GPU AMD).';
-     impact='Meno stutter e latenza su schede AMD, clock piu stabile.';
-     risk='safe';
+  @{ id='amd_ulps';
      fit={ if($script:HW.gpu -eq 'AMD'){'ok'}else{"skip:Solo GPU AMD (rilevata $($script:HW.gpu))"} };
      plan={ @(
        (Pl 'ULPS sulle schede AMD rilevate' '' 'disattivato (EnableUlps 0)')
      ) };
      state={ if((Get-GpuVendor) -eq 'AMD'){(Tw 'todo')}else{(Tw 'na' 'solo su GPU AMD')} }; apply={ Do-AmdUlps } }
-  @{ cat='gaming'; id='nvidia_tel'; name='NVIDIA: disabilita telemetria';
-     problem='I driver NVIDIA installano task/servizi di telemetria che girano in background.';
-     reason='La telemetria consuma CPU e rete senza alcun beneficio per il gaming.';
-     desc='Disattiva i task pianificati e il servizio di telemetria NVIDIA (solo GPU NVIDIA).';
-     impact='Meno processi in background, CPU leggermente piu libera.';
-     risk='safe';
+  @{ id='nvidia_tel';
      fit={ if($script:HW.gpu -eq 'NVIDIA'){'ok'}else{"skip:Solo GPU NVIDIA (rilevata $($script:HW.gpu))"} };
      plan={ @(
        (PlSvc 'NvTelemetryContainer' 'Servizio telemetria NVIDIA'),
        (Pl 'Attivita pianificate NVIDIA (NvTmRep, NvProfileUpdater...)' '' 'disattivate')
      ) };
      state={ if((Get-GpuVendor) -eq 'NVIDIA'){(Tw 'todo')}else{(Tw 'na' 'solo su GPU NVIDIA')} }; apply={ Do-NvidiaTel } }
-  @{ cat='gaming'; id='hibernate'; name='Disabilita ibernazione';
-     problem='Il file hiberfil.sys occupa diversi GB di disco anche se non usi mai la sospensione.';
-     reason='Su desktop l ibernazione e raramente usata; il file pesa quanto la RAM installata.';
-     desc='Esegue powercfg -h off per rimuovere hiberfil.sys (reversibile con -h on).';
-     impact='Libera 4-32 GB su disco. Perdi la sospensione ibrida/avvio rapido.';
-     risk='caution';
+  @{ id='hibernate';
      fit={ if($script:HW.laptop){'warn:Su laptop l ibernazione e utile a batteria scarica: disattivala solo se non la usi mai'}else{'ok'} };
      plan={ @(
        (Pl 'Ibernazione' 'attiva' 'disattivata'),
@@ -2691,68 +2654,38 @@ $script:TWEAKS = @(
      ) };
      state={ (Tw 'todo') }; apply={ Do-Hibernate } }
   # LATENZA & INPUT
-  @{ cat='input'; id='mouse'; name='Accelerazione mouse OFF (raw input)';
-     problem='L Enhance Pointer Precision di Windows accelera il mouse in modo imprevedibile.';
-     reason='L accelerazione rende la mira incoerente: lo stesso movimento fisico da spostamenti diversi.';
-     desc='Disattiva MouseSpeed/Threshold per un input 1:1 (raw).';
-     impact='Mira piu precisa e costante negli sparatutto. Nessun rischio.';
-     risk='safe';
+  @{ id='mouse';
      plan={ @(
        (PlReg 'HKCU:\Control Panel\Mouse' 'MouseSpeed' '0' 'Accelerazione del puntatore'),
        (PlReg 'HKCU:\Control Panel\Mouse' 'MouseThreshold1' '0' 'Prima soglia di accelerazione'),
        (PlReg 'HKCU:\Control Panel\Mouse' 'MouseThreshold2' '0' 'Seconda soglia di accelerazione')
      ) };
      state={ if("$(Get-RegVal 'HKCU:\Control Panel\Mouse' 'MouseSpeed')" -eq '0'){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Mouse } }
-  @{ cat='input'; id='timer'; name='Timer resolution globale';
-     problem='Su Windows 11 la timer resolution puo essere variabile, con scheduling meno preciso.';
-     reason='Una timer resolution alta e costante rende piu regolari i frametime e la latenza.';
-     desc='Attiva GlobalTimerResolutionRequests=1 (richiesta timer globale).';
-     impact='Frametime piu costante, meno stutter. Richiede riavvio.';
-     risk='safe';
+  @{ id='timer';
      plan={ @(
        (PlReg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel' 'GlobalTimerResolutionRequests' '1' 'Timer resolution globale')
      ) };
      state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel' 'GlobalTimerResolutionRequests') -eq 1){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Timer } }
-  @{ cat='input'; id='usb'; name='USB power management OFF';
-     problem='Windows sospende le porte USB per risparmiare energia, causando cali di polling.';
-     reason='Se il mouse/tastiera vanno in standby, si hanno input drop e micro-freeze.';
-     desc='Disattiva il risparmio energetico sui controller USB.';
-     impact='Input di mouse/tastiera piu stabile, niente drop. Nessun rischio.';
-     risk='safe';
+  @{ id='usb';
      fit={ if($script:HW.laptop){'warn:Su laptop aumenta il consumo della batteria: attiva solo se giochi collegato alla corrente'}else{'ok'} };
      plan={ @(
        (Pl 'Risparmio energia su tutte le porte USB' '' 'disattivato (EnhancedPowerManagementEnabled 0)')
      ) };
      state={ (Tw 'todo') }; apply={ Do-Usb } }
-  @{ cat='input'; id='stickykeys'; name='Sticky/Filter/Toggle Keys OFF';
-     problem='Premendo Shift ripetutamente compare il popup delle Sticky Keys che ti butta fuori dal gioco.';
-     reason='Le funzioni di accessibilita tastiera si attivano per errore durante il gioco.';
-     desc='Disattiva Sticky/Filter/Toggle Keys.';
-     impact='Niente piu popup che rubano il focus in game. Nessun rischio.';
-     risk='safe';
+  @{ id='stickykeys';
      plan={ @(
        (PlReg 'HKCU:\Control Panel\Accessibility\StickyKeys' 'Flags' '506' 'Tasti permanenti'),
        (PlReg 'HKCU:\Control Panel\Accessibility\Keyboard Response' 'Flags' '122' 'Filtro tasti'),
        (PlReg 'HKCU:\Control Panel\Accessibility\ToggleKeys' 'Flags' '58' 'Segnali acustici dei tasti')
      ) };
      state={ if("$(Get-RegVal 'HKCU:\Control Panel\Accessibility\StickyKeys' 'Flags')" -eq '506'){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-StickyKeys } }
-  @{ cat='input'; id='startupdelay'; name='Startup delay app ridotto';
-     problem='Windows ritarda artificialmente l avvio delle app in autostart.';
-     reason='Il delay serve a non sovraccaricare l avvio, ma rallenta l accesso al desktop utile.';
-     desc='Imposta StartupDelayInMSec=0 per avviare subito le app.';
-     impact='Desktop e app pronti prima dopo l accensione. Nessun rischio.';
-     risk='safe';
+  @{ id='startupdelay';
      plan={ @(
        (PlReg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize' 'StartupDelayInMSec' '0' 'Ritardo di avvio delle app')
      ) };
      state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize' 'StartupDelayInMSec') -eq 0){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-StartupDelay } }
   # RETE & STREAMING
-  @{ cat='network'; id='network'; name='Rete: Nagle OFF + TCP tuning';
-     problem='L algoritmo di Nagle accumula piccoli pacchetti, aggiungendo latenza nei giochi online.';
-     reason='I giochi inviano tanti pacchetti piccoli: Nagle li ritarda, aumentando il ping percepito.';
-     desc='Disattiva Nagle sulla scheda attiva e regola autotuning/ECN/RSS.';
-     impact='Ping piu basso e stabile online. Reversibile con Ripristina.';
-     risk='safe';
+  @{ id='network';
      plan={ @(
        (Pl 'Nagle su tutte le schede (TcpAckFrequency, TCPNoDelay)' '' 'disattivato'),
        (Pl 'Autotuning della finestra TCP' '' 'normal'),
@@ -2760,12 +2693,7 @@ $script:TWEAKS = @(
        (Pl 'RSS (receive side scaling)' '' 'attivo')
      ) };
      state={ (Tw 'todo') }; apply={ Do-Network } }
-  @{ cat='network'; id='dns'; name='DNS veloci (Cloudflare 1.1.1.1)';
-     problem='I DNS del provider sono spesso lenti e possono rallentare la risoluzione dei domini.';
-     reason='DNS piu veloci riducono i tempi di connessione a server di gioco e matchmaking.';
-     desc='Imposta 1.1.1.1 / 1.0.0.1 sulla scheda attiva (reversibile a DHCP).';
-     impact='Connessioni piu rapide. Reversibile in un click.';
-     risk='safe';
+  @{ id='dns';
      plan={ @(
        $(
          $__a = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
@@ -2776,132 +2704,72 @@ $script:TWEAKS = @(
        )
      ) };
      state={ $a=Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1; if($a){ $d=(Get-DnsClientServerAddress -InterfaceAlias $a.Name -AddressFamily IPv4).ServerAddresses -join ','; if($d -match '1.1.1.1'){(Tw 'ok' 'gia su Cloudflare')}else{(Tw 'todo' "Attuale: $d")} }else{(Tw 'unknown')} }; apply={ Do-Dns } }
-  @{ cat='network'; id='qos'; name='Rimuovi 20% banda riservata QoS';
-     problem='Windows riserva fino al 20% della banda per il QoS di sistema.';
-     reason='Recuperando quella banda hai piu throughput reale per download e streaming.';
-     desc='Imposta NonBestEffortLimit=0.';
-     impact='Piu banda disponibile per gioco/stream. Nessun rischio.';
-     risk='safe';
+  @{ id='qos';
      plan={ @(
        (PlReg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit' '0' 'Banda riservata al QoS di sistema')
      ) };
      state={ if((Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Psched' 'NonBestEffortLimit') -eq 0){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Qos } }
-  @{ cat='network'; id='deliveryopt'; name='Delivery Optimization P2P OFF';
-     problem='Windows usa la tua banda in upload per distribuire aggiornamenti ad altri PC (P2P).';
-     reason='Durante lo streaming quell upload occupa banda e destabilizza il bitrate.';
-     desc='Imposta DODownloadMode=0 (nessun P2P).';
-     impact='Upload piu libero, stream piu stabile. Nessun rischio.';
-     risk='safe';
+  @{ id='deliveryopt';
      plan={ @(
        (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode' '0' 'Condivisione P2P degli aggiornamenti'),
        (PlReg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' 'DODownloadMode' '0' 'Condivisione P2P da criteri di sistema')
      ) };
      state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config' 'DODownloadMode') -eq 0){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-DeliveryOpt } }
-  @{ cat='network'; id='obs_priority'; name='OBS ad alta priorita';
-     problem='OBS gira a priorita normale e puo perdere frame in encoding sotto carico.';
-     reason='Alzando la priorita CPU di OBS l encoding resta fluido anche con la CPU occupata dal gioco.';
-     desc='Imposta CpuPriorityClass alta per obs64/obs32.exe (via Image File Execution Options).';
-     impact='Meno frame persi in registrazione/stream. Nessun rischio.';
-     risk='safe';
+  @{ id='obs_priority';
      plan={ @(
        (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\obs64.exe\PerfOptions' 'CpuPriorityClass' '3' 'Priorita CPU di OBS 64 bit'),
        (PlReg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\obs32.exe\PerfOptions' 'CpuPriorityClass' '3' 'Priorita CPU di OBS 32 bit')
      ) };
      state={ if((Get-RegVal 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\obs64.exe\PerfOptions' 'CpuPriorityClass') -eq 3){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-ObsPriority } }
   # SISTEMA & DEBLOAT
-  @{ cat='system'; id='clean'; name='Pulizia temp + cache Windows Update';
-     problem='File temporanei e cache degli aggiornamenti si accumulano e occupano spazio.';
-     reason='Ripulire libera disco e puo velocizzare alcune operazioni di sistema.';
-     desc='Rimuove temp utente/sistema, cache Windows Update e svuota il DNS.';
-     impact='Libera spazio su disco. Nessun file personale toccato.';
-     risk='safe';
+  @{ id='clean';
      plan={ @(
        (Pl 'Cartella dei file temporanei' '' 'svuotata'),
        (Pl 'Cache di Windows Update' '' 'svuotata'),
        (Pl 'Cache DNS' '' 'svuotata')
      ) };
      state={ $mb=0; Get-ChildItem $env:TEMP -Recurse -File -Force 2>$null | ForEach-Object { $mb+=$_.Length }; (Tw 'todo' "$([math]::Round($mb/1MB)) MB da pulire") }; apply={ Do-Cleanup } }
-  @{ cat='system'; id='visual'; name='Effetti visivi: modalita prestazioni';
-     problem='Animazioni e trasparenze consumano GPU/CPU e rendono la UI meno reattiva.';
-     reason='In modalita prestazioni Windows disattiva gli effetti superflui.';
-     desc='Imposta VisualFXSetting=2 (prestazioni).';
-     impact='UI piu snella e reattiva. Estetica leggermente piu spartana.';
-     risk='safe';
+  @{ id='visual';
      plan={ @(
        (PlReg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' 'VisualFXSetting' '2' 'Effetti visivi di Windows')
      ) };
      state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' 'VisualFXSetting') -eq 2){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Visual } }
-  @{ cat='system'; id='telemetry'; name='Telemetria (DiagTrack) OFF';
-     problem='Il servizio DiagTrack invia dati di diagnostica e gira sempre in background.';
-     reason='Disattivarlo riduce l uso di CPU e rete senza impatti sulle funzioni essenziali.';
-     desc='Ferma e disabilita il servizio DiagTrack (Connected User Experiences).';
-     impact='Meno CPU/rete in background. NON tocca Defender ne la sicurezza.';
-     risk='caution';
+  @{ id='telemetry';
      plan={ @(
        (PlSvc 'DiagTrack' 'Servizio di telemetria Windows')
      ) };
      state={ $s=Get-Service DiagTrack -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){(Tw 'todo')}else{(Tw 'ok')} }; apply={ Do-Telemetry } }
-  @{ cat='system'; id='ads'; name='Suggerimenti/ads di Windows OFF';
-     problem='Windows mostra app suggerite e contenuti promozionali nel menu Start e altrove.';
-     reason='Sono distrazioni e consumano risorse per scaricare i contenuti suggeriti.';
-     desc='Disattiva SilentInstalledApps, suggerimenti e Consumer Features.';
-     impact='Start piu pulito, niente app installate a sorpresa. Nessun rischio.';
-     risk='safe';
+  @{ id='ads';
      plan={ @(
        (PlReg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager' 'SilentInstalledAppsEnabled' '0' 'App installate in silenzio'),
        (PlReg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager' 'SystemPaneSuggestionsEnabled' '0' 'Suggerimenti nel menu Start'),
        (PlReg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' 'DisableWindowsConsumerFeatures' '1' 'Contenuti promozionali di Windows')
      ) };
      state={ (Tw 'todo') }; apply={ Do-Ads } }
-  @{ cat='system'; id='bgapps'; name='App in background OFF (globale)';
-     problem='Le app UWP restano attive in background consumando CPU/RAM e rete.';
-     reason='Bloccarle libera risorse per il gioco senza disinstallare nulla.';
-     desc='Imposta GlobalUserDisabled=1 e LetAppsRunInBackground.';
-     impact='Meno consumo di CPU/RAM in background. Alcune notifiche UWP potrebbero ritardare.';
-     risk='safe';
+  @{ id='bgapps';
      plan={ @(
        (PlReg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' 'GlobalUserDisabled' '1' 'App in background per questo utente'),
        (PlReg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy' 'LetAppsRunInBackground' '2' 'App in background da criteri di sistema')
      ) };
      state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' 'GlobalUserDisabled') -eq 1){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-BgApps } }
-  @{ cat='system'; id='gamebar_rec'; name='Xbox Game Bar recording OFF';
-     problem='La Game Bar registra in background per la funzione clip, usando risorse.';
-     reason='Se non usi le clip Xbox, la registrazione continua e uno spreco di CPU/GPU.';
-     desc='Disattiva GameDVR_Enabled e AppCaptureEnabled.';
-     impact='Meno overhead in game. Perdi la registrazione automatica Xbox.';
-     risk='safe';
+  @{ id='gamebar_rec';
      plan={ @(
        (PlReg 'HKCU:\System\GameConfigStore' 'GameDVR_Enabled' '0' 'Registrazione della Game Bar'),
        (PlReg 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled' '0' 'Cattura in background')
      ) };
      state={ if((Get-RegVal 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' 'AppCaptureEnabled') -eq 0){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-GamebarRec } }
-  @{ cat='system'; id='debloat'; name='Debloat app superflue (UWP)';
-     problem='Windows preinstalla app come Candy Crush, Solitaire, Bing, 3D Builder che non usi.';
-     reason='Occupano spazio e alcune girano in background inutilmente.';
-     desc='Rimuove una lista curata di app UWP (reinstallabili dallo Store).';
-     impact='Sistema piu pulito. Puoi reinstallarle in qualsiasi momento dallo Store.';
-     risk='caution';
+  @{ id='debloat';
      plan={ @(
        (Pl 'App UWP superflue installate su questo PC' '' 'rimosse, reinstallabili dallo Store')
      ) };
      state={ $n=0; foreach($p in $script:BLOAT){ if(Get-AppxPackage -Name $p -ErrorAction SilentlyContinue){$n++} }; if($n -eq 0){(Tw 'ok' 'nessuna app da rimuovere')}else{(Tw 'todo' "$n app rimovibili")} }; apply={ Do-Debloat } }
-  @{ cat='system'; id='search_index'; name='Windows Search indexing OFF (invasivo)';
-     problem='Il servizio di indicizzazione della ricerca puo generare carico su disco/CPU.';
-     reason='Su alcuni PC l indicizzazione rallenta il sistema, ma serve alla ricerca file veloce.';
-     desc='Ferma e disabilita il servizio WSearch.';
-     impact='Meno carico su disco/CPU, MA la ricerca file diventa piu lenta. Reversibile.';
-     risk='caution';
+  @{ id='search_index';
      plan={ @(
        (PlSvc 'WSearch' 'Servizio di indicizzazione Windows Search')
      ) };
      state={ $s=Get-Service WSearch -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){(Tw 'todo')}else{(Tw 'ok')} }; apply={ Do-SearchIndex } }
   # NUOVI TWEAK (motore adattivo)
-  @{ cat='gaming'; id='fse'; name='Fullscreen Optimizations OFF';
-     problem='Windows forza il fullscreen ottimizzato (borderless) invece del fullscreen esclusivo reale.';
-     reason='Il fullscreen esclusivo bypassa il compositor DWM: input piu diretto e frametime piu pulito.';
-     desc='Imposta FSEBehaviorMode=2 e HonorUserFSEBehavior nel GameConfigStore.';
-     impact='Input lag ridotto nei giochi a schermo intero. Nessun rischio.';
-     risk='safe';
+  @{ id='fse';
      plan={ @(
        (PlReg 'HKCU:\System\GameConfigStore' 'GameDVR_FSEBehaviorMode' '2' 'Ottimizzazioni schermo intero'),
        (PlReg 'HKCU:\System\GameConfigStore' 'GameDVR_HonorUserFSEBehaviorMode' '1' 'Rispetta la scelta utente'),
@@ -2909,94 +2777,92 @@ $script:TWEAKS = @(
        (PlReg 'HKCU:\System\GameConfigStore' 'GameDVR_EFSEFeatureFlags' '0' 'Flag delle ottimizzazioni')
      ) };
      state={ if((Get-RegVal 'HKCU:\System\GameConfigStore' 'GameDVR_FSEBehaviorMode') -eq 2){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Fse } }
-  @{ cat='gaming'; id='power_throttling'; name='Power throttling CPU OFF';
-     problem='Windows rallenta (throttla) i processi che considera poco importanti per risparmiare energia.';
-     reason='A volte il throttling colpisce anche giochi, OBS o launcher, causando cali improvvisi.';
-     desc='Imposta PowerThrottlingOff=1: nessun processo viene mai rallentato dal risparmio energetico.';
-     impact='CPU sempre reattiva per giochi e streaming. Consuma un po piu di energia.';
-     risk='safe';
+  @{ id='power_throttling';
      fit={ if($script:HW.laptop){'warn:Su laptop il power throttling risparmia batteria: attiva solo se giochi sempre collegato alla corrente'}else{'ok'} };
      plan={ @(
        (PlReg 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling' 'PowerThrottlingOff' '1' 'Power throttling della CPU')
      ) };
      state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling' 'PowerThrottlingOff') -eq 1){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-PowerThrottling } }
-  @{ cat='gaming'; id='standby_clear'; name='Svuota RAM standby (azione istantanea)';
-     problem='Windows tiene in RAM una cache standby che a volte non viene liberata abbastanza in fretta.';
-     reason='Svuotare la standby list prima di giocare rende la memoria subito disponibile per il gioco.';
-     desc='Purge della standby memory list via API di sistema (richiede Amministratore). Nessuna modifica permanente.';
-     impact='RAM libera immediata prima della sessione di gioco. Azione una tantum, sempre sicura.';
-     risk='safe';
+  @{ id='standby_clear';
      plan={ @(
        (Pl 'RAM in standby' '' 'liberata subito. Azione istantanea: non lascia niente da annullare')
      ) };
      state={ $o=Get-CimInstance Win32_OperatingSystem; (Tw 'todo' "ora $([math]::Round($o.FreePhysicalMemory/1MB,1)) GB liberi") }; apply={ Clear-StandbyList } }
-  @{ cat='network'; id='nic_power'; name='Scheda di rete a piena potenza';
-     problem='Windows puo spegnere la scheda di rete per risparmiare energia e usa interrupt moderation che aggiunge latenza.';
-     reason='Il risparmio energetico della NIC causa micro-disconnessioni; la moderazione degli interrupt ritarda i pacchetti.';
-     desc='Disattiva il power saving della scheda attiva (PnPCapabilities=24) e la interrupt moderation.';
-     impact='Ping piu stabile, niente drop di connessione in game. Richiede riavvio o riconnessione.';
-     risk='safe';
+  @{ id='nic_power';
      fit={ if($script:HW.laptop){'warn:Su laptop la scheda di rete sempre attiva consuma piu batteria'}else{'ok'} };
      plan={ @(
        (Pl 'Risparmio energia della scheda di rete attiva' '' 'disattivato (PnPCapabilities 24)'),
        (Pl 'Interrupt moderation' '' 'disattivata, dove supportata')
      ) };
      state={ $a=Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object -First 1; if(-not $a){(Tw 'unknown')}else{ $ok=$false; Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | ForEach-Object { $p=Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue; if($p.NetCfgInstanceId -eq $a.InterfaceGuid -and $p.PnPCapabilities -eq 24){$ok=$true} }; if($ok){(Tw 'ok')}else{(Tw 'todo')} } }; apply={ Do-NicPower } }
-  @{ cat='system'; id='paging_exec'; name='Kernel sempre in RAM (16GB+)';
-     problem='Windows puo spostare parti del kernel e dei driver nel file di paging su disco.';
-     reason='Con abbastanza RAM, tenere il kernel in memoria elimina micro-attese di paging.';
-     desc='Imposta DisablePagingExecutive=1 in Memory Management.';
-     impact='Sistema piu scattante sotto carico. Consigliato solo con 16 GB o piu.';
-     risk='safe';
+  @{ id='paging_exec';
      fit={ if($script:HW.ram -ge 16){'ok'}else{"skip:Richiede almeno 16 GB di RAM (rilevati $($script:HW.ram) GB)"} };
      plan={ @(
        (PlReg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' 'DisablePagingExecutive' '1' 'Kernel paginabile su disco')
      ) };
      state={ if((Get-RegVal 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' 'DisablePagingExecutive') -eq 1){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-PagingExec } }
-  @{ cat='system'; id='sysmain'; name='SysMain/Superfetch OFF (solo SSD)';
-     problem='SysMain precarica app in RAM analizzando l uso del disco: su SSD e superfluo e consuma CPU/disco.';
-     reason='Gli SSD sono gia velocissimi in lettura casuale: il preload di SysMain non serve e genera carico.';
-     desc='Ferma e disabilita il servizio SysMain (ex Superfetch).';
-     impact='Meno attivita disco/CPU in background su SSD. Su HDD invece va lasciato attivo.';
-     risk='caution';
+  @{ id='sysmain';
      fit={ if($script:HW.ssd){'ok'}else{'skip:Solo con SSD: su HDD SysMain velocizza i caricamenti, meglio lasciarlo attivo'} };
      plan={ @(
        (PlSvc 'SysMain' 'Servizio SysMain / Superfetch')
      ) };
      state={ $s=Get-Service SysMain -ErrorAction SilentlyContinue; if($s -and $s.Status -eq 'Running'){(Tw 'todo')}else{(Tw 'ok')} }; apply={ Do-SysMain } }
-  @{ cat='system'; id='trim'; name='Verifica TRIM SSD attivo';
-     problem='Se il TRIM e disattivato, l SSD rallenta progressivamente con l uso.';
-     reason='Il TRIM permette all SSD di riorganizzare le celle libere mantenendo le prestazioni di scrittura.';
-     desc='Esegue fsutil behavior set DisableDeleteNotify 0 (TRIM attivo).';
-     impact='SSD sempre alla massima velocita nel tempo. Nessun rischio.';
-     risk='safe';
+  @{ id='trim';
      fit={ if($script:HW.ssd){'ok'}else{'skip:Solo per SSD: il TRIM non si applica agli HDD'} };
      plan={ @(
        (Pl 'TRIM sugli SSD (DisableDeleteNotify)' '' 'attivo')
      ) };
      state={ $q=(fsutil behavior query DisableDeleteNotify) -join ' '; if($q -match 'DisableDeleteNotify\s*=\s*0'){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Trim } }
-  @{ cat='system'; id='ntfs'; name='NTFS: last-access timestamp OFF';
-     problem='NTFS aggiorna la data di ultimo accesso di ogni file letto, generando scritture inutili.';
-     reason='Disattivarlo riduce le scritture su disco a ogni lettura di file (utile anche per la vita dell SSD).';
-     desc='Esegue fsutil behavior set disablelastaccess 1 (con backup del valore precedente).';
-     impact='Meno I/O su disco nelle operazioni quotidiane. Nessun rischio.';
-     risk='safe';
+  @{ id='ntfs';
      plan={ @(
        (Pl 'Timestamp di ultimo accesso NTFS' '' 'disattivato')
      ) };
      state={ $q=(fsutil behavior query disablelastaccess) -join ' '; if($q -match '=\s*[13]'){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-Ntfs } }
-  @{ cat='system'; id='edge_preload'; name='Edge preload/background OFF';
-     problem='Microsoft Edge si precarica all avvio e resta in background anche se non lo usi.';
-     reason='Lo startup boost di Edge occupa RAM e CPU all accensione per un browser che magari non apri mai.';
-     desc='Imposta StartupBoostEnabled=0 e BackgroundModeEnabled=0 via policy.';
-     impact='Avvio piu pulito e RAM libera se non usi Edge. Nessun rischio.';
-     risk='safe';
+  @{ id='edge_preload';
      plan={ @(
        (PlReg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' 'StartupBoostEnabled' '0' 'Avvio rapido di Edge in background'),
        (PlReg 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' 'BackgroundModeEnabled' '0' 'Edge sempre in esecuzione')
      ) };
      state={ if((Get-RegVal 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' 'StartupBoostEnabled') -eq 0){(Tw 'ok')}else{(Tw 'todo')} }; apply={ Do-EdgePreload } }
 )
+
+# ---------------- Metadati: dal catalogo unico, non da qui ----------------
+# Nome, categoria, rischio e i quattro testi di ogni tweak arrivano da
+# tweak_catalog.py e vengono iniettati qui all'import del backend. In PowerShell
+# resta solo cio' che si ESEGUE - fit, plan, state, apply - perche' e' codice che
+# interroga questa macchina, non testo da tradurre e tenere allineato in quattro
+# posti. Un tweak che compare qui senza una voce nel catalogo non e' un tweak a
+# meta': e' una card senza nome e senza rischio, quindi non viene mostrato.
+$__TWMETA_JSON = @'
+__TWEAK_META__
+'@
+$script:TWMETA = @{}
+# Niente @() attorno alla pipeline: in PS 5.1 ConvertFrom-Json non ENUMERA
+# l'array, lo emette come oggetto singolo, quindi @(...) restituisce un elemento
+# solo - l'array intero - e il foreach girerebbe una volta con $__m.id uguale a
+# tutti i 35 id concatenati. E' la stessa asimmetria di ConvertTo-Json che
+# collassa gli array di un elemento: la conversione JSON di PowerShell non e'
+# mai una biiezione, e va guardata in faccia ogni volta.
+$__twMetaAll = $__TWMETA_JSON | ConvertFrom-Json
+foreach ($__m in $__twMetaAll) { $script:TWMETA["$($__m.id)"] = $__m }
+if ($script:TWMETA.Count -eq 0) {
+  Say-Err 'Catalogo dei tweak non ricevuto dal backend: nessuna ottimizzazione disponibile. Aggiorna l agent.'
+}
+$__twOk = @()
+foreach ($__t in $script:TWEAKS) {
+  $__meta = $script:TWMETA["$($__t.id)"]
+  if (-not $__meta) {
+    Say-Warn ("Tweak '{0}' assente dal catalogo del backend: lo salto." -f $__t.id)
+    continue
+  }
+  foreach ($__k in @('cat','name','risk','problem','reason','desc','impact')) { $__t[$__k] = "$($__meta.$__k)" }
+  # Non insieme agli altri: "$($__meta.requires_reboot)" e' la STRINGA 'False',
+  # e in PowerShell una stringa non vuota e' vera. Un campo booleano
+  # interpolato e' un campo booleano che vale sempre $true.
+  $__t['requires_reboot'] = [bool]$__meta.requires_reboot
+  $__twOk += $__t
+}
+$script:TWEAKS = $__twOk
 
 $script:PRESETS = @{
   'competitivo' = @('power','gaming','priority','mpo','gpu_msi','amd_ulps','nvidia_tel','fse','power_throttling','standby_clear','mouse','timer','usb','stickykeys','network','nic_power','qos','visual','bgapps','paging_exec','ntfs')
@@ -3377,6 +3243,7 @@ function Show-WebGui {
       $arr += @{
         id = $t.id; cat = $t.cat; name = $t.name; problem = $t.problem
         reason = $t.reason; desc = $t.desc; impact = $t.impact; risk = $t.risk
+        requires_reboot = [bool]$t.requires_reboot
         # `state` resta il testo per l'utente, `state_code` e' quello su cui la
         # GUI decide colore e conteggi: prima li deduceva dal testo con una regex.
         state = $st.label; state_code = $st.code
@@ -4106,8 +3973,16 @@ if ($MODE -eq 'autopilot' -or $MODE -eq 'cleanup') {
   Say "`n[AUTO-PILOT] Analisi del sistema in corso..." 'Cyan'
   $__apBefore = $null; try { $__apBefore = Get-Health } catch {}
   $__apApplied = @()
+  $__apRinviati = @()
   foreach ($t in $script:TWEAKS) {
     if ($t.risk -ne 'safe') { continue }
+    # Un tweak che ha effetto solo dopo il riavvio non puo' stare in un ciclo
+    # che misura il "dopo" due secondi piu' tardi: verrebbe applicato, contato
+    # fra gli applicati e messo in un confronto prima/dopo in cui non era
+    # ancora attivo. Il rapporto ne uscirebbe piu' povero proprio dei tweak di
+    # latenza, e l'utente resterebbe con un riavvio in sospeso che nessuno gli
+    # ha detto. Il criterio e' il riavvio, non il rischio: sono cose diverse.
+    if ($t.requires_reboot) { $__apRinviati += $t.name; continue }
     $__fit = 'ok'; if ($t.fit) { try { $__fit = & $t.fit } catch { $__fit = 'ok' }; if (-not $__fit) { $__fit = 'ok' } }
     if ("$__fit" -like 'skip*') { continue }
     $__st = 'n/d'; try { $__st = & $t.state } catch { $__st = 'n/d' }
@@ -4119,6 +3994,11 @@ if ($MODE -eq 'autopilot' -or $MODE -eq 'cleanup') {
     } catch { Say-Warn ("  {0}" -f $t.name) }
   }
   Save-Backup
+  if ($__apRinviati.Count -gt 0) {
+    # Esclusi, non nascosti: restano applicabili dalla finestra Ottimizzazioni,
+    # dove il riavvio si puo' chiedere e aspettare.
+    Say-Info ("{0} tweak richiedono un riavvio e restano fuori: {1}. Applicali dalla GUI quando puoi riavviare." -f $__apRinviati.Count, ($__apRinviati -join ', ')) 'AUTO-PILOT'
+  }
   Say ("`n[AUTO-PILOT] {0} tweak applicati. Misuro il dopo..." -f $__apApplied.Count) 'Cyan'
   Start-Sleep -Seconds 2
   $__apAfter = $null; try { $__apAfter = Get-Health } catch {}
@@ -5354,3 +5234,27 @@ def _load_gui_html() -> str:
 
 GUI_HTML = _load_gui_html()
 PS_SCRIPT = PS_SCRIPT.replace("__GUI_HTML__", GUI_HTML)
+
+
+# ---------------------------------------------------------------------------
+# Il catalogo dei tweak: uno solo, e sta in tweak_catalog.py
+# ---------------------------------------------------------------------------
+# Fino alla v0.9.0 nome, categoria, rischio e testi di ogni tweak erano scritti
+# a mano qui dentro E in altri tre posti (routers/profiles.py, lab_registry.py,
+# il prompt del Gameplay Doctor). Quattro elenchi che nessuno aggiornava
+# insieme, e infatti erano gia' divergenti. Ora l'agent conserva solo gli id e i
+# blocchi eseguibili, e riceve il resto di qui.
+#
+# `ensure_ascii=True` non e' pignoleria: powershell.exe legge lo script senza
+# BOM, quindi un carattere fuori dall'ASCII diventa mojibake nella console. In
+# JSON esce come \uXXXX, che e' ASCII sul file e torna intero dopo il parse.
+def _tweak_meta_json() -> str:
+    blob = _json.dumps(tweak_catalog.agent_entries(), ensure_ascii=True, indent=1)
+    # Il JSON finisce in una here-string @'...'@: una riga che comincia con '@
+    # la chiuderebbe in anticipo, ed e' lo stesso vincolo che vale per la GUI.
+    if any(r.lstrip().startswith("'@") for r in blob.split("\n")):
+        raise RuntimeError("i metadati dei tweak chiuderebbero la here-string PowerShell")
+    return blob
+
+
+PS_SCRIPT = PS_SCRIPT.replace("__TWEAK_META__", _tweak_meta_json())

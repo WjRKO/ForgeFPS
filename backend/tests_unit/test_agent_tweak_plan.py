@@ -30,8 +30,8 @@ def _tweaks():
     i = PS.index("$script:TWEAKS = @(")
     fine = PS.index("\n)\n", i)
     corpo = PS[i:fine]
-    pezzi = corpo.split("\n  @{ cat=")[1:]
-    return ["@{ cat=" + p for p in pezzi]
+    pezzi = corpo.split("\n  @{ id=")[1:]
+    return ["@{ id=" + p for p in pezzi]
 
 
 TWEAKS = _tweaks()

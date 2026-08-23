@@ -9,6 +9,119 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 
 _Prossime feature in sviluppo — vedi `/app/memory/ROADMAP.md`._
 
+### Fixed — l'Auto-Pilot non applica piu' tweak che aspettano un riavvio
+
+L'Auto-Pilot misura la salute, applica ogni tweak `safe` non ancora attivo,
+aspetta **due secondi** e rimisura. Quattro tweak del lotto hanno effetto solo
+dopo il riavvio — `mpo`, `gpu_msi`, `timer`, `nic_power` — e venivano comunque
+applicati, contati fra gli `applied` e spediti a `/api/autopilot/agent/result`
+dentro un confronto prima/dopo in cui **non erano ancora attivi**.
+
+- Il rapporto sottostimava proprio i tweak di latenza: quelli che avrebbero
+  potuto guadagnare qualcosa erano gli unici a non poterlo mostrare.
+- L'utente restava con un riavvio in sospeso che nessuno gli aveva detto: il
+  Laboratorio ha `Invoke-LabRebootPrompt` apposta, l'Auto-Pilot non aveva nulla.
+- `gpu_msi` scrive nel ramo Interrupt Management della GPU — la modifica piu'
+  pesante del catalogo — e partiva senza una domanda, perche' la scala binaria
+  dell'agent non aveva un gradino fra 'safe' e 'caution'.
+
+Il filtro ora e' `requires_reboot`, non il rischio: sono due cose diverse, e il
+campo esiste gia' nel catalogo per tutti e 35 i tweak. I quattro esclusi
+vengono **elencati a fine corsa** — «richiedono un riavvio e restano fuori:
+... Applicali dalla GUI quando puoi riavviare» — perche' un tweak che sparisce
+senza una riga e' un tweak che l'utente crede applicato.
+
+- **La GUI non indovina piu' il riavvio dalla prosa.** `needsReboot()` cercava
+  `richiede riavvio` dentro `desc`/`impact`/`problem`/`reason`: funzionava per
+  coincidenza, e da quella regex dipendono il filtro «No riavvio», la pillola
+  del tempo, il conteggio del riepilogo e il dialogo finale col bottone
+  «Riavvia ora». Riscrivere un `impact` in «serve un riavvio» li avrebbe spenti
+  tutti in silenzio. Ora il DTO porta `requires_reboot` e la GUI lo preferisce,
+  con la regex come ripiego per gli agent che non inviano ancora il campo.
+- Nel merge dei metadati il booleano **non passa dall'interpolazione**: in
+  PowerShell `[bool]'False'` e' `$true`, quindi un campo booleano reso stringa
+  sarebbe vero per sempre e il filtro avrebbe escluso tutti i tweak.
+
+### Fixed — il bottone del Gameplay Doctor nomina un tweak che esiste
+
+`gui_tweak` e' l'unico campo del referto scelto dal modello che diventa poi un
+comando nell'interfaccia, e non lo validava nessuno: l'id finiva nel referto
+salvato e da li' sull'etichetta del bottone. Un id inventato, o rimasto indietro
+dopo una rinomina, veniva mostrato all'utente com'era.
+
+- Il backend risolve ogni `gui_tweak` contro il catalogo, **sia in scrittura sia
+  in lettura**: riaprire un referto vecchio non rimette in pagina un bottone che
+  mente. Un id sconosciuto diventa `null` e il bottone non viene disegnato — il
+  consiglio testuale resta, la promessa che non si puo' mantenere no. La chiave
+  resta sempre presente, quindi la forma del referto non cambia.
+- Il referto porta ora anche `gui_tweak_name`, e il bottone mostra **il nome del
+  tweak invece dell'id**: «Applica in GUI: Piano energetico prestazioni massime»
+  al posto di «Applica in GUI: power». Vale anche per le alternative, dove l'id
+  compariva fra parentesi quadre. Il nome e' quello del catalogo, in italiano
+  anche in inglese: e' gia' cosi' che la pagina Profili elenca i tweak.
+- **Resta aperto**: il click apre comunque la GUI generica in modalita'
+  `optimize`, perche' `onApply` scarta il proprio argomento e
+  `/agent/launch-uri` accetta solo `mode` e `silent`. Ora l'etichetta e' vera e
+  il tweak esiste, ma non viene pre-selezionato. La meccanica per farlo c'e'
+  gia' (`$script:PROFILE` / `__PROFILE_IDS__`); manca il pezzo nell'URI firmato,
+  che ha un vincolo di retrocompatibilita' sull'HMAC `mode|ts`.
+
+### Changed — un catalogo dei tweak, non quattro
+
+Nome, categoria, rischio e testi di ogni tweak vivevano in **quattro elenchi
+scritti a mano**: `$script:TWEAKS` nell'agent PowerShell, `TWEAK_CATALOG` in
+`routers/profiles.py`, `TWEAKS` in `lab_registry.py` e `_GD_GUI_TWEAKS` dentro
+la stringa di prompt del Gameplay Doctor. Aggiungere un tweak voleva dire
+ricordarsene in quattro posti, e il quarto era quello che nessuno ricordava.
+
+Erano gia' divergenti, e non in modo innocuo:
+
+- il prompt del Gameplay Doctor descriveva `debloat` come «Debloat servizi»
+  mentre l'apply rimuove **app UWP**: il consiglio dato all'utente non era la
+  cosa che il bottone esegue;
+- lo stesso prompt conosceva **15 tweak su 35**, e fra i 20 assenti c'erano
+  `gpu_msi`, `standby_clear`, `power_throttling` e `nic_power` — cioe' proprio i
+  tweak per micro-stutter e latenza DPC, che sono due delle diagnosi che quel
+  prompt deve produrre. Diagnosi corretta, fix non proponibile;
+- `lab_registry` chiamava `gaming` «Boost gaming (Game Mode, Game DVR off)»
+  mentre l'apply attiva **anche HAGS**;
+- `mpo`, `dns`, `search_index` e `standby_clear` avevano nomi diversi fra web e
+  agent.
+
+Ora il catalogo e' **`backend/tweak_catalog.py`** e i quattro consumatori lo
+derivano. In PowerShell restano gli `id` e i soli blocchi eseguibili — `fit`,
+`plan`, `state`, `apply` — perche' sono codice che interroga la macchina, non
+testo; i metadati vengono iniettati in `PS_SCRIPT` all'import, come si faceva
+gia' con `agent_gui.html`. I valori che l'agent riceve sono **identici a prima**,
+verificati confrontando il catalogo fuso in PowerShell con quello precedente.
+
+- **Il rischio e la spunta predefinita non sono piu' la stessa cosa.** L'agent
+  usava `caution` per decidere tre cose insieme (colore della card, spunta
+  iniziale, ammissione all'Auto-Pilot) mentre il Lab ragionava su una scala a
+  quattro livelli, e le due scale erano in disaccordo su `mpo`, `gpu_msi` e
+  `timer`. Ora `risk` sta sulla scala del Lab e la spunta ha il suo campo,
+  `default_on`; `agent_risk()` ricostruisce la stringa binaria per la GUI, che
+  non si accorge di niente.
+- **Un livello di rischio sconosciuto non e' piu' il piu' sicuro.**
+  `_RISK_ORDER.get(x, 0)` faceva passare per `safe` qualunque valore non
+  previsto: un errore di battitura promuoveva il tweak invece di fermarlo. Ora
+  il registro si rifiuta di caricarsi e `/api/lab/registry` risponde 422 invece
+  di trattare un livello inventato come `medium`.
+- **`requires` dichiara l'hardware necessario** invece di nasconderlo in un
+  predicato Python, e vale sia per il Lab sia come documentazione. Conseguenza
+  voluta: **SysMain non viene piu' proposto dal Lab a chi non ha un SSD**, come
+  gia' faceva l'agent per conto suo — prima il Lab poteva sceglierlo e l'agent
+  applicarlo lo stesso, perche' il percorso del Lab non consulta `fit`. Il
+  registro passa a **1.2.0** proprio perche' la selezione puo' cambiare.
+- Un requisito **non verificabile** non fa piu' scartare il tweak: se le
+  `pc_specs` non elencano i dischi, l'assenza del dato non e' la prova che non
+  ci sia un SSD. Fa eccezione il produttore della GPU, dove restare prudenti era
+  gia' la regola.
+- `tests_unit/test_tweak_catalog.py` impedisce il ritorno del copia-incolla: gli
+  id dell'agent devono essere quelli del catalogo, l'array PowerShell non deve
+  tornare a contenere `name=` o `risk=`, e i preset dell'agent e i template dei
+  profili non possono citare tweak che non esistono.
+
 ### Fixed — la GUI non si rompe piu' sugli array di un elemento
 - `ConvertTo-Json` (PS 5.1) serializza un array di UN elemento come scalare:
   `@('x')` diventa `"x"`, non `["x"]`. La Diagnosi chiamava `.some` sul piano di
