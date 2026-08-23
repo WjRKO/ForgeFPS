@@ -1,6 +1,7 @@
 import { RefreshCw, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAutoSync } from "@/hooks/useAutoSync";
+import { syncLabels } from "@/lib/syncLabels";
 
 /**
  * Freshness badge globale (Fase 2 · Sync ambientale):
@@ -9,7 +10,9 @@ import { useAutoSync } from "@/hooks/useAutoSync";
  */
 export default function FreshnessBadge() {
   const { t } = useTranslation();
-  const { ageSec, tier, forceSync, running } = useAutoSync({ enabled: true });
+  // Stesse etichette del pulsante "Sincronizza ora": e' la stessa operazione,
+  // e da qualunque punto la si lanci deve rispondere nella lingua dell'utente.
+  const { ageSec, tier, forceSync, running } = useAutoSync({ enabled: true, labels: syncLabels(t) });
 
   if (tier === "unknown") return null;
 

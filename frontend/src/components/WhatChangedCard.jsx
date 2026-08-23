@@ -2,26 +2,9 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { History, TrendingDown, TrendingUp, Minus, AlertTriangle, ShieldCheck, ShieldAlert, Hourglass } from "lucide-react";
 import api from "@/lib/api";
+import { changeLabel } from "@/lib/changeLabels";
 
 
-const LABELS = {
-  it: {
-    gpu_driver_version: "Driver GPU", ram_speed_mhz: "Velocità RAM", rebar_status: "Resizable BAR",
-    cpu: "CPU", gpu: "GPU", ram: "RAM installata", ram_modules: "Moduli RAM",
-    os_build: "Build di Windows", bios: "BIOS", motherboard: "Scheda madre",
-    refresh_hz: "Refresh del monitor", resolution: "Risoluzione",
-    gpu_secondary: "GPU secondaria", cpu_socket: "Socket CPU",
-    startup_added: "Nuovi programmi all'avvio", startup_removed: "Programmi all'avvio rimossi",
-  },
-  en: {
-    gpu_driver_version: "GPU driver", ram_speed_mhz: "RAM speed", rebar_status: "Resizable BAR",
-    cpu: "CPU", gpu: "GPU", ram: "Installed RAM", ram_modules: "RAM modules",
-    os_build: "Windows build", bios: "BIOS", motherboard: "Motherboard",
-    refresh_hz: "Monitor refresh", resolution: "Resolution",
-    gpu_secondary: "Secondary GPU", cpu_socket: "CPU socket",
-    startup_added: "New startup programs", startup_removed: "Removed startup programs",
-  },
-};
 
 const IMPACT_STYLE = {
   high: "border-[#FF3B30]/50 text-[#FF3B30]",
@@ -37,7 +20,7 @@ const fmtDate = (iso) => {
 };
 
 function ChangeRow({ change, lang, c }) {
-  const label = LABELS[lang][change.kind] || change.kind;
+  const label = changeLabel(change.kind, lang);
   const isStartup = change.kind === "startup_added" || change.kind === "startup_removed";
   return (
     <li className={`border-l-2 pl-3 py-1.5 ${IMPACT_STYLE[change.impact] || IMPACT_STYLE.low}`}>

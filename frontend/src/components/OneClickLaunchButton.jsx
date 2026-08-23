@@ -51,7 +51,6 @@ export default function OneClickLaunchButton({
     try {
       const { data } = await api.get(`/agent/launch-uri?mode=${encodeURIComponent(mode)}&silent=0`);
       if (!data?.uri) throw new Error("no_uri");
-      const initialVis = document.visibilityState;
       const startedAt = Date.now();
       onLaunch?.(startedAt);
       window.location.href = data.uri;
@@ -61,14 +60,13 @@ export default function OneClickLaunchButton({
       // Polling per rilevare completamento
       const startTs = Date.now();
       const intervalMs = 3000;
-      let notInstalledFlagged = false;
       while (Date.now() - startTs < timeoutMs) {
         if (abortRef.current.stop) return;
         await new Promise((r) => setTimeout(r, intervalMs));
-        // Hint: se dopo 4s la tab non ha mai perso focus, forse l'agent non e' installato
-        if (!notInstalledFlagged && Date.now() - startedAt > 4000 && document.visibilityState === initialVis && initialVis === "visible") {
-          notInstalledFlagged = true;
-        }
+        // Qui stava un'euristica "forse l'agent non e' installato" basata sul
+        // fatto che la tab non avesse mai perso il focus: alzava un flag che
+        // nessuno leggeva. Il fallback col link di download lo mostra gia' lo
+        // stato `failed`, che e' un fatto e non un indizio.
         try {
           const done = await detectDone?.();
           if (done) {

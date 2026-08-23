@@ -1,30 +1,33 @@
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useCallback, useState } from "react";
 import api from "@/lib/api";
 import { useSilentLaunch } from "./useSilentLaunch";
+import { SYNC_TIMEOUT_MS } from "@/lib/syncLabels";
 
 /**
- * Sync ambientale (Fase 2):
- * - Legge /api/pc-specs, calcola l'eta' dell'ultimo sync (updated_at).
- * - Trigger automatico silent sync se:
- *   1. Ultimo sync > STALE_HOURS (default 24h) → all'apertura pagina
- *   2. Tab torna in focus dopo IDLE_HOURS di inattivita' (default 1h)
- * - Debounce: max 1 auto-sync ogni COOLDOWN_MIN (default 30 min) per non
- *   sovraccaricare il PC dell'utente.
- * - Espone { ageSec, tier, forceSync, refresh } per FreshnessBadge / AI hover.
+ * Eta' dell'ultimo sync + sync manuale per il badge di freschezza.
  *
- * tier: 'fresh' (< 10min) | 'warm' (< STALE_HOURS h) | 'stale' (>= STALE_HOURS h) | 'unknown'
+ * Nasceva come "sync ambientale": due trigger automatici - all'apertura pagina
+ * se i dati erano vecchi, e al ritorno di focus dopo un'ora di inattivita' -
+ * con un debounce per non tempestare il PC. In v0.7.4 sono stati disattivati:
+ * facevano navigare a un URI `frameforge://` a ogni login, quindi il browser
+ * chiedeva "Aprire FrameForge?" e, con un exe disallineato, si apriva pure una
+ * finestra PowerShell. Da allora il badge mostra lo stato e l'utente clicca.
+ *
+ * Restava pero' l'impalcatura dei trigger spenti: il debounce `canAutoSync()`
+ * definito e mai chiamato, il timestamp dell'ultimo idle scritto in
+ * localStorage e mai riletto "per potenziali future analytics", le costanti che
+ * li taravano. Codice che non si esegue non si rompe mai in modo visibile: si
+ * limita a far credere a chi legge che ci sia un comportamento che non c'e'.
+ * Quel che serviva davvero e' in git; qui resta cosa il badge mostra oggi.
+ *
+ * tier: 'fresh' (< 10min) | 'warm' (< 24h) | 'stale' (>= 24h) | 'unknown'
  */
 const STALE_HOURS = 24;
-const IDLE_HOURS = 1;
-const COOLDOWN_MIN = 30;
 const FRESH_MIN = 10;
-const LS_LAST_AUTO = "ff_autosync_last_ts";
-const LS_LAST_HIDDEN = "ff_last_hidden_ts";
 
-export function useAutoSync({ enabled = true, onSynced } = {}) {
+export function useAutoSync({ enabled = true, labels, onSynced } = {}) {
   const [updatedAt, setUpdatedAt] = useState(null);
   const [now, setNow] = useState(Date.now());
-  const triggeredRef = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -37,20 +40,16 @@ export function useAutoSync({ enabled = true, onSynced } = {}) {
     }
   }, []);
 
-  // Silent sync
   const sync = useSilentLaunch({
     mode: "sync",
-    timeoutMs: 60000,
-    labels: {
-      starting: "",
-      running: "",
-      done: "",
-      failed: "",
-    },
+    timeoutMs: SYNC_TIMEOUT_MS,
+    // Le etichette arrivano da chi ha `t`. Prima erano quattro stringhe vuote,
+    // che l'hook trattava come "non passate" e sostituiva con i propri default
+    // in italiano: il badge parlava italiano anche in inglese.
+    labels,
     detectDone: async () => {
       const u = await refresh();
       if (u && u !== updatedAt) {
-        try { window.localStorage.setItem(LS_LAST_AUTO, String(Date.now())); } catch (e) { console.error("LS write failed", e); }
         onSynced?.(u);
         return true;
       }
@@ -58,56 +57,23 @@ export function useAutoSync({ enabled = true, onSynced } = {}) {
     },
   });
 
-  const canAutoSync = () => {
-    try {
-      const last = parseInt(window.localStorage.getItem(LS_LAST_AUTO) || "0", 10);
-      if (!last) return true;
-      return Date.now() - last > COOLDOWN_MIN * 60 * 1000;
-    } catch { return true; }
-  };
-
   const forceSync = useCallback(() => {
     if (sync.running) return;
     sync.launch();
   }, [sync]);
 
-  // Trigger 1 (disabilitato v0.7.4): auto-launch al carico pagina.
-  // Prima causava un URI navigation ad ogni login/reload che apriva un popup
-  // "Aprire FrameForge?" nel browser e (con exe non allineato) una finestra
-  // PowerShell visibile. Ora il badge mostra solo lo status; l'utente clicca
-  // manualmente per sincronizzare quando vuole.
-  useEffect(() => {
-    if (!enabled || triggeredRef.current) return;
-    (async () => {
-      const u = await refresh();
-      if (!u) return;
-      // Nessun sync automatico: se i dati sono vecchi lo segnala il badge in pagina,
-      // che e' gia' il canale giusto verso l'utente.
-    })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled]);
-
-  // Trigger 2 (disabilitato v0.7.4): auto-launch al ritorno di focus dopo idle.
-  // Stessa motivazione del Trigger 1. Manteniamo solo il tracking dell'idle
-  // per potenziali future analytics; nessuna azione automatica.
+  // All'apertura: quanto sono vecchi i dati. Nessun sync automatico.
   useEffect(() => {
     if (!enabled) return;
-    const onVis = () => {
-      if (document.visibilityState === "hidden") {
-        try { window.localStorage.setItem(LS_LAST_HIDDEN, String(Date.now())); } catch (e) { console.error("LS write failed", e); }
-      }
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, [enabled]);
+    refresh();
+  }, [enabled, refresh]);
 
-  // Ticker to keep 'now' updated per age display (every 30s)
+  // Ticker per tenere aggiornata l'eta' mostrata (ogni 30s)
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(id);
   }, []);
 
-  // Compute age + tier
   let ageSec = null, tier = "unknown";
   if (updatedAt) {
     try {
