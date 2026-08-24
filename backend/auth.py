@@ -23,6 +23,12 @@ REFRESH_DAYS = 7
 MAX_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
 COOKIE_SECURE = os.environ.get("FRONTEND_URL", "").startswith("https")
+# Base per i link nelle email transazionali.
+FRONTEND_URL = (os.environ.get("FRONTEND_URL") or "").rstrip("/") or "http://localhost:3000"
+# Un solo invio di reset ogni due minuti per account: l'endpoint e' pubblico e
+# manda email, quindi senza freno e' un modo per riempire la casella di qualcun
+# altro e per bruciare la quota di invio.
+RESET_COOLDOWN_MINUTES = 2
 
 
 def get_jwt_secret() -> str:
@@ -281,23 +287,48 @@ def build_auth_router(db):
 
     @router.post("/forgot-password")
     async def forgot(data: ForgotInput, request: Request):
-        user = await db.users.find_one({"email": data.email.lower()})
+        email = data.email.lower()
+        user = await db.users.find_one({"email": email})
         if user:
-            token = secrets.token_urlsafe(32)
-            # Salva token con metadati denormalizzati per il pannello admin
-            # (finché non integriamo email vera via Resend: /api/admin/password-resets
-            # permette all'admin di consegnare il link a mano all'utente).
-            await db.password_reset_tokens.insert_one({
-                "token": token,
-                "user_id": str(user["_id"]),
-                "email": data.email.lower(),
-                "created_at": datetime.now(timezone.utc),
-                "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
-                "used": False,
-                "used_at": None,
-                "ip": (request.client.host if request.client else None) if request else None,
+            ora = datetime.now(timezone.utc)
+            # Se un link valido e' stato appena mandato, non se ne conia un altro.
+            recente = await db.password_reset_tokens.find_one({
+                "user_id": str(user["_id"]), "used": False,
+                "created_at": {"$gte": ora - timedelta(minutes=RESET_COOLDOWN_MINUTES)},
             })
-            print(f"[PASSWORD RESET] Link: /reset-password?token={token}")
+            if not recente:
+                token = secrets.token_urlsafe(32)
+                # I metadati denormalizzati servono al pannello admin, che resta
+                # la via di riserva quando l'email non parte.
+                await db.password_reset_tokens.insert_one({
+                    "token": token,
+                    "user_id": str(user["_id"]),
+                    "email": email,
+                    "created_at": ora,
+                    "expires_at": ora + timedelta(hours=1),
+                    "used": False,
+                    "used_at": None,
+                    "ip": (request.client.host if request.client else None) if request else None,
+                })
+                # Il link va all'utente per email. Prima veniva stampato su
+                # stdout: un token di presa di controllo dell'account finiva
+                # nei log della piattaforma, dove resta e dove lo legge
+                # chiunque abbia accesso ai log.
+                inviata = None
+                try:
+                    from email_service import send_password_reset
+                    inviata = await send_password_reset(
+                        email, f"{FRONTEND_URL}/reset-password?token={token}", user.get("name") or "")
+                except Exception as exc:
+                    logger.warning("invio del reset password fallito: %s", exc)
+                if not inviata:
+                    # Senza il token: il link resta recuperabile dal pannello
+                    # admin, che e' il canale previsto quando l'email non c'e'.
+                    logger.warning(
+                        "Reset password per %s non consegnato via email: il link e' in /api/admin/password-resets",
+                        email)
+        # La risposta e' la stessa che l'email esista o no: non e' un modo per
+        # sapere chi ha un account qui.
         return {"ok": True, "message": "If the email exists, a reset link was sent."}
 
     @router.post("/reset-password")

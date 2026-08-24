@@ -9,6 +9,102 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 
 _Prossime feature in sviluppo — vedi `/app/memory/ROADMAP.md`._
 
+### Security — il link di reset arriva all'utente, non ai log
+
+`POST /api/auth/forgot-password` stampava il token su stdout:
+
+```python
+print(f"[PASSWORD RESET] Link: /reset-password?token={token}")
+```
+
+In un deploy containerizzato quella riga finisce nell'aggregatore di log della
+piattaforma, e un token di reset e' una **presa di controllo dell'account** per
+un'ora. Non era una riga di debug dimenticata: era il canale di consegna,
+perche' `email_service` era collegato a benvenuto, trial e pagamenti ma **non al
+reset**. Di conseguenza l'unico altro modo di consegnare il link era
+`/api/admin/password-resets`, cioe' un admin che legge il token di un utente.
+
+- `send_password_reset` collegata al flusso: il link va all'utente per email,
+  con il template delle altre transazionali.
+- La `print` non c'e' piu'. Se l'invio fallisce, nel log va **il fatto e dove
+  trovare il link** (il pannello admin resta la via di riserva), non il segreto.
+- **Un solo invio ogni due minuti per account.** L'endpoint e' pubblico e manda
+  email: senza freno e' un modo per riempire la casella di qualcun altro e per
+  bruciare la quota di invio. Dentro la finestra non si conia nemmeno un nuovo
+  token, cosi' il link gia' ricevuto resta valido.
+- La risposta resta identica per un indirizzo che esiste e per uno che non
+  esiste: l'endpoint non dice chi ha un account.
+
+Il fake di collezione usato dai test unit ha imparato `insert_one` e i confronti
+d'ordine (`$gte` e compagnia), che servivano alla finestra temporale.
+
+### Security — un '*' in una variabile d'ambiente non apre piu' il CORS
+
+`get_cors_origin_regex()` traduceva un `*` in `CORS_ORIGINS` nella regex `.*`,
+e il middleware gira con `allow_credentials=True`: qualunque sito avrebbe potuto
+fare richieste autenticate e **leggerne la risposta**. E' la combinazione che le
+librerie normalmente vietano, ed era raggiungibile con un carattere in un file di
+configurazione — cosa gia' successa una volta per far funzionare un preview
+(`memory/PRD.md`, deployment run 1). La stessa PRD annotava che il codice
+«scarta '*'»: era vero prima che quella funzione lo reintroducesse dall'altra
+parte.
+
+- Un `*` in `CORS_ORIGINS` viene **ignorato con un avviso** che spiega cosa
+  usare al posto suo. Il servizio non si ferma e non resta aperto.
+- La regex non si deriva piu' da niente: si dichiara in `CORS_ORIGIN_REGEX`.
+  Serve perche' il caso vero esiste — i preview URL con prefisso casuale — e
+  senza una via legittima il `*` torna.
+- **Una regex che accetta anche gli estranei viene rifiutata**, perche' sarebbe
+  lo stesso buco da un'altra porta. Il controllo guarda il comportamento e non
+  la stringa: si prova la regex contro due origin estranei con lo stesso
+  `fullmatch` che usa Starlette, cosi' cadono `.*`, `.+`, `(?s).*` e
+  `https?://.*` senza doverli elencare.
+
+Verificato durante l'audit: nessun wildcard nel `.env` di questa macchina, e
+`.env` non e' mai stato committato (`git log --all` vuoto, ignorato da
+`.gitignore:121`). Il buco era latente, non aperto.
+
+### Security — il backend non va piu' dove gli dice l'utente
+
+`POST /api/products/track` accettava un `url: str` **senza alcuna validazione** e
+lo passava a `requests.get`. Il backend e' l'unica cosa che raggiunge MongoDB —
+il `docker-compose` lo mette apposta su una rete interna non pubblicata — quindi
+quell'URL era la strada per arrivarci, insieme a `169.254.169.254` (metadata del
+cloud) e agli endpoint interni del backend stesso. Bastava un account
+registrato, e la registrazione e' aperta.
+
+Due aggravanti:
+
+- **Non era cieca.** L'errore restituito era `f"Impossibile leggere la pagina:
+  {str(e)[:120]}"`: connessione rifiutata, timeout ed errore DNS diventavano
+  distinguibili, cioe' una scansione della rete interna fatta dal server.
+- **Era persistente.** `scheduled_price_check` rilegge gli URL salvati a
+  intervalli: bastava salvarne uno una volta perche' la richiesta venisse
+  rifatta per sempre, senza l'attaccante collegato.
+
+Ora ogni uscita passa da **`backend/url_guard.py`**: solo `http`/`https`, solo
+porte 80/443, e l'host deve risolvere a indirizzi **tutti pubblici** — basta un
+indirizzo privato fra quelli restituiti dal DNS per rifiutare, perche' chi
+controlla il DNS puo' rispondere con uno pubblico e uno privato. Gli IPv4
+mappati in IPv6 (`::ffff:127.0.0.1`) vengono ricondotti al loro IPv4 prima del
+giudizio, altrimenti il loopback rientrerebbe dalla porta di servizio.
+
+- **I redirect non sono piu' automatici.** `allow_redirects=False` e la stessa
+  verifica rifatta a ogni salto: un sito che risponde 302 verso `127.0.0.1`
+  aggirerebbe qualunque controllo fatto sul solo URL iniziale.
+- **I messaggi non sono piu' un oracolo**: il motivo preciso resta nel log del
+  server, all'utente arriva una frase sola. Distinguere «non risolve» da «e' un
+  indirizzo interno» sarebbe uno strumento per mappare la rete.
+- `requests` non e' piu' importato in `scraper.py`: lasciarlo li' e' un invito a
+  rifare una GET diretta.
+
+**Limite dichiarato nel modulo**: fra la risoluzione del nome e l'apertura della
+connessione il DNS puo' cambiare risposta (DNS rebinding). Chiuderlo del tutto
+richiede un transport adapter che si connetta all'IP verificato passando il nome
+nell'header Host. Qui il costo dell'attacco si alza molto, ma la finestra resta —
+ed e' meglio scritta nel codice che scoperta dopo.
+
+
 ### Security — l'agent non esegue piu' un binario che non ha messo lui
 
 `Start-Fps` scaricava PresentMon in `%TEMP%\PresentMon.exe` e lo lanciava, con
