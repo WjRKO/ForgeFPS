@@ -15,10 +15,10 @@
 // L'hash va preso dall'allegato PUBBLICATO: il tag fa partire la CI, che
 // riscrive l'allegato con la propria build. Vedi il commento piu' lungo
 // sopra AGENT_ZIP_SHA256 in backend/routers/pc.py.
-export const AGENT_EXE_URL = "https://github.com/WjRKO/ForgeFPS/releases/download/v0.9.0/forgefps-agent.zip";
-export const AGENT_EXE_SHA256 = "ee9131506b2b210b53feaa0e4b2b50a181e4ab1649edb7c1d63d0c47198c28e9";
-export const AGENT_EXE_VERSION = "v0.9.0";
-export const AGENT_EXE_DATE = "2026-08-22";
+export const AGENT_EXE_URL = "https://github.com/WjRKO/ForgeFPS/releases/download/v0.9.1/forgefps-agent.zip";
+export const AGENT_EXE_SHA256 = "12e1ea2c70ec7f188f34b034e3e42e8f0c165fb6b654dc7b414e44f0861b8f0d";
+export const AGENT_EXE_VERSION = "v0.9.1";
+export const AGENT_EXE_DATE = "2026-08-24";
 export const AGENT_EXE_FORMAT = "zip"; // "zip" (onedir) | legacy: "exe" (onefile)
 export const AGENT_RELEASES_URL = "https://github.com/WjRKO/ForgeFPS/releases";
 export const AGENT_REPO_URL = "https://github.com/WjRKO/ForgeFPS";
