@@ -6,6 +6,7 @@ Template supportati:
     - welcome              (POST /api/auth/register)
     - payment_success      (Stripe webhook checkout.session.completed)
     - payment_failed       (Stripe webhook invoice.payment_failed)
+    - password_reset       (POST /api/auth/forgot-password)
 
 Filosofia:
     - Fire-and-forget: se Resend fallisce, loggamo e proseguiamo (mai bloccare user flow)
@@ -127,6 +128,29 @@ async def send_welcome(to: str, name: str = "") -> Optional[str]:
     <p>Vuoi provare AI Advisor + Live Monitor? <strong>Attiva 14 giorni di Pro gratis</strong>, senza carta.</p>
     """
     return await send_email(to, "Benvenuto su FrameForge", _wrap("Benvenuto su FrameForge", "Il tuo account e' pronto — iniziamo?", body, f"{APP_ORIGIN}/app", "Vai al Dashboard"), tag="welcome")
+
+
+async def send_password_reset(to: str, link: str, name: str = "") -> Optional[str]:
+    """Il link di reset all'utente, per email.
+
+    Fino a qui il token non arrivava mai all'utente per posta: veniva stampato
+    su stdout - quindi finiva nei log della piattaforma, dove chiunque abbia
+    accesso ai log poteva prendersi un account - e restava leggibile agli admin
+    dal pannello. Un token di presa di controllo di un account non e' un dato
+    da tenere in un file di log.
+    """
+    display = name.strip() if name else to.split("@")[0]
+    body = f"""
+    <p>Ciao <strong style="color:#FAFAFA;">{display}</strong>,</p>
+    <p>Hai chiesto di reimpostare la password del tuo account FrameForge.
+       Il link qui sotto vale <strong>un'ora</strong> e si puo' usare una volta sola.</p>
+    <p style="color:#A1A1AA;font-size:13px;">Se non sei stato tu, ignora questa email:
+       la password resta quella di prima e nessuno ha avuto accesso all'account.</p>
+    """
+    return await send_email(
+        to, "Reimposta la password di FrameForge",
+        _wrap("Reimposta la password", "Il link vale un'ora e si usa una volta sola.", body, link, "Scegli una nuova password"),
+        tag="password_reset")
 
 
 async def send_trial_started(to: str, name: str, tier: str, days: int, expires_iso: str) -> Optional[str]:

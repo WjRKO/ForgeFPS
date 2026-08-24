@@ -1,6 +1,8 @@
 """Fake minimale di una collezione motor: quel tanto che serve ai test unit.
 
-Supporta i soli operatori usati dal codice sotto test: uguaglianza, `$ne`, `$in`.
+Supporta i soli operatori usati dal codice sotto test: uguaglianza, `$ne`, `$in`
+e i confronti d'ordine (`$gte`, `$gt`, `$lte`, `$lt`), che servono alle finestre
+temporali - per esempio il freno sugli invii di reset password.
 La proiezione viene ignorata (i test guardano il risultato, non i campi trasferiti).
 """
 from __future__ import annotations
@@ -14,6 +16,16 @@ def _matches(doc: dict, query: dict) -> bool:
                 return False
             if "$in" in cond and value not in cond["$in"]:
                 return False
+            for op, ok in (("$gte", lambda a, b: a >= b), ("$gt", lambda a, b: a > b),
+                           ("$lte", lambda a, b: a <= b), ("$lt", lambda a, b: a < b)):
+                if op in cond:
+                    if value is None:
+                        return False
+                    try:
+                        if not ok(value, cond[op]):
+                            return False
+                    except TypeError:
+                        return False
         elif value != cond:
             return False
     return True
@@ -52,6 +64,13 @@ class FakeCollection:
             if _matches(d, query or {}):
                 return d
         return None
+
+    async def insert_one(self, doc: dict):
+        # Il documento viene tenuto per riferimento: i test che modificano un
+        # campo dopo l'inserimento (per esempio invecchiare un `created_at`)
+        # devono vedere l'effetto senza dover riscrivere la collezione.
+        self.docs.append(doc)
+        return type("Esito", (), {"inserted_id": doc.get("_id")})()
 
 
 class FakeDb:

@@ -1,9 +1,13 @@
+import logging
 import re
 import json
 import asyncio
 from urllib.parse import urlparse, quote_plus
-import requests
 from bs4 import BeautifulSoup
+
+import url_guard
+
+logger = logging.getLogger("boostpc.scraper")
 
 HEADERS = {
     "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -125,7 +129,13 @@ def _detect_currency(text: str) -> str:
 
 
 def _get(url: str):
-    return requests.get(url, headers=HEADERS, timeout=15)
+    """Una GET verso l'esterno, e solo verso l'esterno.
+
+    La verifica sta in url_guard e viene rifatta a ogni redirect: qui non si
+    passa `requests.get` diretto perche' l'URL arriva dall'utente e il backend
+    e' l'unica cosa che vede la rete interna.
+    """
+    return url_guard.fetch(url, headers=HEADERS, timeout=15)
 
 
 def _first_text(soup, selectors):
@@ -247,9 +257,20 @@ def _scrape_sync(url: str) -> dict:
             result["status"] = "no_price"
             result["error"] = "Prezzo non rilevato. Inseriscilo manualmente."
         return result
-    except Exception as e:
+    except url_guard.UrlNonAmmesso as e:
+        # Il motivo preciso resta nel log: all'utente serve sapere che l'indirizzo
+        # non va bene, e distinguere "non risolve" da "e' un indirizzo interno"
+        # trasformerebbe il messaggio in uno strumento per mappare la rete.
+        logger.warning("URL rifiutato dal guard: %s (%s)", url, e)
         result["status"] = "error"
-        result["error"] = f"Impossibile leggere la pagina: {str(e)[:120]}"
+        result["error"] = "Questo indirizzo non e' tracciabile. Usa il link pubblico della pagina prodotto."
+        return result
+    except Exception as e:
+        # Stesso motivo: il testo dell'eccezione distingueva connessione rifiutata,
+        # timeout ed errore DNS, cioe' rispondeva a "cosa c'e' dietro questo IP?".
+        logger.warning("scraping fallito per %s: %s", url, e)
+        result["status"] = "error"
+        result["error"] = "Impossibile leggere la pagina. Inserisci nome e prezzo manualmente."
         return result
 
 
