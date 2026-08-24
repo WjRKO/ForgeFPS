@@ -64,7 +64,7 @@ def _iso_age(ts):
 # GitHub Release del ZIP generico dell'agent. Aggiornare a ogni bump di versione.
 AGENT_ZIP_UPSTREAM = os.environ.get(
     "AGENT_ZIP_UPSTREAM",
-    "https://github.com/WjRKO/ForgeFPS/releases/download/v0.9.0/forgefps-agent.zip",
+    "https://github.com/WjRKO/ForgeFPS/releases/download/v0.9.1/forgefps-agent.zip",
 )
 # SHA256 del ZIP a cui punta AGENT_ZIP_UPSTREAM. Non e' documentazione: viene
 # servito al self-updater dell'agent, che rifiuta di aggiornarsi se il file
@@ -80,7 +80,7 @@ AGENT_ZIP_UPSTREAM = os.environ.get(
 # pagina Download smette di funzionare — e' successo con la 0.9.0.
 AGENT_ZIP_SHA256 = os.environ.get(
     "AGENT_ZIP_SHA256",
-    "ee9131506b2b210b53feaa0e4b2b50a181e4ab1649edb7c1d63d0c47198c28e9",
+    "12e1ea2c70ec7f188f34b034e3e42e8f0c165fb6b654dc7b414e44f0861b8f0d",
 ).lower()
 # La directory temporanea va chiesta al sistema: con "/tmp" scritto a mano il
 # download dell'agent falliva con FileNotFoundError fuori da un container Linux.

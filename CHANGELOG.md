@@ -642,6 +642,12 @@ backend**, non con questa release.
   `AGENT_ZIP_SHA256`. `LATEST_AGENT_VERSION` e' derivata dall'URL, quindi
   finche' non si aggiorna quello il self-updater degli agent gia' installati
   continua a vedere la versione precedente e nessuno riceve il pacchetto nuovo.
+- Backend e pagina Download puntano al pacchetto `v0.9.1`. Lo SHA256 non e'
+  stato copiato dalle note della release: l'allegato pubblicato e' stato
+  scaricato e l'impronta ricalcolata, perche' e' l'unico controllo di integrita'
+  fra una release e le macchine degli utenti finche' l'eseguibile non e' firmato
+  — e con l'hash sbagliato il backend rifiuta di distribuire il pacchetto e la
+  pagina Download smette di funzionare, com'e' successo con la 0.9.0.
 
 ## [0.9.0] — 2026-08-22
 
