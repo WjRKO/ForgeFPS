@@ -622,6 +622,27 @@ verificati confrontando il catalogo fuso in PowerShell con quello precedente.
   Un mock che manda sempre array veri non poteva vedere questo difetto: la GUI
   passava tutte le prove e si rompeva sul primo PC.
 
+## [0.9.1] — 2026-08-24
+
+### Changed — versione dell'agent, per portare in campo la rilevazione unica
+
+L'exe non ha piu' un `collect_specs()` suo: `--mode sync` e la voce 7 del menu
+delegano allo script servito dal backend, che e' l'unico posto in cui la
+rilevazione viene mantenuta. Finche' il pacchetto pubblicato resta alla 0.9.0,
+chi avvia l'agent dall'icona continua a scrivere specs di qualita' diversa da
+chi preme il pulsante nella dashboard.
+
+**La correzione di sicurezza su PresentMon non e' in questo pacchetto, e non ne
+ha bisogno**: vive in `backend/ps_agent.py`, cioe' nello script PowerShell che
+l'exe riscarica a ogni lancio. Quella arriva agli utenti con il **deploy del
+backend**, non con questa release.
+
+- Le note di release del workflow non sono piu' inchiodate alla v0.7.8: usano il
+  tag e ricordano il passo successivo, cioe' aggiornare `AGENT_ZIP_UPSTREAM` e
+  `AGENT_ZIP_SHA256`. `LATEST_AGENT_VERSION` e' derivata dall'URL, quindi
+  finche' non si aggiorna quello il self-updater degli agent gia' installati
+  continua a vedere la versione precedente e nessuno riceve il pacchetto nuovo.
+
 ## [0.9.0] — 2026-08-22
 
 ### Fixed — un tweak che fallisce in silenzio non risulta piu' applicato

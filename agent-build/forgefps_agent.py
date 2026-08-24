@@ -78,7 +78,7 @@ _hide_console_if_silent(_args.uri)
 
 BACKEND_URL = _args.backend
 AGENT_TOKEN = _args.token
-AGENT_VERSION = "0.9.0"
+AGENT_VERSION = "0.9.1"
 # ---------------------------------------------------------------------------
 # Backup e journal: gli stessi file dell'agent PowerShell
 # ---------------------------------------------------------------------------
