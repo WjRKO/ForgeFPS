@@ -72,6 +72,14 @@ jobs:
           body: |
             **SHA256 (ZIP):** `${{ steps.hash.outputs.SHA256 }}`
 
-            v0.7.8 — Rebuild definitivo senza UAC prompt.
-            Manifest esplicito asInvoker + safety check che fa fallire la build
-            se rileva requireAdministrator embedded nell'exe.
+            Build di `${{ github.ref_name }}`, pacchetto `--onedir` con manifest
+            esplicito `asInvoker` e safety check che fa fallire la build se
+            rileva `requireAdministrator` embedded nell'exe.
+
+            Le note di questa versione sono generate dai commit qui sotto.
+
+            > Dopo la pubblicazione: aggiornare `AGENT_ZIP_UPSTREAM` e
+            > `AGENT_ZIP_SHA256` in `backend/routers/pc.py` con l'URL di questo
+            > tag e lo SHA qui sopra. `LATEST_AGENT_VERSION` viene derivata
+            > dall'URL, quindi finche' non lo aggiorni il self-updater degli
+            > agent installati continua a vedere la versione precedente.
