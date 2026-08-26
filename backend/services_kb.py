@@ -138,6 +138,7 @@ def analyze_services(audit, specs_data=None, games=None):
         state = str(a.get("state") or "")
         mode = str(a.get("start_mode") or "")
         dep = int(a.get("dependents") or 0)
+        trig = bool(a.get("trigger_start"))
         kb = SERVICES_KB.get(key)
         rec, why, cond = None, None, None
         if kb:
@@ -159,6 +160,15 @@ def analyze_services(audit, specs_data=None, games=None):
             continue
         if state != "Running" and mode != "Auto":
             rec = "gia_ok"
+        elif trig and mode != "Auto" and rec == "disattiva":
+            # Un servizio trigger-start non gira a vuoto: parte quando un evento
+            # lo richiede (Bluetooth accoppiato, stampante collegata, VPN che
+            # sale) e si ferma da solo. Disattivarlo non toglie niente all'avvio,
+            # rompe la funzione che lo chiama. Prima era indistinguibile da un
+            # Manual qualsiasi perche' l'agent non rilevava il flag.
+            rec = "valuta"
+            cond = {"it": "Parte solo su richiesta (avvio trigger): disattivarlo rompe la funzione che lo usa senza velocizzare l'avvio.",
+                    "en": "Trigger-start only: disabling it breaks the feature that calls it without speeding up boot."}
         elif dep > 2 and rec == "disattiva":
             rec = "valuta"
             cond = {"it": f"Attenzione: {dep} altri servizi dipendono da questo.",
@@ -169,6 +179,7 @@ def analyze_services(audit, specs_data=None, games=None):
             "name": a.get("name"), "display": a.get("display") or a.get("name"),
             "state": state, "start_mode": mode, "ram_mb": a.get("ram_mb"),
             "dependents": dep, "shared": bool(a.get("shared")),
+            "trigger_start": trig, "delayed": bool(a.get("delayed")),
             "recommendation": rec, "category": (kb or {}).get("cat", "altro"),
             "why": why, "condition": cond,
         })
@@ -194,7 +205,12 @@ def is_startup_noise(name, publisher=None):
     import re
     if _NOISE_RE is None:
         _NOISE_RE = re.compile(
-            r"(?i)securityhealth|windows security|windows defender|msmpeng"
+            r"(?i)securityhealth|windows security|sicurezza di windows|msmpeng"
+            # L'antivirus di sistema non e' una voce su cui l'utente possa
+            # agire, e i servizi Defender compaiono col nome localizzato
+            # ("Servizio Microsoft Defender Antivirus"): il match su
+            # "windows defender" non li prendeva.
+            r"|defender|antimalware"
             r"|rtkauduservice|ravcpl|ravbg|rtkngui|realtek hd audio|realtek audio console"
             r"|waves(svc|audio|sys)|maxxaudio"
             r"|syntp|synaptics pointing|etd(ctrl|tray)|elan.*(pointing|touchpad)"

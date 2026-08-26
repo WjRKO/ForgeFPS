@@ -54,6 +54,15 @@ const LS_PC_LOCALE = "ff_local_device";
 const pcLocale = () => { try { return window.localStorage.getItem(LS_PC_LOCALE) || null; } catch { return null; } };
 const ricordaPcLocale = (id) => { try { window.localStorage.setItem(LS_PC_LOCALE, id); } catch (e) { console.error("LS write failed", e); } };
 
+// Verdetto sulla voce di avvio, deciso dal backend (startup_kb.py). Qui c'e'
+// solo il colore: verde = si spegne senza conseguenze, giallo = dipende da come
+// usi il PC, rosso = non si tocca e infatti il bottone non c'e'.
+const SAFETY = {
+  sicuro: { cls: "bg-[#00FF66]/15 text-[#00FF66]" },
+  valuta: { cls: "bg-[#E5FF00]/15 text-[#E5FF00]" },
+  critico: { cls: "bg-[#FF3B30]/15 text-[#FF3B30]" },
+};
+
 const SPEC_KEYS = ["os", "cpu", "gpu", "ram", "disk", "motherboard", "resolution"];
 const specLabel = (t, k) => ({ os: t("mypcpage.sl_os"), cpu: "CPU", gpu: "GPU", ram: "RAM", disk: t("mypcpage.sl_disk"), motherboard: t("mypcpage.sl_mb"), resolution: t("mypcpage.sl_res") }[k]);
 
@@ -305,6 +314,8 @@ export default function MyPc() {
   const [analyzing, setAnalyzing] = useState(false);
   const [err, setErr] = useState("");
   const [showOff, setShowOff] = useState(false);
+  const [acting, setActing] = useState("");
+  const L = (obj) => (obj ? (lang === "en" ? obj.en : obj.it) : null);
   const [editing, setEditing] = useState(false);
   // I pannelli qui sotto leggono dal backend una volta sola, al mount. Dopo un
   // sync mostravano ancora i dati di prima: la griglia specs diceva RAM a 6000
@@ -449,6 +460,33 @@ export default function MyPc() {
       }
     },
   });
+
+  // Spegnere una voce non avviene nel browser: la decisione va in coda sul
+  // backend e la applica l'agent sul PC. Il lancio parte subito dopo, cosi' il
+  // clic ha un effetto visibile invece di restare "in attesa" senza spiegazioni.
+  const toggleStartup = async (voce, enable) => {
+    const chiave = `${voce.name}|${voce.source}`;
+    setActing(chiave);
+    try {
+      await api.post("/startup/toggle", { name: voce.name, source: voce.source, enable });
+      setSpecs((prec) => prec && ({
+        ...prec,
+        startup: (prec.startup || []).map((v) =>
+          // L'errore del tentativo precedente esce di scena qui: riguardava
+          // quel tentativo, non quello appena richiesto.
+          v.name === voce.name && v.source === voce.source
+            ? { ...v, pending_enable: enable, last_error: undefined }
+            : v),
+      }));
+      const nome = voce.display || voce.name;
+      toast.success(t(enable ? "mypcpage.startup_queued_on" : "mypcpage.startup_queued_off", { name: nome }));
+      syncLaunch.launch();
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally {
+      setActing("");
+    }
+  };
 
   const analyzeStartup = async () => {
     setAnalyzing(true); setErr("");
@@ -681,6 +719,7 @@ export default function MyPc() {
           const activeList = vis.filter((s) => s.enabled !== false);
           const offList = vis.filter((s) => s.enabled === false);
           const doneList = specs.startup_done || [];
+          const sicure = activeList.filter((x) => x.safety === "sicuro").length;
           const shown = [...activeList.slice(0, 30), ...(showOff ? offList : [])];
           return (
           <div>
@@ -689,7 +728,7 @@ export default function MyPc() {
                 ? t("mypcpage.startup_counts", { active: activeList.length, off: offList.length })
                 : t("mypcpage.startup_count", { count: activeList.length })}
               {noiseN > 0 && <span className="text-zinc-600"> · {t("mypcpage.startup_noise_hidden", { n: noiseN })}</span>}
-              {" · "}{t("mypcpage.startup_hint")}
+              {sicure > 0 && <span className="text-[#00FF66]"> · {t("mypcpage.startup_safe_count", { n: sicure })}</span>}
             </div>
             {doneList.length > 0 && (
               <div className="px-3 py-2 border-b border-[#1A1A24] bg-[#00FF66]/5 text-[11px]" data-testid="startup-done-strip">
@@ -705,13 +744,58 @@ export default function MyPc() {
                   </span>
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm truncate">{s.name}</div>
+                  {/* display = FileDescription dell'eseguibile, cioè il nome che
+                      mostra il Task Manager. Il name grezzo (spesso una chiave di
+                      registro tipo "RTHDVCPL") resta accanto per ritrovare la voce. */}
+                  <div className="text-sm truncate">
+                    {s.display || s.name}
+                    {s.display && s.display !== s.name && <span className="text-[11px] text-zinc-600"> ({s.name})</span>}
+                  </div>
                   <div className="text-[11px] text-zinc-500 truncate">
                     {s.publisher || t("mypcpage.startup_unsigned")}
                     {s.source && <span className="text-zinc-600"> · {t(`mypcpage.startup_src.${s.source}`, s.source)}</span>}
                   </div>
+                  {L(s.why) && <div className="text-[11px] text-zinc-600 truncate" title={L(s.why)}>{L(s.why)}</div>}
+                  {/* Senza questa riga un'azione fallita spariva in silenzio e
+                      il bottone tornava com'era: sembrava che il clic non fosse
+                      mai avvenuto. Il motivo (di solito: servono i permessi di
+                      amministratore) e' l'unica cosa che spiega perche' il
+                      programma e' ancora li'. */}
+                  {s.last_error && (
+                    <div className="text-[11px] text-[#FF3B3B] truncate" title={s.last_error}
+                         data-testid={`startup-error-${i}`}>
+                      {t("mypcpage.startup_failed", { msg: s.last_error })}
+                    </div>
+                  )}
                 </div>
+                {s.impact_ms ? (
+                  <span className="text-[11px] text-[#E5FF00] tabular-nums shrink-0" data-testid={`startup-impact-${i}`}>
+                    {t("mypcpage.startup_impact", { ms: s.impact_ms })}
+                  </span>
+                ) : null}
                 {s.ram_mb ? <span className="text-[11px] text-zinc-400 tabular-nums shrink-0">{s.ram_mb} MB</span> : null}
+                <span className={`text-[11px] font-bold uppercase tracking-widest px-1.5 py-0.5 shrink-0 ${SAFETY[s.safety]?.cls || SAFETY.valuta.cls}`}
+                      title={t(`mypcpage.startup_safety_hint.${s.safety || "valuta"}`)}
+                      data-testid={`startup-safety-${i}`}>
+                  {t(`mypcpage.startup_safety.${s.safety || "valuta"}`)}
+                </span>
+                {s.pending_enable !== undefined ? (
+                  <span className="text-[11px] text-[#00E0FF] shrink-0 w-24 text-right" data-testid={`startup-pending-${i}`}>
+                    {t(s.pending_enable ? "mypcpage.startup_pending_on" : "mypcpage.startup_pending_off")}
+                  </span>
+                ) : s.can_disable === false ? (
+                  <span className="text-[11px] text-zinc-600 shrink-0 w-24 text-right">{t("mypcpage.startup_locked")}</span>
+                ) : (
+                  <button
+                    data-testid={`startup-toggle-${i}`}
+                    onClick={() => toggleStartup(s, s.enabled === false)}
+                    disabled={acting === `${s.name}|${s.source}` || syncLaunch.running}
+                    className="text-[11px] uppercase tracking-widest px-2 py-1 shrink-0 w-24 border border-[#2A2A35] text-zinc-400 hover:text-[#E5FF00] hover:border-[#E5FF00] disabled:opacity-40 transition-colors">
+                    {acting === `${s.name}|${s.source}`
+                      ? "..."
+                      : t(s.enabled === false ? "mypcpage.startup_enable" : "mypcpage.startup_disable")}
+                  </button>
+                )}
               </div>
             ))}
             {offList.length > 0 && (
@@ -795,7 +879,13 @@ function ServicesCard({ t, lang }) {
                 <div className="text-[11px] text-[#00E0FF] mt-0.5">→ {t("mypcpage.services_how", { name: it.display })}</div>
               )}
             </div>
-            <span className="text-[11px] text-zinc-600 shrink-0 uppercase">{it.state === "Running" ? t("mypcpage.startup_on") : t("mypcpage.startup_off")} · {it.start_mode}</span>
+            <span className="text-[11px] text-zinc-600 shrink-0 uppercase text-right">
+              {it.state === "Running" ? t("mypcpage.startup_on") : t("mypcpage.startup_off")} · {it.start_mode}
+              {/* Un trigger-start parte quando serve e si ferma da solo: senza
+                  questa etichetta sembrava un Manual qualsiasi da spegnere. */}
+              {it.trigger_start && <div className="text-[#00E0FF] normal-case">{t("mypcpage.services_trigger")}</div>}
+              {it.delayed && <div className="text-zinc-500 normal-case">{t("mypcpage.services_delayed")}</div>}
+            </span>
           </div>
         );
       })}
