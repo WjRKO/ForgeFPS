@@ -11,7 +11,7 @@ from auth import build_auth_router, seed_admin
 from helpers import refresh_product_price
 import watchdog
 from settings import get_cors_origins, get_cors_origin_regex
-from routers import advisor, builds, products, pc, push_routes, admin, profiles, discord as discord_router, subscriptions, payments, overlay, community, milestones, lab, missions, devices as devices_router, autopilot as autopilot_router
+from routers import advisor, builds, products, pc, push_routes, admin, profiles, discord as discord_router, subscriptions, payments, overlay, community, milestones, lab, missions, devices as devices_router, autopilot as autopilot_router, dashboard as dashboard_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("boostpc")
@@ -21,7 +21,7 @@ auth_router, get_current_user = build_auth_router(db)
 scheduler = AsyncIOScheduler()
 
 app.include_router(auth_router)
-for module in (advisor, builds, products, pc, push_routes, admin, profiles, discord_router, subscriptions, payments, overlay, community, milestones, lab, missions, devices_router, autopilot_router):
+for module in (advisor, builds, products, pc, push_routes, admin, profiles, discord_router, subscriptions, payments, overlay, community, milestones, lab, missions, devices_router, autopilot_router, dashboard_router):
     app.include_router(module.build(get_current_user))
 
 
