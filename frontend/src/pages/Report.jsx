@@ -106,9 +106,9 @@ const DICT = {
 
 // higherBetter: true => increase is good. For bufferbloat, lower is better.
 const METRICS = [
-  { key: "health_score", labelKey: "health", icon: HeartPulse, unit: "", accent: "text-[#00FF66]", higherBetter: true },
-  { key: "bufferbloat_ms", labelKey: "bufferbloat", icon: Gauge, unit: "ms", accent: "text-[#00E0FF]", higherBetter: false },
-  { key: "fps_avg", labelKey: "fps", icon: Zap, unit: "FPS", accent: "text-[#E5FF00]", higherBetter: true },
+  { key: "health_score", labelKey: "health", icon: HeartPulse, unit: "", accent: "text-ok", higherBetter: true },
+  { key: "bufferbloat_ms", labelKey: "bufferbloat", icon: Gauge, unit: "ms", accent: "text-info", higherBetter: false },
+  { key: "fps_avg", labelKey: "fps", icon: Zap, unit: "FPS", accent: "text-volt", higherBetter: true },
   { key: "bench_overall", labelKey: "bench", icon: Cpu, unit: "", accent: "text-[#B388FF]", higherBetter: true },
 ];
 
@@ -117,7 +117,7 @@ function DeltaBadge({ value, higherBetter, c }) {
   if (value === 0) return <span className="inline-flex items-center gap-1 text-zinc-500 text-sm"><Minus size={13} /> {c.same}</span>;
   const good = higherBetter ? value > 0 : value < 0;
   const Icon = value > 0 ? TrendingUp : TrendingDown;
-  const color = good ? "text-[#00FF66]" : "text-[#FF3B30]";
+  const color = good ? "text-ok" : "text-bad";
   const sign = value > 0 ? "+" : "";
   return (
     <span className={`inline-flex items-center gap-1 text-sm font-bold ${color}`}>
@@ -407,7 +407,7 @@ export default function Report() {
   return (
     <div className="space-y-6" data-testid="report-page">
       <div>
-        <div className="text-[11px] uppercase tracking-[0.25em] text-[#E5FF00] mb-1">{c.eyebrow}</div>
+        <div className="text-[11px] uppercase tracking-[0.25em] text-volt mb-1">{c.eyebrow}</div>
         <h1 className="font-display font-black text-3xl sm:text-4xl tracking-tight">{c.title}</h1>
         <p className="text-zinc-500 text-sm mt-2 max-w-2xl">{c.sub}</p>
       </div>
@@ -415,8 +415,8 @@ export default function Report() {
       {/* How it works */}
       <div className="grid sm:grid-cols-3 gap-3">
         {[["1", c.step1, c.step1d], ["2", c.step2, c.step2d], ["3", c.step3, c.step3d]].map(([n, t, d]) => (
-          <div key={n} className="bg-[#0F0F12] border border-[#2A2A35] p-4 hover:border-[#E5FF00]/40 transition-colors" data-testid={`report-step-${n}`}>
-            <div className="w-7 h-7 bg-[#E5FF00] text-black font-black flex items-center justify-center mb-2">{n}</div>
+          <div key={n} className="bg-panel border border-hud p-4 hover:border-volt/40 transition-colors" data-testid={`report-step-${n}`}>
+            <div className="w-7 h-7 bg-volt text-black font-black flex items-center justify-center mb-2">{n}</div>
             <div className="font-semibold text-sm mb-1">{t}</div>
             <p className="text-xs text-zinc-500 leading-relaxed">{d}</p>
           </div>
@@ -426,24 +426,24 @@ export default function Report() {
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => capture("before")} disabled={!!busy} data-testid="capture-before-btn"
-          className="inline-flex items-center gap-2 border border-[#00E0FF]/50 text-[#00E0FF] px-4 py-2.5 hover:bg-[#00E0FF]/10 transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
+          className="inline-flex items-center gap-2 border border-info/50 text-info px-4 py-2.5 hover:bg-info/10 transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
           {busy === "before" ? <Loader2 size={15} className="animate-spin" /> : <Camera size={15} />} {c.capture_before}
         </button>
         <button onClick={() => capture("after")} disabled={!!busy} data-testid="capture-after-btn"
-          className="inline-flex items-center gap-2 border border-[#00FF66]/50 text-[#00FF66] px-4 py-2.5 hover:bg-[#00FF66]/10 transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
+          className="inline-flex items-center gap-2 border border-ok/50 text-ok px-4 py-2.5 hover:bg-ok/10 transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
           {busy === "after" ? <Loader2 size={15} className="animate-spin" /> : <Camera size={15} />} {c.capture_after}
         </button>
         <div className="flex-1" />
         <button onClick={reset} disabled={!!busy || (!before && !after)} data-testid="report-reset-btn"
-          className="inline-flex items-center gap-2 border border-[#2A2A35] text-zinc-400 px-4 py-2.5 hover:border-white transition-colors text-sm uppercase tracking-wide disabled:opacity-40">
+          className="inline-flex items-center gap-2 border border-hud text-zinc-400 px-4 py-2.5 hover:border-white transition-colors text-sm uppercase tracking-wide disabled:opacity-40">
           <RotateCcw size={15} /> {c.reset}
         </button>
         <button onClick={exportPng} disabled={!!busy || (!before && !after)} data-testid="report-export-btn"
-          className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-5 py-2.5 hover:bg-[#c9e000] transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
+          className="inline-flex items-center gap-2 bg-volt text-black font-bold px-5 py-2.5 hover:bg-[#c9e000] transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
           {busy === "export" ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />} {c.export}
         </button>
         <button onClick={exportPdf} disabled={!!busy || (!before && !after)} data-testid="report-export-pdf-btn"
-          className="inline-flex items-center gap-2 border border-[#E5FF00]/60 text-[#E5FF00] font-bold px-5 py-2.5 hover:bg-[#E5FF00]/10 transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
+          className="inline-flex items-center gap-2 border border-volt/60 text-volt font-bold px-5 py-2.5 hover:bg-volt/10 transition-colors text-sm uppercase tracking-wide disabled:opacity-50">
           {busy === "pdf" ? <Loader2 size={15} className="animate-spin" /> : (!pdfOk ? <Lock size={15} /> : <FileText size={15} />)} {c.export_pdf}
         </button>
       </div>
@@ -453,19 +453,19 @@ export default function Report() {
         <label className="text-[11px] uppercase tracking-widest text-zinc-500 mb-1.5 block">{c.notes}</label>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} data-testid="report-notes"
           placeholder={c.notes_ph}
-          className="w-full bg-[#0F0F12] border border-[#2A2A35] focus:border-[#E5FF00] outline-none p-3 text-sm text-zinc-200 transition-colors resize-y" />
+          className="w-full bg-panel border border-hud focus:border-volt outline-none p-3 text-sm text-zinc-200 transition-colors resize-y" />
       </div>
 
       {/* Branded report card (exported) */}
-      <div ref={cardRef} className="relative overflow-hidden bg-[#0A0A0C] border border-[#2A2A35] p-6" data-testid="report-card"
+      <div ref={cardRef} className="relative overflow-hidden bg-panel-deep border border-hud p-6" data-testid="report-card"
         style={{ backgroundImage: "radial-gradient(circle at 12% 0%, rgba(229,255,0,0.10), transparent 45%), radial-gradient(circle at 100% 100%, rgba(0,255,102,0.08), transparent 40%)" }}>
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[#E5FF00] flex items-center justify-center"><Zap size={18} className="text-black" fill="black" /></div>
-            <span className="font-display font-black text-xl tracking-tight">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
+            <div className="w-8 h-8 bg-volt flex items-center justify-center"><Zap size={18} className="text-black" fill="black" /></div>
+            <span className="font-display font-black text-xl tracking-tight">FRAME<span className="text-volt">FORGE</span></span>
           </div>
           <div className="text-right">
-            <div className="text-[11px] uppercase tracking-[0.25em] text-[#E5FF00]">{c.report_title}</div>
+            <div className="text-[11px] uppercase tracking-[0.25em] text-volt">{c.report_title}</div>
             <div className="text-[11px] text-zinc-500">{now.toLocaleDateString()} · {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
           </div>
         </div>
@@ -473,9 +473,9 @@ export default function Report() {
         {/* Header row */}
         <div className="grid grid-cols-[1.4fr_1fr_auto_1fr_1fr] items-center gap-3 px-3 pb-2 text-[11px] uppercase tracking-widest text-zinc-500">
           <div>Metric</div>
-          <div className="text-center text-[#00E0FF]">{c.before}</div>
+          <div className="text-center text-info">{c.before}</div>
           <div />
-          <div className="text-center text-[#00FF66]">{c.after}</div>
+          <div className="text-center text-ok">{c.after}</div>
           <div className="text-right">{c.delta}</div>
         </div>
 
@@ -486,7 +486,7 @@ export default function Report() {
             const dv = deltas?.[m.key];
             const Icon = m.icon;
             return (
-              <div key={m.key} className="grid grid-cols-[1.4fr_1fr_auto_1fr_1fr] items-center gap-3 bg-black/50 border border-[#1A1A24] px-3 py-3" data-testid={`report-metric-${m.key}`}>
+              <div key={m.key} className="grid grid-cols-[1.4fr_1fr_auto_1fr_1fr] items-center gap-3 bg-black/50 border border-hud-soft px-3 py-3" data-testid={`report-metric-${m.key}`}>
                 <div className="flex items-center gap-2 text-sm text-zinc-300">
                   <Icon size={16} className={m.accent} /> {c[m.labelKey]}
                 </div>
@@ -502,15 +502,15 @@ export default function Report() {
         {/* grades line */}
         <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-zinc-500">
           {(before?.health_grade || after?.health_grade) && (
-            <span>{c.health} {c.grade}: <b className="text-zinc-300">{before?.health_grade || "—"}</b> <ArrowRight size={11} className="inline" /> <b className="text-[#00FF66]">{after?.health_grade || "—"}</b></span>
+            <span>{c.health} {c.grade}: <b className="text-zinc-300">{before?.health_grade || "—"}</b> <ArrowRight size={11} className="inline" /> <b className="text-ok">{after?.health_grade || "—"}</b></span>
           )}
           {(before?.bufferbloat_grade || after?.bufferbloat_grade) && (
-            <span>{c.bufferbloat} {c.grade}: <b className="text-zinc-300">{before?.bufferbloat_grade || "—"}</b> <ArrowRight size={11} className="inline" /> <b className="text-[#00E0FF]">{after?.bufferbloat_grade || "—"}</b></span>
+            <span>{c.bufferbloat} {c.grade}: <b className="text-zinc-300">{before?.bufferbloat_grade || "—"}</b> <ArrowRight size={11} className="inline" /> <b className="text-info">{after?.bufferbloat_grade || "—"}</b></span>
           )}
           {!before && !after && <span className="italic">{c.tip_before}</span>}
         </div>
 
-        <div className="mt-5 pt-3 border-t border-[#1A1A24] flex items-center justify-between text-[11px] text-zinc-600">
+        <div className="mt-5 pt-3 border-t border-hud-soft flex items-center justify-between text-[11px] text-zinc-600">
           <span className="flex items-center gap-1"><Activity size={11} /> {c.footer}</span>
           <span>{before?.captured_at ? new Date(before.captured_at).toLocaleDateString() : ""}</span>
         </div>

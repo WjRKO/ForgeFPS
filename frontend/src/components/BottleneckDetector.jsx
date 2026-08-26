@@ -57,12 +57,12 @@ export default function BottleneckDetector({ compact = false }) {
   const kind = classify();
 
   const PALETTES = {
-    cpu:      { color: "#FF3B30", bg: "bg-[#FF3B30]/10", border: "border-[#FF3B30]/50", icon: Cpu, glow: "shadow-[0_0_28px_rgba(255,59,48,0.15)]" },
-    gpu:      { color: "#00E0FF", bg: "bg-[#00E0FF]/10", border: "border-[#00E0FF]/50", icon: Gpu, glow: "shadow-[0_0_28px_rgba(0,224,255,0.15)]" },
+    cpu:      { color: "#FF3B30", bg: "bg-bad/10", border: "border-bad/50", icon: Cpu, glow: "shadow-[0_0_28px_rgba(255,59,48,0.15)]" },
+    gpu:      { color: "#00E0FF", bg: "bg-info/10", border: "border-info/50", icon: Gpu, glow: "shadow-[0_0_28px_rgba(0,224,255,0.15)]" },
     ram:      { color: "#FFAA00", bg: "bg-[#FFAA00]/10", border: "border-[#FFAA00]/50", icon: Database, glow: "shadow-[0_0_28px_rgba(255,170,0,0.15)]" },
-    balanced: { color: "#00FF66", bg: "bg-[#00FF66]/10", border: "border-[#00FF66]/50", icon: CheckCircle2, glow: "shadow-[0_0_28px_rgba(0,255,102,0.15)]" },
-    idle:     { color: "#7D7D8A", bg: "bg-[#1A1A24]",    border: "border-[#2A2A35]",    icon: Moon,          glow: "" },
-    mixed:    { color: "#E5FF00", bg: "bg-[#E5FF00]/10", border: "border-[#E5FF00]/50", icon: Zap,           glow: "shadow-[0_0_28px_rgba(229,255,0,0.15)]" },
+    balanced: { color: "#00FF66", bg: "bg-ok/10", border: "border-ok/50", icon: CheckCircle2, glow: "shadow-[0_0_28px_rgba(0,255,102,0.15)]" },
+    idle:     { color: "#7D7D8A", bg: "bg-hud-soft",    border: "border-hud",    icon: Moon,          glow: "" },
+    mixed:    { color: "#E5FF00", bg: "bg-volt/10", border: "border-volt/50", icon: Zap,           glow: "shadow-[0_0_28px_rgba(229,255,0,0.15)]" },
   };
   const COPY = {
     cpu:      { title: t("bottleneck.cpu_title", { defaultValue: "CPU-BOUND" }),

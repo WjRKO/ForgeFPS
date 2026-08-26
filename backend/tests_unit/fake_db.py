@@ -65,6 +65,9 @@ class FakeCollection:
                 return d
         return None
 
+    async def count_documents(self, query: dict | None = None) -> int:
+        return sum(1 for d in self.docs if _matches(d, query or {}))
+
     async def insert_one(self, doc: dict):
         # Il documento viene tenuto per riferimento: i test che modificano un
         # campo dopo l'inserimento (per esempio invecchiare un `created_at`)

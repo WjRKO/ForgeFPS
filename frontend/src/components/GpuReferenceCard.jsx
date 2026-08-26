@@ -16,12 +16,13 @@ import { Gauge, Cpu, Zap, AlertTriangle, CheckCircle2, HelpCircle, Lock } from "
 import { Link } from "react-router-dom";
 import api from "@/lib/api";
 import { toast } from "sonner";
+import { HUDCard } from "@/components/hud";
 
 const STATUS_COLORS = {
-  ok: { border: "border-[#00FF66]/40", text: "text-[#00FF66]", bg: "bg-[#00FF66]/5" },
-  overperforming: { border: "border-[#00E0FF]/40", text: "text-[#00E0FF]", bg: "bg-[#00E0FF]/5" },
-  borderline: { border: "border-[#E5FF00]/40", text: "text-[#E5FF00]", bg: "bg-[#E5FF00]/5" },
-  underperforming: { border: "border-[#FF3B30]/40", text: "text-[#FF3B30]", bg: "bg-[#FF3B30]/5" },
+  ok: { border: "border-ok/40", text: "text-ok", bg: "bg-ok/5" },
+  overperforming: { border: "border-info/40", text: "text-info", bg: "bg-info/5" },
+  borderline: { border: "border-volt/40", text: "text-volt", bg: "bg-volt/5" },
+  underperforming: { border: "border-bad/40", text: "text-bad", bg: "bg-bad/5" },
   unknown: { border: "border-zinc-700", text: "text-zinc-400", bg: "bg-zinc-900/40" },
 };
 
@@ -71,17 +72,17 @@ export default function GpuReferenceCard() {
   // Plan gate: GPU fuori dai 20 modelli Free e utente senza catalogo completo
   if (data.reason === "plan_required") {
     return (
-      <div className="border border-[#2A2A35] bg-[#0F0F12] p-5" data-testid="gpu-reference-locked">
+      <HUDCard testid="gpu-reference-locked">
         <div className="flex items-center gap-2 text-sm font-bold mb-1 text-zinc-200">
-          <Lock size={14} className="text-[#E5FF00]" /> {en ? "GPU vs Reference — full catalog (200+ GPUs)" : "GPU vs Reference — catalogo completo (200+ GPU)"}
+          <Lock size={14} className="text-volt" /> {en ? "GPU vs Reference — full catalog (200+ GPUs)" : "GPU vs Reference — catalogo completo (200+ GPU)"}
         </div>
         <p className="text-xs text-zinc-500 leading-relaxed">
           {en
             ? "Your GPU is outside the 20 free models. Go Pro to compare against the full catalog — or earn it with a secret trophy."
             : "La tua GPU è fuori dai 20 modelli gratuiti. Passa a Pro per il confronto sul catalogo completo — o sbloccalo con un trofeo segreto."}{" "}
-          <Link to="/pricing" className="text-[#E5FF00] hover:underline" data-testid="gpu-reference-upgrade-link">{en ? "Go Pro" : "Passa a Pro"}</Link>
+          <Link to="/pricing" className="text-volt hover:underline" data-testid="gpu-reference-upgrade-link">{en ? "Go Pro" : "Passa a Pro"}</Link>
         </p>
-      </div>
+      </HUDCard>
     );
   }
 
@@ -132,19 +133,19 @@ export default function GpuReferenceCard() {
       {ref ? (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-xs">
-            <div className="bg-black/40 border border-[#2A2A35] p-2">
+            <div className="bg-black/40 border border-hud p-2">
               <div className="text-zinc-500 text-[11px] uppercase">{en ? "PassMark G3D" : "PassMark G3D"}</div>
               <div className="text-zinc-100 font-bold text-sm mt-0.5" data-testid="gpu-ref-g3d">{ref.g3d?.toLocaleString() || "n/d"}</div>
             </div>
-            <div className="bg-black/40 border border-[#2A2A35] p-2">
+            <div className="bg-black/40 border border-hud p-2">
               <div className="text-zinc-500 text-[11px] uppercase">3DMark Time Spy</div>
               <div className="text-zinc-100 font-bold text-sm mt-0.5">{ref.timespy?.toLocaleString() || "n/d"}</div>
             </div>
-            <div className="bg-black/40 border border-[#2A2A35] p-2">
+            <div className="bg-black/40 border border-hud p-2">
               <div className="text-zinc-500 text-[11px] uppercase">VRAM</div>
               <div className="text-zinc-100 font-bold text-sm mt-0.5">{ref.vram_gb ? `${ref.vram_gb} GB` : "n/d"}</div>
             </div>
-            <div className="bg-black/40 border border-[#2A2A35] p-2">
+            <div className="bg-black/40 border border-hud p-2">
               <div className="text-zinc-500 text-[11px] uppercase">TDP</div>
               <div className="text-zinc-100 font-bold text-sm mt-0.5">{ref.tdp_w ? `${ref.tdp_w} W` : "n/d"}</div>
             </div>
@@ -171,7 +172,7 @@ export default function GpuReferenceCard() {
           </div>
         </>
       ) : (
-        <div className="bg-black/40 border border-[#2A2A35] p-3 text-xs text-zinc-400 mb-4">
+        <div className="bg-black/40 border border-hud p-3 text-xs text-zinc-400 mb-4">
           {en
             ? `Your GPU "${gpuStr}" is not in our reference catalog yet. Only the local benchmark applies.`
             : `La tua GPU "${gpuStr}" non e' ancora nel nostro catalogo di reference. Solo il benchmark locale si applica.`}
@@ -183,7 +184,7 @@ export default function GpuReferenceCard() {
           onClick={launchFullBench}
           disabled={launching}
           data-testid="gpu-ref-full-bench-btn"
-          className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold text-xs px-3 py-2 hover:bg-[#D4EE00] disabled:opacity-50 transition-colors"
+          className="inline-flex items-center gap-2 bg-volt text-black font-bold text-xs px-3 py-2 hover:bg-[#D4EE00] disabled:opacity-50 transition-colors"
         >
           <Gauge size={14} />
           {launching

@@ -5,7 +5,7 @@ import api from "@/lib/api";
 import { ROLE_ICONS } from "@/components/DeviceSwitcher";
 
 
-const scoreColor = (s) => (s == null ? "text-zinc-600" : s >= 80 ? "text-[#00FF66]" : s >= 60 ? "text-[#E5FF00]" : "text-[#FF3B30]");
+const scoreColor = (s) => (s == null ? "text-zinc-600" : s >= 80 ? "text-ok" : s >= 60 ? "text-volt" : "text-bad");
 
 export const DeviceCompare = () => {
   const { t, i18n } = useTranslation();
@@ -37,24 +37,24 @@ export const DeviceCompare = () => {
   );
 
   return (
-    <div className="border border-[#2A2A35] bg-[#0F0F12] hud-tick mb-6" data-testid="device-compare">
-      <div className="p-4 border-b border-[#2A2A35] flex items-center gap-2">
-        <Monitor size={14} className="text-[#00E0FF]" />
+    <div className="border border-hud bg-panel hud-tick mb-6" data-testid="device-compare">
+      <div className="p-4 border-b border-hud flex items-center gap-2">
+        <Monitor size={14} className="text-info" />
         <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">{c.title}</span>
       </div>
-      <div className={`grid grid-cols-1 ${devs.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2"} divide-y md:divide-y-0 md:divide-x divide-[#1A1A24]`}>
+      <div className={`grid grid-cols-1 ${devs.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2"} divide-y md:divide-y-0 md:divide-x divide-hud-soft`}>
         {devs.map((d) => {
           const I = ROLE_ICONS[d.role] || Monitor;
           const isSuffering = sufferer && sufferer.device_id === d.device_id;
           return (
             <div key={d.device_id} className="p-4" data-testid={`compare-${d.device_id}`}>
               <div className="flex items-center gap-2 mb-3">
-                <I size={15} className={d.is_active ? "text-[#E5FF00]" : "text-zinc-500"} />
+                <I size={15} className={d.is_active ? "text-volt" : "text-zinc-500"} />
                 <span className="text-sm font-bold truncate">{d.name}</span>
-                <span className={`w-1.5 h-1.5 rounded-full ${d.online ? "bg-[#00FF66]" : "bg-zinc-600"}`} />
+                <span className={`w-1.5 h-1.5 rounded-full ${d.online ? "bg-ok" : "bg-zinc-600"}`} />
                 <span className="text-[11px] font-mono uppercase text-zinc-600">{c[d.role] || d.role}</span>
                 {isSuffering && (
-                  <span className="ml-auto flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-[#FF3B30] border border-[#FF3B30]/40 bg-[#FF3B30]/10 px-1.5 py-0.5" data-testid={`compare-suffering-${d.device_id}`}>
+                  <span className="ml-auto flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-bad border border-bad/40 bg-bad/10 px-1.5 py-0.5" data-testid={`compare-suffering-${d.device_id}`}>
                     <AlertTriangle size={9} /> {c.suffering}
                   </span>
                 )}

@@ -46,14 +46,14 @@ export default function NextActionBanner({ kind, custom, dismissKey, testid }) {
       icon: Gauge,
       text: t("nba.post_apply", { defaultValue: "Tweak applicati. Fai un benchmark per misurare il guadagno reale." }),
       ctaLabel: t("nba.post_apply_cta", { defaultValue: "Esegui benchmark" }),
-      to: "/app/benchmark",
+      to: "/app/pc?tab=benchmark",
       accent: "#00FF66",
     },
     "post-benchmark": {
       icon: TrendingUp,
       text: t("nba.post_bench", { defaultValue: "Benchmark completato. Salva il report PDF o confronta con la media della community." }),
       ctaLabel: t("nba.post_bench_cta", { defaultValue: "Vedi confronto" }),
-      to: "/app/benchmark",
+      to: "/app/pc?tab=benchmark",
       accent: "#B388FF",
     },
   };

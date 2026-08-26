@@ -11,6 +11,7 @@ import AgentPreview from "@/components/AgentPreview";
 import FirstScanBanner from "@/components/FirstScanBanner";
 import TokenMismatchHint from "@/components/TokenMismatchHint";
 import { MissionContextStrip } from "@/components/MissionContextStrip";
+import { HUDCard } from "@/components/hud";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const isEn = () => i18n.language?.startsWith("en");
@@ -66,9 +67,9 @@ function GpuGuide({ vendor }) {
   const g = GPU_GUIDE[tab];
   const en = isEn();
   return (
-    <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-6" data-testid="gpu-guide-card">
+    <HUDCard testid="gpu-guide-card" pad="p-6" className="mb-6">
       <div className="flex items-start gap-4 mb-4">
-        <div className="w-11 h-11 border border-[#2A2A35] flex items-center justify-center shrink-0"><Gamepad2 size={22} className="text-[#E5FF00]" /></div>
+        <div className="w-11 h-11 border border-hud flex items-center justify-center shrink-0"><Gamepad2 size={22} className="text-volt" /></div>
         <div>
           <h3 className="font-display font-bold text-lg">{t("desktop.gpu_title")}</h3>
           <p className="text-zinc-500 text-sm mt-1 max-w-2xl">{t("desktop.gpu_desc")}</p>
@@ -77,27 +78,27 @@ function GpuGuide({ vendor }) {
       <div className="flex gap-2 mb-4">
         {["nvidia", "amd"].map((k) => (
           <button key={k} data-testid={`gpu-tab-${k}`} onClick={() => setTab(k)}
-            className={`px-4 py-2 text-sm font-bold transition-colors ${tab === k ? "bg-[#E5FF00] text-black" : "border border-[#2A2A35] text-zinc-400 hover:border-[#E5FF00]"}`}>
+            className={`px-4 py-2 text-sm font-bold transition-colors ${tab === k ? "bg-volt text-black" : "border border-hud text-zinc-400 hover:border-volt"}`}>
             {GPU_GUIDE[k].label}{vendor === (k === "nvidia" ? "NVIDIA" : "AMD") ? ` ·  ${t("desktop.your_gpu")}` : ""}
           </button>
         ))}
       </div>
-      <div className="text-xs text-zinc-500 mb-3 flex items-center gap-2"><Sparkles size={13} className="text-[#00E0FF]" /> {en ? g.path_en : g.path}</div>
-      <div className="border border-[#1A1A24]">
+      <div className="text-xs text-zinc-500 mb-3 flex items-center gap-2"><Sparkles size={13} className="text-info" /> {en ? g.path_en : g.path}</div>
+      <div className="border border-hud-soft">
         {g.rows.map((r, i) => (
-          <div key={i} data-testid={`gpu-setting-${tab}-${i}`} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr] gap-1 sm:gap-4 p-3 border-b border-[#1A1A24] last:border-0">
+          <div key={i} data-testid={`gpu-setting-${tab}-${i}`} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr] gap-1 sm:gap-4 p-3 border-b border-hud-soft last:border-0">
             <div>
               <div className="text-sm text-zinc-200">{en ? r.s_en : r.s}</div>
               <div className="text-xs text-zinc-600 mt-0.5">{en ? r.w_en : r.w}</div>
             </div>
-            <div className="text-sm font-bold text-[#00FF66] flex items-center">{en ? r.v_en : r.v}</div>
+            <div className="text-sm font-bold text-ok flex items-center">{en ? r.v_en : r.v}</div>
           </div>
         ))}
       </div>
-      <div className="mt-4 text-xs text-zinc-500 border-t border-[#1A1A24] pt-3">
+      <div className="mt-4 text-xs text-zinc-500 border-t border-hud-soft pt-3">
         💡 {t("desktop.gpu_footer")}
       </div>
-    </div>
+    </HUDCard>
   );
 }
 
@@ -111,10 +112,10 @@ function CmdRow({ label, cmd, testid, accent }) {
     <div className="mb-3">
       <div className={`text-xs uppercase tracking-widest mb-1 ${accent || "text-zinc-500"}`}>{label}</div>
       <div className="flex items-stretch gap-2">
-        <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-xs text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid={`${testid}-cmd`}>{cmd}</code>
+        <code className="flex-1 bg-black border border-hud px-3 py-2.5 text-xs text-ok overflow-x-auto whitespace-nowrap" data-testid={`${testid}-cmd`}>{cmd}</code>
         <button data-testid={`${testid}-copy`} onClick={copy} aria-label={i18n.t("a11y.copy")}
-          className="shrink-0 flex items-center gap-1 border border-[#2A2A35] px-3 hover:border-[#E5FF00] transition-colors text-xs">
-          {copied ? <Check size={14} className="text-[#00FF66]" /> : <Copy size={14} />}
+          className="shrink-0 flex items-center gap-1 border border-hud px-3 hover:border-volt transition-colors text-xs">
+          {copied ? <Check size={14} className="text-ok" /> : <Copy size={14} />}
         </button>
       </div>
     </div>
@@ -250,7 +251,7 @@ export default function DesktopAgent() {
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold text-zinc-200">{s.warn_title}</div>
                   <p className="text-xs text-zinc-400 leading-relaxed mt-1">
-                    {s.warn_desc_a} <code className="text-[#00E0FF]">{AGENT_DEFAULT_BACKEND}</code> {s.warn_desc_b}
+                    {s.warn_desc_a} <code className="text-info">{AGENT_DEFAULT_BACKEND}</code> {s.warn_desc_b}
                   </p>
                   <p className="text-xs text-[#FFAA00] leading-relaxed mt-2">{s.warn_test}</p>
                 </div>
@@ -261,10 +262,10 @@ export default function DesktopAgent() {
           {/* Feature grid: cosa fa l'app */}
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-3">{en ? "// what it does" : "// cosa fa"}</div>
-            <div className="grid sm:grid-cols-2 gap-px bg-[#2A2A35] border border-[#2A2A35] stagger">
+            <div className="grid sm:grid-cols-2 gap-px bg-hud border border-hud stagger">
               {ACTIONS.map((a, i) => (
-                <div key={i} className="bg-[#0F0F12] p-5 tile-hover">
-                  <a.icon size={20} className="text-[#E5FF00] mb-3 icon-pop" />
+                <div key={i} className="bg-panel p-5 tile-hover">
+                  <a.icon size={20} className="text-volt mb-3 icon-pop" />
                   <h3 className="font-display font-semibold text-base mb-1">{en ? a.title_en : a.title}</h3>
                   <p className="text-zinc-500 text-xs leading-relaxed">{en ? a.desc_en : a.desc}</p>
                 </div>
@@ -273,8 +274,8 @@ export default function DesktopAgent() {
           </div>
 
           {/* Antivirus note */}
-          <div className="border border-[#00FF66]/25 bg-[#00FF66]/5 p-4 flex items-start gap-2.5" data-testid="exe-av-note">
-            <ShieldCheck size={16} className="text-[#00FF66] shrink-0 mt-0.5" />
+          <div className="border border-ok/25 bg-ok/5 p-4 flex items-start gap-2.5" data-testid="exe-av-note">
+            <ShieldCheck size={16} className="text-ok shrink-0 mt-0.5" />
             <p className="text-xs text-zinc-400 leading-relaxed">{s.av_note}</p>
           </div>
 
@@ -282,57 +283,57 @@ export default function DesktopAgent() {
           <GpuGuide vendor={gpuVendor} />
 
           {/* Secure PowerShell method — accordion collapsed */}
-          <div className="bg-[#0F0F12] border border-[#E5FF00]/30" id="powershell-method">
+          <div className="bg-panel border border-volt/30" id="powershell-method">
             <button onClick={() => setAdvOpen((v) => !v)} data-testid="secure-toggle"
               className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-[#141420] transition-colors">
               <span className="flex items-center gap-2.5">
-                <ShieldCheck size={16} className="text-[#E5FF00]" />
+                <ShieldCheck size={16} className="text-volt" />
                 <span className="text-sm font-semibold text-zinc-200">{s.secure_title}</span>
-                <span className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] border border-[#E5FF00]/40 px-1.5 py-0.5">.ps1</span>
+                <span className="text-[11px] font-mono uppercase tracking-widest text-volt border border-volt/40 px-1.5 py-0.5">.ps1</span>
               </span>
               <ChevronDown size={18} className={`text-zinc-500 transition-transform ${advOpen ? "rotate-180" : ""}`} />
             </button>
             {advOpen && (
-              <div className="px-5 pb-5 border-t border-[#1A1A24]" data-testid="secure-method">
+              <div className="px-5 pb-5 border-t border-hud-soft" data-testid="secure-method">
                 <p className="text-zinc-400 text-sm my-4 max-w-2xl">{s.secure_desc}</p>
-                <CmdRow label={s.token_label} cmd={token || "…"} testid="agent-token" accent="text-[#00E0FF]" />
-                <CmdRow label={s.s1} cmd={dl} testid="secure-download" accent="text-[#00FF66]" />
+                <CmdRow label={s.token_label} cmd={token || "…"} testid="agent-token" accent="text-info" />
+                <CmdRow label={s.s1} cmd={dl} testid="secure-download" accent="text-ok" />
                 <div className="mb-3">
-                  <div className="text-xs uppercase tracking-widest mb-1 text-[#00E0FF]">{s.s2}</div>
+                  <div className="text-xs uppercase tracking-widest mb-1 text-info">{s.s2}</div>
                   <div className="flex items-stretch gap-2">
-                    <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-xs text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="secure-verify-cmd">{verify}</code>
+                    <code className="flex-1 bg-black border border-hud px-3 py-2.5 text-xs text-ok overflow-x-auto whitespace-nowrap" data-testid="secure-verify-cmd">{verify}</code>
                   </div>
                   <div className="flex items-center gap-2 mt-2 text-xs">
-                    <FileCheck2 size={13} className="text-[#00FF66] shrink-0" />
+                    <FileCheck2 size={13} className="text-ok shrink-0" />
                     <span className="text-zinc-500">{s.expected}:</span>
                     <code className="text-zinc-300 break-all" data-testid="expected-sha256">{sha || "…"}</code>
                   </div>
                 </div>
-                <CmdRow label={s.s3} cmd={run("optimize")} testid="secure-run" accent="text-[#E5FF00]" />
+                <CmdRow label={s.s3} cmd={run("optimize")} testid="secure-run" accent="text-volt" />
 
-                <div className="mt-5 border-t border-[#1A1A24] pt-4">
+                <div className="mt-5 border-t border-hud-soft pt-4">
                   <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{s.modes_label}</div>
                   {RUN_MODES.map((rm) => (
                     <CmdRow key={rm.m} label={en ? rm.en : rm.it} cmd={run(rm.m)} testid={`run-${rm.m}`} accent="text-zinc-500" />
                   ))}
                 </div>
 
-                <div className="mt-4 border-t border-[#1A1A24] pt-4 flex items-start gap-3">
+                <div className="mt-4 border-t border-hud-soft pt-4 flex items-start gap-3">
                   <Lock size={16} className="text-zinc-400 shrink-0 mt-0.5" />
                   <div>
                     <div className="text-sm text-zinc-200 font-semibold">{s.why_title}</div>
                     <p className="text-xs text-zinc-500 max-w-2xl leading-relaxed mt-0.5">{s.why_desc}</p>
-                    <Link to="/security" data-testid="why-security-link" className="text-xs text-[#E5FF00] hover:underline mt-1 inline-block">{s.why_link} →</Link>
+                    <Link to="/security" data-testid="why-security-link" className="text-xs text-volt hover:underline mt-1 inline-block">{s.why_link} →</Link>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-3 mt-4 border-t border-[#1A1A24] pt-4">
+                <div className="flex flex-wrap gap-3 mt-4 border-t border-hud-soft pt-4">
                   <a data-testid="download-agent-btn" href={`${API}/desktop-agent/download`} onClick={() => trackConversion("agent_download")}
-                    className="inline-flex items-center gap-2 border border-[#2A2A35] px-4 py-2 text-sm hover:border-[#E5FF00] transition-colors">
+                    className="inline-flex items-center gap-2 border border-hud px-4 py-2 text-sm hover:border-volt transition-colors">
                     <Download size={16} /> {t("desktop.download_py")}
                   </a>
                   <Link to="/app/pc" data-testid="to-mypc-btn"
-                    className="inline-flex items-center gap-2 border border-[#2A2A35] px-4 py-2 text-sm hover:border-[#E5FF00] transition-colors">
+                    className="inline-flex items-center gap-2 border border-hud px-4 py-2 text-sm hover:border-volt transition-colors">
                     <Activity size={16} /> {t("desktop.see_mypc")}
                   </Link>
                 </div>
@@ -344,11 +345,11 @@ export default function DesktopAgent() {
 
         {/* RIGHT: sticky action panel */}
         <aside className="lg:sticky lg:top-6 lg:self-start" data-testid="exe-teaser">
-          <div className="bg-gradient-to-br from-[#00E0FF]/15 to-[#0F0F12] border border-[#00E0FF]/40 p-5" data-testid="exe-download-block">
+          <div className="bg-gradient-to-br from-info/15 to-panel border border-info/40 p-5" data-testid="exe-download-block">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-10 h-10 border border-[#00E0FF]/40 flex items-center justify-center shrink-0"><MonitorDown size={20} className="text-[#00E0FF]" /></div>
+              <div className="w-10 h-10 border border-info/40 flex items-center justify-center shrink-0"><MonitorDown size={20} className="text-info" /></div>
               <div className="flex-1 min-w-0">
-                <div className="text-[11px] font-mono uppercase tracking-widest text-[#00E0FF]">FrameForge Agent</div>
+                <div className="text-[11px] font-mono uppercase tracking-widest text-info">FrameForge Agent</div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-white">{AGENT_EXE_VERSION}</span>
                   <span className="text-[11px] text-zinc-500">·</span>
@@ -362,19 +363,19 @@ export default function DesktopAgent() {
 
             <button type="button" data-testid="exe-download-btn"
               onClick={handleDownloadZip}
-              className="flex items-center justify-center gap-2 bg-[#00E0FF] text-black font-bold py-3 text-sm uppercase tracking-wide hover:bg-[#33e8ff] transition-colors w-full">
+              className="flex items-center justify-center gap-2 bg-info text-black font-bold py-3 text-sm uppercase tracking-wide hover:bg-[#33e8ff] transition-colors w-full">
               <Download size={16} /> {s.exe_btn}
             </button>
             <p className="mt-1.5 text-[11px] text-zinc-500 leading-relaxed px-1" data-testid="exe-personalized-hint">{s.exe_personalized_hint}</p>
 
             <a href={AGENT_RELEASES_URL} target="_blank" rel="noreferrer" data-testid="exe-releases-link"
-              className="mt-2 flex items-center justify-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-[#00E0FF] transition-colors">
+              className="mt-2 flex items-center justify-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-info transition-colors">
               <History size={11} /> {en ? "All versions" : "Tutte le versioni"} <ExternalLink size={9} />
             </a>
 
-            <div className="mt-4 pt-3 border-t border-[#2A2A35]">
+            <div className="mt-4 pt-3 border-t border-hud">
               <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-1.5 flex items-center gap-1.5">
-                <FileCheck2 size={11} className="text-[#00FF66]" /> {s.exe_sha}
+                <FileCheck2 size={11} className="text-ok" /> {s.exe_sha}
               </div>
               <code className="block text-[11px] text-zinc-400 font-mono break-all leading-relaxed" data-testid="exe-sha256">{AGENT_EXE_SHA256}</code>
               {/* Il bottone di download serve un pacchetto RIPACCHETTATO con dentro
@@ -384,24 +385,24 @@ export default function DesktopAgent() {
               <div className="text-[11px] text-zinc-500 mt-1.5 leading-relaxed" data-testid="exe-sha256-note">{s.exe_sha_note}</div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5">
                 <a href={AGENT_EXE_URL} data-testid="exe-original-download"
-                  className="inline-flex items-center gap-1 text-[11px] text-zinc-300 hover:text-[#E5FF00] hover:underline">
+                  className="inline-flex items-center gap-1 text-[11px] text-zinc-300 hover:text-volt hover:underline">
                   <FileCheck2 size={12} /> {s.exe_sha_link} <ExternalLink size={9} />
                 </a>
                 <a href={`https://www.virustotal.com/gui/file/${AGENT_EXE_SHA256}`} target="_blank" rel="noreferrer" data-testid="exe-virustotal"
-                  className="inline-flex items-center gap-1 text-[11px] text-[#00FF66] hover:underline">
+                  className="inline-flex items-center gap-1 text-[11px] text-ok hover:underline">
                   <ShieldCheck size={12} /> {s.exe_vt} <ExternalLink size={9} />
                 </a>
               </div>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-[#2A2A35]">
+            <div className="mt-4 pt-3 border-t border-hud">
               <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-1.5">{s.exe_run}</div>
-              <CmdRow label="" cmd={exeCmd} testid="exe-run" accent="text-[#E5FF00]" />
+              <CmdRow label="" cmd={exeCmd} testid="exe-run" accent="text-volt" />
             </div>
 
             <a href="#powershell-method" onClick={() => setAdvOpen(true)}
               data-testid="jump-to-secure"
-              className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-zinc-500 hover:text-[#E5FF00] transition-colors border-t border-[#2A2A35] pt-3">
+              className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-zinc-500 hover:text-volt transition-colors border-t border-hud pt-3">
               <ShieldCheck size={12} /> {en ? "Or use the secure PowerShell method" : "Oppure usa il metodo sicuro PowerShell"} ↓
             </a>
           </div>

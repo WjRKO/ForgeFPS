@@ -138,9 +138,9 @@ export default function ObsOverlayPanel() {
   }
 
   return (
-    <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 space-y-5" data-testid="obs-overlay-panel">
+    <div className="bg-panel border border-hud p-5 space-y-5" data-testid="obs-overlay-panel">
       <div className="flex items-center gap-2 text-sm font-bold">
-        <Radio size={16} className="text-[#00E0FF]" /> OBS Browser Overlay
+        <Radio size={16} className="text-info" /> OBS Browser Overlay
       </div>
       <p className="text-xs text-zinc-500 -mt-3">
         Aggiungi questo URL come <strong className="text-zinc-300">Browser Source</strong> in OBS Studio (larghezza 340px, altezza 260px consigliati — assicurati che "custom CSS" sia vuoto). Aggiorna in tempo reale mentre il Live Monitor gira.
@@ -161,13 +161,13 @@ export default function ObsOverlayPanel() {
           readOnly
           value={cfg?.url || ""}
           data-testid="overlay-url-input"
-          className="flex-1 min-w-[240px] bg-[#0A0A0F] border border-[#2A2A35] text-xs text-zinc-300 font-mono px-3 py-2 select-all"
+          className="flex-1 min-w-[240px] bg-[#0A0A0F] border border-hud text-xs text-zinc-300 font-mono px-3 py-2 select-all"
           onFocus={(e) => e.target.select()}
         />
         <button
           onClick={copyUrl}
           data-testid="overlay-copy-btn"
-          className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold uppercase tracking-widest text-xs px-4 py-2 hover:bg-[#D4EE00] transition-colors"
+          className="inline-flex items-center gap-2 bg-volt text-black font-bold uppercase tracking-widest text-xs px-4 py-2 hover:bg-[#D4EE00] transition-colors"
         >
           {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? (isEn() ? "Copied" : "Copiato") : (isEn() ? "Copy URL" : "Copia URL")}
         </button>
@@ -176,7 +176,7 @@ export default function ObsOverlayPanel() {
           target="_blank"
           rel="noreferrer"
           data-testid="overlay-open-btn"
-          className="inline-flex items-center gap-2 border border-[#2A2A35] text-zinc-300 hover:border-[#00E0FF] hover:text-[#00E0FF] text-xs px-3 py-2 transition-colors"
+          className="inline-flex items-center gap-2 border border-hud text-zinc-300 hover:border-info hover:text-info text-xs px-3 py-2 transition-colors"
         >
           <ExternalLink size={12} /> {isEn() ? "Open" : "Apri"}
         </a>
@@ -201,7 +201,7 @@ export default function ObsOverlayPanel() {
                 key={p.id}
                 onClick={() => updateCfg({ position: p.id })}
                 data-testid={`overlay-pos-${p.id}`}
-                className={`text-xs px-3 py-2 border transition-colors ${cfg?.position === p.id ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/5" : "border-[#2A2A35] text-zinc-400 hover:border-zinc-600"}`}
+                className={`text-xs px-3 py-2 border transition-colors ${cfg?.position === p.id ? "border-volt text-volt bg-volt/5" : "border-hud text-zinc-400 hover:border-zinc-600"}`}
               >
                 {isEn() ? p.en : p.label}
               </button>
@@ -214,13 +214,13 @@ export default function ObsOverlayPanel() {
             <div className="text-[11px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Data source (Multi-PC)" : "Sorgente dati (Multi-PC)"}</div>
             <div className="grid grid-cols-1 gap-1">
               <button onClick={() => updateCfg({ source_device: "" })} data-testid="overlay-source-active"
-                className={`text-xs px-3 py-2 border text-left transition-colors ${!cfg?.source_device ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/5" : "border-[#2A2A35] text-zinc-400 hover:border-zinc-600"}`}>
+                className={`text-xs px-3 py-2 border text-left transition-colors ${!cfg?.source_device ? "border-volt text-volt bg-volt/5" : "border-hud text-zinc-400 hover:border-zinc-600"}`}>
                 {isEn() ? "Active PC (default)" : "PC attivo (default)"}
               </button>
               {devices.map((d) => (
                 <button key={d.device_id} onClick={() => updateCfg({ source_device: d.device_id })}
                   data-testid={`overlay-source-${d.device_id}`}
-                  className={`text-xs px-3 py-2 border text-left transition-colors ${cfg?.source_device === d.device_id ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/5" : "border-[#2A2A35] text-zinc-400 hover:border-zinc-600"}`}>
+                  className={`text-xs px-3 py-2 border text-left transition-colors ${cfg?.source_device === d.device_id ? "border-volt text-volt bg-volt/5" : "border-hud text-zinc-400 hover:border-zinc-600"}`}>
                   {d.name} <span className="text-zinc-600">· {d.role}</span>
                 </button>
               ))}
@@ -236,9 +236,9 @@ export default function ObsOverlayPanel() {
                 key={th.id}
                 onClick={() => updateCfg({ theme: th.id })}
                 data-testid={`overlay-theme-${th.id}`}
-                className={`flex items-center gap-2 text-xs px-3 py-2 border transition-colors ${cfg?.theme === th.id ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/5" : "border-[#2A2A35] text-zinc-400 hover:border-zinc-600"}`}
+                className={`flex items-center gap-2 text-xs px-3 py-2 border transition-colors ${cfg?.theme === th.id ? "border-volt text-volt bg-volt/5" : "border-hud text-zinc-400 hover:border-zinc-600"}`}
               >
-                <span className="w-3 h-3 border border-[#2A2A35]" style={{ background: th.swatch }} />
+                <span className="w-3 h-3 border border-hud" style={{ background: th.swatch }} />
                 {isEn() ? th.en : th.label}
               </button>
             ))}
@@ -256,7 +256,7 @@ export default function ObsOverlayPanel() {
                 key={l.id}
                 onClick={() => updateCfg({ layout: l.id })}
                 data-testid={`overlay-layout-${l.id}`}
-                className={`text-xs px-3 py-2 border transition-colors ${cfg?.layout === l.id ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/5" : "border-[#2A2A35] text-zinc-400 hover:border-zinc-600"}`}
+                className={`text-xs px-3 py-2 border transition-colors ${cfg?.layout === l.id ? "border-volt text-volt bg-volt/5" : "border-hud text-zinc-400 hover:border-zinc-600"}`}
               >
                 {isEn() ? l.en : l.label}
               </button>
@@ -271,7 +271,7 @@ export default function ObsOverlayPanel() {
                 key={s.id}
                 onClick={() => updateCfg({ size: s.id })}
                 data-testid={`overlay-size-${s.id}`}
-                className={`text-xs px-3 py-2 border transition-colors ${(cfg?.size || "medium") === s.id ? "border-[#E5FF00] text-[#E5FF00] bg-[#E5FF00]/5" : "border-[#2A2A35] text-zinc-400 hover:border-zinc-600"}`}
+                className={`text-xs px-3 py-2 border transition-colors ${(cfg?.size || "medium") === s.id ? "border-volt text-volt bg-volt/5" : "border-hud text-zinc-400 hover:border-zinc-600"}`}
               >
                 {s.label}
               </button>
@@ -286,7 +286,7 @@ export default function ObsOverlayPanel() {
               value={cfg?.accent || THEMES.find((th) => th.id === cfg?.theme)?.swatch || "#E5FF00"}
               onChange={(e) => setAccentDebounced(e.target.value)}
               data-testid="overlay-accent-picker"
-              className="w-10 h-9 bg-[#0A0A0F] border border-[#2A2A35] cursor-pointer p-0.5"
+              className="w-10 h-9 bg-[#0A0A0F] border border-hud cursor-pointer p-0.5"
               title={isEn() ? "Custom accent color" : "Colore accent personalizzato"}
             />
             <span className="font-mono text-xs text-zinc-400">{cfg?.accent || (isEn() ? "theme" : "tema")}</span>
@@ -294,7 +294,7 @@ export default function ObsOverlayPanel() {
               <button
                 onClick={() => updateCfg({ accent: "" })}
                 data-testid="overlay-accent-reset"
-                className="text-[11px] uppercase tracking-widest text-zinc-500 border border-[#2A2A35] px-2 py-1.5 hover:border-zinc-500 transition-colors"
+                className="text-[11px] uppercase tracking-widest text-zinc-500 border border-hud px-2 py-1.5 hover:border-zinc-500 transition-colors"
               >
                 Reset
               </button>
@@ -314,7 +314,7 @@ export default function ObsOverlayPanel() {
                 key={m.key}
                 onClick={() => updateCfg({ [m.key]: !active })}
                 data-testid={`overlay-toggle-${m.key}`}
-                className={`text-xs px-3 py-1.5 border transition-colors ${active ? "border-[#00E0FF] text-[#00E0FF] bg-[#00E0FF]/5" : "border-[#2A2A35] text-zinc-500 hover:border-zinc-600"}`}
+                className={`text-xs px-3 py-1.5 border transition-colors ${active ? "border-info text-info bg-info/5" : "border-hud text-zinc-500 hover:border-zinc-600"}`}
               >
                 {active ? <Check size={11} className="inline mr-1" /> : null}{m.label}
               </button>
@@ -327,7 +327,7 @@ export default function ObsOverlayPanel() {
       <div>
         <div className="text-[11px] uppercase tracking-widest text-zinc-500 font-mono mb-2">{isEn() ? "Live preview" : "Anteprima live"}</div>
         <div
-          className="relative border border-[#2A2A35] overflow-hidden"
+          className="relative border border-hud overflow-hidden"
           style={{
             height: 220,
             backgroundImage: "linear-gradient(45deg, #1a1a20 25%, transparent 25%, transparent 75%, #1a1a20 75%), linear-gradient(45deg, #1a1a20 25%, transparent 25%, transparent 75%, #1a1a20 75%)",
@@ -360,7 +360,7 @@ export default function ObsOverlayPanel() {
       </div>
 
       {/* OBS setup instructions */}
-      <details className="border-t border-[#2A2A35] pt-3">
+      <details className="border-t border-hud pt-3">
         <summary className="text-[11px] text-zinc-500 cursor-pointer hover:text-zinc-300 font-mono uppercase tracking-widest">
           {isEn() ? "How to add it in OBS Studio" : "Come aggiungerlo in OBS Studio"}
         </summary>

@@ -29,10 +29,10 @@ export default function BrowserPopupHint({ testid = "browser-popup-hint" }) {
   if (!visible) return null;
 
   return (
-    <div className="mb-4 flex items-start gap-2 bg-[#0F0F12] border border-[#00E0FF]/30 px-3 py-2 text-xs text-zinc-400 leading-relaxed" data-testid={testid}>
-      <Info size={13} className="text-[#00E0FF] shrink-0 mt-0.5" />
+    <div className="mb-4 flex items-start gap-2 bg-panel border border-info/30 px-3 py-2 text-xs text-zinc-400 leading-relaxed" data-testid={testid}>
+      <Info size={13} className="text-info shrink-0 mt-0.5" />
       <div className="flex-1">
-        <span className="text-[#00E0FF] font-semibold">
+        <span className="text-info font-semibold">
           {t("popup_hint.title", { defaultValue: "Prima volta?" })}
         </span>{" "}
         {t("popup_hint.body", {

@@ -13,6 +13,16 @@ module.exports = {
         sm: 'calc(var(--radius) - 4px)'
       },
       colors: {
+        // Token HUD. Prima questi 11 valori erano scritti a mano ~2300 volte
+        // nei .jsx come classi arbitrarie (bg-[#E5FF00]); cambiare il giallo
+        // del brand voleva dire un find-and-replace su tutto il frontend.
+        volt: { DEFAULT: '#E5FF00', dim: '#D4EC00' },   // accento primario / hover
+        ok: '#00FF66',                                  // esito positivo
+        info: '#00E0FF',                                // agent, telemetria
+        bad: '#FF3B30',                                 // errore, regressione
+        hud: { DEFAULT: '#2A2A35', soft: '#1A1A24' },   // bordi
+        panel: { DEFAULT: '#0F0F12', deep: '#0A0A0C', hover: '#141419' },
+        ink: '#050505',                                 // fondo pagina
         // Tier di testo "muted" resi accessibili su fondo #050505 (WCAG AA).
         // zinc-500 di default (#71717A) era 3.96:1, zinc-600 (#52525B) 2.48:1.
         zinc: {

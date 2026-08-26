@@ -51,7 +51,7 @@ export default function CurrentGameCard({ appid, gameName, source, exe, fullscre
 
   return (
     <div
-      className="relative overflow-hidden border border-[#2A2A35] mb-4 group"
+      className="relative overflow-hidden border border-hud mb-4 group"
       data-testid="current-game-card"
     >
       {/* header cover as bg */}
@@ -62,28 +62,28 @@ export default function CurrentGameCard({ appid, gameName, source, exe, fullscre
           aria-hidden
         />
       )}
-      <div className="absolute inset-0 bg-gradient-to-r from-[#0F0F12] via-[#0F0F12]/85 to-transparent" aria-hidden />
+      <div className="absolute inset-0 bg-gradient-to-r from-panel via-panel/85 to-transparent" aria-hidden />
       <div className="relative flex items-center gap-4 p-4">
         {info?.capsule_image ? (
           <img
             src={info.capsule_image}
             alt={displayName}
-            className="w-28 h-11 object-cover shrink-0 border border-[#2A2A35]"
+            className="w-28 h-11 object-cover shrink-0 border border-hud"
             data-testid="current-game-cover"
           />
         ) : (
-          <div className="w-28 h-11 shrink-0 border border-[#2A2A35] bg-black flex items-center justify-center">
-            <Gamepad2 size={20} className="text-[#E5FF00]" />
+          <div className="w-28 h-11 shrink-0 border border-hud bg-black flex items-center justify-center">
+            <Gamepad2 size={20} className="text-volt" />
           </div>
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap text-[11px] uppercase tracking-widest text-zinc-500">
-            <span className="flex items-center gap-1 text-[#00FF66]">
+            <span className="flex items-center gap-1 text-ok">
               <Radio size={11} className="animate-pulse" />
               {t("live.game_now_playing", "Ora in gioco")}
             </span>
             <span className="text-zinc-700">·</span>
-            <span className="font-mono font-bold text-[#E5FF00]" data-testid="current-game-source">{sourceLabel}</span>
+            <span className="font-mono font-bold text-volt" data-testid="current-game-source">{sourceLabel}</span>
             {fullscreen && (
               <>
                 <span className="text-zinc-700">·</span>
@@ -101,7 +101,7 @@ export default function CurrentGameCard({ appid, gameName, source, exe, fullscre
             {info?.genres?.length > 0 && (
               <>
                 {info?.developers?.length > 0 && <span className="text-zinc-700">·</span>}
-                <span className="text-[#00E0FF]" data-testid="current-game-genres">{info.genres.slice(0, 3).join(" · ")}</span>
+                <span className="text-info" data-testid="current-game-genres">{info.genres.slice(0, 3).join(" · ")}</span>
               </>
             )}
             {exe && !info?.developers?.length && (
@@ -109,7 +109,7 @@ export default function CurrentGameCard({ appid, gameName, source, exe, fullscre
             )}
           </div>
           {discorde && (
-            <div className="text-[11px] text-[#E5FF00] mt-1" data-testid="current-game-mismatch">
+            <div className="text-[11px] text-volt mt-1" data-testid="current-game-mismatch">
               {t("live.game_fps_mismatch", { app: fpsApp, defaultValue: "Gli FPS mostrati sono di {{app}}, non di questo gioco." })}
             </div>
           )}
@@ -119,7 +119,7 @@ export default function CurrentGameCard({ appid, gameName, source, exe, fullscre
             href={`https://store.steampowered.com/app/${appid}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden md:flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-zinc-500 hover:text-[#E5FF00] transition-colors"
+            className="hidden md:flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-zinc-500 hover:text-volt transition-colors"
             data-testid="current-game-steam-link"
           >
             <PlayCircle size={13} /> Steam

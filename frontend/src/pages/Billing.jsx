@@ -12,7 +12,7 @@ import { CreditCard, ExternalLink, Sparkles, ArrowRight, Loader2, Wallet, Zap, C
 import { toast } from "sonner";
 import api from "@/lib/api";
 import i18n from "@/i18n";
-import { PageHeader } from "@/components/hud";
+import { HUDCard, PageHeader } from "@/components/hud";
 
 const TIER_META = {
   pro: { name: "Pro", color: "#E5FF00", icon: Zap },
@@ -89,12 +89,12 @@ export default function Billing() {
   return (
     <div className="max-w-4xl mx-auto fade-up" data-testid="billing-page">
       <PageHeader
-        eyebrow={<span className="inline-flex items-center gap-2"><CreditCard size={13} className="text-[#E5FF00]" /> {isEn() ? "// billing" : "// fatturazione"}</span>}
+        eyebrow={<span className="inline-flex items-center gap-2"><CreditCard size={13} className="text-volt" /> {isEn() ? "// billing" : "// fatturazione"}</span>}
         title={isEn() ? "Billing & plan" : "Fatturazione e piano"}
       />
 
       {/* Piano corrente */}
-      <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-6" data-testid="current-plan-card">
+      <HUDCard testid="current-plan-card" pad="p-6" className="mb-6">
         <div className="text-xs uppercase tracking-widest text-zinc-500 font-mono mb-3">{isEn() ? "// current plan" : "// piano corrente"}</div>
         <div className="flex flex-wrap items-center gap-4">
           <div className="w-14 h-14 border-2 flex items-center justify-center" style={{ borderColor: meta.color, color: meta.color }}>
@@ -106,7 +106,7 @@ export default function Billing() {
               <div className="text-sm text-zinc-400 mt-1">{isEn() ? <>Trial active — <strong className="text-zinc-100">{info.trial_days_left} day{info.trial_days_left === 1 ? "" : "s"} left</strong> · expires {fmtDate(info.trial_expires_at)}</> : <>Trial attivo — <strong className="text-zinc-100">{info.trial_days_left} giorn{info.trial_days_left === 1 ? "o" : "i"} rimasti</strong> · scade il {fmtDate(info.trial_expires_at)}</>}</div>
             )}
             {meta.isExpired && (
-              <div className="text-sm text-[#FF3B30] mt-1">{isEn() ? <>Reactivate within <strong>{info.grace_days_left} days</strong> to keep your data.</> : <>Riattiva entro <strong>{info.grace_days_left} giorni</strong> per non perdere i dati.</>}</div>
+              <div className="text-sm text-bad mt-1">{isEn() ? <>Reactivate within <strong>{info.grace_days_left} days</strong> to keep your data.</> : <>Riattiva entro <strong>{info.grace_days_left} giorni</strong> per non perdere i dati.</>}</div>
             )}
             {isPaid && info.trial_expires_at && (
               <div className="text-sm text-zinc-400 mt-1">{isEn() ? "Automatic renewal via Stripe · managed in the portal." : "Rinnovo automatico via Stripe · gestito nel portal."}</div>
@@ -116,10 +116,10 @@ export default function Billing() {
             )}
           </div>
         </div>
-      </div>
+      </HUDCard>
 
       {/* Metodo di pagamento */}
-      <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-6" data-testid="payment-method-card">
+      <HUDCard testid="payment-method-card" pad="p-6" className="mb-6">
         <div className="text-xs uppercase tracking-widest text-zinc-500 font-mono mb-3">{isEn() ? "// payment method" : "// metodo di pagamento"}</div>
         {isPaid ? (
           <>
@@ -130,7 +130,7 @@ export default function Billing() {
               onClick={openPortal}
               disabled={loadingPortal}
               data-testid="open-portal-btn"
-              className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-5 py-2.5 text-sm hover:bg-[#D4EC00] transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 bg-volt text-black font-bold px-5 py-2.5 text-sm hover:bg-volt-dim transition-colors disabled:opacity-50"
             >
               {loadingPortal ? <Loader2 size={15} className="animate-spin" /> : <ExternalLink size={15} />}
               {loadingPortal ? (isEn() ? "Opening..." : "Apro...") : (isEn() ? "Manage payment on Stripe" : "Gestisci pagamento su Stripe")}
@@ -144,11 +144,11 @@ export default function Billing() {
             {isEn() ? "No payment method linked to your account. You'll add a card when you subscribe to a plan." : "Nessun metodo di pagamento associato al tuo account. Aggiungerai la carta quando sottoscriverai un piano."}
           </div>
         )}
-      </div>
+      </HUDCard>
 
       {/* Annullamento trial */}
       {isTrial && (
-        <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-6" data-testid="cancel-trial-card">
+        <HUDCard testid="cancel-trial-card" pad="p-6" className="mb-6">
           <div className="text-xs uppercase tracking-widest text-zinc-500 font-mono mb-3">{isEn() ? "// cancel trial" : "// annulla trial"}</div>
           {askCancel ? (
             <>
@@ -162,7 +162,7 @@ export default function Billing() {
                   onClick={cancelTrial}
                   disabled={cancelling}
                   data-testid="cancel-trial-confirm"
-                  className="inline-flex items-center gap-2 border border-[#FF3B30]/50 text-[#FF3B30] px-5 py-2.5 text-sm hover:bg-[#FF3B30]/10 transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-2 border border-bad/50 text-bad px-5 py-2.5 text-sm hover:bg-bad/10 transition-colors disabled:opacity-50"
                 >
                   {cancelling ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
                   {isEn() ? "Yes, cancel the trial" : "Sì, annulla il trial"}
@@ -171,7 +171,7 @@ export default function Billing() {
                   onClick={() => setAskCancel(false)}
                   disabled={cancelling}
                   data-testid="cancel-trial-back"
-                  className="border border-[#2A2A35] text-zinc-300 px-5 py-2.5 text-sm hover:border-[#E5FF00]/50 transition-colors disabled:opacity-50"
+                  className="border border-hud text-zinc-300 px-5 py-2.5 text-sm hover:border-volt/50 transition-colors disabled:opacity-50"
                 >
                   {isEn() ? "Keep the trial" : "Mantieni il trial"}
                 </button>
@@ -187,20 +187,20 @@ export default function Billing() {
               <button
                 onClick={() => setAskCancel(true)}
                 data-testid="cancel-trial-btn"
-                className="text-sm text-zinc-400 underline underline-offset-4 hover:text-[#FF3B30] transition-colors"
+                className="text-sm text-zinc-400 underline underline-offset-4 hover:text-bad transition-colors"
               >
                 {isEn() ? "Cancel the trial" : "Annulla il trial"}
               </button>
             </>
           )}
-        </div>
+        </HUDCard>
       )}
 
       {/* CTA upgrade */}
       {(isStarter || isTrial || meta.isExpired) && (
-        <div className="bg-gradient-to-br from-[#E5FF00]/10 to-transparent border border-[#E5FF00]/40 p-6" data-testid="upgrade-cta">
+        <div className="bg-gradient-to-br from-volt/10 to-transparent border border-volt/40 p-6" data-testid="upgrade-cta">
           <div className="flex items-start gap-4">
-            <Sparkles size={22} className="text-[#E5FF00] shrink-0 mt-1" />
+            <Sparkles size={22} className="text-volt shrink-0 mt-1" />
             <div className="flex-1">
               <h3 className="font-display font-black text-xl tracking-tighter mb-2">
                 {isTrial ? (isEn() ? "Continue with Pro after the trial" : "Continua con Pro dopo il trial") : meta.isExpired ? (isEn() ? "Reactivate your plan" : "Riattiva il tuo piano") : (isEn() ? "Upgrade your plan" : "Migliora il tuo piano")}
@@ -211,7 +211,7 @@ export default function Billing() {
               <Link
                 to="/pricing"
                 data-testid="see-plans-btn"
-                className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-5 py-2.5 text-sm hover:bg-[#D4EC00] transition-colors"
+                className="inline-flex items-center gap-2 bg-volt text-black font-bold px-5 py-2.5 text-sm hover:bg-volt-dim transition-colors"
               >
                 {isEn() ? "See plans" : "Vedi i piani"} <ArrowRight size={15} />
               </Link>

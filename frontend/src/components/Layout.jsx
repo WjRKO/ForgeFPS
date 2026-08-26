@@ -106,28 +106,28 @@ function Notifications() {
   return (
     <div className="relative">
       <button data-testid="notifications-btn" onClick={() => setOpen((o) => !o)}
-        className="relative p-2 border border-[#2A2A35] hover:border-[#E5FF00] transition-colors">
+        className="relative p-2 border border-hud hover:border-volt transition-colors">
         <Bell size={18} />
         {unread > 0 && (
-          <span data-testid="notif-count" className="absolute -top-1 -right-1 bg-[#E5FF00] text-black text-[11px] font-bold px-1.5 rounded-sm">
+          <span data-testid="notif-count" className="absolute -top-1 -right-1 bg-volt text-black text-[11px] font-bold px-1.5 rounded-sm">
             {unread}
           </span>
         )}
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-80 bg-[#0F0F12] border border-[#2A2A35] z-50 max-h-[28rem] overflow-auto">
-          <div className="flex items-center justify-between p-3 border-b border-[#2A2A35]">
+        <div className="absolute right-0 mt-2 w-80 bg-panel border border-hud z-50 max-h-[28rem] overflow-auto">
+          <div className="flex items-center justify-between p-3 border-b border-hud">
             <span className="text-xs uppercase tracking-widest text-zinc-500">{t("notif.title")}</span>
             <div className="flex gap-2">
-              <button onClick={markAll} className="text-xs text-[#E5FF00] hover:underline" data-testid="mark-all-read-btn">{t("notif.mark_read")}</button>
+              <button onClick={markAll} className="text-xs text-volt hover:underline" data-testid="mark-all-read-btn">{t("notif.mark_read")}</button>
               <button onClick={() => setOpen(false)}><X size={14} /></button>
             </div>
           </div>
           {pushSupported() && (
-            <div className="border-b border-[#1A1A24]">
+            <div className="border-b border-hud-soft">
               <button data-testid="toggle-push-btn" onClick={togglePush} disabled={pushBusy || pushState === "denied"}
-                className="w-full flex items-center gap-2 px-3 py-2.5 text-xs hover:bg-[#141419] transition-colors disabled:opacity-50">
-                {pushState === "subscribed" ? <BellOff size={14} className="text-[#FF3B30]" /> : <BellRing size={14} className="text-[#00FF66]" />}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-xs hover:bg-panel-hover transition-colors disabled:opacity-50">
+                {pushState === "subscribed" ? <BellOff size={14} className="text-bad" /> : <BellRing size={14} className="text-ok" />}
                 {pushState === "denied" ? t("notif.push_blocked")
                   : pushState === "subscribed" ? t("notif.push_off") : t("notif.push_on")}
               </button>
@@ -151,14 +151,14 @@ function Notifications() {
             const Row = (
               <>
                 <div className="flex items-start justify-between gap-2">
-                  <div className={`text-xs font-bold uppercase mb-1 ${n.type === "regression" ? "text-[#FF3B30]" : "text-[#00FF66]"}`}>{label}</div>
+                  <div className={`text-xs font-bold uppercase mb-1 ${n.type === "regression" ? "text-bad" : "text-ok"}`}>{label}</div>
                   {!n.read && (
                     <button
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); markOne(n.id); }}
                       title={t("notif.mark_one_read")}
                       aria-label={t("notif.mark_one_read")}
                       data-testid="mark-one-read-btn"
-                      className="shrink-0 text-zinc-600 hover:text-[#E5FF00] transition-colors"
+                      className="shrink-0 text-zinc-600 hover:text-volt transition-colors"
                     >
                       <Check size={13} />
                     </button>
@@ -168,7 +168,7 @@ function Notifications() {
                 {text && <div className="text-zinc-400 text-xs mt-1">{text} {n.currency || ""}</div>}
               </>
             );
-            const cls = `p-3 border-b border-[#1A1A24] text-sm block ${n.read ? "opacity-60" : ""}`;
+            const cls = `p-3 border-b border-hud-soft text-sm block ${n.read ? "opacity-60" : ""}`;
             return n.link ? (
               <Link key={n.id || `n-${i}`} to={n.link} onClick={() => { markOne(n.id); setOpen(false); }} className={`${cls} hover:bg-[#12121A]`}>
                 {Row}
@@ -213,14 +213,14 @@ export default function Layout() {
   const doLogout = async () => { await logout(); navigate("/login"); };
 
   return (
-    <div className="min-h-screen flex bg-[#050505] text-zinc-100">
+    <div className="min-h-screen flex bg-ink text-zinc-100">
       {mobileOpen && (
         <div className="fixed inset-0 bg-black/60 z-40 md:hidden" onClick={() => setMobileOpen(false)} data-testid="sidebar-overlay" />
       )}
-      <aside className={`w-60 border-r border-[#2A2A35] bg-[#0A0A0C] flex flex-col fixed h-full z-50 transition-transform duration-200 ${mobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`} data-testid="sidebar">
-        <div className="p-5 border-b border-[#2A2A35] flex items-center gap-2">
-          <div className="w-8 h-8 bg-[#E5FF00] flex items-center justify-center"><Zap size={18} className="text-black" /></div>
-          <span className="font-display font-black tracking-tighter text-lg">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
+      <aside className={`w-60 border-r border-hud bg-panel-deep flex flex-col fixed h-full z-50 transition-transform duration-200 ${mobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`} data-testid="sidebar">
+        <div className="p-5 border-b border-hud flex items-center gap-2">
+          <div className="w-8 h-8 bg-volt flex items-center justify-center"><Zap size={18} className="text-black" /></div>
+          <span className="font-display font-black tracking-tighter text-lg">FRAME<span className="text-volt">FORGE</span></span>
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {NAV_GROUPS.map((group, gi) => {
@@ -239,7 +239,7 @@ export default function Layout() {
                         type="button"
                         onClick={() => setFeedbackOpen(true)}
                         data-testid={`nav-${n.id}`}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-zinc-400 hover:text-white hover:bg-[#141419] transition-colors"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-zinc-400 hover:text-white hover:bg-panel-hover transition-colors"
                       >
                         <n.icon size={17} /> {t(n.label)}
                       </button>
@@ -250,13 +250,13 @@ export default function Layout() {
                     <NavLink key={n.to} to={n.to} end={n.end} data-testid={`nav-${n.id}`}
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${
-                          isActive ? "bg-[#E5FF00] text-black font-bold" : "text-zinc-400 hover:text-white hover:bg-[#141419]"
+                          isActive ? "bg-volt text-black font-bold" : "text-zinc-400 hover:text-white hover:bg-panel-hover"
                         }`}>
                       <n.icon size={17} />
                       <span className="flex-1">{t(n.label)}</span>
                       {badgeCount > 0 && (
                         <span
-                          className="min-w-[18px] h-[18px] px-1.5 flex items-center justify-center bg-[#FF3B30] text-white text-[11px] font-bold rounded-full"
+                          className="min-w-[18px] h-[18px] px-1.5 flex items-center justify-center bg-bad text-white text-[11px] font-bold rounded-full"
                           data-testid={`nav-${n.id}-badge`}
                         >
                           {badgeCount > 9 ? "9+" : badgeCount}
@@ -273,9 +273,9 @@ export default function Layout() {
       </aside>
 
       <div className="flex-1 md:ml-60 flex flex-col min-w-0">
-        <header className="h-16 border-b border-[#2A2A35] bg-black/60 backdrop-blur-xl sticky top-0 z-40 flex items-center justify-between px-4 sm:px-6">
+        <header className="h-16 border-b border-hud bg-black/60 backdrop-blur-xl sticky top-0 z-40 flex items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-3 min-w-0">
-            <button className="md:hidden p-2 border border-[#2A2A35] hover:border-[#E5FF00] transition-colors" onClick={() => setMobileOpen(true)} data-testid="sidebar-toggle" aria-label="Menu">
+            <button className="md:hidden p-2 border border-hud hover:border-volt transition-colors" onClick={() => setMobileOpen(true)} data-testid="sidebar-toggle" aria-label="Menu">
               <Menu size={18} />
             </button>
             <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 truncate" data-testid="page-title">
@@ -287,7 +287,7 @@ export default function Layout() {
             <button
               type="button"
               onClick={() => setHandoffOpen(true)}
-              className="hidden sm:inline-flex items-center gap-1.5 border border-[#2A2A35] text-zinc-400 hover:text-[#E5FF00] hover:border-[#E5FF00] px-2.5 py-1.5 text-xs transition-colors"
+              className="hidden sm:inline-flex items-center gap-1.5 border border-hud text-zinc-400 hover:text-volt hover:border-volt px-2.5 py-1.5 text-xs transition-colors"
               title={t("mobile.handoff_title", { defaultValue: "Continua sul telefono" })}
               data-testid="mobile-handoff-header-btn">
               <Smartphone size={14} />

@@ -10,7 +10,7 @@ import HealthHistoryCard from "@/components/HealthHistoryCard";
 import WhatChangedCard from "@/components/WhatChangedCard";
 import { HwInsightsPanel } from "@/components/HwInsightsPanel";
 import SyncTimeline from "@/components/SyncTimeline";
-import { PageHeader } from "@/components/hud";
+import { HUDCard, PageHeader } from "@/components/hud";
 import { DevicesPanel } from "@/components/DevicesPanel";
 import { DeviceCompare } from "@/components/DeviceCompare";
 import { useSilentLaunch } from "@/hooks/useSilentLaunch";
@@ -58,9 +58,9 @@ const ricordaPcLocale = (id) => { try { window.localStorage.setItem(LS_PC_LOCALE
 // solo il colore: verde = si spegne senza conseguenze, giallo = dipende da come
 // usi il PC, rosso = non si tocca e infatti il bottone non c'e'.
 const SAFETY = {
-  sicuro: { cls: "bg-[#00FF66]/15 text-[#00FF66]" },
-  valuta: { cls: "bg-[#E5FF00]/15 text-[#E5FF00]" },
-  critico: { cls: "bg-[#FF3B30]/15 text-[#FF3B30]" },
+  sicuro: { cls: "bg-ok/15 text-ok" },
+  valuta: { cls: "bg-volt/15 text-volt" },
+  critico: { cls: "bg-bad/15 text-bad" },
 };
 
 const SPEC_KEYS = ["os", "cpu", "gpu", "ram", "disk", "motherboard", "resolution"];
@@ -114,7 +114,7 @@ function composeSpec(key, d) {
   return v;
 }
 
-const STATUS_ICON = { ok: <CheckCircle2 size={16} className="text-[#00FF66]" />, warn: <AlertTriangle size={16} className="text-[#E5FF00]" />, bad: <XCircle size={16} className="text-[#FF3B30]" />, unknown: <HelpCircle size={16} className="text-zinc-600" /> };
+const STATUS_ICON = { ok: <CheckCircle2 size={16} className="text-ok" />, warn: <AlertTriangle size={16} className="text-volt" />, bad: <XCircle size={16} className="text-bad" />, unknown: <HelpCircle size={16} className="text-zinc-600" /> };
 
 
 // v0.7.4d: guida actionable quando la temp CPU non e' leggibile.
@@ -257,7 +257,7 @@ function CpuTempReasonHint({ checks }) {
   const color = isSecurity ? "#E5FF00" : "#00E0FF"; // giallo = protezione security, azzurro = altro
 
   return (
-    <div className="mt-4 border-t border-[#1A1A24] pt-3" data-testid="cpu-temp-reason-hint">
+    <div className="mt-4 border-t border-hud-soft pt-3" data-testid="cpu-temp-reason-hint">
       <div className="border p-4" style={{ borderColor: `${color}66`, backgroundColor: `${color}0D` }}>
         <div className="flex items-start gap-3">
           <AlertTriangle size={16} className="shrink-0 mt-0.5" style={{ color }} />
@@ -506,15 +506,15 @@ export default function MyPc() {
       <div className="max-w-3xl mx-auto fade-up">
         <div className="mb-6"><div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("mypcpage.eyebrow")}</div>
           <h1 className="font-display font-black text-3xl tracking-tighter">{t("mypcpage.title")}</h1></div>
-        <div className="mb-4 bg-[#0F0F12] border border-[#2A2A35] p-5 text-sm text-zinc-400">
-          {t("mypcpage.intro")} <span className="text-[#E5FF00]">{t("mypcpage.intro_hl")}</span>.
+        <HUDCard className="mb-4 text-sm text-zinc-400">
+          {t("mypcpage.intro")} <span className="text-volt">{t("mypcpage.intro_hl")}</span>.
           {" "}{t("mypcpage.intro2")}
-        </div>
+        </HUDCard>
         <SpecsForm initial={specs?.data || {}}
           onSaved={(d) => { setSpecs(d); setEditing(false); load(); }}
           onCancel={hasSpecs ? () => setEditing(false) : undefined} />
         <div className="mt-4 text-center">
-          <Link to="/app/desktop" data-testid="go-desktop-btn" className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-[#E5FF00] transition-colors">
+          <Link to="/app/desktop" data-testid="go-desktop-btn" className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-volt transition-colors">
             <MonitorDown size={16} /> {t("mypcpage.want_more")}
           </Link>
         </div>
@@ -527,12 +527,12 @@ export default function MyPc() {
       <PageHeader eyebrow={t("mypcpage.eyebrow")} title={t("mypcpage.title")}
         actions={<>
           <button data-testid="silent-sync-btn" onClick={syncLaunch.launch} disabled={syncLaunch.running}
-            className="flex items-center gap-2 border border-[#00E0FF]/50 text-[#00E0FF] px-3 py-2 text-sm hover:bg-[#00E0FF]/10 disabled:opacity-60 transition-colors">
+            className="flex items-center gap-2 border border-info/50 text-info px-3 py-2 text-sm hover:bg-info/10 disabled:opacity-60 transition-colors">
             {syncLaunch.running ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
             {t("mypcpage.silent_sync_btn", { defaultValue: "Sincronizza ora" })}
           </button>
-          <button data-testid="edit-specs-btn" onClick={() => setEditing(true)} className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><Pencil size={15} /> {t("mypcpage.edit")}</button>
-          <Link to="/app/upgrade" data-testid="to-upgrade-btn" className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost"><Rocket size={15} /> {t("mypcpage.upgrade")}</Link>
+          <button data-testid="edit-specs-btn" onClick={() => setEditing(true)} className="flex items-center gap-2 border border-hud px-3 py-2 text-sm hover:border-volt btn-ghost"><Pencil size={15} /> {t("mypcpage.edit")}</button>
+          <Link to="/app/upgrade" data-testid="to-upgrade-btn" className="flex items-center gap-2 border border-hud px-3 py-2 text-sm hover:border-volt btn-ghost"><Rocket size={15} /> {t("mypcpage.upgrade")}</Link>
         </>} />
 
       <MissionContextStrip metrics={["services_done", "startup_done", "health_score", "optimize_total"]} />
@@ -546,10 +546,10 @@ export default function MyPc() {
         try { diffSec = Math.floor((Date.now() - new Date(specs.updated_at).getTime()) / 1000); } catch { diffSec = 999999; }
         const justNow = diffSec >= 0 && diffSec < 5;
         return (
-          <div className={`mb-4 flex items-center gap-2 text-xs transition-colors ${justNow ? "text-[#00FF66]" : "text-zinc-500"}`} data-testid="last-sync-info">
-            <span className={`w-1.5 h-1.5 rounded-full bg-[#00FF66] ${justNow ? "animate-ping" : ""}`} />
+          <div className={`mb-4 flex items-center gap-2 text-xs transition-colors ${justNow ? "text-ok" : "text-zinc-500"}`} data-testid="last-sync-info">
+            <span className={`w-1.5 h-1.5 rounded-full bg-ok ${justNow ? "animate-ping" : ""}`} />
             <span>{t("mypcpage.last_sync", { defaultValue: "Ultimo sync:" })}</span>
-            <span className={`font-mono ${justNow ? "text-[#00FF66] font-bold" : "text-zinc-300"}`} data-testid="last-sync-timestamp">
+            <span className={`font-mono ${justNow ? "text-ok font-bold" : "text-zinc-300"}`} data-testid="last-sync-timestamp">
               {(() => {
                 try {
                   const d = new Date(specs.updated_at);
@@ -565,14 +565,14 @@ export default function MyPc() {
                 } catch { return specs.updated_at; }
               })()}
             </span>
-            {justNow && <span className="text-[#00FF66] font-bold">· {t("mypcpage.sync_ok", { defaultValue: "aggiornato!" })}</span>}
+            {justNow && <span className="text-ok font-bold">· {t("mypcpage.sync_ok", { defaultValue: "aggiornato!" })}</span>}
             {/* "Aggiorna" stava nella barra in alto accanto a "Sincronizza ora",
                 con la STESSA icona: uno rilegge il database in un istante, l'altro
                 accende l'agent per un minuto, e non c'era modo di indovinare quale
                 fosse quale. Qui, attaccato all'ora dell'ultimo sync, dice da solo
                 cosa fa. */}
             <button data-testid="refresh-pc-btn" onClick={load}
-              className="underline underline-offset-2 hover:text-[#E5FF00] transition-colors">
+              className="underline underline-offset-2 hover:text-volt transition-colors">
               {t("mypcpage.refresh")}
             </button>
           </div>
@@ -582,18 +582,18 @@ export default function MyPc() {
       <BrowserPopupHint testid="mypc-popup-hint" />
 
       {health && (
-        <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick p-6 mb-4">
-          <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4 flex items-center gap-2"><Activity size={14} className="text-[#E5FF00]" /> Health Score</div>
+        <HUDCard pad="p-6" className="hud-tick mb-4">
+          <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4 flex items-center gap-2"><Activity size={14} className="text-volt" /> Health Score</div>
           <div className="flex flex-col md:flex-row gap-8 items-center">
             <ScoreRing score={health.score} grade={t(`mypcpage.health.grade.${health.grade_key}`, health.grade)} />
             <div className="flex-1 w-full grid sm:grid-cols-2 gap-2">
               {health.checks.map((c, i) => (
-                <div key={c.id || i} data-testid={`check-${i}`} className="flex items-start gap-2 bg-black border border-[#1A1A24] p-3">
+                <div key={c.id || i} data-testid={`check-${i}`} className="flex items-start gap-2 bg-black border border-hud-soft p-3">
                   {STATUS_ICON[c.status]}
                   <div className="min-w-0">
                     <div className="text-sm text-zinc-200">{t(`mypcpage.health.label.${c.id}`, c.label)}</div>
                     <div className="text-xs text-zinc-500">{t(`mypcpage.health.msg.${c.mkey}`, { v: c.mval, defaultValue: c.message })}</div>
-                    {c.fix && <div className="text-xs text-[#E5FF00] mt-1">→ {t(`mypcpage.health.fix.${c.id}`, c.fix)}</div>}
+                    {c.fix && <div className="text-xs text-volt mt-1">→ {t(`mypcpage.health.fix.${c.id}`, c.fix)}</div>}
                   </div>
                 </div>
               ))}
@@ -601,16 +601,16 @@ export default function MyPc() {
           </div>
           <CpuTempReasonHint checks={health.checks} />
           {(health.fleet || health.throttling?.checked) && (
-            <div className="mt-4 flex flex-wrap gap-3 border-t border-[#1A1A24] pt-3">
+            <div className="mt-4 flex flex-wrap gap-3 border-t border-hud-soft pt-3">
               {health.fleet && (
                 <div className="flex items-center gap-2 text-xs" data-testid="health-fleet-percentile">
-                  <Users size={13} className="text-[#00E0FF]" />
+                  <Users size={13} className="text-info" />
                   <span className="text-zinc-400">{t("mypcpage.health.fleetpct", { pct: health.fleet.percentile, n: health.fleet.n })}</span>
                 </div>
               )}
               {health.throttling?.checked && (
                 <div className="flex items-center gap-2 text-xs" data-testid="health-throttling">
-                  <Thermometer size={13} className={health.throttling.detected ? "text-[#FF3B30]" : "text-[#00FF66]"} />
+                  <Thermometer size={13} className={health.throttling.detected ? "text-bad" : "text-ok"} />
                   <span className={health.throttling.detected ? "text-red-400" : "text-zinc-400"}>
                     {health.throttling.detected
                       ? t("mypcpage.health.throttle_yes", { n: health.throttling.events, temp: health.throttling.max_temp })
@@ -621,28 +621,28 @@ export default function MyPc() {
             </div>
           )}
           {(health.gpu_temp != null || health.cpu_temp != null) && (
-            <div className="mt-4 flex flex-wrap gap-3 border-t border-[#1A1A24] pt-3">
+            <div className="mt-4 flex flex-wrap gap-3 border-t border-hud-soft pt-3">
               {health.cpu_temp != null && (
                 <div className="flex items-center gap-2 text-sm" data-testid="cpu-temp">
-                  <Thermometer size={15} className={health.cpu_temp >= 90 ? "text-[#FF3B30]" : health.cpu_temp >= 80 ? "text-[#E5FF00]" : "text-[#00FF66]"} />
+                  <Thermometer size={15} className={health.cpu_temp >= 90 ? "text-bad" : health.cpu_temp >= 80 ? "text-volt" : "text-ok"} />
                   <span className="text-zinc-500">CPU</span> <span className="font-bold">{health.cpu_temp}°C</span>
                 </div>
               )}
               {health.gpu_temp != null && (
                 <div className="flex items-center gap-2 text-sm" data-testid="gpu-temp">
-                  <Thermometer size={15} className={health.gpu_temp >= 85 ? "text-[#FF3B30]" : health.gpu_temp >= 75 ? "text-[#E5FF00]" : "text-[#00FF66]"} />
+                  <Thermometer size={15} className={health.gpu_temp >= 85 ? "text-bad" : health.gpu_temp >= 75 ? "text-volt" : "text-ok"} />
                   <span className="text-zinc-500">GPU</span> <span className="font-bold">{health.gpu_temp}°C</span>
                 </div>
               )}
             </div>
           )}
           {health.driver_version && (
-            <div className="mt-4 text-xs text-zinc-500 flex items-center gap-2 border-t border-[#1A1A24] pt-3">
+            <div className="mt-4 text-xs text-zinc-500 flex items-center gap-2 border-t border-hud-soft pt-3">
               {t("mypcpage.driver_gpu")} <span className="text-zinc-300">{health.driver_version}</span>
-              <a href="https://www.nvidia.com/Download/index.aspx" target="_blank" rel="noreferrer" className="text-[#E5FF00] hover:underline ml-2">{t("mypcpage.check_updates")}</a>
+              <a href="https://www.nvidia.com/Download/index.aspx" target="_blank" rel="noreferrer" className="text-volt hover:underline ml-2">{t("mypcpage.check_updates")}</a>
             </div>
           )}
-        </div>
+        </HUDCard>
       )}
 
       <HwInsightsPanel key={`hw-${syncVersion}`} />
@@ -653,9 +653,9 @@ export default function MyPc() {
 
       <SyncTimeline key={`st-${syncVersion}`} days={7} />
 
-      <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick mb-4">
-        <div className="p-5 border-b border-[#2A2A35] text-xs uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2"><Cpu size={14} className="text-[#E5FF00]" /> {t("mypcpage.hardware")}</div>
-        <div className="grid sm:grid-cols-2 gap-px bg-[#1A1A24]">
+      <div className="bg-panel border border-hud hud-tick mb-4">
+        <div className="p-5 border-b border-hud text-xs uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2"><Cpu size={14} className="text-volt" /> {t("mypcpage.hardware")}</div>
+        <div className="grid sm:grid-cols-2 gap-px bg-hud-soft">
           {shownSpecKeys.map((k) => {
             const conf = specs.data?.hw_confidence || {};
             const c = hwConf(conf[k === "disk" ? "storage" : k]);
@@ -663,11 +663,11 @@ export default function MyPc() {
             // non era rappresentabile: due fonti che si contraddicono facevano
             // lo stesso badge verde di due che confermano.
             const badgeCls = c?.agree === false
-              ? "text-[#FF3B30] border-[#FF3B30]/40"
+              ? "text-bad border-bad/40"
               : c?.sources >= 2
-                ? "text-[#00FF66] border-[#00FF66]/30"
+                ? "text-ok border-ok/30"
                 : c?.sources === 1
-                  ? "text-[#E5FF00] border-[#E5FF00]/30"
+                  ? "text-volt border-volt/30"
                   : "text-zinc-600 border-zinc-800";
             const badgeTxt = c?.agree === false ? `${c.sources} ⚠` : `${c?.sources ?? 0}×`;
             const vecchio = nonConfermato(specs, k === "disk" ? "storage_model" : k);
@@ -677,7 +677,7 @@ export default function MyPc() {
                 ? t("mypcpage.hw_sources_agree", { n: c.sources, defaultValue: "{{n}} fonti indipendenti, concordi" })
                 : t("mypcpage.hw_sources_tooltip", "Numero di fonti indipendenti (WMI + Registry + nvidia-smi) che hanno confermato questo componente");
             return (
-              <div key={k} className="bg-[#0F0F12] p-4" data-testid={`spec-${k}`}>
+              <div key={k} className="bg-panel p-4" data-testid={`spec-${k}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs uppercase tracking-widest text-zinc-500">{specLabel(t, k)}</div>
                   {c != null && (
@@ -703,15 +703,15 @@ export default function MyPc() {
         </div>
       </div>
 
-      <div className="bg-[#0F0F12] border border-[#2A2A35]" style={{ display: (specs.startup || []).length ? "block" : "none" }}>
-        <div className="p-5 border-b border-[#2A2A35] flex items-center justify-between">
+      <div className="bg-panel border border-hud" style={{ display: (specs.startup || []).length ? "block" : "none" }}>
+        <div className="p-5 border-b border-hud flex items-center justify-between">
           <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">{t("mypcpage.startup")}</span>
           <button data-testid="analyze-startup-btn" onClick={analyzeStartup} disabled={analyzing}
-            className="flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-3 py-1.5 text-xs hover:bg-[#D4EC00] transition-colors disabled:opacity-60 btn-volt">
+            className="flex items-center gap-2 bg-volt text-black font-bold px-3 py-1.5 text-xs hover:bg-volt-dim transition-colors disabled:opacity-60 btn-volt">
             {analyzing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} {t("mypcpage.analyze_ai")}
           </button>
         </div>
-        {err && <div className="p-3 text-xs text-[#FF3B30]">{err}</div>}
+        {err && <div className="p-3 text-xs text-bad">{err}</div>}
         {!startup && !err && (() => {
           const all = specs.startup || [];
           const noiseN = all.filter((s) => s.noise).length;
@@ -723,23 +723,23 @@ export default function MyPc() {
           const shown = [...activeList.slice(0, 30), ...(showOff ? offList : [])];
           return (
           <div>
-            <div className="p-3 text-xs text-zinc-500 border-b border-[#1A1A24]">
+            <div className="p-3 text-xs text-zinc-500 border-b border-hud-soft">
               {offList.length > 0
                 ? t("mypcpage.startup_counts", { active: activeList.length, off: offList.length })
                 : t("mypcpage.startup_count", { count: activeList.length })}
               {noiseN > 0 && <span className="text-zinc-600"> · {t("mypcpage.startup_noise_hidden", { n: noiseN })}</span>}
-              {sicure > 0 && <span className="text-[#00FF66]"> · {t("mypcpage.startup_safe_count", { n: sicure })}</span>}
+              {sicure > 0 && <span className="text-ok"> · {t("mypcpage.startup_safe_count", { n: sicure })}</span>}
             </div>
             {doneList.length > 0 && (
-              <div className="px-3 py-2 border-b border-[#1A1A24] bg-[#00FF66]/5 text-[11px]" data-testid="startup-done-strip">
-                <span className="text-[#00FF66] font-bold">✓ {t("mypcpage.startup_done", { n: doneList.length })}</span>{" "}
+              <div className="px-3 py-2 border-b border-hud-soft bg-ok/5 text-[11px]" data-testid="startup-done-strip">
+                <span className="text-ok font-bold">✓ {t("mypcpage.startup_done", { n: doneList.length })}</span>{" "}
                 <span className="text-zinc-500">{doneList.map((d) => d.name).join(", ")}</span>
               </div>
             )}
             {shown.map((s, i) => (
-              <div key={`${s.name}-${i}`} className={`flex items-center gap-3 px-3 py-2 border-b border-[#1A1A24] ${s.enabled === false ? "opacity-50" : ""}`} data-testid={`startup-detected-${i}`}>
+              <div key={`${s.name}-${i}`} className={`flex items-center gap-3 px-3 py-2 border-b border-hud-soft ${s.enabled === false ? "opacity-50" : ""}`} data-testid={`startup-detected-${i}`}>
                 {s.enabled !== null && s.enabled !== undefined && (
-                  <span className={`text-[11px] font-bold uppercase tracking-widest px-1.5 py-0.5 shrink-0 ${s.enabled === false ? "bg-zinc-700/40 text-zinc-400" : "bg-[#00FF66]/15 text-[#00FF66]"}`}>
+                  <span className={`text-[11px] font-bold uppercase tracking-widest px-1.5 py-0.5 shrink-0 ${s.enabled === false ? "bg-zinc-700/40 text-zinc-400" : "bg-ok/15 text-ok"}`}>
                     {s.enabled === false ? t("mypcpage.startup_off") : t("mypcpage.startup_on")}
                   </span>
                 )}
@@ -769,7 +769,7 @@ export default function MyPc() {
                   )}
                 </div>
                 {s.impact_ms ? (
-                  <span className="text-[11px] text-[#E5FF00] tabular-nums shrink-0" data-testid={`startup-impact-${i}`}>
+                  <span className="text-[11px] text-volt tabular-nums shrink-0" data-testid={`startup-impact-${i}`}>
                     {t("mypcpage.startup_impact", { ms: s.impact_ms })}
                   </span>
                 ) : null}
@@ -780,7 +780,7 @@ export default function MyPc() {
                   {t(`mypcpage.startup_safety.${s.safety || "valuta"}`)}
                 </span>
                 {s.pending_enable !== undefined ? (
-                  <span className="text-[11px] text-[#00E0FF] shrink-0 w-24 text-right" data-testid={`startup-pending-${i}`}>
+                  <span className="text-[11px] text-info shrink-0 w-24 text-right" data-testid={`startup-pending-${i}`}>
                     {t(s.pending_enable ? "mypcpage.startup_pending_on" : "mypcpage.startup_pending_off")}
                   </span>
                 ) : s.can_disable === false ? (
@@ -790,7 +790,7 @@ export default function MyPc() {
                     data-testid={`startup-toggle-${i}`}
                     onClick={() => toggleStartup(s, s.enabled === false)}
                     disabled={acting === `${s.name}|${s.source}` || syncLaunch.running}
-                    className="text-[11px] uppercase tracking-widest px-2 py-1 shrink-0 w-24 border border-[#2A2A35] text-zinc-400 hover:text-[#E5FF00] hover:border-[#E5FF00] disabled:opacity-40 transition-colors">
+                    className="text-[11px] uppercase tracking-widest px-2 py-1 shrink-0 w-24 border border-hud text-zinc-400 hover:text-volt hover:border-volt disabled:opacity-40 transition-colors">
                     {acting === `${s.name}|${s.source}`
                       ? "..."
                       : t(s.enabled === false ? "mypcpage.startup_enable" : "mypcpage.startup_disable")}
@@ -799,7 +799,7 @@ export default function MyPc() {
               </div>
             ))}
             {offList.length > 0 && (
-              <button onClick={() => setShowOff(!showOff)} data-testid="startup-toggle-off" className="w-full p-2.5 text-[11px] uppercase tracking-widest text-zinc-600 hover:text-[#E5FF00] transition-colors">
+              <button onClick={() => setShowOff(!showOff)} data-testid="startup-toggle-off" className="w-full p-2.5 text-[11px] uppercase tracking-widest text-zinc-600 hover:text-volt transition-colors">
                 {showOff ? t("mypcpage.startup_hide_off") : t("mypcpage.startup_show_off", { n: offList.length })}
               </button>
             )}
@@ -808,17 +808,17 @@ export default function MyPc() {
         })()}
         {startup && (
           <div>
-            <div className="p-4 text-sm text-zinc-300 border-b border-[#1A1A24] bg-black">{startup.summary}</div>
+            <div className="p-4 text-sm text-zinc-300 border-b border-hud-soft bg-black">{startup.summary}</div>
             {startup.items.map((it, i) => {
               const det = (specs.startup || []).find((s) => s.name && it.name && (s.name.toLowerCase().includes(it.name.toLowerCase()) || it.name.toLowerCase().includes(s.name.toLowerCase())));
               const how = det?.source === "service" ? t("mypcpage.startup_how_service") : det?.source === "task" ? t("mypcpage.startup_how_task") : t("mypcpage.startup_how_taskmgr");
               return (
-                <div key={it.name || i} className="flex items-center gap-3 p-3 border-b border-[#1A1A24]" data-testid={`startup-item-${i}`}>
-                  <span className={`text-xs font-bold uppercase px-2 py-0.5 shrink-0 ${it.recommendation === "disabilita" ? "bg-[#FF3B30]/20 text-[#FF3B30]" : it.recommendation === "mantieni" ? "bg-[#00FF66]/20 text-[#00FF66]" : "bg-[#E5FF00]/20 text-[#E5FF00]"}`}>{it.recommendation}</span>
+                <div key={it.name || i} className="flex items-center gap-3 p-3 border-b border-hud-soft" data-testid={`startup-item-${i}`}>
+                  <span className={`text-xs font-bold uppercase px-2 py-0.5 shrink-0 ${it.recommendation === "disabilita" ? "bg-bad/20 text-bad" : it.recommendation === "mantieni" ? "bg-ok/20 text-ok" : "bg-volt/20 text-volt"}`}>{it.recommendation}</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm truncate">{it.name}{det?.ram_mb ? <span className="text-[11px] text-zinc-500"> · {det.ram_mb} MB RAM</span> : null}</div>
                     <div className="text-xs text-zinc-500">{it.reason}</div>
-                    {it.recommendation === "disabilita" && <div className="text-[11px] text-[#00E0FF] mt-0.5">→ {how}</div>}
+                    {it.recommendation === "disabilita" && <div className="text-[11px] text-info mt-0.5">→ {how}</div>}
                   </div>
                 </div>
               );
@@ -840,10 +840,10 @@ function ServicesCard({ t, lang }) {
   if (!data || !data.available || !data.items?.length) return null;
   const L = (obj) => (obj ? (lang === "en" ? obj.en : obj.it) : null);
   const REC = {
-    disattiva: { cls: "bg-[#FF3B30]/20 text-[#FF3B30]", it: "Disattiva", en: "Disable" },
-    valuta: { cls: "bg-[#E5FF00]/20 text-[#E5FF00]", it: "Valuta", en: "Consider" },
+    disattiva: { cls: "bg-bad/20 text-bad", it: "Disattiva", en: "Disable" },
+    valuta: { cls: "bg-volt/20 text-volt", it: "Valuta", en: "Consider" },
     gia_ok: { cls: "bg-zinc-700/40 text-zinc-400", it: "Già ok", en: "Already ok" },
-    mantieni: { cls: "bg-[#00FF66]/20 text-[#00FF66]", it: "Mantieni", en: "Keep" },
+    mantieni: { cls: "bg-ok/20 text-ok", it: "Mantieni", en: "Keep" },
   };
   const actionable = data.items.filter((it) => it.recommendation !== "gia_ok");
   const okItems = data.items.filter((it) => it.recommendation === "gia_ok");
@@ -851,51 +851,51 @@ function ServicesCard({ t, lang }) {
   const done = data.done || [];
   const doneMb = done.reduce((a, d) => a + (d.ram_mb || 0), 0);
   return (
-    <div className="bg-[#0F0F12] border border-[#2A2A35]" data-testid="services-card">
-      <div className="p-5 border-b border-[#2A2A35] flex items-center justify-between flex-wrap gap-2">
+    <div className="bg-panel border border-hud" data-testid="services-card">
+      <div className="p-5 border-b border-hud flex items-center justify-between flex-wrap gap-2">
         <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">{t("mypcpage.services_title")}</span>
         <span className="text-[11px] text-zinc-500" data-testid="services-summary">
           {t("mypcpage.services_summary", { n: data.summary.disattiva, m: data.summary.valuta, tot: data.summary.total_audited })}
           {data.summary.ram_mb_saveable > 0 && ` · ~${data.summary.ram_mb_saveable} MB RAM`}
         </span>
       </div>
-      <div className="p-3 text-[11px] text-zinc-500 border-b border-[#1A1A24]">{t("mypcpage.services_hint")}</div>
+      <div className="p-3 text-[11px] text-zinc-500 border-b border-hud-soft">{t("mypcpage.services_hint")}</div>
       {done.length > 0 && (
-        <div className="px-3 py-2 border-b border-[#1A1A24] bg-[#00FF66]/5 text-[11px]" data-testid="services-done-strip">
-          <span className="text-[#00FF66] font-bold">✓ {t("mypcpage.services_done", { n: done.length })}{doneMb > 0 ? ` · ~${doneMb} MB RAM` : ""}</span>{" "}
+        <div className="px-3 py-2 border-b border-hud-soft bg-ok/5 text-[11px]" data-testid="services-done-strip">
+          <span className="text-ok font-bold">✓ {t("mypcpage.services_done", { n: done.length })}{doneMb > 0 ? ` · ~${doneMb} MB RAM` : ""}</span>{" "}
           <span className="text-zinc-500">{done.map((d) => d.display || d.name).join(", ")}</span>
         </div>
       )}
       {rows.map((it, i) => {
         const r = REC[it.recommendation] || REC.valuta;
         return (
-          <div key={it.name} className="flex items-start gap-3 p-3 border-b border-[#1A1A24]" data-testid={`service-item-${i}`}>
+          <div key={it.name} className="flex items-start gap-3 p-3 border-b border-hud-soft" data-testid={`service-item-${i}`}>
             <span className={`text-xs font-bold uppercase px-2 py-0.5 shrink-0 ${r.cls}`}>{lang === "en" ? r.en : r.it}</span>
             <div className="flex-1 min-w-0">
               <div className="text-sm truncate">{it.display} <span className="text-[11px] text-zinc-600">({it.name})</span>{it.ram_mb ? <span className="text-[11px] text-zinc-500"> · {it.ram_mb} MB</span> : null}</div>
               {L(it.why) && <div className="text-xs text-zinc-500">{L(it.why)}</div>}
               {L(it.condition) && <div className="text-[11px] text-amber-500/90 mt-0.5">⚠ {L(it.condition)}</div>}
               {(it.recommendation === "disattiva" || it.recommendation === "valuta") && (
-                <div className="text-[11px] text-[#00E0FF] mt-0.5">→ {t("mypcpage.services_how", { name: it.display })}</div>
+                <div className="text-[11px] text-info mt-0.5">→ {t("mypcpage.services_how", { name: it.display })}</div>
               )}
             </div>
             <span className="text-[11px] text-zinc-600 shrink-0 uppercase text-right">
               {it.state === "Running" ? t("mypcpage.startup_on") : t("mypcpage.startup_off")} · {it.start_mode}
               {/* Un trigger-start parte quando serve e si ferma da solo: senza
                   questa etichetta sembrava un Manual qualsiasi da spegnere. */}
-              {it.trigger_start && <div className="text-[#00E0FF] normal-case">{t("mypcpage.services_trigger")}</div>}
+              {it.trigger_start && <div className="text-info normal-case">{t("mypcpage.services_trigger")}</div>}
               {it.delayed && <div className="text-zinc-500 normal-case">{t("mypcpage.services_delayed")}</div>}
             </span>
           </div>
         );
       })}
       {actionable.length > 10 && (
-        <button onClick={() => setShowAll(!showAll)} data-testid="services-show-all" className="w-full p-2.5 text-[11px] uppercase tracking-widest text-zinc-500 hover:text-[#E5FF00] transition-colors">
+        <button onClick={() => setShowAll(!showAll)} data-testid="services-show-all" className="w-full p-2.5 text-[11px] uppercase tracking-widest text-zinc-500 hover:text-volt transition-colors">
           {showAll ? t("mypcpage.services_less") : t("mypcpage.services_more", { n: actionable.length - 10 })}
         </button>
       )}
       {okItems.length > 0 && (
-        <button onClick={() => setShowOk(!showOk)} data-testid="services-toggle-ok" className="w-full p-2.5 text-[11px] uppercase tracking-widest text-zinc-600 hover:text-[#E5FF00] transition-colors border-t border-[#1A1A24]">
+        <button onClick={() => setShowOk(!showOk)} data-testid="services-toggle-ok" className="w-full p-2.5 text-[11px] uppercase tracking-widest text-zinc-600 hover:text-volt transition-colors border-t border-hud-soft">
           {showOk ? t("mypcpage.services_hide_ok") : t("mypcpage.services_show_ok", { n: okItems.length })}
         </button>
       )}

@@ -28,17 +28,17 @@ function StepCard({ step, idx }) {
   const Icon = step.icon;
   return (
     <div
-      className="bg-black/40 border border-[#2A2A35] hover:border-[#E5FF00]/40 p-4 transition-colors"
+      className="bg-black/40 border border-hud hover:border-volt/40 p-4 transition-colors"
       data-testid={`first-scan-step-${idx + 1}`}
     >
-      <Icon size={18} className="text-[#E5FF00] mb-2" />
+      <Icon size={18} className="text-volt mb-2" />
       <div className="text-sm font-bold text-zinc-100 mb-1">{step.title}</div>
       <div className="text-xs text-zinc-500 leading-relaxed">{step.desc}</div>
       {step.cta && (
         <button
           onClick={step.action}
           data-testid={`first-scan-step-${idx + 1}-cta`}
-          className="mt-3 text-xs font-bold text-[#E5FF00] hover:text-[#F5FF66] inline-flex items-center gap-1"
+          className="mt-3 text-xs font-bold text-volt hover:text-[#F5FF66] inline-flex items-center gap-1"
         >
           {step.cta} <ArrowRight size={12} />
         </button>
@@ -51,13 +51,13 @@ export default function ScanPendingBanner({ en }) {
   const steps = en ? STEPS.en : STEPS.it;
 
   return (
-    <div className="border border-[#E5FF00]/40 bg-gradient-to-br from-[#E5FF00]/10 via-[#00E0FF]/5 to-transparent p-6 mb-6" data-testid="first-scan-pending">
+    <div className="border border-volt/40 bg-gradient-to-br from-volt/10 via-info/5 to-transparent p-6 mb-6" data-testid="first-scan-pending">
       <div className="flex items-start gap-3 mb-4">
-        <div className="w-10 h-10 border border-[#E5FF00]/50 bg-black flex items-center justify-center shrink-0">
-          <Loader2 size={18} className="text-[#E5FF00] animate-spin" />
+        <div className="w-10 h-10 border border-volt/50 bg-black flex items-center justify-center shrink-0">
+          <Loader2 size={18} className="text-volt animate-spin" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] mb-1">
+          <div className="text-[11px] font-mono uppercase tracking-widest text-volt mb-1">
             {en ? "// first scan · waiting..." : "// primo scan · in attesa..."}
           </div>
           <h2 className="font-display font-black text-2xl tracking-tighter text-zinc-100 mb-1">
@@ -76,7 +76,7 @@ export default function ScanPendingBanner({ en }) {
       </div>
 
       <div className="mt-4 flex items-center gap-2 text-[11px] text-zinc-500">
-        <span className="w-1.5 h-1.5 bg-[#E5FF00] rounded-full animate-pulse" />
+        <span className="w-1.5 h-1.5 bg-volt rounded-full animate-pulse" />
         {en
           ? "Polling every 3s. Leave this tab open — no refresh needed."
           : "Aggiorno ogni 3s. Tieni questa scheda aperta — nessun refresh necessario."}

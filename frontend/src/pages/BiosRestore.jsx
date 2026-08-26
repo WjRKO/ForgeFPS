@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { Cpu, RotateCcw, CheckCircle2, AlertTriangle, ShieldCheck, KeyRound, Info, Star, MemoryStick, MonitorPlay, MessageSquareCode } from "lucide-react";
 import api from "@/lib/api";
-import { PageHeader } from "@/components/hud";
+import { HUDCard, PageHeader } from "@/components/hud";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
 
 const isEn = () => i18n.language?.startsWith("en");
@@ -145,9 +145,9 @@ function filterForHardware(list, hw) {
 function Row({ item, tone, i, section, onAsk }) {
   const { t } = useTranslation();
   const Icon = tone === "safe" ? CheckCircle2 : AlertTriangle;
-  const color = tone === "safe" ? "text-[#00FF66]" : "text-[#E5FF00]";
+  const color = tone === "safe" ? "text-ok" : "text-volt";
   return (
-    <div className="flex gap-3 p-3 border-b border-[#1A1A24] last:border-0 items-start row-hover" data-testid={`${section}-${tone}-${item.id || i}`}>
+    <div className="flex gap-3 p-3 border-b border-hud-soft last:border-0 items-start row-hover" data-testid={`${section}-${tone}-${item.id || i}`}>
       <Icon size={16} className={`${color} shrink-0 mt-0.5`} />
       <div className="flex-1 min-w-0">
         <div className="text-sm text-zinc-100 font-semibold">{item.s}</div>
@@ -155,7 +155,7 @@ function Row({ item, tone, i, section, onAsk }) {
       </div>
       {onAsk && (
         <button onClick={() => onAsk(item, tone)} data-testid={`ask-ai-${section}-${item.id || i}`}
-          className="shrink-0 self-center inline-flex items-center gap-1 border border-[#2A2A35] px-2 py-1.5 text-[11px] text-zinc-400 hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors whitespace-nowrap">
+          className="shrink-0 self-center inline-flex items-center gap-1 border border-hud px-2 py-1.5 text-[11px] text-zinc-400 hover:border-volt hover:text-volt transition-colors whitespace-nowrap">
           <MessageSquareCode size={12} /> {t("bios.ask_ai")}
         </button>
       )}
@@ -238,15 +238,15 @@ export default function BiosRestore() {
             <>
               {/* Consigliati per il tuo PC */}
               {hasHw && topPicks.length > 0 && (
-                <div id="bios-top" className="bg-gradient-to-br from-[#E5FF00]/10 to-transparent border border-[#E5FF00]/40 p-5 scroll-mt-24" data-testid="bios-top-picks">
-                  <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#E5FF00]"><Star size={16} /> {t("bios.top_picks")}</div>
+                <div id="bios-top" className="bg-gradient-to-br from-volt/10 to-transparent border border-volt/40 p-5 scroll-mt-24" data-testid="bios-top-picks">
+                  <div className="flex items-center gap-2 text-sm font-bold mb-3 text-volt"><Star size={16} /> {t("bios.top_picks")}</div>
                   <div className="grid sm:grid-cols-3 gap-3 stagger">
                     {topPicks.map((tp, i) => (
-                      <div key={tp.id} className="bg-black/60 border border-[#2A2A35] p-3 flex flex-col card-hover" data-testid={`top-pick-${tp.id}`}>
+                      <div key={tp.id} className="bg-black/60 border border-hud p-3 flex flex-col card-hover" data-testid={`top-pick-${tp.id}`}>
                         <div className="text-xs font-bold text-zinc-100">{tp.s}</div>
                         <div className="text-[11px] text-zinc-500 mt-1 leading-relaxed line-clamp-3 flex-1">{tp.w}</div>
                         <button onClick={() => askAI(tp, tp.impact && caution.some((c) => c.id === tp.id) ? "caution" : "safe")} data-testid={`ask-ai-top-${tp.id}`}
-                          className="mt-2 inline-flex items-center justify-center gap-1 border border-[#E5FF00]/40 text-[#E5FF00] px-2 py-1.5 text-[11px] font-bold hover:bg-[#E5FF00] hover:text-black transition-colors">
+                          className="mt-2 inline-flex items-center justify-center gap-1 border border-volt/40 text-volt px-2 py-1.5 text-[11px] font-bold hover:bg-volt hover:text-black transition-colors">
                           <MessageSquareCode size={12} /> {t("bios.ask_ai")}
                         </button>
                       </div>
@@ -255,45 +255,45 @@ export default function BiosRestore() {
                 </div>
               )}
 
-              <div id="bios-access" className="bg-[#0F0F12] border border-[#2A2A35] p-5 scroll-mt-24" data-testid="bios-access">
-                <div className="flex items-center gap-2 text-sm font-bold mb-2"><KeyRound size={16} className="text-[#00E0FF]" /> {t("bios.how_enter")}</div>
-                <p className="text-sm text-zinc-300">{t("bios.enter_pre")} <span className="text-[#E5FF00] font-bold">{key}</span>{vendor && <span className="text-zinc-500"> {t("bios.detected_board", { vendor })}</span>}.</p>
+              <div id="bios-access" className="bg-panel border border-hud p-5 scroll-mt-24" data-testid="bios-access">
+                <div className="flex items-center gap-2 text-sm font-bold mb-2"><KeyRound size={16} className="text-info" /> {t("bios.how_enter")}</div>
+                <p className="text-sm text-zinc-300">{t("bios.enter_pre")} <span className="text-volt font-bold">{key}</span>{vendor && <span className="text-zinc-500"> {t("bios.detected_board", { vendor })}</span>}.</p>
                 <p className="text-xs text-zinc-500 mt-2">{t("bios.enter_alt")}</p>
               </div>
 
-              <div id="bios-safe" className="bg-[#0F0F12] border border-[#00FF66]/30 p-5 scroll-mt-24">
-                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#00FF66]"><ShieldCheck size={16} /> {t("bios.safe_title")} <span className="text-[11px] font-mono text-zinc-500 ml-auto">{safe.length}</span></div>
-                <div className="border border-[#1A1A24]">{safe.map((it, i) => <Row key={it.id} item={it} tone="safe" i={i} section="bios" onAsk={askAI} />)}</div>
+              <div id="bios-safe" className="bg-panel border border-ok/30 p-5 scroll-mt-24">
+                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-ok"><ShieldCheck size={16} /> {t("bios.safe_title")} <span className="text-[11px] font-mono text-zinc-500 ml-auto">{safe.length}</span></div>
+                <div className="border border-hud-soft">{safe.map((it, i) => <Row key={it.id} item={it} tone="safe" i={i} section="bios" onAsk={askAI} />)}</div>
               </div>
 
-              <div id="bios-caution" className="bg-[#0F0F12] border border-[#E5FF00]/30 p-5 scroll-mt-24">
-                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#E5FF00]"><AlertTriangle size={16} /> {t("bios.caution_title")} <span className="text-[11px] font-mono text-zinc-500 ml-auto">{caution.length}</span></div>
-                <div className="border border-[#1A1A24]">{caution.map((it, i) => <Row key={it.id} item={it} tone="caution" i={i} section="bios" onAsk={askAI} />)}</div>
+              <div id="bios-caution" className="bg-panel border border-volt/30 p-5 scroll-mt-24">
+                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-volt"><AlertTriangle size={16} /> {t("bios.caution_title")} <span className="text-[11px] font-mono text-zinc-500 ml-auto">{caution.length}</span></div>
+                <div className="border border-hud-soft">{caution.map((it, i) => <Row key={it.id} item={it} tone="caution" i={i} section="bios" onAsk={askAI} />)}</div>
               </div>
 
-              <div className="bg-black border border-[#2A2A35] p-4 flex gap-3 items-start">
-                <Info size={16} className="text-[#00E0FF] shrink-0 mt-0.5" />
+              <div className="bg-black border border-hud p-4 flex gap-3 items-start">
+                <Info size={16} className="text-info shrink-0 mt-0.5" />
                 <p className="text-xs text-zinc-400 leading-relaxed">{t("bios.golden_rule")}</p>
               </div>
             </>
           ) : (
             <>
-              <div id="restore-safe" className="bg-[#0F0F12] border border-[#00FF66]/30 p-5 scroll-mt-24">
-                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#00FF66]"><ShieldCheck size={16} /> {t("bios.restore_safe")} <span className="text-[11px] font-mono text-zinc-500 ml-auto">{restoreSafe.length}</span></div>
-                <div className="border border-[#1A1A24]">{restoreSafe.map((it, i) => <Row key={it.id} item={it} tone="safe" i={i} section="restore" onAsk={askAIRestore} />)}</div>
+              <div id="restore-safe" className="bg-panel border border-ok/30 p-5 scroll-mt-24">
+                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-ok"><ShieldCheck size={16} /> {t("bios.restore_safe")} <span className="text-[11px] font-mono text-zinc-500 ml-auto">{restoreSafe.length}</span></div>
+                <div className="border border-hud-soft">{restoreSafe.map((it, i) => <Row key={it.id} item={it} tone="safe" i={i} section="restore" onAsk={askAIRestore} />)}</div>
                 <div className="mt-4">
                   <div className="text-xs text-zinc-500 mb-2">{t("bios.restore_cmd_hint")}</div>
                   <SecureRunBlock token={token} mode="restore" testid="restore-run-cmd" />
                 </div>
               </div>
 
-              <div id="restore-caution" className="bg-[#0F0F12] border border-[#E5FF00]/30 p-5 scroll-mt-24">
-                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-[#E5FF00]"><AlertTriangle size={16} /> {t("bios.caution_title")} <span className="text-[11px] font-mono text-zinc-500 ml-auto">{restoreCaution.length}</span></div>
-                <div className="border border-[#1A1A24]">{restoreCaution.map((it, i) => <Row key={it.id} item={it} tone="caution" i={i} section="restore" onAsk={askAIRestore} />)}</div>
+              <div id="restore-caution" className="bg-panel border border-volt/30 p-5 scroll-mt-24">
+                <div className="flex items-center gap-2 text-sm font-bold mb-3 text-volt"><AlertTriangle size={16} /> {t("bios.caution_title")} <span className="text-[11px] font-mono text-zinc-500 ml-auto">{restoreCaution.length}</span></div>
+                <div className="border border-hud-soft">{restoreCaution.map((it, i) => <Row key={it.id} item={it} tone="caution" i={i} section="restore" onAsk={askAIRestore} />)}</div>
               </div>
 
-              <div className="bg-black border border-[#2A2A35] p-4 flex gap-3 items-start">
-                <Info size={16} className="text-[#00E0FF] shrink-0 mt-0.5" />
+              <div className="bg-black border border-hud p-4 flex gap-3 items-start">
+                <Info size={16} className="text-info shrink-0 mt-0.5" />
                 <p className="text-xs text-zinc-400 leading-relaxed">{t("bios.restore_info")}</p>
               </div>
             </>
@@ -303,36 +303,36 @@ export default function BiosRestore() {
         {/* RIGHT: sticky panel */}
         <aside className="lg:sticky lg:top-6 lg:self-start space-y-4" data-testid="bios-panel">
           {/* Tabs BIOS / Restore */}
-          <div className="bg-[#0F0F12] border border-[#2A2A35] p-4">
+          <HUDCard pad="p-4">
             <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{t("bios.mode_label")}</div>
             <div className="grid grid-cols-2 gap-1.5">
               <button data-testid="tab-bios" onClick={() => setTab("bios")}
-                className={`inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-bold transition-colors ${tab === "bios" ? "bg-[#E5FF00] text-black" : "border border-[#2A2A35] text-zinc-400 hover:border-[#E5FF00]"}`}>
+                className={`inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-bold transition-colors ${tab === "bios" ? "bg-volt text-black" : "border border-hud text-zinc-400 hover:border-volt"}`}>
                 <Cpu size={13} /> {t("bios.tab_bios")}
               </button>
               <button data-testid="tab-restore" onClick={() => setTab("restore")}
-                className={`inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-bold transition-colors ${tab === "restore" ? "bg-[#E5FF00] text-black" : "border border-[#2A2A35] text-zinc-400 hover:border-[#E5FF00]"}`}>
+                className={`inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-bold transition-colors ${tab === "restore" ? "bg-volt text-black" : "border border-hud text-zinc-400 hover:border-volt"}`}>
                 <RotateCcw size={13} /> {t("bios.tab_restore")}
               </button>
             </div>
-          </div>
+          </HUDCard>
 
           {/* Hardware detected */}
           {hasHw && (
-            <div className="bg-[#0F0F12] border border-[#00E0FF]/30 p-4" data-testid="bios-hw">
-              <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-[#00E0FF] mb-2">
+            <div className="bg-panel border border-info/30 p-4" data-testid="bios-hw">
+              <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-info mb-2">
                 <Cpu size={11} /> {t("bios.hw_detected")}
               </div>
               <div className="space-y-1 text-[11px]">
-                {hw.cpu && <div className="truncate text-zinc-300" data-testid="hw-cpu" title={data.cpu || HW_LABEL.cpu[hw.cpu]}><span className="text-[#E5FF00]">CPU</span> {data.cpu || HW_LABEL.cpu[hw.cpu]}</div>}
-                {hw.gpu && <div className="truncate text-zinc-300" data-testid="hw-gpu" title={data.gpu || HW_LABEL.gpu[hw.gpu]}><span className="text-[#00FF66]">GPU</span> {data.gpu || HW_LABEL.gpu[hw.gpu]}</div>}
-                {hw.ramType && <div className="text-zinc-300" data-testid="hw-ram"><span className="text-[#00E0FF]">RAM</span> {hw.ramType}</div>}
+                {hw.cpu && <div className="truncate text-zinc-300" data-testid="hw-cpu" title={data.cpu || HW_LABEL.cpu[hw.cpu]}><span className="text-volt">CPU</span> {data.cpu || HW_LABEL.cpu[hw.cpu]}</div>}
+                {hw.gpu && <div className="truncate text-zinc-300" data-testid="hw-gpu" title={data.gpu || HW_LABEL.gpu[hw.gpu]}><span className="text-ok">GPU</span> {data.gpu || HW_LABEL.gpu[hw.gpu]}</div>}
+                {hw.ramType && <div className="text-zinc-300" data-testid="hw-ram"><span className="text-info">RAM</span> {hw.ramType}</div>}
               </div>
             </div>
           )}
 
           {/* Jump-to sections */}
-          <div className="bg-[#0F0F12] border border-[#2A2A35] p-4">
+          <HUDCard pad="p-4">
             <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{t("bios.jump_to")}</div>
             <div className="space-y-1">
               {tab === "bios" ? (
@@ -349,11 +349,11 @@ export default function BiosRestore() {
                 </>
               )}
             </div>
-          </div>
+          </HUDCard>
 
           {/* Golden rule/tip */}
-          <div className="border border-[#00E0FF]/25 bg-[#00E0FF]/5 p-3 flex gap-2 items-start">
-            <Info size={12} className="text-[#00E0FF] shrink-0 mt-0.5" />
+          <div className="border border-info/25 bg-info/5 p-3 flex gap-2 items-start">
+            <Info size={12} className="text-info shrink-0 mt-0.5" />
             <p className="text-[11px] text-zinc-400 leading-relaxed">{tab === "bios" ? t("bios.golden_rule_short") : t("bios.restore_info_short")}</p>
           </div>
         </aside>

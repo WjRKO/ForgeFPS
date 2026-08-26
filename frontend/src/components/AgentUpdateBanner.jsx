@@ -42,13 +42,13 @@ export default function AgentUpdateBanner() {
 
   return (
     <div
-      className="border-b border-[#E5FF00]/40 bg-gradient-to-r from-[#E5FF00]/15 via-[#00E0FF]/8 to-transparent"
+      className="border-b border-volt/40 bg-gradient-to-r from-volt/15 via-info/8 to-transparent"
       data-testid="agent-update-banner"
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-3 flex-wrap">
         <div className="relative shrink-0">
-          <ArrowUpCircle size={18} className="text-[#E5FF00]" />
-          <span className="absolute -top-1 -right-1 w-2 h-2 bg-[#E5FF00] rounded-full animate-pulse" />
+          <ArrowUpCircle size={18} className="text-volt" />
+          <span className="absolute -top-1 -right-1 w-2 h-2 bg-volt rounded-full animate-pulse" />
         </div>
         <div className="flex-1 min-w-0 text-sm text-zinc-200 flex items-center gap-2 flex-wrap">
           <span className="font-bold">
@@ -60,7 +60,7 @@ export default function AgentUpdateBanner() {
               {state.installed || (en ? "unknown" : "sconosciuta")}
             </span>
             <span className="text-zinc-600">→</span>
-            <span className="font-mono text-[#E5FF00] font-bold">v{state.latest}</span>
+            <span className="font-mono text-volt font-bold">v{state.latest}</span>
           </span>
           <span className="text-zinc-400 hidden md:inline">·</span>
           <span className="text-xs text-zinc-400 hidden md:inline">
@@ -70,7 +70,7 @@ export default function AgentUpdateBanner() {
         <Link
           to="/app/desktop"
           data-testid="agent-update-cta"
-          className="inline-flex items-center gap-1.5 bg-[#E5FF00] text-black font-bold uppercase tracking-widest text-[11px] px-3 py-1.5 hover:bg-[#F5FF66] transition-colors"
+          className="inline-flex items-center gap-1.5 bg-volt text-black font-bold uppercase tracking-widest text-[11px] px-3 py-1.5 hover:bg-[#F5FF66] transition-colors"
         >
           <Sparkles size={12} /> {en ? "Update now" : "Aggiorna ora"}
         </Link>

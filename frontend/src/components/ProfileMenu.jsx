@@ -61,10 +61,10 @@ function PlanBadge({ info }) {
     const tier = eff === "streamer_trial" ? "Streamer" : "Pro";
     const urgent = days <= 3;
     return (
-      <div className={`mt-2 flex items-center gap-2 border px-2.5 py-1.5 ${urgent ? "border-[#FFA500] bg-[#FFA500]/10" : "border-[#E5FF00] bg-[#E5FF00]/10"}`}>
-        <Gift size={13} className={urgent ? "text-[#FFA500]" : "text-[#E5FF00]"} />
+      <div className={`mt-2 flex items-center gap-2 border px-2.5 py-1.5 ${urgent ? "border-[#FFA500] bg-[#FFA500]/10" : "border-volt bg-volt/10"}`}>
+        <Gift size={13} className={urgent ? "text-[#FFA500]" : "text-volt"} />
         <div className="min-w-0 text-xs">
-          <div className={`uppercase tracking-widest font-bold ${urgent ? "text-[#FFA500]" : "text-[#E5FF00]"}`}>{tier} · trial</div>
+          <div className={`uppercase tracking-widest font-bold ${urgent ? "text-[#FFA500]" : "text-volt"}`}>{tier} · trial</div>
           <div className="text-zinc-400 text-[11px] font-mono">{days} giorn{days === 1 ? "o" : "i"} rimasti</div>
         </div>
       </div>
@@ -72,10 +72,10 @@ function PlanBadge({ info }) {
   }
   if (eff === "pro_expired" || eff === "streamer_expired") {
     return (
-      <div className="mt-2 flex items-center gap-2 border border-[#FF3B30]/60 bg-[#FF3B30]/10 px-2.5 py-1.5">
-        <AlertTriangle size={13} className="text-[#FF3B30]" />
+      <div className="mt-2 flex items-center gap-2 border border-bad/60 bg-bad/10 px-2.5 py-1.5">
+        <AlertTriangle size={13} className="text-bad" />
         <div className="min-w-0 text-xs">
-          <div className="uppercase tracking-widest font-bold text-[#FF3B30]">Scaduto</div>
+          <div className="uppercase tracking-widest font-bold text-bad">Scaduto</div>
           <div className="text-zinc-400 text-[11px] font-mono">Riattiva entro {grace}gg</div>
         </div>
       </div>
@@ -83,17 +83,17 @@ function PlanBadge({ info }) {
   }
   if (eff === "pro") {
     return (
-      <div className="mt-2 flex items-center gap-2 border border-[#E5FF00] bg-[#E5FF00]/10 px-2.5 py-1.5">
-        <Zap size={13} className="text-[#E5FF00]" />
-        <span className="text-xs uppercase tracking-widest font-bold text-[#E5FF00]">Pro · attivo</span>
+      <div className="mt-2 flex items-center gap-2 border border-volt bg-volt/10 px-2.5 py-1.5">
+        <Zap size={13} className="text-volt" />
+        <span className="text-xs uppercase tracking-widest font-bold text-volt">Pro · attivo</span>
       </div>
     );
   }
   if (eff === "streamer") {
     return (
-      <div className="mt-2 flex items-center gap-2 border border-[#00E0FF] bg-[#00E0FF]/10 px-2.5 py-1.5">
-        <Crown size={13} className="text-[#00E0FF]" />
-        <span className="text-xs uppercase tracking-widest font-bold text-[#00E0FF]">Streamer · attivo</span>
+      <div className="mt-2 flex items-center gap-2 border border-info bg-info/10 px-2.5 py-1.5">
+        <Crown size={13} className="text-info" />
+        <span className="text-xs uppercase tracking-widest font-bold text-info">Streamer · attivo</span>
       </div>
     );
   }
@@ -157,10 +157,10 @@ export default function ProfileMenu() {
         <div
           ref={menuRef}
           data-testid="profile-menu-dropdown"
-          className="absolute right-0 top-full mt-2 w-72 bg-[#0A0A0F] border border-[#2A2A35] shadow-2xl z-50"
+          className="absolute right-0 top-full mt-2 w-72 bg-[#0A0A0F] border border-hud shadow-2xl z-50"
         >
           {/* Sezione 1 — account card */}
-          <div className="p-4 border-b border-[#2A2A35]">
+          <div className="p-4 border-b border-hud">
             <div className="flex items-center gap-3">
               <span className="w-10 h-10 flex items-center justify-center text-base font-bold text-white shrink-0" style={{ backgroundColor: color }}>
                 {initial}
@@ -170,7 +170,7 @@ export default function ProfileMenu() {
                 <div className="text-[11px] text-zinc-500 font-mono truncate">{user.email}</div>
               </div>
               {user.role === "admin" && (
-                <span className="bg-[#E5FF00]/20 text-[#E5FF00] text-[11px] font-bold uppercase tracking-widest px-1.5 py-0.5" title="Admin">
+                <span className="bg-volt/20 text-volt text-[11px] font-bold uppercase tracking-widest px-1.5 py-0.5" title="Admin">
                   <ShieldIcon size={10} className="inline" />
                 </span>
               )}
@@ -200,11 +200,11 @@ export default function ProfileMenu() {
               <MenuItem to="/app/account#discord" icon={DISCORD_ICON} label={t("profile.discord_connect", { defaultValue: "Collega Discord" })} testid="menu-discord" />
             )}
             <MenuItem href="https://discord.gg/frameforge" external icon={Bug} label={t("profile.feedback", { defaultValue: "Segnala bug / feedback" })} testid="menu-feedback" />
-            <div className="my-1 border-t border-[#2A2A35]" />
+            <div className="my-1 border-t border-hud" />
             <button
               onClick={doLogout}
               data-testid="menu-logout"
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-zinc-300 hover:bg-[#141419] hover:text-[#FF3B30] transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-zinc-300 hover:bg-panel-hover hover:text-bad transition-colors"
             >
               <LogOut size={15} /> {t("profile.logout", { defaultValue: "Logout" })}
             </button>
@@ -222,7 +222,7 @@ function MenuItem({ to, href, external, icon: Icon, label, accent, testid }) {
       <span className="flex-1">{label}</span>
     </>
   );
-  const cls = "w-full flex items-center gap-2.5 px-3 py-2 text-sm text-zinc-300 hover:bg-[#141419] hover:text-zinc-100 transition-colors";
+  const cls = "w-full flex items-center gap-2.5 px-3 py-2 text-sm text-zinc-300 hover:bg-panel-hover hover:text-zinc-100 transition-colors";
   if (href) {
     return <a href={href} target={external ? "_blank" : undefined} rel={external ? "noopener noreferrer" : undefined} className={cls} data-testid={testid}>{body}</a>;
   }

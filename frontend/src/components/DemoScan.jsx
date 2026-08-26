@@ -47,10 +47,10 @@ const COPY = {
 
 const gradeColor = (g) => {
   if (!g) return "text-zinc-400";
-  if (g.startsWith("A")) return "text-[#00FF66]";
-  if (g === "B") return "text-[#E5FF00]";
+  if (g.startsWith("A")) return "text-ok";
+  if (g === "B") return "text-volt";
   if (g === "C") return "text-[#FF6B00]";
-  return "text-[#FF3B30]";
+  return "text-bad";
 };
 
 export const DemoScan = () => {
@@ -100,41 +100,41 @@ export const DemoScan = () => {
   };
 
   const HwCell = ({ icon: Icon, label, value, color }) => (
-    <div className="bg-black border border-[#1A1A24] p-3" data-testid={`demo-hw-${label.toLowerCase()}`}>
+    <div className="bg-black border border-hud-soft p-3" data-testid={`demo-hw-${label.toLowerCase()}`}>
       <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-zinc-500"><Icon size={11} className={color} /> {label}</div>
       <div className="font-display font-bold text-sm mt-1 truncate">{value || c.unknown}</div>
     </div>
   );
 
   return (
-    <div className="bg-[#0A0A0C] border border-[#2A2A35] relative overflow-hidden" data-testid="demo-scan">
-      <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-[#1A1A24]">
-        <span className="w-2.5 h-2.5 rounded-full bg-[#FF3B30]" />
-        <span className="w-2.5 h-2.5 rounded-full bg-[#E5FF00]" />
-        <span className="w-2.5 h-2.5 rounded-full bg-[#00FF66]" />
+    <div className="bg-panel-deep border border-hud relative overflow-hidden" data-testid="demo-scan">
+      <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-hud-soft">
+        <span className="w-2.5 h-2.5 rounded-full bg-bad" />
+        <span className="w-2.5 h-2.5 rounded-full bg-volt" />
+        <span className="w-2.5 h-2.5 rounded-full bg-ok" />
         <span className="ml-2 text-[11px] font-mono uppercase tracking-widest text-zinc-500">forgefps://scan</span>
       </div>
 
       <div className="p-6">
-        <div className="text-[11px] font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-2">{c.eyebrow}</div>
+        <div className="text-[11px] font-mono tracking-[0.2em] uppercase text-volt mb-2">{c.eyebrow}</div>
         <h3 className="font-display font-black text-2xl tracking-tight mb-2">{c.title}</h3>
         <p className="text-sm text-zinc-500 mb-5 leading-relaxed">{c.sub}</p>
 
         {state === "idle" && (
           <button onClick={run} data-testid="demo-scan-run"
-            className="w-full flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold py-3 hover:bg-[#D4EC00] transition-colors btn-volt uppercase tracking-wide text-sm">
+            className="w-full flex items-center justify-center gap-2 bg-volt text-black font-bold py-3 hover:bg-volt-dim transition-colors btn-volt uppercase tracking-wide text-sm">
             <ScanLine size={16} /> {c.run}
           </button>
         )}
 
         {state === "scanning" && (
-          <div className="relative border border-[#1A1A24] bg-black p-4" data-testid="demo-scan-scanning">
-            <motion.div className="absolute left-0 right-0 h-[2px] bg-[#E5FF00]/70"
+          <div className="relative border border-hud-soft bg-black p-4" data-testid="demo-scan-scanning">
+            <motion.div className="absolute left-0 right-0 h-[2px] bg-volt/70"
               initial={{ top: 0 }} animate={{ top: ["0%", "100%", "0%"] }} transition={{ duration: 1.3, repeat: Infinity, ease: "linear" }} />
-            <div className="flex items-center gap-2 text-sm text-[#E5FF00] font-mono mb-3"><Loader2 size={14} className="animate-spin" /> {c.scanning}</div>
+            <div className="flex items-center gap-2 text-sm text-volt font-mono mb-3"><Loader2 size={14} className="animate-spin" /> {c.scanning}</div>
             <ul className="space-y-1.5 font-mono text-xs">
               {c.steps.map((s, i) => (
-                <li key={i} className={`flex items-center gap-2 ${i < step ? "text-[#00FF66]" : i === step ? "text-zinc-300" : "text-zinc-600"}`}>
+                <li key={i} className={`flex items-center gap-2 ${i < step ? "text-ok" : i === step ? "text-zinc-300" : "text-zinc-600"}`}>
                   {i < step ? <Check size={12} /> : <span className="w-3 text-center">{i === step ? ">" : "·"}</span>} {s}
                 </li>
               ))}
@@ -148,35 +148,35 @@ export const DemoScan = () => {
               {/* Real hardware */}
               <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{c.hw}</div>
               <div className="grid grid-cols-2 gap-2 mb-5">
-                <HwCell icon={MonitorPlay} label="GPU" value={specs?.gpu} color="text-[#00E0FF]" />
-                <HwCell icon={Cpu} label="CPU" value={specs?.cpu_threads ? `${specs.cpu_threads} ${lang === "en" ? "threads" : "thread"}` : ""} color="text-[#00FF66]" />
+                <HwCell icon={MonitorPlay} label="GPU" value={specs?.gpu} color="text-info" />
+                <HwCell icon={Cpu} label="CPU" value={specs?.cpu_threads ? `${specs.cpu_threads} ${lang === "en" ? "threads" : "thread"}` : ""} color="text-ok" />
                 <HwCell icon={MemoryStick} label="RAM" value={specs?.ram} color="text-[#B388FF]" />
-                <HwCell icon={MonitorSmartphone} label="OS" value={specs?.os} color="text-[#E5FF00]" />
+                <HwCell icon={MonitorSmartphone} label="OS" value={specs?.os} color="text-volt" />
               </div>
 
               {/* Real network */}
               <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{c.net}</div>
               {net ? (
                 <div className="grid grid-cols-4 gap-2 mb-5" data-testid="demo-net-result">
-                  <div className="bg-black border border-[#1A1A24] p-3 text-center">
+                  <div className="bg-black border border-hud-soft p-3 text-center">
                     <div className="text-[11px] uppercase tracking-widest text-zinc-500 flex items-center justify-center gap-1"><Gauge size={10} /> {c.bloat}</div>
                     <div className={`font-display font-black text-2xl mt-1 ${gradeColor(net.grade)}`}>{net.grade || "--"}</div>
                   </div>
-                  <div className="bg-black border border-[#1A1A24] p-3 text-center">
+                  <div className="bg-black border border-hud-soft p-3 text-center">
                     <div className="text-[11px] uppercase tracking-widest text-zinc-500">{c.idle}</div>
                     <div className="font-display font-black text-lg mt-1 text-zinc-100">{net.idleMs}<span className="text-xs text-zinc-500">ms</span></div>
                   </div>
-                  <div className="bg-black border border-[#1A1A24] p-3 text-center">
+                  <div className="bg-black border border-hud-soft p-3 text-center">
                     <div className="text-[11px] uppercase tracking-widest text-zinc-500">{c.load}</div>
                     <div className="font-display font-black text-lg mt-1 text-zinc-100">{net.loadedMs ?? "--"}<span className="text-xs text-zinc-500">ms</span></div>
                   </div>
-                  <div className="bg-black border border-[#1A1A24] p-3 text-center">
+                  <div className="bg-black border border-hud-soft p-3 text-center">
                     <div className="text-[11px] uppercase tracking-widest text-zinc-500 flex items-center justify-center gap-1"><Wifi size={10} /> {c.down}</div>
                     <div className="font-display font-black text-lg mt-1 text-zinc-100">{net.downloadMbps ?? "--"}<span className="text-xs text-zinc-500"> Mb</span></div>
                   </div>
                 </div>
               ) : (
-                <p className="text-[11px] text-zinc-500 border border-[#1A1A24] bg-black px-3 py-2.5 mb-5">{c.netfail}</p>
+                <p className="text-[11px] text-zinc-500 border border-hud-soft bg-black px-3 py-2.5 mb-5">{c.netfail}</p>
               )}
 
               {/* Rule-based advice */}
@@ -184,8 +184,8 @@ export const DemoScan = () => {
               <div className="space-y-2 mb-4">
                 {advice.map((p, i) => (
                   <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }}
-                    className="flex items-start gap-3 bg-black border border-[#1A1A24] border-l-2 border-l-[#E5FF00] px-3 py-2.5" data-testid={`demo-advice-${i}`}>
-                    <AlertTriangle size={15} className="text-[#E5FF00] shrink-0 mt-0.5" />
+                    className="flex items-start gap-3 bg-black border border-hud-soft border-l-2 border-l-volt px-3 py-2.5" data-testid={`demo-advice-${i}`}>
+                    <AlertTriangle size={15} className="text-volt shrink-0 mt-0.5" />
                     <div>
                       <div className="text-sm text-zinc-100 font-semibold">{p.t}</div>
                       <div className="text-xs text-zinc-500 leading-relaxed">{p.d}</div>
@@ -197,11 +197,11 @@ export const DemoScan = () => {
               <p className="text-[11px] text-zinc-600 mb-4 leading-relaxed">{c.note}</p>
               <div className="flex flex-col gap-2">
                 <Link to="/register" data-testid="demo-scan-cta"
-                  className="group w-full flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold py-3 hover:bg-[#D4EC00] transition-colors btn-volt uppercase tracking-wide text-sm">
+                  className="group w-full flex items-center justify-center gap-2 bg-volt text-black font-bold py-3 hover:bg-volt-dim transition-colors btn-volt uppercase tracking-wide text-sm">
                   {c.cta} <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link to="/demo" data-testid="demo-scan-explore"
-                  className="w-full flex items-center justify-center gap-2 border border-[#2A2A35] text-zinc-300 font-semibold py-2.5 hover:border-[#E5FF00]/50 hover:text-white transition-colors text-sm">
+                  className="w-full flex items-center justify-center gap-2 border border-hud text-zinc-300 font-semibold py-2.5 hover:border-volt/50 hover:text-white transition-colors text-sm">
                   {c.demo}
                 </Link>
               </div>

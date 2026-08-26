@@ -35,7 +35,7 @@ function pctDelta(now, prev) {
 function DeltaBadge({ delta, positive = "up" }) {
   if (delta == null || Math.abs(delta) < 1) return null;
   const isImprovement = positive === "up" ? delta > 0 : delta < 0;
-  const color = isImprovement ? "text-[#00FF66]" : "text-[#FF9500]";
+  const color = isImprovement ? "text-ok" : "text-[#FF9500]";
   const Icon = delta > 0 ? TrendingUp : TrendingDown;
   return (
     <span className={`inline-flex items-center gap-0.5 text-[11px] ${color} font-mono`}>
@@ -46,7 +46,7 @@ function DeltaBadge({ delta, positive = "up" }) {
 
 function Card({ title, icon: Icon, accent, children, testid }) {
   return (
-    <div className="bg-[#0F0F12] border border-[#2A2A35] p-5" data-testid={testid}>
+    <div className="bg-panel border border-hud p-5" data-testid={testid}>
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-zinc-500 mb-3">
         {Icon && <Icon size={13} className={accent} />} {title}
       </div>
@@ -57,7 +57,7 @@ function Card({ title, icon: Icon, accent, children, testid }) {
 
 function StatRow({ label, value, sub, deltaProps, testid }) {
   return (
-    <div className="flex items-baseline justify-between border-b border-[#2A2A35]/40 py-2 last:border-b-0" data-testid={testid}>
+    <div className="flex items-baseline justify-between border-b border-hud/40 py-2 last:border-b-0" data-testid={testid}>
       <div>
         <div className="text-xs text-zinc-400">{label}</div>
         {sub && <div className="text-[11px] text-zinc-600">{sub}</div>}
@@ -128,8 +128,8 @@ export default function FullBenchmarkReport() {
 
   if (!state.latest) {
     return (
-      <div className="border border-dashed border-[#2A2A35] bg-[#0A0A0F] p-8 text-center" data-testid="fullbench-empty">
-        <Zap size={36} className="mx-auto text-[#E5FF00] mb-3" />
+      <div className="border border-dashed border-hud bg-[#0A0A0F] p-8 text-center" data-testid="fullbench-empty">
+        <Zap size={36} className="mx-auto text-volt mb-3" />
         <h3 className="font-display font-black text-xl mb-2">{isEnFB() ? "No Full Benchmark yet" : "Nessun Full Benchmark ancora"}</h3>
         <p className="text-sm text-zinc-400 mb-4 max-w-md mx-auto">
           {isEnFB() ? "The Full Benchmark measures CPU multi-thread burst+sustained, RAM L2/L3/DRAM bandwidth, multi-QD disk, extended network and thermal trace. Takes 2-4 minutes." : "Il Full Benchmark misura CPU multi-thread burst+sustained, RAM L2/L3/DRAM bandwidth, disco multi-QD, rete estesa e traccia termica. Dura 2-4 minuti."}
@@ -166,7 +166,7 @@ export default function FullBenchmarkReport() {
   return (
     <div className="space-y-6" data-testid="fullbench-report">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-[#0F0F12] border border-[#2A2A35] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-panel border border-hud p-4">
         <div>
           <div className="text-[11px] uppercase tracking-widest text-zinc-500 font-mono">Ultimo Full Benchmark</div>
           <div className="text-lg font-bold text-white" data-testid="fullbench-ran-at">{ranAt}</div>
@@ -191,7 +191,7 @@ export default function FullBenchmarkReport() {
 
       <div className="grid md:grid-cols-2 gap-4">
         {/* CPU */}
-        <Card title="CPU multi-thread" icon={Cpu} accent="text-[#00E0FF]" testid="fullbench-cpu">
+        <Card title="CPU multi-thread" icon={Cpu} accent="text-info" testid="fullbench-cpu">
           <StatRow
             label="Burst (30s)"
             value={fmtMops(f.cpu_mt_burst_mops)}
@@ -223,14 +223,14 @@ export default function FullBenchmarkReport() {
         </Card>
 
         {/* Disk */}
-        <Card title="Disk I/O multi-queue" icon={HardDrive} accent="text-[#00FF66]" testid="fullbench-disk">
+        <Card title="Disk I/O multi-queue" icon={HardDrive} accent="text-ok" testid="fullbench-disk">
           <StatRow label="Sequential QD1 (128KB)" value={fmtMbps(f.disk_seq_qd1_mbps)} deltaProps={{ delta: pctDelta(f.disk_seq_qd1_mbps, pf?.disk_seq_qd1_mbps), positive: "up" }} testid="disk-seq" />
           <StatRow label="Random 4K QD1" value={fmtIops(f.disk_rand_4k_qd1_iops)} sub="Latenza a bassa profondita' (gaming)" deltaProps={{ delta: pctDelta(f.disk_rand_4k_qd1_iops, pf?.disk_rand_4k_qd1_iops), positive: "up" }} testid="disk-rand-qd1" />
           <StatRow label="Random 4K QD32" value={fmtIops(f.disk_rand_4k_qd32_iops)} sub="Async parallelo (asset streaming)" deltaProps={{ delta: pctDelta(f.disk_rand_4k_qd32_iops, pf?.disk_rand_4k_qd32_iops), positive: "up" }} testid="disk-rand-qd32" />
         </Card>
 
         {/* Network */}
-        <Card title="Network extended (30 ping x 3 host)" icon={Globe} accent="text-[#E5FF00]" testid="fullbench-network">
+        <Card title="Network extended (30 ping x 3 host)" icon={Globe} accent="text-volt" testid="fullbench-network">
           {netHosts.length === 0 && <div className="text-xs text-zinc-500">{isEnFB() ? "No network data available." : "Nessun dato rete disponibile."}</div>}
           {netHosts.map(([host, m]) => (
             <StatRow
@@ -273,11 +273,11 @@ export default function FullBenchmarkReport() {
 
       {/* Trend History */}
       {state.history.length > 1 && (
-        <Card title={`Storico Full Benchmark (ultimi ${state.history.length})`} icon={TrendingUp} accent="text-[#00E0FF]" testid="fullbench-history">
+        <Card title={`Storico Full Benchmark (ultimi ${state.history.length})`} icon={TrendingUp} accent="text-info" testid="fullbench-history">
           <div className="overflow-x-auto -mx-2 px-2">
             <table className="w-full text-xs">
               <thead className="text-zinc-500 uppercase tracking-widest text-[11px]">
-                <tr className="border-b border-[#2A2A35]">
+                <tr className="border-b border-hud">
                   <th className="text-left py-2">Data</th>
                   <th className="text-right py-2">CPU burst</th>
                   <th className="text-right py-2">CPU sust.</th>
@@ -288,7 +288,7 @@ export default function FullBenchmarkReport() {
               </thead>
               <tbody>
                 {state.history.map((h, i) => (
-                  <tr key={h.created_at} className="border-b border-[#2A2A35]/40 hover:bg-[#0F0F12]/60" data-testid={`history-row-${i}`}>
+                  <tr key={h.created_at} className="border-b border-hud/40 hover:bg-panel/60" data-testid={`history-row-${i}`}>
                     <td className="py-2 text-zinc-400">{new Date(h.created_at).toLocaleDateString()} {new Date(h.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td>
                     <td className="text-right py-2 font-mono">{h.full.cpu_mt_burst_mops || "--"}</td>
                     <td className="text-right py-2 font-mono">{h.full.cpu_mt_sustained_mops || "--"}</td>

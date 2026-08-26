@@ -341,18 +341,18 @@ export default function Changelog() {
   const c = COPY[lang];
   usePageMeta(c.meta_t, c.meta_d);
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100">
+    <div className="min-h-screen bg-ink text-zinc-100">
       <MarketingNav />
       <main className="max-w-4xl mx-auto px-6 pt-28 pb-20">
-        <div className="text-xs font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-3">{c.eyebrow}</div>
+        <div className="text-xs font-mono tracking-[0.2em] uppercase text-volt mb-3">{c.eyebrow}</div>
         <h1 className="font-display font-black text-4xl sm:text-5xl tracking-tighter mb-4">{c.title}</h1>
         <p className="text-zinc-400 text-base sm:text-lg max-w-xl leading-relaxed mb-8">{c.sub}</p>
 
         <div className="flex flex-wrap gap-3 mb-14">
           <a href="#roadmap" data-testid="roadmap-link"
-            className="inline-flex items-center gap-2 border border-[#2A2A35] px-4 py-2 text-sm hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors"><Map size={15} /> {c.roadmap}</a>
+            className="inline-flex items-center gap-2 border border-hud px-4 py-2 text-sm hover:border-volt hover:text-volt transition-colors"><Map size={15} /> {c.roadmap}</a>
           <a href={`${AGENT_REPO_URL}/issues`} target="_blank" rel="noreferrer" data-testid="issues-link"
-            className="inline-flex items-center gap-2 border border-[#2A2A35] px-4 py-2 text-sm hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors"><Github size={15} /> {c.issues}</a>
+            className="inline-flex items-center gap-2 border border-hud px-4 py-2 text-sm hover:border-volt hover:text-volt transition-colors"><Github size={15} /> {c.issues}</a>
         </div>
 
         {/* Public roadmap */}
@@ -363,7 +363,7 @@ export default function Changelog() {
             {["progress", "planned", "exploring"].map((key) => {
               const col = ROADMAP[key];
               return (
-                <div key={key} className="bg-[#0F0F12] border border-[#1A1A24] p-5" data-testid={`roadmap-col-${key}`}>
+                <div key={key} className="bg-panel border border-hud-soft p-5" data-testid={`roadmap-col-${key}`}>
                   <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-widest mb-4" style={{ color: col.color }}>
                     <col.icon size={13} className={key === "progress" ? "animate-spin" : ""} /> {col[lang]}
                   </div>
@@ -381,15 +381,15 @@ export default function Changelog() {
           </div>
         </section>
 
-        <div className="relative border-l border-[#1A1A24] pl-6 ml-1 space-y-10">
+        <div className="relative border-l border-hud-soft pl-6 ml-1 space-y-10">
           {RELEASES.map((r, i) => (
             <div key={i} className="relative" data-testid={`release-${r.version}`}>
-              <span className="absolute -left-[29px] top-1.5 w-3 h-3 bg-[#E5FF00]" />
+              <span className="absolute -left-[29px] top-1.5 w-3 h-3 bg-volt" />
               <div className="flex items-baseline gap-3 mb-4">
                 <span className="font-display font-black text-xl tracking-tight">v{r.version}</span>
                 <span className="text-xs font-mono text-zinc-500">{r.date}</span>
               </div>
-              <div className="bg-[#0F0F12] border border-[#1A1A24] p-5">
+              <div className="bg-panel border border-hud-soft p-5">
                 <Section tagKey="added" items={r.added[lang]} lang={lang} />
                 <Section tagKey="fixed" items={r.fixed[lang]} lang={lang} />
                 <Section tagKey="changed" items={r.changed[lang]} lang={lang} />

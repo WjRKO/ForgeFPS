@@ -64,8 +64,8 @@ export default function PlanStatusBanner() {
   if (isTrial && days > 0) {
     const urgent = days <= 3;
     const tier = info.plan_stored === "streamer_trial" ? "Streamer" : "Pro";
-    const bg = urgent ? "bg-[#FFA500]/10 border-[#FFA500]/40" : "bg-[#E5FF00]/10 border-[#E5FF00]/40";
-    const iconColor = urgent ? "text-[#FFA500]" : "text-[#E5FF00]";
+    const bg = urgent ? "bg-[#FFA500]/10 border-[#FFA500]/40" : "bg-volt/10 border-volt/40";
+    const iconColor = urgent ? "text-[#FFA500]" : "text-volt";
     return (
       <div className={`border-b ${bg}`} data-testid="plan-banner-trial">
         <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-3">
@@ -78,7 +78,7 @@ export default function PlanStatusBanner() {
             )}
           </div>
           <Link to="/pricing" data-testid="plan-banner-cta"
-            className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 transition-colors ${urgent ? "bg-[#FFA500] text-black hover:bg-[#FFB933]" : "bg-[#E5FF00] text-black hover:bg-[#D4EE00]"}`}>
+            className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 transition-colors ${urgent ? "bg-[#FFA500] text-black hover:bg-[#FFB933]" : "bg-volt text-black hover:bg-[#D4EE00]"}`}>
             {en ? "See plans" : "Vedi piani"} <ArrowRight size={11} />
           </Link>
           <button onClick={dismiss} className="p-1 text-zinc-500 hover:text-zinc-200 transition-colors" data-testid="plan-banner-dismiss" title={en ? "Dismiss" : "Chiudi"} aria-label={en ? "Dismiss" : "Chiudi"}>
@@ -93,9 +93,9 @@ export default function PlanStatusBanner() {
   if (isExpired) {
     const tier = info.plan_effective === "streamer_expired" ? "Streamer" : "Pro";
     return (
-      <div className="border-b border-[#FF3B30]/40 bg-[#FF3B30]/10" data-testid="plan-banner-expired">
+      <div className="border-b border-bad/40 bg-bad/10" data-testid="plan-banner-expired">
         <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-3">
-          <AlertTriangle size={16} className="shrink-0 text-[#FF3B30]" />
+          <AlertTriangle size={16} className="shrink-0 text-bad" />
           <div className="text-sm text-zinc-200 min-w-0 flex-1 truncate">
             {en ? (
               <>Your <strong>{tier} trial expired</strong>. Reactivate within <strong>{graceDays} day{graceDays === 1 ? "" : "s"}</strong> to keep your data.</>
@@ -104,7 +104,7 @@ export default function PlanStatusBanner() {
             )}
           </div>
           <Link to="/pricing" data-testid="plan-banner-reactivate"
-            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-[#FF3B30] text-white hover:bg-[#FF5544] transition-colors">
+            className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 bg-bad text-white hover:bg-[#FF5544] transition-colors">
             {en ? "Reactivate" : "Riattiva"} <ArrowRight size={11} />
           </Link>
           <button onClick={dismiss} className="p-1 text-zinc-500 hover:text-zinc-200 transition-colors" data-testid="plan-banner-dismiss-expired" aria-label={en ? "Dismiss" : "Chiudi"}>

@@ -17,13 +17,14 @@ import { Copy, Check, Clock, KeyRound, RotateCw, Loader2 } from "lucide-react";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import i18n from "@/i18n";
+import { HUDCard } from "@/components/hud";
 
 const isEn = () => i18n.language?.startsWith("en");
 
 const STATUS_STYLES = {
-  active:  { bg: "bg-[#00FF66]/10", border: "border-[#00FF66]/40", text: "text-[#00FF66]", label: "ATTIVO", label_en: "ACTIVE" },
+  active:  { bg: "bg-ok/10", border: "border-ok/40", text: "text-ok", label: "ATTIVO", label_en: "ACTIVE" },
   used:    { bg: "bg-zinc-700/20", border: "border-zinc-700", text: "text-zinc-400", label: "USATO", label_en: "USED" },
-  expired: { bg: "bg-[#FF3B30]/10", border: "border-[#FF3B30]/40", text: "text-[#FF3B30]", label: "SCADUTO", label_en: "EXPIRED" },
+  expired: { bg: "bg-bad/10", border: "border-bad/40", text: "text-bad", label: "SCADUTO", label_en: "EXPIRED" },
 };
 
 function timeAgo(iso) {
@@ -70,12 +71,12 @@ export default function PasswordResetsPanel() {
   };
 
   return (
-    <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mt-8" data-testid="password-resets-panel">
+    <HUDCard testid="password-resets-panel" pad="p-6" className="mt-8">
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-1">// admin · reset password</div>
           <h2 className="font-display font-bold text-xl tracking-tight flex items-center gap-2">
-            <KeyRound size={18} className="text-[#E5FF00]" />
+            <KeyRound size={18} className="text-volt" />
             {isEn() ? "Password resets requested" : "Reset password richiesti"}
           </h2>
           <p className="text-xs text-zinc-500 mt-1 max-w-2xl">
@@ -83,7 +84,7 @@ export default function PasswordResetsPanel() {
           </p>
         </div>
         <button onClick={load} disabled={loading} data-testid="password-resets-refresh"
-          className="inline-flex items-center gap-2 text-xs px-3 py-2 border border-[#2A2A35] hover:border-[#E5FF00] transition-colors disabled:opacity-50">
+          className="inline-flex items-center gap-2 text-xs px-3 py-2 border border-hud hover:border-volt transition-colors disabled:opacity-50">
           {loading ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
           {isEn() ? "Refresh" : "Aggiorna"}
         </button>
@@ -99,7 +100,7 @@ export default function PasswordResetsPanel() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm" data-testid="password-resets-table">
             <thead>
-              <tr className="text-xs uppercase tracking-widest text-zinc-500 border-b border-[#2A2A35]">
+              <tr className="text-xs uppercase tracking-widest text-zinc-500 border-b border-hud">
                 <th className="text-left py-2 px-3">Email</th>
                 <th className="text-left py-2 px-3">{isEn() ? "When" : "Quando"}</th>
                 <th className="text-left py-2 px-3">IP</th>
@@ -111,7 +112,7 @@ export default function PasswordResetsPanel() {
               {items.map((it, i) => {
                 const sty = STATUS_STYLES[it.status] || STATUS_STYLES.expired;
                 return (
-                  <tr key={i} className="border-b border-[#2A2A35]/50 hover:bg-black/30" data-testid={`reset-row-${i}`}>
+                  <tr key={i} className="border-b border-hud/50 hover:bg-black/30" data-testid={`reset-row-${i}`}>
                     <td className="py-2 px-3 text-zinc-200 font-mono text-xs">{it.email}</td>
                     <td className="py-2 px-3 text-zinc-400 text-xs">
                       <Clock size={10} className="inline mr-1" />
@@ -126,7 +127,7 @@ export default function PasswordResetsPanel() {
                     <td className="py-2 px-3 text-right">
                       {it.status === "active" ? (
                         <button onClick={() => copy(it.link, i)} data-testid={`reset-copy-${i}`}
-                          className="inline-flex items-center gap-1.5 text-xs px-2 py-1 border border-[#2A2A35] hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors">
+                          className="inline-flex items-center gap-1.5 text-xs px-2 py-1 border border-hud hover:border-volt hover:text-volt transition-colors">
                           {copiedIdx === i ? <><Check size={11} /> {isEn() ? "Copied" : "Copiato"}</> : <><Copy size={11} /> {isEn() ? "Copy link" : "Copia link"}</>}
                         </button>
                       ) : (
@@ -140,6 +141,6 @@ export default function PasswordResetsPanel() {
           </table>
         </div>
       )}
-    </div>
+    </HUDCard>
   );
 }

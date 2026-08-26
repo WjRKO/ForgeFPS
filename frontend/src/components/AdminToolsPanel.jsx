@@ -12,10 +12,10 @@ import api from "@/lib/api";
 
 const TEMPLATES = ["welcome", "trial_started", "trial_ending", "payment_success", "payment_failed"];
 
-const CARD = "bg-[#0F0F12] border border-[#2A2A35] p-6 mb-6";
+const CARD = "bg-panel border border-hud p-6 mb-6";
 const EYEBROW = "text-xs uppercase tracking-widest text-zinc-500 font-mono mb-1 flex items-center gap-2";
-const INPUT = "bg-black border border-[#2A2A35] px-3 py-2 text-sm text-zinc-200 focus:border-[#E5FF00] outline-none";
-const BTN = "inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2 text-sm hover:bg-[#D4EC00] transition-colors disabled:opacity-50";
+const INPUT = "bg-black border border-hud px-3 py-2 text-sm text-zinc-200 focus:border-volt outline-none";
+const BTN = "inline-flex items-center gap-2 bg-volt text-black font-bold px-4 py-2 text-sm hover:bg-volt-dim transition-colors disabled:opacity-50";
 
 export default function AdminToolsPanel() {
   const { t, i18n } = useTranslation();
@@ -72,7 +72,7 @@ export default function AdminToolsPanel() {
   return (
     <>
       <div className={CARD} data-testid="admin-signups-card">
-        <div className={EYEBROW}><TrendingUp size={14} className="text-[#E5FF00]" /> {c.signups}</div>
+        <div className={EYEBROW}><TrendingUp size={14} className="text-volt" /> {c.signups}</div>
         <p className="text-xs text-zinc-600 mb-4">{c.signups_sub}</p>
         {points === null ? (
           <Loader2 size={16} className="animate-spin text-zinc-600" />
@@ -81,7 +81,7 @@ export default function AdminToolsPanel() {
         ) : (
           <>
             <div className="text-sm text-zinc-400 mb-3">
-              {c.signups_total}: <span className="text-[#E5FF00] font-mono font-bold">{total}</span>
+              {c.signups_total}: <span className="text-volt font-mono font-bold">{total}</span>
             </div>
             <div style={{ width: "100%", height: 200 }}>
               <ResponsiveContainer>
@@ -99,7 +99,7 @@ export default function AdminToolsPanel() {
       </div>
 
       <div className={CARD} data-testid="admin-test-email-card">
-        <div className={EYEBROW}><Mail size={14} className="text-[#E5FF00]" /> {c.email}</div>
+        <div className={EYEBROW}><Mail size={14} className="text-volt" /> {c.email}</div>
         <p className="text-xs text-zinc-600 mb-4">{c.email_sub}</p>
         <div className="flex flex-wrap items-center gap-3">
           <select value={tpl} onChange={(e) => setTpl(e.target.value)} className={INPUT} data-testid="test-email-template" aria-label={c.email}>
@@ -117,7 +117,7 @@ export default function AdminToolsPanel() {
       </div>
 
       <div className={CARD} data-testid="admin-releases-card">
-        <div className={EYEBROW}><Megaphone size={14} className="text-[#E5FF00]" /> {c.rel}</div>
+        <div className={EYEBROW}><Megaphone size={14} className="text-volt" /> {c.rel}</div>
         <p className="text-xs text-zinc-600 mb-4">{c.rel_sub}</p>
         <div className="flex flex-wrap items-center gap-3">
           <input

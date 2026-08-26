@@ -8,6 +8,7 @@ import {
 import { Link } from "react-router-dom";
 import api from "@/lib/api";
 import { toast } from "sonner";
+import { HUDCard } from "@/components/hud";
 
 const ICONS = {
   Search, Sparkles, Zap, Radio, Wrench, Cpu, Activity,
@@ -18,7 +19,7 @@ const TIER_META = {
   bronze:   { color: "text-[#C99A5A]", ring: "border-[#C99A5A]",   bg: "bg-[#C99A5A]/10" },
   silver:   { color: "text-[#B0B7C3]", ring: "border-[#B0B7C3]",   bg: "bg-[#B0B7C3]/10" },
   gold:     { color: "text-[#FFB800]", ring: "border-[#FFB800]",   bg: "bg-[#FFB800]/10" },
-  platinum: { color: "text-[#00E0FF]", ring: "border-[#00E0FF]",   bg: "bg-[#00E0FF]/10" },
+  platinum: { color: "text-info", ring: "border-info",   bg: "bg-info/10" },
 };
 
 const CATEGORY_LABELS = {
@@ -32,8 +33,8 @@ const CATEGORY_LABELS = {
 const RARITY = (pct) => {
   if (pct == null) return null;
   if (pct < 5) return { it: "Leggendario", en: "Legendary", cls: "text-[#B26BFF] border-[#B26BFF]/50 bg-[#B26BFF]/10" };
-  if (pct < 20) return { it: "Epico", en: "Epic", cls: "text-[#00E0FF] border-[#00E0FF]/50 bg-[#00E0FF]/10" };
-  if (pct < 50) return { it: "Raro", en: "Rare", cls: "text-[#00FF66] border-[#00FF66]/50 bg-[#00FF66]/10" };
+  if (pct < 20) return { it: "Epico", en: "Epic", cls: "text-info border-info/50 bg-info/10" };
+  if (pct < 50) return { it: "Raro", en: "Rare", cls: "text-ok border-ok/50 bg-ok/10" };
   return { it: "Comune", en: "Common", cls: "text-zinc-400 border-zinc-600 bg-zinc-800/40" };
 };
 
@@ -61,7 +62,7 @@ export default function Milestones() {
         </p>
       </div>
 
-      <div className="flex items-center gap-2 mb-6 border-b border-[#2A2A35]">
+      <div className="flex items-center gap-2 mb-6 border-b border-hud">
         <TabButton active={tab === "missions"} onClick={() => setTab("missions")} testid="tab-missions" icon={Swords}>
           {t("missions.tab_missions", "Missioni")}
         </TabButton>
@@ -81,7 +82,7 @@ function TabButton({ active, onClick, children, testid, icon: Icon }) {
       onClick={onClick}
       data-testid={testid}
       className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors border-b-2 -mb-px ${
-        active ? "border-[#E5FF00] text-[#E5FF00]" : "border-transparent text-zinc-500 hover:text-white"
+        active ? "border-volt text-volt" : "border-transparent text-zinc-500 hover:text-white"
       }`}
     >
       <Icon size={14} /> {children}
@@ -128,7 +129,7 @@ function MissionsTab({ t, lang }) {
       {data.chain && !data.chain.done && (
         <>
           <SectionLabel icon={Crown} text={`${t("missions.chain_title", "Catena Recluta")} · ${data.chain.steps.filter((s) => s.status === "completed").length}/${data.chain.steps.length}`} />
-          <div className="border border-[#2A2A35] bg-[#0F0F12] mb-8 divide-y divide-[#1A1A24]" data-testid="chain-block">
+          <div className="border border-hud bg-panel mb-8 divide-y divide-hud-soft" data-testid="chain-block">
             {data.chain.steps.map((s) => (
               <ChainStepRow key={s.code} s={s} en={en} />
             ))}
@@ -172,7 +173,7 @@ function MissionsTab({ t, lang }) {
       {/* Attive */}
       <SectionLabel icon={Swords} text={`${t("missions.active", "Missioni attive")} · ${data.slots.used}/${data.slots.max}`} />
       {data.active.length === 0 ? (
-        <div className="border border-dashed border-[#2A2A35] p-6 text-center text-sm text-zinc-500 mb-8" data-testid="missions-none-active">
+        <div className="border border-dashed border-hud p-6 text-center text-sm text-zinc-500 mb-8" data-testid="missions-none-active">
           <Target size={18} className="mx-auto mb-2 text-zinc-600" />
           {t("missions.none_active", "Nessuna missione attiva. Attivane una qui sotto!")}
         </div>
@@ -206,10 +207,10 @@ function MissionsTab({ t, lang }) {
           <SectionLabel icon={CheckCircle2} text={`${t("missions.completed", "Completate")} · ${data.completed.length}`} />
           <div className="space-y-px" data-testid="missions-completed-list">
             {data.completed.map((m) => (
-              <div key={m.code} className="flex items-center gap-3 bg-[#0F0F12] border border-[#1A1A24] px-4 py-2.5" data-testid={`mission-completed-${m.code}`}>
-                <CheckCircle2 size={14} className="text-[#00FF66] shrink-0" />
+              <div key={m.code} className="flex items-center gap-3 bg-panel border border-hud-soft px-4 py-2.5" data-testid={`mission-completed-${m.code}`}>
+                <CheckCircle2 size={14} className="text-ok shrink-0" />
                 <span className="text-sm text-zinc-300 flex-1 truncate">{en ? m.name_en : m.name_it}</span>
-                <span className="text-[11px] font-mono text-[#00FF66]">+{m.xp} XP</span>
+                <span className="text-[11px] font-mono text-ok">+{m.xp} XP</span>
                 {m.completed_at && (
                   <span className="text-[11px] font-mono text-zinc-600">{new Date(m.completed_at).toLocaleDateString(en ? "en-US" : "it-IT")}</span>
                 )}
@@ -225,7 +226,7 @@ function MissionsTab({ t, lang }) {
 function SectionLabel({ icon: Icon, text }) {
   return (
     <div className="flex items-center gap-2 mb-3">
-      <Icon size={13} className="text-[#E5FF00]" />
+      <Icon size={13} className="text-volt" />
       <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">{text}</span>
     </div>
   );
@@ -239,7 +240,7 @@ function ChainStepRow({ s, en }) {
   return (
     <div className={`flex items-center gap-4 p-4 ${locked ? "opacity-40" : ""}`} data-testid={`chain-step-${s.code}`}>
       <div className={`w-9 h-9 flex items-center justify-center border shrink-0 ${
-        done ? "border-[#00FF66] text-[#00FF66]" : locked ? "border-[#2A2A35] text-zinc-600" : "border-[#E5FF00] text-[#E5FF00]"
+        done ? "border-ok text-ok" : locked ? "border-hud text-zinc-600" : "border-volt text-volt"
       }`}>
         {done ? <CheckCircle2 size={16} /> : locked ? <Lock size={14} /> : <Icon size={16} />}
       </div>
@@ -249,13 +250,13 @@ function ChainStepRow({ s, en }) {
           <span className={`text-sm font-semibold ${done ? "text-zinc-500 line-through" : "text-zinc-100"}`}>
             {en ? s.name_en : s.name_it}
           </span>
-          <span className="text-[11px] font-mono text-[#E5FF00]">+{s.xp} XP</span>
+          <span className="text-[11px] font-mono text-volt">+{s.xp} XP</span>
         </div>
         {!done && <div className="text-xs text-zinc-500 mt-0.5">{en ? s.desc_en : s.desc_it}</div>}
         {s.status === "active" && s.target > 1 && (
           <div className="flex items-center gap-3 mt-2">
-            <div className="flex-1 h-1 bg-[#0A0A0C] border border-[#2A2A35] overflow-hidden">
-              <div className="h-full bg-[#E5FF00]" style={{ width: `${pct}%` }} />
+            <div className="flex-1 h-1 bg-panel-deep border border-hud overflow-hidden">
+              <div className="h-full bg-volt" style={{ width: `${pct}%` }} />
             </div>
             <span className="text-[11px] font-mono text-zinc-500">{s.progress}/{s.target}</span>
           </div>
@@ -263,7 +264,7 @@ function ChainStepRow({ s, en }) {
       </div>
       {s.status === "active" && (
         <Link to={s.link} data-testid={`chain-go-${s.code}`}
-          className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-black bg-[#E5FF00] hover:bg-[#D4EC00] px-3 py-1.5 transition-colors shrink-0">
+          className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-black bg-volt hover:bg-volt-dim px-3 py-1.5 transition-colors shrink-0">
           {en ? s.cta_en : s.cta_it} <ArrowRight size={11} />
         </Link>
       )}
@@ -277,12 +278,12 @@ function WeeklyMissionCard({ m, en, t, variant = "weekly" }) {
   const pct = Math.max(0, Math.min(100, Math.round((m.progress / m.target) * 100)));
   const why = en ? m.why_en : m.why_it;
   const daily = variant === "daily";
-  const box = done ? "border-[#00FF66]/40 bg-[#00FF66]/[0.03]"
-    : daily ? "border-[#FF9F1C]/30 bg-[#FF9F1C]/[0.03]" : "border-[#00E0FF]/30 bg-[#00E0FF]/[0.03]";
-  const iconBox = done ? "border-[#00FF66]/50 text-[#00FF66]"
-    : daily ? "border-[#FF9F1C]/50 text-[#FF9F1C]" : "border-[#00E0FF]/50 text-[#00E0FF]";
-  const barCls = daily ? "bg-[#FF9F1C]" : "bg-[#00E0FF]";
-  const goCls = daily ? "bg-[#FF9F1C] hover:bg-[#FFB54C]" : "bg-[#00E0FF] hover:bg-[#33E6FF]";
+  const box = done ? "border-ok/40 bg-ok/[0.03]"
+    : daily ? "border-[#FF9F1C]/30 bg-[#FF9F1C]/[0.03]" : "border-info/30 bg-info/[0.03]";
+  const iconBox = done ? "border-ok/50 text-ok"
+    : daily ? "border-[#FF9F1C]/50 text-[#FF9F1C]" : "border-info/50 text-info";
+  const barCls = daily ? "bg-[#FF9F1C]" : "bg-info";
+  const goCls = daily ? "bg-[#FF9F1C] hover:bg-[#FFB54C]" : "bg-info hover:bg-[#33E6FF]";
   return (
     <div className={`border p-4 ${box}`} data-testid={`${variant}-${m.template}`}>
       <div className="flex items-start gap-3">
@@ -292,17 +293,17 @@ function WeeklyMissionCard({ m, en, t, variant = "weekly" }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className={`text-sm font-semibold ${done ? "text-zinc-500 line-through" : ""}`}>{en ? m.name_en : m.name_it}</span>
-            <span className="text-[11px] font-mono text-[#E5FF00]">+{m.xp} XP</span>
+            <span className="text-[11px] font-mono text-volt">+{m.xp} XP</span>
           </div>
           <div className="text-xs text-zinc-500 mt-1">{en ? m.desc_en : m.desc_it}</div>
           {why && (
-            <div className="text-[11px] text-[#00E0FF]/90 mt-1.5 italic">
+            <div className="text-[11px] text-info/90 mt-1.5 italic">
               {t("missions.weekly_why", "Perché")}: {why}
             </div>
           )}
           {!done && (
             <div className="flex items-center gap-3 mt-3">
-              <div className="flex-1 h-1.5 bg-[#0A0A0C] border border-[#2A2A35] overflow-hidden">
+              <div className="flex-1 h-1.5 bg-panel-deep border border-hud overflow-hidden">
                 <div className={`h-full ${barCls}`} style={{ width: `${pct}%` }} />
               </div>
               <span className="text-[11px] font-mono text-zinc-400 tabular-nums">{m.progress}/{m.target}</span>
@@ -322,36 +323,36 @@ function ActiveMissionRow({ m, en, t, busy, onAbandon }) {
   const Icon = ICONS[m.icon] || Swords;
   const pct = Math.max(0, Math.min(100, Math.round((m.progress / m.target) * 100)));
   return (
-    <div className="border border-[#E5FF00]/30 bg-[#E5FF00]/[0.03] p-4" data-testid={`mission-row-${m.code}`}>
+    <div className="border border-volt/30 bg-volt/[0.03] p-4" data-testid={`mission-row-${m.code}`}>
       <div className="flex items-start gap-4">
-        <div className="w-11 h-11 flex items-center justify-center border border-[#E5FF00]/40 text-[#E5FF00] shrink-0">
+        <div className="w-11 h-11 flex items-center justify-center border border-volt/40 text-volt shrink-0">
           <Icon size={18} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-display font-black text-base">{en ? m.name_en : m.name_it}</span>
-            <span className="text-[11px] font-mono text-[#E5FF00]">+{m.xp} XP</span>
+            <span className="text-[11px] font-mono text-volt">+{m.xp} XP</span>
             <button
               onClick={onAbandon}
               disabled={busy === m.code}
               data-testid={`mission-abandon-${m.code}`}
               aria-label={t("a11y.abandon_mission")}
               title={t("missions.abandon", "Abbandona")}
-              className="ml-auto text-zinc-600 hover:text-[#FF3B30] transition-colors disabled:opacity-40"
+              className="ml-auto text-zinc-600 hover:text-bad transition-colors disabled:opacity-40"
             >
               <X size={14} />
             </button>
           </div>
           <div className="text-xs text-zinc-400 mt-1">{en ? m.desc_en : m.desc_it}</div>
           <div className="flex items-center gap-3 mt-3">
-            <div className="flex-1 h-1.5 bg-[#0A0A0C] border border-[#2A2A35] overflow-hidden">
-              <div className="h-full bg-[#E5FF00] transition-all duration-500" style={{ width: `${pct}%` }} />
+            <div className="flex-1 h-1.5 bg-panel-deep border border-hud overflow-hidden">
+              <div className="h-full bg-volt transition-all duration-500" style={{ width: `${pct}%` }} />
             </div>
             <span className="text-[11px] font-mono text-zinc-400 tabular-nums">{m.progress}/{m.target}</span>
             <Link
               to={m.link}
               data-testid={`mission-go-${m.code}`}
-              className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-black bg-[#E5FF00] hover:bg-[#D4EC00] px-3 py-1.5 transition-colors"
+              className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-black bg-volt hover:bg-volt-dim px-3 py-1.5 transition-colors"
             >
               {en ? m.cta_en : m.cta_it} <ArrowRight size={11} />
             </Link>
@@ -365,22 +366,22 @@ function ActiveMissionRow({ m, en, t, busy, onAbandon }) {
 function AvailableMissionCard({ m, en, t, busy, slotsFull, onActivate }) {
   const Icon = ICONS[m.icon] || Swords;
   return (
-    <div className="border border-[#2A2A35] bg-[#0F0F12] p-4 hover:border-zinc-600 transition-colors" data-testid={`mission-avail-${m.code}`}>
+    <div className="border border-hud bg-panel p-4 hover:border-zinc-600 transition-colors" data-testid={`mission-avail-${m.code}`}>
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 flex items-center justify-center border border-[#2A2A35] text-zinc-500 shrink-0">
+        <div className="w-10 h-10 flex items-center justify-center border border-hud text-zinc-500 shrink-0">
           <Icon size={16} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-sm">{en ? m.name_en : m.name_it}</span>
-            <span className="text-[11px] font-mono text-[#E5FF00]">+{m.xp} XP</span>
+            <span className="text-[11px] font-mono text-volt">+{m.xp} XP</span>
           </div>
           <div className="text-xs text-zinc-500 mt-1 leading-snug">{en ? m.desc_en : m.desc_it}</div>
           <button
             onClick={onActivate}
             disabled={busy === m.code || slotsFull}
             data-testid={`mission-activate-${m.code}`}
-            className="mt-3 text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 border border-[#E5FF00]/50 text-[#E5FF00] hover:bg-[#E5FF00] hover:text-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="mt-3 text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 border border-volt/50 text-volt hover:bg-volt hover:text-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {slotsFull ? t("missions.slots_full", "Slot pieni") : t("missions.activate", "Attiva")}
           </button>
@@ -456,7 +457,7 @@ function TrophiesTab({ t, lang }) {
           <div className="text-3xl font-black font-mono tabular-nums mt-1" data-testid="stats-xp">
             {state.xp} <span className="text-base text-zinc-500 font-normal">XP</span>
           </div>
-          <div className="mt-3 h-2 bg-[#0A0A0C] border border-[#2A2A35] overflow-hidden">
+          <div className="mt-3 h-2 bg-panel-deep border border-hud overflow-hidden">
             <div className={`h-full ${tierMeta.color.replace("text-", "bg-")} transition-all duration-500`} style={{ width: `${tierProgress}%` }} data-testid="stats-progress-bar" />
           </div>
           <div className="text-xs text-zinc-500 mt-1.5 font-mono">
@@ -474,7 +475,7 @@ function TrophiesTab({ t, lang }) {
       </div>
 
       {/* Vantaggi tier */}
-      <div className="border border-[#2A2A35] bg-[#0F0F12] p-4 mb-6" data-testid="tier-perks-panel">
+      <HUDCard testid="tier-perks-panel" pad="p-4" className="mb-6">
         <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">
           {t("missions.perks_title", "Vantaggi tier")}
         </div>
@@ -485,7 +486,7 @@ function TrophiesTab({ t, lang }) {
             const isCurrent = state.tier === p.tier;
             return (
               <div key={p.tier} data-testid={`tier-perk-${p.tier}`}
-                className={`border p-3 ${isCurrent ? `${meta.ring} ${meta.bg}` : reached ? "border-[#2A2A35]" : "border-[#1A1A24] opacity-50"}`}>
+                className={`border p-3 ${isCurrent ? `${meta.ring} ${meta.bg}` : reached ? "border-hud" : "border-hud-soft opacity-50"}`}>
                 <div className={`text-[11px] font-black uppercase tracking-widest ${meta.color} flex items-center gap-1.5`}>
                   {reached ? <CheckCircle2 size={11} /> : <Lock size={10} />}
                   {p.tier}
@@ -499,19 +500,19 @@ function TrophiesTab({ t, lang }) {
             );
           })}
         </div>
-      </div>
+      </HUDCard>
 
       {/* OBS overlay copy */}
       {overlayUrl && (
-        <div className="border border-[#2A2A35] bg-[#0F0F12] p-4 mb-6 flex items-center gap-3" data-testid="milestone-overlay-block">
-          <Radio size={16} className="text-[#00FF66] shrink-0" />
+        <div className="border border-hud bg-panel p-4 mb-6 flex items-center gap-3" data-testid="milestone-overlay-block">
+          <Radio size={16} className="text-ok shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="text-xs uppercase tracking-widest text-zinc-500 mb-0.5">{t("milestones.obs_overlay", "OBS Overlay — Milestone popup live")}</div>
             <div className="text-[11px] font-mono text-zinc-400 truncate">{overlayUrl}</div>
           </div>
           <button
             onClick={copyOverlay}
-            className="text-xs font-bold uppercase tracking-widest px-3 py-2 bg-[#E5FF00] text-black hover:bg-[#B8CC00] transition-colors"
+            className="text-xs font-bold uppercase tracking-widest px-3 py-2 bg-volt text-black hover:bg-[#B8CC00] transition-colors"
             data-testid="milestone-overlay-copy"
           >
             {copied ? t("milestones.copied", "COPIATO ✓") : t("milestones.copy_url", "COPIA URL")}
@@ -525,7 +526,7 @@ function TrophiesTab({ t, lang }) {
         <FilterButton value="all" current={filter} onClick={setFilter} testid="filter-all">{t("milestones.filter_all", "Tutti")}</FilterButton>
         <FilterButton value="unlocked" current={filter} onClick={setFilter} testid="filter-unlocked">{t("milestones.filter_unlocked", "Sbloccati")}</FilterButton>
         <FilterButton value="locked" current={filter} onClick={setFilter} testid="filter-locked">{t("milestones.filter_locked", "Da sbloccare")}</FilterButton>
-        <span className="w-px h-4 bg-[#2A2A35] mx-1" />
+        <span className="w-px h-4 bg-hud mx-1" />
         <FilterButton value="all" current={category} onClick={setCategory} testid="cat-all">{t("milestones.cat_all", "Tutte")}</FilterButton>
         {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
           <FilterButton key={k} value={k} current={category} onClick={setCategory} testid={`cat-${k}`}>{v[lang]}</FilterButton>
@@ -538,7 +539,7 @@ function TrophiesTab({ t, lang }) {
           <MilestoneCard key={m.code} m={m} lang={lang} t={t} />
         ))}
         {filtered.length === 0 && (
-          <div className="col-span-full text-center text-zinc-500 py-12 border border-dashed border-[#2A2A35]" data-testid="milestones-empty">
+          <div className="col-span-full text-center text-zinc-500 py-12 border border-dashed border-hud" data-testid="milestones-empty">
             {t("milestones.empty", "Nessun traguardo in questa categoria")}
           </div>
         )}
@@ -554,7 +555,7 @@ function FilterButton({ value, current, onClick, children, testid }) {
       onClick={() => onClick(value)}
       data-testid={testid}
       className={`text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 transition-colors ${
-        active ? "bg-[#E5FF00] text-black" : "bg-[#0F0F12] text-zinc-400 border border-[#2A2A35] hover:text-white"
+        active ? "bg-volt text-black" : "bg-panel text-zinc-400 border border-hud hover:text-white"
       }`}
     >
       {children}
@@ -576,12 +577,12 @@ function MilestoneCard({ m, lang, t }) {
       className={`relative border p-4 transition-all ${
         m.unlocked
           ? `${tierMeta.ring} ${tierMeta.bg}`
-          : "border-[#2A2A35] bg-[#0F0F12] opacity-70 hover:opacity-100"
+          : "border-hud bg-panel opacity-70 hover:opacity-100"
       }`}
       data-testid={`milestone-${m.code}`}
     >
       <div className="flex items-start gap-3">
-        <div className={`w-12 h-12 flex items-center justify-center border ${m.unlocked ? tierMeta.ring : "border-[#2A2A35]"} ${m.unlocked ? tierMeta.color : "text-zinc-600"} shrink-0`}>
+        <div className={`w-12 h-12 flex items-center justify-center border ${m.unlocked ? tierMeta.ring : "border-hud"} ${m.unlocked ? tierMeta.color : "text-zinc-600"} shrink-0`}>
           {m.unlocked ? <Icon size={20} /> : <Lock size={16} />}
         </div>
         <div className="flex-1 min-w-0">
@@ -595,7 +596,7 @@ function MilestoneCard({ m, lang, t }) {
               </span>
             )}
             {m.unlocked && (
-              <CheckCircle2 size={12} className="ml-auto text-[#00FF66]" data-testid={`milestone-${m.code}-check`} />
+              <CheckCircle2 size={12} className="ml-auto text-ok" data-testid={`milestone-${m.code}-check`} />
             )}
           </div>
           <div className="font-display font-black text-base leading-tight" data-testid={`milestone-${m.code}-name`}>{name}</div>
@@ -611,13 +612,13 @@ function MilestoneCard({ m, lang, t }) {
             </div>
           )}
           {rewardLabel && (
-            <div className="mt-2 text-[11px] uppercase tracking-widest text-[#E5FF00] font-bold">
+            <div className="mt-2 text-[11px] uppercase tracking-widest text-volt font-bold">
               🎁 {rewardLabel}
             </div>
           )}
           {!m.unlocked && m.threshold > 1 && (
             <>
-              <div className="mt-2.5 h-1 bg-[#0A0A0C] overflow-hidden">
+              <div className="mt-2.5 h-1 bg-panel-deep overflow-hidden">
                 <div className={`h-full ${tierMeta.color.replace("text-", "bg-")}`} style={{ width: `${progressPct}%` }} />
               </div>
               <div className="text-[11px] font-mono text-zinc-500 mt-1">

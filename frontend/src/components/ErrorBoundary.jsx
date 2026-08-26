@@ -70,8 +70,8 @@ export default class ErrorBoundary extends Component {
     const c = T[lang()];
     return (
       <div className="min-h-[60vh] flex items-center justify-center p-6" data-testid="error-boundary">
-        <div className="bg-[#0F0F12] border border-[#FF3B30]/40 hud-tick p-8 max-w-lg w-full">
-          <div className="flex items-center gap-2 text-[#FF3B30] mb-3">
+        <div className="bg-panel border border-bad/40 hud-tick p-8 max-w-lg w-full">
+          <div className="flex items-center gap-2 text-bad mb-3">
             <AlertTriangle size={18} />
             <span className="text-xs uppercase tracking-[0.2em]">{c.title}</span>
           </div>
@@ -81,14 +81,14 @@ export default class ErrorBoundary extends Component {
             <button
               onClick={this.handleRetry}
               data-testid="error-boundary-retry"
-              className="inline-flex items-center gap-2 bg-[#E5FF00] text-black text-sm font-semibold px-4 py-2 hover:bg-[#d4ee00] transition-colors"
+              className="inline-flex items-center gap-2 bg-volt text-black text-sm font-semibold px-4 py-2 hover:bg-[#d4ee00] transition-colors"
             >
               <RotateCcw size={14} /> {c.retry}
             </button>
             <a
               href="/app"
               data-testid="error-boundary-home"
-              className="inline-flex items-center gap-2 border border-[#2A2A35] text-zinc-300 text-sm px-4 py-2 hover:border-[#E5FF00]/50 transition-colors"
+              className="inline-flex items-center gap-2 border border-hud text-zinc-300 text-sm px-4 py-2 hover:border-volt/50 transition-colors"
             >
               <Home size={14} /> {c.home}
             </a>

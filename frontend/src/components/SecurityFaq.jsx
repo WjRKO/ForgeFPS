@@ -52,7 +52,7 @@ export const SecurityFaq = () => {
 
   return (
     <section className="max-w-3xl" data-testid="security-faq">
-      <div className="text-xs font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-3">{c.eyebrow}</div>
+      <div className="text-xs font-mono tracking-[0.2em] uppercase text-volt mb-3">{c.eyebrow}</div>
       <h2 className="font-display font-black text-2xl sm:text-3xl tracking-tight mb-2">{c.title}</h2>
       <p className="text-zinc-500 text-sm mb-8">{c.sub}</p>
 
@@ -60,13 +60,13 @@ export const SecurityFaq = () => {
         {c.items.map((it, i) => {
           const isOpen = open === i;
           return (
-            <div key={i} id={i === 1 ? "faq-av" : undefined} className="bg-[#0F0F12] border border-[#1A1A24] scroll-mt-24" data-testid={`faq-item-${i}`}>
+            <div key={i} id={i === 1 ? "faq-av" : undefined} className="bg-panel border border-hud-soft scroll-mt-24" data-testid={`faq-item-${i}`}>
               <button
                 onClick={() => setOpen(isOpen ? -1 : i)}
                 data-testid={`faq-toggle-${i}`}
                 className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-[#12121a] transition-colors">
                 <span className="flex items-center gap-3">
-                  <HelpCircle size={16} className={isOpen ? "text-[#E5FF00]" : "text-zinc-600"} />
+                  <HelpCircle size={16} className={isOpen ? "text-volt" : "text-zinc-600"} />
                   <span className="font-semibold text-sm text-zinc-100">{it.q}</span>
                 </span>
                 <ChevronDown size={17} className={`shrink-0 text-zinc-500 transition-transform ${isOpen ? "rotate-180" : ""}`} />
@@ -79,7 +79,7 @@ export const SecurityFaq = () => {
                     <p className="px-5 pb-4 pl-14 text-sm text-zinc-400 leading-relaxed">{it.a}</p>
                     {i === 1 && (
                       <a href={VT_URL} target="_blank" rel="noreferrer" data-testid="faq-vt-link"
-                        className="inline-flex items-center gap-1.5 mb-5 ml-14 text-xs text-[#00FF66] hover:underline">
+                        className="inline-flex items-center gap-1.5 mb-5 ml-14 text-xs text-ok hover:underline">
                         <ShieldCheck size={13} /> {lang === "en" ? "View the full VirusTotal report" : "Vedi il report VirusTotal completo"} <ExternalLink size={10} />
                       </a>
                     )}

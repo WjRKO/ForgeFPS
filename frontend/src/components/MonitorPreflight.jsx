@@ -192,9 +192,9 @@ export default function MonitorPreflight({ open, onClose, onConfirm, launching }
   if (!open) return null;
 
   const STATUS_ICON = {
-    ok: <CheckCircle2 size={16} className="text-[#00FF66] shrink-0" data-testid="pf-icon-ok" />,
-    warn: <AlertTriangle size={16} className="text-[#E5FF00] shrink-0" data-testid="pf-icon-warn" />,
-    bad: <XCircle size={16} className="text-[#FF3B30] shrink-0" data-testid="pf-icon-bad" />,
+    ok: <CheckCircle2 size={16} className="text-ok shrink-0" data-testid="pf-icon-ok" />,
+    warn: <AlertTriangle size={16} className="text-volt shrink-0" data-testid="pf-icon-warn" />,
+    bad: <XCircle size={16} className="text-bad shrink-0" data-testid="pf-icon-bad" />,
     unknown: <AlertTriangle size={16} className="text-zinc-500 shrink-0" data-testid="pf-icon-unknown" />,
   };
 
@@ -211,7 +211,7 @@ export default function MonitorPreflight({ open, onClose, onConfirm, launching }
   // sotto la piega, serviva scrollare per vederlo).
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 overflow-y-auto" onClick={onClose} data-testid="monitor-preflight">
-      <div className="bg-[#0F0F12] border border-[#2A2A35] max-w-lg w-full p-6" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-panel border border-hud max-w-lg w-full p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between mb-4">
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-1">{t("live.pf_eyebrow", { defaultValue: "// pre-flight" })}</div>
@@ -227,7 +227,7 @@ export default function MonitorPreflight({ open, onClose, onConfirm, launching }
         ) : (
           <div className="space-y-2 mb-5" data-testid="preflight-checks">
             {(displayedChecks || []).map((c) => (
-              <div key={c.key} className="flex items-start gap-3 bg-black border border-[#1A1A24] p-3" data-testid={`pf-check-${c.key}`}>
+              <div key={c.key} className="flex items-start gap-3 bg-black border border-hud-soft p-3" data-testid={`pf-check-${c.key}`}>
                 {STATUS_ICON[c.status]}
                 <div className="min-w-0 flex-1">
                   <div className="text-sm text-zinc-200 font-semibold">{c.label}</div>
@@ -242,7 +242,7 @@ export default function MonitorPreflight({ open, onClose, onConfirm, launching }
                         value={manualGame}
                         onChange={(e) => setManualGame(e.target.value)}
                         data-testid="pf-game-manual-select"
-                        className="flex-1 bg-[#0A0A0F] border border-[#2A2A35] text-xs text-zinc-200 px-2 py-1.5 focus:outline-none focus:border-[#E5FF00]/40"
+                        className="flex-1 bg-[#0A0A0F] border border-hud text-xs text-zinc-200 px-2 py-1.5 focus:outline-none focus:border-volt/40"
                       >
                         <option value="">{t("live.pf_game_manual_placeholder", { defaultValue: "Seleziona manualmente il gioco…" })}</option>
                         {library.slice(0, 100).map((g) => (
@@ -266,7 +266,7 @@ export default function MonitorPreflight({ open, onClose, onConfirm, launching }
         )}
 
         {hasWarning && !loading && (
-          <div className="text-xs text-zinc-500 mb-4 border-l-2 border-[#E5FF00]/40 pl-3" data-testid="preflight-hint">
+          <div className="text-xs text-zinc-500 mb-4 border-l-2 border-volt/40 pl-3" data-testid="preflight-hint">
             {t("live.pf_warn_hint_v2", { defaultValue: "Le note sopra sono solo promemoria. Puoi avviare il monitor comunque — gli FPS partiranno appena un gioco andra a schermo intero." })}
           </div>
         )}
@@ -281,8 +281,8 @@ export default function MonitorPreflight({ open, onClose, onConfirm, launching }
             data-testid="preflight-confirm"
             className={`inline-flex items-center gap-2 font-bold px-4 py-2 text-sm transition-colors disabled:opacity-50 ${
               hasWarning
-                ? "bg-transparent text-[#E5FF00] border border-[#E5FF00] hover:bg-[#E5FF00]/10"
-                : "bg-[#E5FF00] text-black hover:bg-[#D4EE00]"
+                ? "bg-transparent text-volt border border-volt hover:bg-volt/10"
+                : "bg-volt text-black hover:bg-[#D4EE00]"
             }`}>
             {launching ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />}
             {btnLabel}

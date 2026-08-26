@@ -48,11 +48,11 @@ const relTime = (iso, en) => {
 function PcHeroCard({ specs, health, t, en }) {
   const hasSpecs = !!(specs?.data?.cpu || specs?.data?.gpu);
   const score = health?.score;
-  const color = score >= 80 ? "text-[#00FF66]" : score >= 55 ? "text-[#E5FF00]" : "text-[#FF3B30]";
+  const color = score >= 80 ? "text-ok" : score >= 55 ? "text-volt" : "text-bad";
 
   if (!hasSpecs) {
     return (
-      <HUDCard testid="pc-empty-card" className="border-[#E5FF00]/30">
+      <HUDCard testid="pc-empty-card" className="border-volt/30">
         <EmptyState
           icon={MonitorDown}
           title={t("dashboard.pc_no_specs_title")}
@@ -85,7 +85,7 @@ function PcHeroCard({ specs, health, t, en }) {
     <HUDCard testid="pc-hero-card" featured className="lg:col-span-2 gap-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2">
-          <Gauge size={16} className="text-[#E5FF00]" />
+          <Gauge size={16} className="text-volt" />
           <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
             {t("dashboard.pc_title")}
           </span>
@@ -98,7 +98,7 @@ function PcHeroCard({ specs, health, t, en }) {
         <Link
           to="/app/pc"
           data-testid="pc-open-mypc"
-          className="text-xs font-mono uppercase tracking-widest text-[#E5FF00] hover:underline"
+          className="text-xs font-mono uppercase tracking-widest text-volt hover:underline"
         >
           {t("dashboard.pc_open")} →
         </Link>
@@ -115,10 +115,10 @@ function PcHeroCard({ specs, health, t, en }) {
             {badges.map((b) => (
               <span
                 key={b.label}
-                className="inline-flex items-center gap-1.5 px-2 py-1 border border-[#2A2A35] bg-[#0A0A0C] text-xs text-zinc-300"
+                className="inline-flex items-center gap-1.5 px-2 py-1 border border-hud bg-panel-deep text-xs text-zinc-300"
                 data-testid={`pc-badge-${b.label.toLowerCase()}`}
               >
-                <b.icon size={11} className="text-[#00E0FF]" />
+                <b.icon size={11} className="text-info" />
                 <span className="text-zinc-500 font-mono text-[11px]">{b.label}</span>
                 <span className="truncate max-w-[160px]">{b.value}</span>
               </span>
@@ -147,8 +147,8 @@ function PcHeroCard({ specs, health, t, en }) {
         data-testid="pc-optimize-cta"
         className={`inline-flex items-center justify-center gap-2 border py-2.5 text-xs font-mono uppercase tracking-widest transition-colors ${
           score < 55
-            ? "border-[#FF3B30]/60 bg-[#FF3B30]/10 text-[#FF3B30] hover:bg-[#FF3B30]/20"
-            : "border-[#E5FF00]/60 bg-[#E5FF00]/10 text-[#E5FF00] hover:bg-[#E5FF00]/20"
+            ? "border-bad/60 bg-bad/10 text-bad hover:bg-bad/20"
+            : "border-volt/60 bg-volt/10 text-volt hover:bg-volt/20"
         }`}
       >
         <Sparkles size={13} /> {t("dashboard.pc_optimize")}
@@ -192,7 +192,7 @@ function BenchmarkCard({ bench, discord, t, onShare }) {
     <HUDCard testid="bench-card">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <TrendingUp size={14} className="text-[#00FF66]" />
+          <TrendingUp size={14} className="text-ok" />
           <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
             {t("dashboard.bench_title")}
           </span>
@@ -216,7 +216,7 @@ function BenchmarkCard({ bench, discord, t, onShare }) {
           {prev > 0 && (
             <div
               className={`flex items-center gap-1 text-xs font-mono mt-1 ${
-                positive ? "text-[#00FF66]" : "text-[#FF3B30]"
+                positive ? "text-ok" : "text-bad"
               }`}
               data-testid="bench-delta"
             >
@@ -239,7 +239,7 @@ function QuickActionsCard({ t }) {
   const actions = [
     { to: "/app/advisor", icon: MessageSquareCode, label: t("dashboard.quick_advisor_title"), testid: "qa-advisor" },
     { to: "/app/desktop", icon: MonitorDown, label: t("dashboard.act_agent"), testid: "qa-agent" },
-    { to: "/app/games", icon: Gamepad2, label: t("dashboard.act_games"), testid: "qa-games" },
+    { to: "/app/gaming?tab=games", icon: Gamepad2, label: t("dashboard.act_games"), testid: "qa-games" },
     { to: "/app/tracker", icon: LineChart, label: t("dashboard.quick_tracker_title"), testid: "qa-tracker" },
     { to: "/app/builds", icon: Cpu, label: t("dashboard.quick_builds_title"), testid: "qa-builds" },
     { to: "/app/network", icon: Wifi, label: "Network", testid: "qa-network" },
@@ -247,7 +247,7 @@ function QuickActionsCard({ t }) {
   return (
     <HUDCard testid="quick-actions-card">
       <div className="flex items-center gap-2 mb-3">
-        <Zap size={13} className="text-[#E5FF00]" />
+        <Zap size={13} className="text-volt" />
         <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
           {t("dashboard.actions_title")}
         </span>
@@ -258,9 +258,9 @@ function QuickActionsCard({ t }) {
             key={a.to}
             to={a.to}
             data-testid={a.testid}
-            className="flex flex-col items-start gap-1.5 border border-[#2A2A35] hover:border-[#E5FF00] p-2.5 transition-colors"
+            className="flex flex-col items-start gap-1.5 border border-hud hover:border-volt p-2.5 transition-colors"
           >
-            <a.icon size={14} className="text-[#E5FF00]" />
+            <a.icon size={14} className="text-volt" />
             <span className="text-[11px] text-zinc-200 leading-tight">{a.label}</span>
           </Link>
         ))}
@@ -303,7 +303,7 @@ function DiscordCard({ discord, user, t }) {
               <div className="text-xs font-semibold truncate">
                 {discord.username || user?.discord_username || t("dashboard.discord_linked")}
               </div>
-              <div className="text-[11px] text-[#00FF66] font-mono">✓ {t("dashboard.discord_linked")}</div>
+              <div className="text-[11px] text-ok font-mono">✓ {t("dashboard.discord_linked")}</div>
             </div>
           </div>
           <a
@@ -339,13 +339,13 @@ function AgentCard({ t }) {
     trackConversion("agent_download");
   };
   return (
-    <HUDCard testid="agent-card" className="gap-3 border-[#00E0FF]/40 bg-gradient-to-br from-[#00E0FF]/10 to-transparent">
+    <HUDCard testid="agent-card" className="gap-3 border-info/40 bg-gradient-to-br from-info/10 to-transparent">
       <div className="flex items-center gap-2">
-        <MonitorDown size={13} className="text-[#00E0FF]" />
+        <MonitorDown size={13} className="text-info" />
         <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
           {t("dashboard.agent_title")}
         </span>
-        {!seen && <span className="ml-auto text-[11px] font-mono uppercase text-[#00E0FF] border border-[#00E0FF]/40 px-1">NEW</span>}
+        {!seen && <span className="ml-auto text-[11px] font-mono uppercase text-info border border-info/40 px-1">NEW</span>}
       </div>
       <div>
         <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">
@@ -359,7 +359,7 @@ function AgentCard({ t }) {
         rel="noreferrer"
         onClick={markSeen}
         data-testid="agent-download-btn"
-        className="inline-flex items-center justify-center gap-1.5 bg-[#00E0FF] text-black font-bold py-2 text-[11px] font-mono uppercase tracking-widest hover:bg-[#33e8ff] transition-colors"
+        className="inline-flex items-center justify-center gap-1.5 bg-info text-black font-bold py-2 text-[11px] font-mono uppercase tracking-widest hover:bg-[#33e8ff] transition-colors"
       >
         <Download size={12} /> {t("dashboard.agent_download")}
       </a>
@@ -368,7 +368,7 @@ function AgentCard({ t }) {
         target="_blank"
         rel="noreferrer"
         data-testid="agent-view-releases"
-        className="text-center text-[11px] font-mono text-zinc-500 hover:text-[#00E0FF]"
+        className="text-center text-[11px] font-mono text-zinc-500 hover:text-info"
       >
         {t("dashboard.agent_view")} →
       </a>
@@ -384,7 +384,7 @@ function ActivityFeed({ notifs, bench, agentUpdateSeen, t, en }) {
         id: `n-${n.id}`,
         kind: "drop",
         icon: Bell,
-        color: "text-[#00FF66]",
+        color: "text-ok",
         label: n.title || t("dashboard.feed_drop"),
         detail: `${n.old_price} → ${n.new_price} ${n.currency || "€"}`,
         at: n.created_at,
@@ -396,7 +396,7 @@ function ActivityFeed({ notifs, bench, agentUpdateSeen, t, en }) {
         id: "b-latest",
         kind: "bench",
         icon: TrendingUp,
-        color: "text-[#E5FF00]",
+        color: "text-volt",
         label: t("dashboard.feed_bench"),
         detail: `${(bench.latest.after?.overall || bench.latest.after?.score || 0).toLocaleString()} pts`,
         at: bench.latest.created_at || bench.latest.ts,
@@ -408,7 +408,7 @@ function ActivityFeed({ notifs, bench, agentUpdateSeen, t, en }) {
         id: "a-release",
         kind: "release",
         icon: Download,
-        color: "text-[#00E0FF]",
+        color: "text-info",
         label: t("dashboard.feed_release"),
         detail: AGENT_EXE_VERSION,
         at: new Date().toISOString(),
@@ -421,7 +421,7 @@ function ActivityFeed({ notifs, bench, agentUpdateSeen, t, en }) {
   return (
     <HUDCard testid="activity-feed">
       <div className="flex items-center gap-2 mb-3">
-        <Activity size={13} className="text-[#00E0FF]" />
+        <Activity size={13} className="text-info" />
         <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
           {t("dashboard.feed_title")}
         </span>
@@ -429,7 +429,7 @@ function ActivityFeed({ notifs, bench, agentUpdateSeen, t, en }) {
       {events.length === 0 ? (
         <p className="text-xs text-zinc-500 py-2">{t("dashboard.feed_none")}</p>
       ) : (
-        <ul className="divide-y divide-[#1A1A24]">
+        <ul className="divide-y divide-hud-soft">
           {events.map((e) => (
             <li key={e.id}>
               <Link
@@ -457,12 +457,12 @@ function RecentProductsCard({ products, t }) {
     <HUDCard testid="recent-products-card">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <LineChart size={13} className="text-[#E5FF00]" />
+          <LineChart size={13} className="text-volt" />
           <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
             {t("dashboard.recent")}
           </span>
         </div>
-        <Link to="/app/tracker" className="text-[11px] font-mono uppercase text-[#E5FF00] hover:underline">
+        <Link to="/app/tracker" className="text-[11px] font-mono uppercase text-volt hover:underline">
           {t("dashboard.see_all")} →
         </Link>
       </div>
@@ -474,21 +474,21 @@ function RecentProductsCard({ products, t }) {
             <Link
               to="/app/tracker"
               data-testid="dash-add-product"
-              className="mt-2 border border-[#E5FF00] text-[#E5FF00] hover:bg-[#E5FF00] hover:text-black px-5 py-2 text-xs font-mono uppercase tracking-widest transition-colors"
+              className="mt-2 border border-volt text-volt hover:bg-volt hover:text-black px-5 py-2 text-xs font-mono uppercase tracking-widest transition-colors"
             >
               {t("dashboard.add_one")}
             </Link>
           }
         />
       ) : (
-        <ul className="divide-y divide-[#1A1A24]">
+        <ul className="divide-y divide-hud-soft">
           {products.map((p) => (
             <li key={p.id}>
               <Link
                 to={`/app/tracker/${p.id}`}
                 className="flex items-center gap-3 py-2.5 hover:bg-[#141420] -mx-2 px-2 transition-colors"
               >
-                <div className="w-9 h-9 bg-black border border-[#2A2A35] flex items-center justify-center overflow-hidden shrink-0">
+                <div className="w-9 h-9 bg-black border border-hud flex items-center justify-center overflow-hidden shrink-0">
                   {p.image ? (
                     <img src={p.image} alt="" className="w-full h-full object-contain" />
                   ) : (
@@ -521,13 +521,13 @@ function HeroEmpty({ t }) {
   ];
   return (
     <div
-      className="border border-[#E5FF00]/30 bg-gradient-to-br from-[#E5FF00]/10 via-[#00E0FF]/5 to-transparent p-8 mb-6"
+      className="border border-volt/30 bg-gradient-to-br from-volt/10 via-info/5 to-transparent p-8 mb-6"
       data-testid="hero-empty"
     >
       <div className="max-w-2xl">
-        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-[#E5FF00]/10 border border-[#E5FF00]/30 mb-4">
-          <Sparkles size={12} className="text-[#E5FF00]" />
-          <span className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00]">
+        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-volt/10 border border-volt/30 mb-4">
+          <Sparkles size={12} className="text-volt" />
+          <span className="text-[11px] font-mono uppercase tracking-widest text-volt">
             {t("dashboard.eyebrow")}
           </span>
         </div>
@@ -541,18 +541,18 @@ function HeroEmpty({ t }) {
               key={it.to}
               to={it.to}
               data-testid={it.testid}
-              className="group flex flex-col gap-2 bg-black/40 border border-[#2A2A35] hover:border-[#E5FF00] p-4 transition-colors"
+              className="group flex flex-col gap-2 bg-black/40 border border-hud hover:border-volt p-4 transition-colors"
             >
               <div className="flex items-center gap-2">
-                <span className="w-6 h-6 bg-[#E5FF00] text-black text-xs font-black flex items-center justify-center">
+                <span className="w-6 h-6 bg-volt text-black text-xs font-black flex items-center justify-center">
                   {i + 1}
                 </span>
-                <it.icon size={14} className="text-[#E5FF00]" />
+                <it.icon size={14} className="text-volt" />
               </div>
               <span className="text-sm font-semibold text-zinc-100">{it.label}</span>
               <ArrowRight
                 size={13}
-                className="text-[#E5FF00] group-hover:translate-x-1 transition-transform"
+                className="text-volt group-hover:translate-x-1 transition-transform"
               />
             </Link>
           ))}
@@ -577,20 +577,25 @@ export default function Dashboard() {
   const [notifs, setNotifs] = useState(null);
   const [missions, setMissions] = useState(null);
 
+  // Una sola richiesta: prima erano otto, e /pc-specs e /pc-health facevano
+  // molto piu' lavoro di quanto questa pagina disegni.
   useEffect(() => {
-    api.get("/stats").then(({ data }) => setStats(data)).catch(() => setStats({}));
-    api.get("/products").then(({ data }) => setProducts((data || []).slice(0, 5))).catch(() => setProducts([]));
-    api.get("/pc-specs").then(({ data }) => setSpecs(data)).catch(() => setSpecs({}));
-    api.get("/pc-health").then(({ data }) => setHealth(data?.available ? data : null)).catch(() => setHealth(null));
-    api.get("/pc-benchmark").then(({ data }) => setBench(data?.latest ? data : null)).catch(() => setBench(null));
-    api.get("/discord/status").then(({ data }) => setDiscord(data)).catch(() => setDiscord({ linked: false }));
-    api.get("/notifications").then(({ data }) => setNotifs(data || [])).catch(() => setNotifs([]));
-    api.get("/missions").then(({ data }) => {
-      setMissions(data);
-      if (data.just_completed?.length) {
-        window.dispatchEvent(new CustomEvent("ff-mission-completed", { detail: data.just_completed }));
+    api.get("/dashboard").then(({ data }) => {
+      setStats(data.stats);
+      setProducts(data.products || []);
+      setSpecs(data.specs);
+      setHealth(data.health?.available ? data.health : null);
+      setBench(data.benchmark?.latest ? data.benchmark : null);
+      setDiscord(data.discord);
+      setNotifs(data.notifications || []);
+      setMissions(data.missions);
+      if (data.missions?.just_completed?.length) {
+        window.dispatchEvent(new CustomEvent("ff-mission-completed", { detail: data.missions.just_completed }));
       }
-    }).catch(() => setMissions(null));
+    }).catch(() => {
+      setStats({}); setProducts([]); setSpecs({}); setHealth(null);
+      setBench(null); setDiscord({ linked: false }); setNotifs([]); setMissions(null);
+    });
   }, []);
 
   const shareBench = async () => {

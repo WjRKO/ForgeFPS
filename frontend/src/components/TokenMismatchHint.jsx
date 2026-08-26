@@ -88,9 +88,9 @@ export default function TokenMismatchHint() {
         <div className="mt-4 pt-4 border-t border-[#FFAA00]/20 space-y-4" data-testid="token-mismatch-detail">
           {email && (
             <div className="flex items-center gap-2 text-xs">
-              <User size={13} className="text-[#00E0FF]" />
+              <User size={13} className="text-info" />
               <span className="text-zinc-500">{en ? "Currently logged in as:" : "Attualmente loggato come:"}</span>
-              <span className="font-mono text-[#00E0FF] font-semibold" data-testid="current-account-email">{email}</span>
+              <span className="font-mono text-info font-semibold" data-testid="current-account-email">{email}</span>
             </div>
           )}
 
@@ -106,16 +106,16 @@ export default function TokenMismatchHint() {
               </li>
               <li>
                 {en ? (
-                  <>Place it in the <strong>same folder</strong> where you extracted <code className="text-[#00E0FF] bg-black px-1">forgefps-agent</code> (the folder that contains <code className="text-[#00E0FF] bg-black px-1">forgefps-agent.exe</code>).</>
+                  <>Place it in the <strong>same folder</strong> where you extracted <code className="text-info bg-black px-1">forgefps-agent</code> (the folder that contains <code className="text-info bg-black px-1">forgefps-agent.exe</code>).</>
                 ) : (
-                  <>Mettilo nella <strong>stessa cartella</strong> dove hai estratto <code className="text-[#00E0FF] bg-black px-1">forgefps-agent</code> (quella che contiene <code className="text-[#00E0FF] bg-black px-1">forgefps-agent.exe</code>).</>
+                  <>Mettilo nella <strong>stessa cartella</strong> dove hai estratto <code className="text-info bg-black px-1">forgefps-agent</code> (quella che contiene <code className="text-info bg-black px-1">forgefps-agent.exe</code>).</>
                 )}
               </li>
               <li>
                 {en ? (
-                  <>Double-click <strong>forgefps-launcher.bat</strong>. The exe will start with the current account's token and overwrite the old one in <code className="text-[#00E0FF] bg-black px-1 text-[11px]">%APPDATA%\FrameForge\token.dat</code>.</>
+                  <>Double-click <strong>forgefps-launcher.bat</strong>. The exe will start with the current account's token and overwrite the old one in <code className="text-info bg-black px-1 text-[11px]">%APPDATA%\FrameForge\token.dat</code>.</>
                 ) : (
-                  <>Doppio click su <strong>forgefps-launcher.bat</strong>. L'exe si avvia con il token dell'account attuale e sovrascrive quello vecchio in <code className="text-[#00E0FF] bg-black px-1 text-[11px]">%APPDATA%\FrameForge\token.dat</code>.</>
+                  <>Doppio click su <strong>forgefps-launcher.bat</strong>. L'exe si avvia con il token dell'account attuale e sovrascrive quello vecchio in <code className="text-info bg-black px-1 text-[11px]">%APPDATA%\FrameForge\token.dat</code>.</>
                 )}
               </li>
               <li>

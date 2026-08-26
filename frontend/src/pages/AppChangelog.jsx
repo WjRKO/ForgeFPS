@@ -37,15 +37,15 @@ function ChangeItem({ change, en }) {
 
 function ReleaseCard({ release, isLatest, en }) {
   return (
-    <article className="border border-[#1A1A24] bg-[#0F0F12] p-6 relative" data-testid={`changelog-release-${release.version}`}>
+    <article className="border border-hud-soft bg-panel p-6 relative" data-testid={`changelog-release-${release.version}`}>
       {isLatest && (
-        <span className="absolute -top-2.5 right-4 bg-[#E5FF00] text-black text-[11px] font-mono uppercase tracking-widest px-2 py-0.5">
+        <span className="absolute -top-2.5 right-4 bg-volt text-black text-[11px] font-mono uppercase tracking-widest px-2 py-0.5">
           {en ? "LATEST" : "ULTIMA"}
         </span>
       )}
-      <header className="flex items-baseline flex-wrap gap-3 mb-4 pb-4 border-b border-[#1A1A24]">
+      <header className="flex items-baseline flex-wrap gap-3 mb-4 pb-4 border-b border-hud-soft">
         <div className="flex items-center gap-2">
-          <Package size={16} className="text-[#E5FF00]" />
+          <Package size={16} className="text-volt" />
           <h2 className="font-display font-black text-2xl tracking-tighter text-white">v{release.version}</h2>
         </div>
         <div className="flex items-center gap-1.5 text-xs text-zinc-500 font-mono">
@@ -55,11 +55,11 @@ function ReleaseCard({ release, isLatest, en }) {
 
       {release.highlights?.length > 0 && (
         <div className="mb-4">
-          <div className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] mb-2">// {en ? "highlights" : "in evidenza"}</div>
+          <div className="text-[11px] font-mono uppercase tracking-widest text-volt mb-2">// {en ? "highlights" : "in evidenza"}</div>
           <ul className="space-y-1">
             {release.highlights.map((h) => (
               <li key={h} className="text-sm text-zinc-200 flex items-start gap-2">
-                <span className="text-[#E5FF00] mt-1 shrink-0">▸</span> {h}
+                <span className="text-volt mt-1 shrink-0">▸</span> {h}
               </li>
             ))}
           </ul>
@@ -69,7 +69,7 @@ function ReleaseCard({ release, isLatest, en }) {
       {release.changes?.length > 0 && (
         <div>
           <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-1">// {en ? "all changes" : "tutte le modifiche"}</div>
-          <ul className="divide-y divide-[#1A1A24]">
+          <ul className="divide-y divide-hud-soft">
             {release.changes.map((c, i) => <ChangeItem key={`${release.version}-${i}`} change={c} en={en} />)}
           </ul>
         </div>
@@ -111,8 +111,8 @@ export default function AppChangelog() {
         {releases.map((rel, i) => <ReleaseCard key={rel.version} release={rel} isLatest={i === 0} en={en} />)}
       </div>
 
-      <div className="mt-8 pt-6 border-t border-[#1A1A24] text-xs text-zinc-500 flex items-center justify-between">
-        <Link to="/app" className="hover:text-[#E5FF00] inline-flex items-center gap-1.5" data-testid="app-changelog-back">
+      <div className="mt-8 pt-6 border-t border-hud-soft text-xs text-zinc-500 flex items-center justify-between">
+        <Link to="/app" className="hover:text-volt inline-flex items-center gap-1.5" data-testid="app-changelog-back">
           <ArrowLeft size={12} /> {en ? "Back to dashboard" : "Torna al dashboard"}
         </Link>
         <span className="font-mono">{releases.length} {en ? "releases" : "release"}</span>

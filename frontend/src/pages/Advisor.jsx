@@ -23,10 +23,10 @@ function CodeBlock({ children }) {
   return (
     <div className="relative my-2 group/code" data-testid="ai-code-block">
       <button onClick={copy} data-testid="ai-code-copy"
-        className="absolute top-2 right-2 flex items-center gap-1 border border-[#2A2A35] bg-[#0F0F12] px-2 py-1 text-[11px] text-zinc-400 hover:border-[#E5FF00] hover:text-white transition-colors">
-        {copied ? <Check size={12} className="text-[#00FF66]" /> : <Copy size={12} />} {copied ? i18n.t("advisor.copied") : i18n.t("advisor.copy_code")}
+        className="absolute top-2 right-2 flex items-center gap-1 border border-hud bg-panel px-2 py-1 text-[11px] text-zinc-400 hover:border-volt hover:text-white transition-colors">
+        {copied ? <Check size={12} className="text-ok" /> : <Copy size={12} />} {copied ? i18n.t("advisor.copied") : i18n.t("advisor.copy_code")}
       </button>
-      <pre className="bg-black border border-[#2A2A35] p-3 pr-16 overflow-x-auto text-xs text-[#00FF66] leading-relaxed">
+      <pre className="bg-black border border-hud p-3 pr-16 overflow-x-auto text-xs text-ok leading-relaxed">
         <code>{text}</code>
       </pre>
     </div>
@@ -40,7 +40,7 @@ const MD = {
     return <CodeBlock>{text}</CodeBlock>;
   },
   code({ children }) {
-    return <code className="bg-black/60 border border-[#2A2A35] px-1 py-0.5 text-[#00E0FF] text-[0.85em]">{children}</code>;
+    return <code className="bg-black/60 border border-hud px-1 py-0.5 text-info text-[0.85em]">{children}</code>;
   },
   h1: ({ children }) => <h3 className="font-display font-bold text-base mt-3 mb-1">{children}</h3>,
   h2: ({ children }) => <h3 className="font-display font-bold text-base mt-3 mb-1">{children}</h3>,
@@ -50,10 +50,10 @@ const MD = {
   li: ({ children }) => <li className="text-sm">{children}</li>,
   p: ({ children }) => <p className="my-1 text-sm leading-relaxed">{children}</p>,
   strong: ({ children }) => <strong className="text-white font-bold">{children}</strong>,
-  a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="text-[#E5FF00] hover:underline">{children}</a>,
-  table: ({ children }) => <div className="overflow-x-auto my-2"><table className="w-full text-xs border border-[#2A2A35]">{children}</table></div>,
-  th: ({ children }) => <th className="border border-[#2A2A35] px-2 py-1 text-left bg-[#141419]">{children}</th>,
-  td: ({ children }) => <td className="border border-[#2A2A35] px-2 py-1">{children}</td>,
+  a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="text-volt hover:underline">{children}</a>,
+  table: ({ children }) => <div className="overflow-x-auto my-2"><table className="w-full text-xs border border-hud">{children}</table></div>,
+  th: ({ children }) => <th className="border border-hud px-2 py-1 text-left bg-panel-hover">{children}</th>,
+  td: ({ children }) => <td className="border border-hud px-2 py-1">{children}</td>,
 };
 
 export default function Advisor() {
@@ -250,7 +250,7 @@ export default function Advisor() {
     <div className="max-w-6xl mx-auto fade-up">
       <PageHeader eyebrow={t("advisor.eyebrow")} title={t("advisor.subtitle")}
         actions={specs?.data?.cpu && (
-          <div data-testid="specs-badge" className="inline-flex items-center gap-2 text-xs text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-3 py-1.5">
+          <div data-testid="specs-badge" className="inline-flex items-center gap-2 text-xs text-ok border border-ok/40 bg-ok/10 px-3 py-1.5">
             <Cpu size={13} /> {t("advisor.personalized")}: {specs.data.cpu}{specs.data.gpu ? ` · ${specs.data.gpu}` : ""}
           </div>
         )} />
@@ -261,18 +261,18 @@ export default function Advisor() {
       {planInfo?.is_pro && <PlannedActionsCard />}
 
       <div className="grid lg:grid-cols-[240px_1fr] gap-4">
-        <div className="bg-[#0F0F12] border border-[#2A2A35] flex flex-col h-[70vh]">
+        <div className="bg-panel border border-hud flex flex-col h-[70vh]">
           <button data-testid="new-chat-btn" onClick={newChat}
-            className="m-3 flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold py-2 hover:bg-[#D4EC00] transition-colors btn-volt">
+            className="m-3 flex items-center justify-center gap-2 bg-volt text-black font-bold py-2 hover:bg-volt-dim transition-colors btn-volt">
             <Plus size={16} /> {t("common.new_chat")}
           </button>
           <div className="flex-1 overflow-auto px-2 pb-2">
             {sessions.map((s) => (
               <div key={s.id} onClick={() => openSession(s.id)} data-testid={`session-${s.id}`}
-                className={`group flex items-center gap-2 px-3 py-2 text-sm cursor-pointer transition-colors ${sessionId === s.id ? "bg-[#141419] text-white" : "text-zinc-400 hover:bg-[#141419]"}`}>
+                className={`group flex items-center gap-2 px-3 py-2 text-sm cursor-pointer transition-colors ${sessionId === s.id ? "bg-panel-hover text-white" : "text-zinc-400 hover:bg-panel-hover"}`}>
                 <MessageSquareCode size={14} className="shrink-0" />
                 <span className="flex-1 truncate">{s.title}</span>
-                <button onClick={(e) => deleteSession(s.id, e)} className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-[#FF3B30]">
+                <button onClick={(e) => deleteSession(s.id, e)} className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-bad">
                   <Trash2 size={13} />
                 </button>
               </div>
@@ -280,7 +280,7 @@ export default function Advisor() {
           </div>
         </div>
 
-        <div className="bg-[#0F0F12] border border-[#2A2A35] flex flex-col h-[70vh] relative overflow-hidden">
+        <div className="bg-panel border border-hud flex flex-col h-[70vh] relative overflow-hidden">
           <CoachSelector mode={mode} onChange={changeMode} />
           <div className="flex-1 overflow-auto p-6 space-y-4">
             {messages.length === 0 && (
@@ -310,7 +310,7 @@ export default function Advisor() {
               <div className="ml-9 flex flex-wrap gap-1.5" data-testid="followup-chips">
                 {followups.map((f, i) => (
                   <button key={f} onClick={() => send(f)} data-testid={`followup-${i}`}
-                    className="text-xs px-3 py-1.5 border border-[#00E0FF]/40 bg-[#00E0FF]/5 text-[#00E0FF] hover:bg-[#00E0FF]/15 transition-colors">
+                    className="text-xs px-3 py-1.5 border border-info/40 bg-info/5 text-info hover:bg-info/15 transition-colors">
                     {f}
                   </button>
                 ))}
@@ -344,7 +344,7 @@ function CreditsBar({ quota, t }) {
   if (!quota) return null;
   if (quota.mode === "unlimited") {
     return (
-      <div data-testid="ai-credits-bar" className="mb-4 flex items-center gap-2 border border-[#00E0FF]/40 bg-[#00E0FF]/5 px-3 py-2 text-xs text-[#00E0FF]">
+      <div data-testid="ai-credits-bar" className="mb-4 flex items-center gap-2 border border-info/40 bg-info/5 px-3 py-2 text-xs text-info">
         <InfinityIcon size={14} /> <span data-testid="ai-credits-count">{t("advisor.credits_unlimited")}</span>
       </div>
     );
@@ -352,8 +352,8 @@ function CreditsBar({ quota, t }) {
   if (quota.mode === "weekly") {
     const empty = quota.remaining <= 0;
     return (
-      <div data-testid="ai-credits-bar" className={`mb-4 flex flex-wrap items-center gap-2 border px-3 py-2 text-xs ${empty ? "border-[#FF3B30]/50 bg-[#FF3B30]/5 text-[#FF3B30]" : "border-[#2A2A35] bg-[#0F0F12] text-zinc-400"}`}>
-        <Zap size={14} className={empty ? "" : "text-[#E5FF00]"} />
+      <div data-testid="ai-credits-bar" className={`mb-4 flex flex-wrap items-center gap-2 border px-3 py-2 text-xs ${empty ? "border-bad/50 bg-bad/5 text-bad" : "border-hud bg-panel text-zinc-400"}`}>
+        <Zap size={14} className={empty ? "" : "text-volt"} />
         <span data-testid="ai-credits-count">
           {empty ? t("advisor.credits_weekly_empty") : t("advisor.credits_weekly", { used: quota.used, limit: quota.limit })}
         </span>
@@ -363,10 +363,10 @@ function CreditsBar({ quota, t }) {
   // mode === "credits" (starter)
   const empty = quota.total <= 0;
   return (
-    <div data-testid="ai-credits-bar" className={`mb-4 border px-3 py-2 ${empty ? "border-[#FF3B30]/50 bg-[#FF3B30]/5" : "border-[#2A2A35] bg-[#0F0F12]"}`}>
+    <div data-testid="ai-credits-bar" className={`mb-4 border px-3 py-2 ${empty ? "border-bad/50 bg-bad/5" : "border-hud bg-panel"}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
-        <Zap size={14} className={empty ? "text-[#FF3B30]" : "text-[#E5FF00]"} />
-        <span data-testid="ai-credits-count" className={empty ? "text-[#FF3B30] font-bold" : "text-white font-bold"}>
+        <Zap size={14} className={empty ? "text-bad" : "text-volt"} />
+        <span data-testid="ai-credits-count" className={empty ? "text-bad font-bold" : "text-white font-bold"}>
           {empty ? t("advisor.credits_empty_title") : t("advisor.credits_left", { count: quota.total })}
         </span>
         {!empty && (
@@ -378,11 +378,11 @@ function CreditsBar({ quota, t }) {
         )}
         <span className="flex-1" />
         <button data-testid="ai-credits-missions-link" onClick={() => navigate("/app/milestones")}
-          className="flex items-center gap-1 border border-[#E5FF00]/40 bg-[#E5FF00]/10 text-[#E5FF00] px-2 py-1 hover:bg-[#E5FF00]/20 transition-colors">
+          className="flex items-center gap-1 border border-volt/40 bg-volt/10 text-volt px-2 py-1 hover:bg-volt/20 transition-colors">
           <Swords size={12} /> {t("advisor.credits_go_missions")}
         </button>
         <button data-testid="ai-credits-upgrade-link" onClick={() => navigate("/pricing")}
-          className="border border-[#2A2A35] text-zinc-400 px-2 py-1 hover:border-[#00E0FF] hover:text-[#00E0FF] transition-colors">
+          className="border border-hud text-zinc-400 px-2 py-1 hover:border-info hover:text-info transition-colors">
           {t("advisor.credits_upgrade")}
         </button>
       </div>
@@ -403,15 +403,15 @@ const COACH_OPTIONS = [
 
 function CoachSelector({ mode, onChange }) {
   return (
-    <div className="border-b border-[#2A2A35] px-4 py-2 flex items-center gap-2 text-xs">
-      <Sparkles size={12} className="text-[#E5FF00] shrink-0" />
+    <div className="border-b border-hud px-4 py-2 flex items-center gap-2 text-xs">
+      <Sparkles size={12} className="text-volt shrink-0" />
       <span className="text-zinc-500 font-mono uppercase tracking-widest mr-1">Coach:</span>
       {COACH_OPTIONS.map((opt) => (
         <button
           key={opt.id}
           onClick={() => onChange(opt.id)}
           data-testid={`coach-mode-${opt.id}`}
-          className={`px-2 py-1 border transition-colors ${mode === opt.id ? "border-[#E5FF00] bg-[#E5FF00]/10 text-[#E5FF00]" : "border-[#2A2A35] text-zinc-500 hover:text-white"}`}
+          className={`px-2 py-1 border transition-colors ${mode === opt.id ? "border-volt bg-volt/10 text-volt" : "border-hud text-zinc-500 hover:text-white"}`}
         >
           {opt.label}
         </button>
@@ -423,14 +423,14 @@ function CoachSelector({ mode, onChange }) {
 function EmptyChatSuggestions({ title, subtitle, suggestions, onSelect }) {
   return (
     <div className="h-full flex flex-col items-center justify-center text-center">
-      <Terminal size={40} className="text-[#E5FF00] mb-4" />
+      <Terminal size={40} className="text-volt mb-4" />
       <h3 className="font-display font-semibold text-lg mb-2">{title}</h3>
       <p className="text-zinc-500 text-sm mb-6 max-w-sm">{subtitle}</p>
       <div className="grid sm:grid-cols-2 gap-2 w-full max-w-lg">
         {suggestions.map((s, i) => (
           <button key={s} data-testid={`suggestion-${i}`} onClick={() => onSelect(s)}
-            className="group flex items-start gap-2 text-left text-xs text-zinc-400 border border-[#2A2A35] p-3 hover:border-[#E5FF00] hover:text-white hover:-translate-y-0.5 transition-all">
-            <MessageSquareCode size={13} className="text-[#E5FF00] shrink-0 mt-0.5 icon-pop" /> {s}
+            className="group flex items-start gap-2 text-left text-xs text-zinc-400 border border-hud p-3 hover:border-volt hover:text-white hover:-translate-y-0.5 transition-all">
+            <MessageSquareCode size={13} className="text-volt shrink-0 mt-0.5 icon-pop" /> {s}
           </button>
         ))}
       </div>
@@ -441,9 +441,9 @@ function EmptyChatSuggestions({ title, subtitle, suggestions, onSelect }) {
 function TypingIndicator() {
   return (
     <span className="flex items-center gap-1 py-0.5">
-      <span className="w-1.5 h-1.5 bg-[#00E0FF] rounded-full typing-dot" />
-      <span className="w-1.5 h-1.5 bg-[#00E0FF] rounded-full typing-dot" style={{ animationDelay: "0.2s" }} />
-      <span className="w-1.5 h-1.5 bg-[#00E0FF] rounded-full typing-dot" style={{ animationDelay: "0.4s" }} />
+      <span className="w-1.5 h-1.5 bg-info rounded-full typing-dot" />
+      <span className="w-1.5 h-1.5 bg-info rounded-full typing-dot" style={{ animationDelay: "0.2s" }} />
+      <span className="w-1.5 h-1.5 bg-info rounded-full typing-dot" style={{ animationDelay: "0.4s" }} />
     </span>
   );
 }
@@ -456,10 +456,10 @@ function ChatBubble({ index, message, isLast, streaming, feedback, copied, onFee
     <div className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
       <div className={`flex items-end gap-2 ${m.role === "user" ? "flex-row-reverse" : ""} w-full`}>
         {m.role === "assistant" && (
-          <div data-testid="ai-avatar" className="w-7 h-7 bg-[#00E0FF]/15 border border-[#00E0FF]/40 flex items-center justify-center shrink-0 text-[#00E0FF]"><MessageSquareCode size={14} /></div>
+          <div data-testid="ai-avatar" className="w-7 h-7 bg-info/15 border border-info/40 flex items-center justify-center shrink-0 text-info"><MessageSquareCode size={14} /></div>
         )}
         <div className={`max-w-[80%] px-4 py-3 text-sm leading-relaxed ${
-          m.role === "user" ? "bg-[#E5FF00] text-black whitespace-pre-wrap" : "bg-black border border-[#2A2A35] text-zinc-200"}`}>
+          m.role === "user" ? "bg-volt text-black whitespace-pre-wrap" : "bg-black border border-hud text-zinc-200"}`}>
           {m.image && (
             <img src={m.image} alt="allegato" className="max-h-40 mb-2 border border-black/20" />
           )}
@@ -473,20 +473,20 @@ function ChatBubble({ index, message, isLast, streaming, feedback, copied, onFee
       {showActions && (
         <div className="ml-9 mt-1 flex items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
           <button onClick={() => onFeedback(index, m, "up")} data-testid={`msg-thumb-up-${index}`}
-            className={`p-1 border transition-colors ${feedback === "up" ? "border-[#00FF66] bg-[#00FF66]/10 text-[#00FF66]" : "border-transparent text-zinc-500 hover:text-[#00FF66]"}`} aria-label={i18n.language?.startsWith("en") ? "Helpful" : "Utile"}>
+            className={`p-1 border transition-colors ${feedback === "up" ? "border-ok bg-ok/10 text-ok" : "border-transparent text-zinc-500 hover:text-ok"}`} aria-label={i18n.language?.startsWith("en") ? "Helpful" : "Utile"}>
             <ThumbsUp size={11} />
           </button>
           <button onClick={() => onFeedback(index, m, "down")} data-testid={`msg-thumb-down-${index}`}
-            className={`p-1 border transition-colors ${feedback === "down" ? "border-[#FF3B30] bg-[#FF3B30]/10 text-[#FF3B30]" : "border-transparent text-zinc-500 hover:text-[#FF3B30]"}`} aria-label={i18n.language?.startsWith("en") ? "Not helpful" : "Non utile"}>
+            className={`p-1 border transition-colors ${feedback === "down" ? "border-bad bg-bad/10 text-bad" : "border-transparent text-zinc-500 hover:text-bad"}`} aria-label={i18n.language?.startsWith("en") ? "Not helpful" : "Non utile"}>
             <ThumbsDown size={11} />
           </button>
           <button onClick={() => onCopy(index, m.content)} data-testid={`msg-copy-${index}`}
-            className="p-1 border border-transparent text-zinc-500 hover:text-[#00E0FF]" aria-label={i18n.language?.startsWith("en") ? "Copy" : "Copia"}>
-            {copied ? <Check size={11} className="text-[#00FF66]" /> : <Copy size={11} />}
+            className="p-1 border border-transparent text-zinc-500 hover:text-info" aria-label={i18n.language?.startsWith("en") ? "Copy" : "Copia"}>
+            {copied ? <Check size={11} className="text-ok" /> : <Copy size={11} />}
           </button>
           {isLast && !streaming && (
             <button onClick={onRegenerate} data-testid="msg-regen"
-              className="p-1 border border-transparent text-zinc-500 hover:text-[#E5FF00]" aria-label="Rigenera">
+              className="p-1 border border-transparent text-zinc-500 hover:text-volt" aria-label="Rigenera">
               <RefreshCw size={11} />
             </button>
           )}
@@ -498,12 +498,12 @@ function ChatBubble({ index, message, isLast, streaming, feedback, copied, onFee
 
 function ChatInput({ input, setInput, imageDataUrl, setImageDataUrl, fileInputRef, onSend, onPickImage, streaming, disabled, placeholder }) {
   return (
-    <div className="border-t border-[#2A2A35] p-3 space-y-2">
+    <div className="border-t border-hud p-3 space-y-2">
       {imageDataUrl && (
-        <div className="flex items-center gap-2 bg-black/40 border border-[#00E0FF]/40 p-2" data-testid="image-preview">
-          <img src={imageDataUrl} alt="allegato" className="h-16 border border-[#2A2A35]" />
-          <span className="text-xs text-[#00E0FF] font-mono flex-1">{i18n.language?.startsWith("en") ? "Image attached (will be sent with the next message)" : "Immagine allegata (verrà inviata con il prossimo messaggio)"}</span>
-          <button onClick={() => setImageDataUrl("")} className="text-zinc-500 hover:text-[#FF3B30]" data-testid="image-remove">
+        <div className="flex items-center gap-2 bg-black/40 border border-info/40 p-2" data-testid="image-preview">
+          <img src={imageDataUrl} alt="allegato" className="h-16 border border-hud" />
+          <span className="text-xs text-info font-mono flex-1">{i18n.language?.startsWith("en") ? "Image attached (will be sent with the next message)" : "Immagine allegata (verrà inviata con il prossimo messaggio)"}</span>
+          <button onClick={() => setImageDataUrl("")} className="text-zinc-500 hover:text-bad" data-testid="image-remove">
             <XIcon size={16} />
           </button>
         </div>
@@ -511,12 +511,12 @@ function ChatInput({ input, setInput, imageDataUrl, setImageDataUrl, fileInputRe
       <div className="flex gap-2">
         <input type="file" accept="image/*" ref={fileInputRef} onChange={onPickImage} className="hidden" data-testid="image-file-input" />
         <button onClick={() => fileInputRef.current?.click()} data-testid="image-attach-btn"
-          className="border border-[#2A2A35] hover:border-[#00E0FF] text-zinc-500 hover:text-[#00E0FF] px-3 transition-colors" title="Allega screenshot (max 4MB)">
+          className="border border-hud hover:border-info text-zinc-500 hover:text-info px-3 transition-colors" title="Allega screenshot (max 4MB)">
           <ImageIcon size={16} />
         </button>
         <input data-testid="chat-input" value={input} onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && onSend()} placeholder={placeholder} disabled={disabled}
-          className="flex-1 bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 text-sm transition-colors disabled:opacity-50" />
+          className="flex-1 bg-black border border-hud focus:border-volt outline-none px-3 py-2 text-sm transition-colors disabled:opacity-50" />
         <PrimaryButton testid="chat-send-btn" onClick={() => onSend()} disabled={streaming || disabled} className="!px-4">
           {streaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
         </PrimaryButton>

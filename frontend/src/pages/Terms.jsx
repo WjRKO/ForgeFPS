@@ -96,10 +96,10 @@ export default function Terms() {
   const c = CONTENT[lang];
   usePageMeta(`${c.title} · FrameForge`, c.intro);
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
+    <div className="min-h-screen bg-ink text-white">
       <MarketingNav />
       <main className="max-w-3xl mx-auto px-6 pt-32 pb-20">
-        <div className="inline-flex items-center gap-2 mb-4 text-[#E5FF00] text-xs font-mono uppercase tracking-widest">
+        <div className="inline-flex items-center gap-2 mb-4 text-volt text-xs font-mono uppercase tracking-widest">
           <Scale size={14} /> {lang === "en" ? "// Legal" : "// Legale"}
         </div>
         <h1 className="font-display font-black tracking-tighter text-4xl sm:text-5xl mb-3" data-testid="terms-title">
@@ -109,7 +109,7 @@ export default function Terms() {
         <p className="text-zinc-300 text-base leading-relaxed mb-10">{c.intro}</p>
         <div className="space-y-8">
           {c.sections.map((s) => (
-            <section key={s.h} className="border-l-2 border-[#1A1A24] pl-5">
+            <section key={s.h} className="border-l-2 border-hud-soft pl-5">
               <h2 className="font-display font-black tracking-tight text-lg mb-2 text-white">{s.h}</h2>
               <p className="text-zinc-400 text-sm leading-relaxed">{s.p}</p>
             </section>

@@ -231,7 +231,7 @@ function CopyBtn({ text, lang }) {
   };
   return (
     <button onClick={doCopy} data-testid="guide-copy-btn"
-      className={`ml-2 inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest px-2 py-1 border transition-colors ${ok ? "border-[#00FF66] text-[#00FF66]" : "border-[#2A2A35] text-zinc-400 hover:border-[#E5FF00] hover:text-[#E5FF00]"}`}>
+      className={`ml-2 inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest px-2 py-1 border transition-colors ${ok ? "border-ok text-ok" : "border-hud text-zinc-400 hover:border-volt hover:text-volt"}`}>
       {ok ? <Check size={12} /> : <Copy size={12} />} {ok ? c.copied : c.copy}
     </button>
   );
@@ -251,7 +251,7 @@ function GuideCard({ g, lang, idx }) {
           <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-0.5">GUIDA {String(idx + 1).padStart(2, "0")}</div>
           <h2 className="font-display font-black text-2xl sm:text-3xl tracking-tight text-white">{g_t.title}</h2>
         </div>
-        <div className="hidden sm:inline-flex items-center gap-1.5 border border-[#2A2A35] px-2.5 py-1 text-[11px] font-mono text-zinc-400">
+        <div className="hidden sm:inline-flex items-center gap-1.5 border border-hud px-2.5 py-1 text-[11px] font-mono text-zinc-400">
           <Clock size={11} /> {g.minutes} {c.time}
         </div>
       </div>
@@ -260,16 +260,16 @@ function GuideCard({ g, lang, idx }) {
       <ol className="space-y-4 mb-6">
         {g_t.steps.map((s, i) => (
           <li key={i} className="flex gap-4">
-            <div className="shrink-0 w-8 h-8 border border-[#2A2A35] flex items-center justify-center font-mono text-sm text-[#E5FF00]">{i + 1}</div>
+            <div className="shrink-0 w-8 h-8 border border-hud flex items-center justify-center font-mono text-sm text-volt">{i + 1}</div>
             <div className="flex-1 min-w-0 pt-1">
               <div className="flex items-center gap-2 mb-1.5">
-                <span className={`inline-flex items-center gap-1 text-[11px] font-mono uppercase tracking-widest px-1.5 py-0.5 ${s.where === "web" ? "text-[#00E0FF] border border-[#00E0FF]/40" : "text-[#E5FF00] border border-[#E5FF00]/40"}`}>
+                <span className={`inline-flex items-center gap-1 text-[11px] font-mono uppercase tracking-widest px-1.5 py-0.5 ${s.where === "web" ? "text-info border border-info/40" : "text-volt border border-volt/40"}`}>
                   {s.where === "web" ? <Globe size={9} /> : <Monitor size={9} />} {s.where === "web" ? c.web : c.desktop}
                 </span>
               </div>
               <div className="text-sm text-zinc-200 leading-relaxed">{s.text}</div>
               {s.cmd && (
-                <div className="mt-2 bg-black border border-[#1A1A24] p-3 font-mono text-xs text-[#00FF66] flex items-start gap-2">
+                <div className="mt-2 bg-black border border-hud-soft p-3 font-mono text-xs text-ok flex items-start gap-2">
                   <code className="flex-1 whitespace-pre-wrap break-all">{s.cmd}</code>
                   <CopyBtn text={s.cmd} lang={lang} />
                 </div>
@@ -280,8 +280,8 @@ function GuideCard({ g, lang, idx }) {
       </ol>
 
       {g_t.tips && g_t.tips.length > 0 && (
-        <div className="border-l-2 border-[#E5FF00] pl-4 py-2 bg-[#0F0F12]">
-          <div className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] mb-1.5">Tips</div>
+        <div className="border-l-2 border-volt pl-4 py-2 bg-panel">
+          <div className="text-[11px] font-mono uppercase tracking-widest text-volt mb-1.5">Tips</div>
           <ul className="space-y-1.5 text-sm text-zinc-300">
             {g_t.tips.map((tip, i) => (
               <li key={i} className="flex gap-2 leading-relaxed"><span className="text-zinc-600">—</span>{tip}</li>
@@ -298,28 +298,28 @@ export default function Guide() {
   const c = COPY[lang];
   usePageMeta(c.meta_t, c.meta_d);
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100">
+    <div className="min-h-screen bg-ink text-zinc-100">
       <MarketingNav />
       <main className="max-w-3xl mx-auto px-6 pt-28 pb-20">
-        <div className="text-xs font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-3">{c.eyebrow}</div>
+        <div className="text-xs font-mono tracking-[0.2em] uppercase text-volt mb-3">{c.eyebrow}</div>
         <h1 className="font-display font-black text-4xl sm:text-5xl tracking-tighter mb-4">{c.title}</h1>
         <p className="text-zinc-400 text-base sm:text-lg max-w-xl leading-relaxed mb-10">{c.sub}</p>
 
         {/* TOC */}
-        <nav className="mb-14 border-t border-[#1A1A24]" aria-label="Table of contents">
+        <nav className="mb-14 border-t border-hud-soft" aria-label="Table of contents">
           {GUIDES.map((g, i) => {
             const Icon = g.icon;
             return (
               <a key={g.id} href={`#${g.id}`} data-testid={`toc-${g.id}`}
-                className="group flex items-center gap-4 border-b border-[#1A1A24] py-4 hover:bg-[#0A0A0C] transition-colors">
+                className="group flex items-center gap-4 border-b border-hud-soft py-4 hover:bg-panel-deep transition-colors">
                 <div className="w-8 h-8 flex items-center justify-center shrink-0" style={{ backgroundColor: g.tint, color: "#000" }}>
                   <Icon size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">GUIDA {String(i + 1).padStart(2, "0")} · {g.minutes} {c.time}</div>
-                  <div className="text-base font-bold text-zinc-100 group-hover:text-[#E5FF00] transition-colors">{g[lang].title}</div>
+                  <div className="text-base font-bold text-zinc-100 group-hover:text-volt transition-colors">{g[lang].title}</div>
                 </div>
-                <ChevronRight size={18} className="text-zinc-600 group-hover:text-[#E5FF00] shrink-0 transition-colors" />
+                <ChevronRight size={18} className="text-zinc-600 group-hover:text-volt shrink-0 transition-colors" />
               </a>
             );
           })}
@@ -330,19 +330,19 @@ export default function Guide() {
         ))}
 
         {/* CTA */}
-        <div className="mt-16 border border-[#2A2A35] p-8 bg-gradient-to-br from-[#0F0F12] to-[#050505]" data-testid="guide-cta">
+        <div className="mt-16 border border-hud p-8 bg-gradient-to-br from-panel to-ink" data-testid="guide-cta">
           <div className="flex items-start gap-4">
-            <PlayCircle size={28} className="text-[#E5FF00] shrink-0 mt-1" />
+            <PlayCircle size={28} className="text-volt shrink-0 mt-1" />
             <div className="flex-1">
               <h3 className="font-display font-black text-2xl tracking-tight mb-2">{c.cta_h}</h3>
               <p className="text-zinc-400 mb-5 max-w-xl">{c.cta_sub}</p>
               <div className="flex flex-wrap gap-3">
                 <Link to="/login" data-testid="guide-cta-app"
-                  className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-5 py-2.5 text-sm hover:bg-[#D4EC00] transition-colors btn-volt">
+                  className="inline-flex items-center gap-2 bg-volt text-black font-bold px-5 py-2.5 text-sm hover:bg-volt-dim transition-colors btn-volt">
                   <BookOpen size={15} /> {c.cta_btn}
                 </Link>
                 <Link to="/#download" data-testid="guide-cta-agent"
-                  className="inline-flex items-center gap-2 border border-[#2A2A35] px-5 py-2.5 text-sm hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors">
+                  className="inline-flex items-center gap-2 border border-hud px-5 py-2.5 text-sm hover:border-volt hover:text-volt transition-colors">
                   <Monitor size={15} /> {c.cta_agent}
                 </Link>
               </div>

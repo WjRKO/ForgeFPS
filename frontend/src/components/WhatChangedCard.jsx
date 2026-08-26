@@ -3,13 +3,14 @@ import { useTranslation } from "react-i18next";
 import { History, TrendingDown, TrendingUp, Minus, AlertTriangle, ShieldCheck, ShieldAlert, Hourglass } from "lucide-react";
 import api from "@/lib/api";
 import { changeLabel } from "@/lib/changeLabels";
+import { HUDCard } from "@/components/hud";
 
 
 
 const IMPACT_STYLE = {
-  high: "border-[#FF3B30]/50 text-[#FF3B30]",
-  medium: "border-[#E5FF00]/40 text-[#E5FF00]",
-  low: "border-[#2A2A35] text-zinc-500",
+  high: "border-bad/50 text-bad",
+  medium: "border-volt/40 text-volt",
+  low: "border-hud text-zinc-500",
 };
 
 const fmtDate = (iso) => {
@@ -43,10 +44,10 @@ function ChangeRow({ change, lang, c }) {
 }
 
 const WD_STYLE = {
-  regressed: { icon: ShieldAlert, box: "border-[#FF3B30]/50 bg-[#FF3B30]/5", tone: "text-[#FF3B30]" },
-  improved: { icon: ShieldCheck, box: "border-[#00E0FF]/40 bg-[#00E0FF]/5", tone: "text-[#00E0FF]" },
-  held: { icon: ShieldCheck, box: "border-[#E5FF00]/30 bg-[#E5FF00]/5", tone: "text-[#E5FF00]" },
-  pending: { icon: Hourglass, box: "border-[#2A2A35]", tone: "text-zinc-400" },
+  regressed: { icon: ShieldAlert, box: "border-bad/50 bg-bad/5", tone: "text-bad" },
+  improved: { icon: ShieldCheck, box: "border-info/40 bg-info/5", tone: "text-info" },
+  held: { icon: ShieldCheck, box: "border-volt/30 bg-volt/5", tone: "text-volt" },
+  pending: { icon: Hourglass, box: "border-hud", tone: "text-zinc-400" },
 };
 
 function WatchdogBanner({ wd, c }) {
@@ -105,7 +106,7 @@ export default function WhatChangedCard() {
 
   const dir = trend?.direction;
   const Icon = dir === "down" ? TrendingDown : dir === "up" ? TrendingUp : Minus;
-  const tone = dir === "down" ? "text-[#FF3B30]" : dir === "up" ? "text-[#00E0FF]" : "text-zinc-400";
+  const tone = dir === "down" ? "text-bad" : dir === "up" ? "text-info" : "text-zinc-400";
   const headline = dir === "down"
     ? c.down.replace("{pct}", Math.abs(trend.delta_pct))
     : dir === "up"
@@ -114,9 +115,9 @@ export default function WhatChangedCard() {
   const metricLabel = state.metric === "benchmark" ? c.metricBench : c.metricHealth;
 
   return (
-    <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick p-6 mb-4" data-testid="what-changed-card">
+    <HUDCard testid="what-changed-card" pad="p-6" className="hud-tick mb-4">
       <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-1 flex items-center gap-2">
-        <History size={14} className="text-[#E5FF00]" /> {c.title}
+        <History size={14} className="text-volt" /> {c.title}
       </div>
       <p className="text-xs text-zinc-600 mb-4">{c.sub}</p>
 
@@ -139,7 +140,7 @@ export default function WhatChangedCard() {
       {dir === "down" && suspects.length > 0 && (
         <div className="mb-5" data-testid="what-changed-suspects">
           <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1.5">
-            <AlertTriangle size={12} className="text-[#FF3B30]" /> {c.suspects}
+            <AlertTriangle size={12} className="text-bad" /> {c.suspects}
           </div>
           <ul className="space-y-1.5">
             {suspects.map((s, i) => <ChangeRow key={`s-${i}`} change={s} lang={lang} c={c} />)}
@@ -163,13 +164,13 @@ export default function WhatChangedCard() {
             <button
               onClick={toggleAll}
               data-testid="what-changed-toggle-all"
-              className="mt-3 text-[11px] uppercase tracking-wider text-zinc-500 hover:text-[#E5FF00] transition-colors"
+              className="mt-3 text-[11px] uppercase tracking-wider text-zinc-500 hover:text-volt transition-colors"
             >
               {showAll ? c.showLess : c.showAll}
             </button>
           )}
         </div>
       )}
-    </div>
+    </HUDCard>
   );
 }

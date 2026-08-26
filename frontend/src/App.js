@@ -42,8 +42,8 @@ const Report = lazy(() => import("@/pages/Report"));
 const Lab = lazy(() => import("@/pages/Lab"));
 
 const Fallback = () => (
-  <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-    <Loader2 className="animate-spin text-[#E5FF00]" size={32} />
+  <div className="min-h-screen bg-ink flex items-center justify-center">
+    <Loader2 className="animate-spin text-volt" size={32} />
   </div>
 );
 
@@ -56,7 +56,7 @@ function Protected({ children }) {
 
 function Guest({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen bg-[#050505]" />;
+  if (loading) return <div className="min-h-screen bg-ink" />;
   if (user) return <Navigate to="/app" replace />;
   return children;
 }
@@ -101,14 +101,16 @@ function App() {
                 <Route path="upgrade" element={<Upgrade />} />
                 <Route path="tracker" element={<Tracker />} />
                 <Route path="tracker/:id" element={<ProductDetail />} />
-                <Route path="pc" element={<MyPcHub initialTab="overview" />} />
-                <Route path="live" element={<MyPcHub initialTab="live" />} />
-                <Route path="benchmark" element={<MyPcHub initialTab="benchmark" />} />
+                <Route path="pc" element={<MyPcHub />} />
+                <Route path="gaming" element={<Gaming />} />
                 <Route path="network" element={<Network />} />
-                <Route path="gaming" element={<Gaming initialTab="games" />} />
                 <Route path="milestones" element={<Milestones />} />
-                <Route path="profiles" element={<Gaming initialTab="profiles" />} />
-                <Route path="games" element={<Gaming initialTab="games" />} />
+                {/* I vecchi path restano validi ma portano alla forma canonica:
+                    la tab e' un search param, non una rotta a se'. */}
+                <Route path="live" element={<Navigate to="/app/pc?tab=live" replace />} />
+                <Route path="benchmark" element={<Navigate to="/app/pc?tab=benchmark" replace />} />
+                <Route path="profiles" element={<Navigate to="/app/gaming?tab=profiles" replace />} />
+                <Route path="games" element={<Navigate to="/app/gaming?tab=games" replace />} />
                 <Route path="bios" element={<BiosRestore />} />
                 <Route path="report" element={<Report />} />
                 <Route path="lab" element={<Lab />} />

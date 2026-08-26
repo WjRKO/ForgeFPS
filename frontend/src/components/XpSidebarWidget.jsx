@@ -13,7 +13,7 @@ const TIER_COLORS = {
   bronze:   { text: "text-[#C99A5A]", bar: "bg-[#C99A5A]",   ring: "border-[#C99A5A]/40" },
   silver:   { text: "text-[#B0B7C3]", bar: "bg-[#B0B7C3]",   ring: "border-[#B0B7C3]/40" },
   gold:     { text: "text-[#FFB800]", bar: "bg-[#FFB800]",   ring: "border-[#FFB800]/40" },
-  platinum: { text: "text-[#00E0FF]", bar: "bg-[#00E0FF]",   ring: "border-[#00E0FF]/40" },
+  platinum: { text: "text-info", bar: "bg-info",   ring: "border-info/40" },
 };
 
 const TIER_MIN = { bronze: 0, silver: 100, gold: 300, platinum: 800 };
@@ -67,7 +67,7 @@ export function XpSidebarWidget() {
     <NavLink
       to="/app/milestones"
       data-testid="xp-widget"
-      className="block border-t border-[#2A2A35] p-3 hover:bg-[#141419] transition-colors group"
+      className="block border-t border-hud p-3 hover:bg-panel-hover transition-colors group"
     >
       <div className="flex items-center gap-2 mb-1.5">
         <div className={`w-7 h-7 flex items-center justify-center border ${col.ring} ${col.text}`}>
@@ -83,7 +83,7 @@ export function XpSidebarWidget() {
         </div>
         <ChevronRight size={13} className="text-zinc-600 group-hover:text-white transition-colors" />
       </div>
-      <div className="h-1 bg-[#141419] overflow-hidden">
+      <div className="h-1 bg-panel-hover overflow-hidden">
         <div
           className={`h-full ${col.bar} transition-all duration-500`}
           style={{ width: `${pct}%` }}

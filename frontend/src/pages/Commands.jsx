@@ -5,7 +5,7 @@ import i18n from "@/i18n";
 import { Terminal, Copy, Check, ShieldAlert, MessageSquareCode, Trash2, Wrench, Wifi, Zap, Package, Search, MonitorPlay, Rocket, Power, HeartPulse, AlertTriangle, Undo2, Download, CalendarClock, Sparkles, Cpu, Filter, X } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
-import { PageHeader } from "@/components/hud";
+import { HUDCard, PageHeader } from "@/components/hud";
 
 const isEn = () => i18n.language?.startsWith("en");
 
@@ -108,8 +108,8 @@ function CopyBtn({ text, testid }) {
   };
   return (
     <button onClick={copy} data-testid={testid} aria-label={i18n.t("a11y.copy")}
-      className="shrink-0 flex items-center justify-center border border-[#2A2A35] px-3 hover:border-[#E5FF00] transition-colors">
-      {copied ? <Check size={14} className="text-[#00FF66]" /> : <Copy size={14} />}
+      className="shrink-0 flex items-center justify-center border border-hud px-3 hover:border-volt transition-colors">
+      {copied ? <Check size={14} className="text-ok" /> : <Copy size={14} />}
     </button>
   );
 }
@@ -173,42 +173,42 @@ function MaintenanceCard() {
   };
 
   return (
-    <div className="bg-gradient-to-br from-[#E5FF00]/10 to-transparent border border-[#E5FF00]/40 p-5 mb-5" data-testid="maintenance-card">
-      <div className="flex items-center gap-2 text-sm font-bold mb-1 text-[#E5FF00]"><Sparkles size={16} /> {t("commands.maint_title")}</div>
+    <div className="bg-gradient-to-br from-volt/10 to-transparent border border-volt/40 p-5 mb-5" data-testid="maintenance-card">
+      <div className="flex items-center gap-2 text-sm font-bold mb-1 text-volt"><Sparkles size={16} /> {t("commands.maint_title")}</div>
       <p className="text-xs text-zinc-400 mb-3 leading-relaxed">{t("commands.maint_desc")}</p>
 
       <div className="grid sm:grid-cols-2 gap-2 mb-4">
         {MAINT.map((m) => (
-          <div key={m.label} className="flex items-center gap-2 text-xs text-zinc-400"><Check size={12} className="text-[#00FF66] shrink-0" /> {isEn() ? m.label_en : m.label}</div>
+          <div key={m.label} className="flex items-center gap-2 text-xs text-zinc-400"><Check size={12} className="text-ok shrink-0" /> {isEn() ? m.label_en : m.label}</div>
         ))}
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
         <button onClick={download} data-testid="maint-download"
-          className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2 text-sm hover:bg-[#D4EC00] transition-colors btn-volt">
+          className="inline-flex items-center gap-2 bg-volt text-black font-bold px-4 py-2 text-sm hover:bg-volt-dim transition-colors btn-volt">
           <Download size={15} /> {t("commands.download_script")}
         </button>
         <CopyBtn text={oneLine} testid="maint-oneline-copy" />
         <span className="inline-flex items-center text-xs text-zinc-500">{t("commands.copy_run_hint")}</span>
       </div>
 
-      <div className="border-t border-[#2A2A35] pt-4">
-        <div className="flex items-center gap-2 text-xs font-bold text-zinc-200 mb-2"><CalendarClock size={14} className="text-[#00E0FF]" /> {t("commands.schedule_title")}</div>
+      <div className="border-t border-hud pt-4">
+        <div className="flex items-center gap-2 text-xs font-bold text-zinc-200 mb-2"><CalendarClock size={14} className="text-info" /> {t("commands.schedule_title")}</div>
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <span className="text-xs text-zinc-500">{t("commands.every")}</span>
           <select value={day} onChange={(e) => setDay(e.target.value)} data-testid="maint-day"
-            className="bg-black border border-[#2A2A35] text-xs text-zinc-200 px-2 py-1.5 focus:border-[#E5FF00] outline-none">
+            className="bg-black border border-hud text-xs text-zinc-200 px-2 py-1.5 focus:border-volt outline-none">
             {DAYS.map((d) => <option key={d} value={d}>{t(`commands.days.${d}`)}</option>)}
           </select>
           <span className="text-xs text-zinc-500">{t("commands.at")}</span>
           <select value={time} onChange={(e) => setTime(e.target.value)} data-testid="maint-time"
-            className="bg-black border border-[#2A2A35] text-xs text-zinc-200 px-2 py-1.5 focus:border-[#E5FF00] outline-none">
+            className="bg-black border border-hud text-xs text-zinc-200 px-2 py-1.5 focus:border-volt outline-none">
             {TIMES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
         <div className="text-xs text-zinc-500 mb-1">{t("commands.schedule_hint")}</div>
         <div className="flex items-stretch gap-2">
-          <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-[11px] text-[#00FF66] overflow-x-auto whitespace-nowrap" data-testid="maint-schedule-cmd">{scheduleCmd}</code>
+          <code className="flex-1 bg-black border border-hud px-3 py-2.5 text-[11px] text-ok overflow-x-auto whitespace-nowrap" data-testid="maint-schedule-cmd">{scheduleCmd}</code>
           <CopyBtn text={scheduleCmd} testid="maint-schedule-copy" />
         </div>
         <p className="text-[11px] text-zinc-600 mt-2">{t("commands.remove_schedule")} <span className="text-zinc-400">Unregister-ScheduledTask -TaskName 'FrameForge-Manutenzione' -Confirm:$false</span></p>
@@ -220,15 +220,15 @@ function MaintenanceCard() {
 function CmdRow({ item, onAsk }) {
   const { t } = useTranslation();
   return (
-    <div className="p-4 border-b border-[#1A1A24] last:border-0" data-testid={`cmd-${item.cmd.slice(0, 24)}`}>
+    <div className="p-4 border-b border-hud-soft last:border-0" data-testid={`cmd-${item.cmd.slice(0, 24)}`}>
       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
         {item.admin && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-[#FF3B30] border border-[#FF3B30]/40 bg-[#FF3B30]/10 px-1.5 py-0.5" data-testid="admin-badge">
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-bad border border-bad/40 bg-bad/10 px-1.5 py-0.5" data-testid="admin-badge">
             <ShieldAlert size={11} /> {t("commands.requires_admin")}
           </span>
         )}
         {item.warn && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-[#E5FF00] border border-[#E5FF00]/40 bg-[#E5FF00]/10 px-1.5 py-0.5" data-testid="warn-badge">
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-volt border border-volt/40 bg-volt/10 px-1.5 py-0.5" data-testid="warn-badge">
             <AlertTriangle size={11} /> {t("commands.advanced")}
           </span>
         )}
@@ -236,16 +236,16 @@ function CmdRow({ item, onAsk }) {
       </div>
 
       {item.warn && (
-        <div className="text-[11px] text-[#E5FF00]/80 leading-relaxed mb-2">
+        <div className="text-[11px] text-volt/80 leading-relaxed mb-2">
           {t("commands.advanced_warn")}
         </div>
       )}
 
       <div className="flex items-stretch gap-2">
-        <code className="flex-1 bg-black border border-[#2A2A35] px-3 py-2.5 text-xs text-[#00FF66] overflow-x-auto whitespace-nowrap">{item.cmd}</code>
+        <code className="flex-1 bg-black border border-hud px-3 py-2.5 text-xs text-ok overflow-x-auto whitespace-nowrap">{item.cmd}</code>
         <CopyBtn text={item.cmd} testid="cmd-copy" />
         <button onClick={() => onAsk(item)} data-testid="cmd-ask-ai"
-          className="shrink-0 inline-flex items-center gap-1 border border-[#2A2A35] px-2.5 text-[11px] text-zinc-400 hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors whitespace-nowrap">
+          className="shrink-0 inline-flex items-center gap-1 border border-hud px-2.5 text-[11px] text-zinc-400 hover:border-volt hover:text-volt transition-colors whitespace-nowrap">
           <MessageSquareCode size={12} /> {t("commands.ask_ai")}
         </button>
       </div>
@@ -253,7 +253,7 @@ function CmdRow({ item, onAsk }) {
       {item.undo && (
         <div className="flex items-stretch gap-2 mt-2">
           <div className="shrink-0 flex items-center gap-1 text-[11px] text-zinc-500 px-1"><Undo2 size={12} /> {t("commands.undo")}</div>
-          <code className="flex-1 bg-black/60 border border-[#2A2A35] px-3 py-2 text-[11px] text-zinc-400 overflow-x-auto whitespace-nowrap">{item.undo}</code>
+          <code className="flex-1 bg-black/60 border border-hud px-3 py-2 text-[11px] text-zinc-400 overflow-x-auto whitespace-nowrap">{item.undo}</code>
           <CopyBtn text={item.undo} testid="cmd-undo-copy" />
         </div>
       )}
@@ -329,24 +329,24 @@ export default function Commands() {
       <div className="grid lg:grid-cols-[1fr_320px] gap-6 items-start mt-6">
         {/* LEFT: content */}
         <div className="min-w-0 space-y-4">
-          <div className="bg-black border border-[#2A2A35] p-4 flex gap-3 items-start">
-            <Terminal size={16} className="text-[#00E0FF] shrink-0 mt-0.5" />
+          <div className="bg-black border border-hud p-4 flex gap-3 items-start">
+            <Terminal size={16} className="text-info shrink-0 mt-0.5" />
             <p className="text-xs text-zinc-400 leading-relaxed">{t("commands.admin_hint")}</p>
           </div>
 
           <MaintenanceCard />
 
           {cats.length === 0 ? (
-            <div className="bg-[#0F0F12] border border-[#2A2A35] p-10 text-center" data-testid="commands-empty">
+            <div className="bg-panel border border-hud p-10 text-center" data-testid="commands-empty">
               <Search size={28} className="text-zinc-600 mx-auto mb-3" />
               <div className="text-sm text-zinc-400 mb-3">{t("commands.no_results")}</div>
               <button onClick={clearFilters} data-testid="commands-clear-filters"
-                className="text-xs text-[#E5FF00] hover:underline">{t("commands.clear_filters")}</button>
+                className="text-xs text-volt hover:underline">{t("commands.clear_filters")}</button>
             </div>
           ) : (
             cats.map((cat) => (
-              <div key={cat.id} id={`cmd-cat-${cat.id}`} className="bg-[#0F0F12] border border-[#2A2A35] panel-hover scroll-mt-24" data-testid={`cmd-cat-${cat.id}`}>
-                <div className="flex items-center justify-between px-5 py-3 border-b border-[#2A2A35]">
+              <div key={cat.id} id={`cmd-cat-${cat.id}`} className="bg-panel border border-hud panel-hover scroll-mt-24" data-testid={`cmd-cat-${cat.id}`}>
+                <div className="flex items-center justify-between px-5 py-3 border-b border-hud">
                   <span className="flex items-center gap-2">
                     <cat.icon size={16} style={{ color: cat.color }} className="icon-pop" />
                     <span className="text-sm font-bold text-zinc-100">{cat.id === "gpu" ? `${t("commands.cat.gpu")} (${GPU_CMD[gpuBrand]?.label})` : t(`commands.cat.${cat.id}`)}</span>
@@ -362,27 +362,27 @@ export default function Commands() {
         {/* RIGHT: sticky search + filters panel */}
         <aside className="lg:sticky lg:top-6 lg:self-start space-y-4" data-testid="commands-panel">
           {/* Search */}
-          <div className="bg-[#0F0F12] border border-[#2A2A35] p-4">
-            <div className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] mb-2 flex items-center gap-1.5">
+          <div className="bg-panel border border-hud p-4">
+            <div className="text-[11px] font-mono uppercase tracking-widest text-volt mb-2 flex items-center gap-1.5">
               <Search size={11} /> {t("commands.search_label")}
             </div>
             <div className="relative">
               <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}
                 placeholder={t("commands.search_placeholder")} data-testid="commands-search-input"
-                className="w-full bg-black border border-[#2A2A35] px-3 py-2.5 pr-8 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-[#E5FF00] font-mono" />
+                className="w-full bg-black border border-hud px-3 py-2.5 pr-8 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-volt font-mono" />
               {query && (
-                <button onClick={() => setQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-[#E5FF00]" data-testid="commands-search-clear">
+                <button onClick={() => setQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-volt" data-testid="commands-search-clear">
                   <X size={12} />
                 </button>
               )}
             </div>
             <div className="mt-2 text-[11px] font-mono text-zinc-500">
-              <span className="text-[#E5FF00]">{totalVisible}</span> / {totalAll} {t("commands.commands_visible")}
+              <span className="text-volt">{totalVisible}</span> / {totalAll} {t("commands.commands_visible")}
             </div>
           </div>
 
           {/* Filters */}
-          <div className="bg-[#0F0F12] border border-[#2A2A35] p-4">
+          <HUDCard pad="p-4">
             <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5">
               <Filter size={11} /> {t("commands.filters_label")}
             </div>
@@ -393,28 +393,28 @@ export default function Commands() {
             </div>
             {hasFilter && (
               <button onClick={clearFilters} data-testid="commands-clear-all"
-                className="mt-3 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-[#E5FF00] transition-colors">
+                className="mt-3 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-volt transition-colors">
                 {t("commands.clear_filters")} →
               </button>
             )}
-          </div>
+          </HUDCard>
 
           {/* Hardware detected */}
           {(data.cpu || data.gpu || data.ram) && (
-            <div className="bg-[#0F0F12] border border-[#2A2A35] p-4" data-testid="commands-hw">
+            <HUDCard testid="commands-hw" pad="p-4">
               <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5">
                 <Cpu size={11} /> {t("commands.hw_label")}
               </div>
               <div className="space-y-1 text-[11px] text-zinc-400">
-                {data.cpu && <div className="truncate" title={data.cpu}><span className="text-[#E5FF00]">CPU</span> {data.cpu}</div>}
-                {data.gpu && <div className="truncate" title={data.gpu}><span className="text-[#00FF66]">GPU</span> {data.gpu}</div>}
-                {data.ram && <div><span className="text-[#00E0FF]">RAM</span> {data.ram}</div>}
+                {data.cpu && <div className="truncate" title={data.cpu}><span className="text-volt">CPU</span> {data.cpu}</div>}
+                {data.gpu && <div className="truncate" title={data.gpu}><span className="text-ok">GPU</span> {data.gpu}</div>}
+                {data.ram && <div><span className="text-info">RAM</span> {data.ram}</div>}
               </div>
-            </div>
+            </HUDCard>
           )}
 
           {/* Categories nav */}
-          <div className="bg-[#0F0F12] border border-[#2A2A35] p-4">
+          <HUDCard pad="p-4">
             <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-2">{t("commands.jump_to")}</div>
             <div className="space-y-1">
               {cats.map((cat) => (
@@ -428,7 +428,7 @@ export default function Commands() {
                 </a>
               ))}
             </div>
-          </div>
+          </HUDCard>
         </aside>
       </div>
     </div>

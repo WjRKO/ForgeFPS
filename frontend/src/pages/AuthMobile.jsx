@@ -34,19 +34,19 @@ export default function AuthMobile() {
 
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-6" data-testid="auth-mobile-page">
-      <div className="max-w-md w-full border border-[#2A2A35] bg-[#0F0F12] p-8 text-center">
+      <div className="max-w-md w-full border border-hud bg-panel p-8 text-center">
         {state === "loading" && (
           <>
-            <Loader2 size={40} className="text-[#E5FF00] animate-spin mx-auto mb-4" />
-            <div className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] mb-2">{isEn() ? "// MOBILE AUTHENTICATION" : "// AUTENTICAZIONE MOBILE"}</div>
+            <Loader2 size={40} className="text-volt animate-spin mx-auto mb-4" />
+            <div className="text-[11px] font-mono uppercase tracking-widest text-volt mb-2">{isEn() ? "// MOBILE AUTHENTICATION" : "// AUTENTICAZIONE MOBILE"}</div>
             <h1 className="font-display font-black text-2xl tracking-tight mb-2">{isEn() ? "Connecting you..." : "Ti sto collegando..."}</h1>
             <p className="text-zinc-400 text-sm">{isEn() ? "Verifying the magic link. You'll be on the Dashboard in a moment." : "Verifica del magic link in corso. Tra un istante sarai sulla Dashboard."}</p>
           </>
         )}
         {state === "error" && (
           <>
-            <ShieldAlert size={40} className="text-[#FF3B30] mx-auto mb-4" />
-            <div className="text-[11px] font-mono uppercase tracking-widest text-[#FF3B30] mb-2">{isEn() ? "// INVALID LINK" : "// LINK NON VALIDO"}</div>
+            <ShieldAlert size={40} className="text-bad mx-auto mb-4" />
+            <div className="text-[11px] font-mono uppercase tracking-widest text-bad mb-2">{isEn() ? "// INVALID LINK" : "// LINK NON VALIDO"}</div>
             <h1 className="font-display font-black text-2xl tracking-tight mb-2">{isEn() ? "Unable to sign in" : "Impossibile accedere"}</h1>
             <p className="text-zinc-400 text-sm mb-6" data-testid="auth-mobile-error">{errorMsg}</p>
             <p className="text-zinc-500 text-xs">
@@ -54,7 +54,7 @@ export default function AuthMobile() {
             </p>
             <button
               onClick={() => navigate("/login")}
-              className="mt-6 inline-flex items-center gap-1.5 border border-[#E5FF00]/50 text-[#E5FF00] hover:bg-[#E5FF00]/10 px-5 py-2 text-xs font-mono uppercase tracking-widest transition-colors"
+              className="mt-6 inline-flex items-center gap-1.5 border border-volt/50 text-volt hover:bg-volt/10 px-5 py-2 text-xs font-mono uppercase tracking-widest transition-colors"
               data-testid="auth-mobile-login-cta"
             >
               {isEn() ? "Go to login →" : "Vai al login →"}

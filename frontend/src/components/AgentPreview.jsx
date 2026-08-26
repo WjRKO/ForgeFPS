@@ -46,12 +46,12 @@ export default function AgentPreview({ label = "Anteprima GUI live" }) {
 
   return (
     <div
-      className="relative overflow-hidden border border-[#2A2A35] bg-black aspect-[16/10] mb-4"
+      className="relative overflow-hidden border border-hud bg-black aspect-[16/10] mb-4"
       data-testid="agent-preview-card"
     >
-      <div className="absolute top-2 left-2 z-20 flex items-center gap-1.5 bg-black/70 border border-[#00E0FF]/40 px-2 py-0.5">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66] animate-pulse" />
-        <span className="text-[11px] font-mono uppercase tracking-widest text-[#00E0FF]">
+      <div className="absolute top-2 left-2 z-20 flex items-center gap-1.5 bg-black/70 border border-info/40 px-2 py-0.5">
+        <span className="w-1.5 h-1.5 rounded-full bg-ok animate-pulse" />
+        <span className="text-[11px] font-mono uppercase tracking-widest text-info">
           {label}
         </span>
       </div>
@@ -108,7 +108,7 @@ function MockGui() {
       data-testid="agent-preview-mock"
     >
       {/* title bar */}
-      <div className="flex items-center gap-1.5 pb-2 border-b border-[#1A1A24]">
+      <div className="flex items-center gap-1.5 pb-2 border-b border-hud-soft">
         <span className="w-2 h-2 rounded-full bg-[#ff5f57]" />
         <span className="w-2 h-2 rounded-full bg-[#febc2e]" />
         <span className="w-2 h-2 rounded-full bg-[#28c840]" />
@@ -125,8 +125,8 @@ function MockGui() {
               key={tab}
               className={`text-[11px] font-mono px-1.5 py-1 border ${
                 i === 0
-                  ? "border-[#E5FF00]/60 bg-[#E5FF00]/10 text-[#E5FF00]"
-                  : "border-[#1A1A24] text-zinc-500"
+                  ? "border-volt/60 bg-volt/10 text-volt"
+                  : "border-hud-soft text-zinc-500"
               }`}
             >
               {tab}
@@ -139,15 +139,15 @@ function MockGui() {
           {TWEAKS.map((tw, i) => (
             <div
               key={i}
-              className="flex items-center gap-1.5 border border-[#1A1A24] bg-[#0A0A10] px-1.5 py-1 opacity-0 preview-row"
+              className="flex items-center gap-1.5 border border-hud-soft bg-[#0A0A10] px-1.5 py-1 opacity-0 preview-row"
               style={{ animationDelay: `${tw.delay}s` }}
             >
-              <tw.icon size={9} className="text-[#00E0FF] shrink-0" />
+              <tw.icon size={9} className="text-info shrink-0" />
               <span className="text-[11px] text-zinc-300 flex-1 truncate">
                 {tw.label}
               </span>
               <span
-                className="text-[8px] font-mono text-[#00FF66] border border-[#00FF66]/40 px-1 opacity-0 preview-check"
+                className="text-[8px] font-mono text-ok border border-ok/40 px-1 opacity-0 preview-check"
                 style={{ animationDelay: `${tw.delay + 0.5}s` }}
               >
                 GIÀ ATTIVO
@@ -158,8 +158,8 @@ function MockGui() {
       </div>
 
       {/* progress bar */}
-      <div className="mt-2 h-1 bg-[#1A1A24] overflow-hidden">
-        <div className="h-full bg-gradient-to-r from-[#00E0FF] via-[#E5FF00] to-[#00FF66] preview-progress" />
+      <div className="mt-2 h-1 bg-hud-soft overflow-hidden">
+        <div className="h-full bg-gradient-to-r from-info via-volt to-ok preview-progress" />
       </div>
 
       <style>{`
