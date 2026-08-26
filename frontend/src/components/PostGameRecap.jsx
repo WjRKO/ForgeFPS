@@ -18,7 +18,7 @@ export const PostGameRecap = () => {
 
   if (rows.length === 0) {
     return (
-      <div className="border border-dashed border-[#2A2A35] p-8 text-center" data-testid="recap-empty">
+      <div className="border border-dashed border-hud p-8 text-center" data-testid="recap-empty">
         <Gamepad2 size={22} className="mx-auto mb-3 text-zinc-600" />
         <div className="text-sm text-zinc-400">
           {en
@@ -39,8 +39,8 @@ export const PostGameRecap = () => {
   return (
     <div className="space-y-4" data-testid="postgame-recap">
       {/* Ultima sessione */}
-      <div className="border border-[#2A2A35] bg-[#0F0F12]">
-        <div className="p-4 border-b border-[#2A2A35] flex items-center justify-between flex-wrap gap-2">
+      <div className="border border-hud bg-panel">
+        <div className="p-4 border-b border-hud flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
               {en ? "Last session" : "Ultima sessione"}
@@ -56,7 +56,7 @@ export const PostGameRecap = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Stat big label="FPS" value={rec.fps_avg} accent="#E5FF00" testid="recap-fps-avg"
                 sub={delta != null ? (
-                  <span className={`flex items-center gap-1 ${delta >= 0 ? "text-[#00FF66]" : "text-[#FF3B30]"}`}>
+                  <span className={`flex items-center gap-1 ${delta >= 0 ? "text-ok" : "text-bad"}`}>
                     {delta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
                     {delta >= 0 ? "+" : ""}{delta} {en ? "vs last time" : "vs ultima volta"}
                   </span>
@@ -71,9 +71,9 @@ export const PostGameRecap = () => {
             </div>
             {(latest.actions || []).length > 0 && (
               <div className="mt-4 flex items-center gap-2 flex-wrap">
-                <Zap size={12} className="text-[#E5FF00]" />
+                <Zap size={12} className="text-volt" />
                 {(latest.actions || []).map((a, i) => (
-                  <span key={i} className="text-[11px] font-mono uppercase tracking-widest px-2 py-0.5 border border-[#2A2A35] text-zinc-400">{a}</span>
+                  <span key={i} className="text-[11px] font-mono uppercase tracking-widest px-2 py-0.5 border border-hud text-zinc-400">{a}</span>
                 ))}
               </div>
             )}
@@ -89,17 +89,17 @@ export const PostGameRecap = () => {
 
       {/* Storico compatto */}
       {rows.length > 1 && (
-        <div className="border border-[#2A2A35] bg-[#0F0F12]" data-testid="recap-history">
-          <div className="p-3 border-b border-[#1A1A24] text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2">
+        <div className="border border-hud bg-panel" data-testid="recap-history">
+          <div className="p-3 border-b border-hud-soft text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2">
             <Activity size={12} /> {en ? "Previous sessions" : "Sessioni precedenti"}
           </div>
-          <div className="divide-y divide-[#1A1A24]">
+          <div className="divide-y divide-hud-soft">
             {rows.slice(1, 8).map((s, i) => (
               <div key={i} className="flex items-center gap-3 px-4 py-2.5 text-sm" data-testid={`recap-row-${i}`}>
                 <span className="font-semibold text-zinc-200 flex-1 truncate">{s.game}</span>
                 <span className="text-[11px] font-mono text-zinc-500">{Math.round((s.duration_s || 0) / 60)} min</span>
                 {s.recap?.fps_avg ? (
-                  <span className="text-[11px] font-mono text-[#E5FF00] tabular-nums">{s.recap.fps_avg} FPS</span>
+                  <span className="text-[11px] font-mono text-volt tabular-nums">{s.recap.fps_avg} FPS</span>
                 ) : (
                   <span className="text-[11px] font-mono text-zinc-600">—</span>
                 )}
@@ -118,7 +118,7 @@ export const PostGameRecap = () => {
 
 function Stat({ label, value, sub, accent, big, testid }) {
   return (
-    <div className="border border-[#1A1A24] bg-black/30 p-3" data-testid={testid}>
+    <div className="border border-hud-soft bg-black/30 p-3" data-testid={testid}>
       <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">{label}</div>
       <div className={`font-mono font-black tabular-nums ${big ? "text-3xl" : "text-2xl"}`} style={accent ? { color: accent } : undefined}>
         {value}

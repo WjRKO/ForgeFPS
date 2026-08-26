@@ -39,15 +39,15 @@ export const DeviceSwitcher = () => {
   return (
     <div className="relative" ref={ref} data-testid="device-switcher">
       <button onClick={() => setOpen((o) => !o)} data-testid="device-switcher-btn"
-        className="flex items-center gap-2 border border-[#2A2A35] px-2.5 py-1.5 text-xs text-zinc-300 hover:border-[#E5FF00] transition-colors max-w-[180px]">
-        <AIcon size={13} className="text-[#E5FF00] shrink-0" />
+        className="flex items-center gap-2 border border-hud px-2.5 py-1.5 text-xs text-zinc-300 hover:border-volt transition-colors max-w-[180px]">
+        <AIcon size={13} className="text-volt shrink-0" />
         <span className="truncate hidden sm:inline">{active.name}</span>
-        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active.online ? "bg-[#00FF66]" : "bg-zinc-600"}`} />
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active.online ? "bg-ok" : "bg-zinc-600"}`} />
         <ChevronDown size={12} className="shrink-0 text-zinc-500" />
       </button>
       {open && (
-        <div className="absolute right-0 mt-1 w-64 bg-[#0F0F12] border border-[#2A2A35] shadow-xl z-50" data-testid="device-switcher-menu">
-          <div className="px-3 py-2 text-[11px] font-mono uppercase tracking-widest text-zinc-600 border-b border-[#1A1A24]">
+        <div className="absolute right-0 mt-1 w-64 bg-panel border border-hud shadow-xl z-50" data-testid="device-switcher-menu">
+          <div className="px-3 py-2 text-[11px] font-mono uppercase tracking-widest text-zinc-600 border-b border-hud-soft">
             {c.title} · {data.devices.length}
           </div>
           {data.devices.map((d) => {
@@ -55,15 +55,15 @@ export const DeviceSwitcher = () => {
             return (
               <button key={d.device_id} onClick={() => switchTo(d)} data-testid={`device-option-${d.device_id}`}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-[#141420] transition-colors">
-                <I size={14} className={d.is_active ? "text-[#E5FF00]" : "text-zinc-500"} />
+                <I size={14} className={d.is_active ? "text-volt" : "text-zinc-500"} />
                 <span className="flex-1 min-w-0">
                   <span className="block text-xs text-zinc-200 truncate">{d.name}</span>
                   <span className="block text-[11px] text-zinc-600">
                     {c[d.role] || d.role}{d.health_score != null ? ` · Health ${d.health_score}` : ""}
                   </span>
                 </span>
-                <span className={`w-1.5 h-1.5 rounded-full ${d.online ? "bg-[#00FF66]" : "bg-zinc-600"}`} />
-                {d.is_active && <Check size={13} className="text-[#E5FF00]" />}
+                <span className={`w-1.5 h-1.5 rounded-full ${d.online ? "bg-ok" : "bg-zinc-600"}`} />
+                {d.is_active && <Check size={13} className="text-volt" />}
               </button>
             );
           })}

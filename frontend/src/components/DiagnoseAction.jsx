@@ -5,10 +5,10 @@ import {
 } from "lucide-react";
 
 const DIFFICULTY_STYLES = {
-  facile:    { color: "text-[#00FF66]", key: "easy" },
-  easy:      { color: "text-[#00FF66]", key: "easy" },
-  medio:     { color: "text-[#E5FF00]", key: "medium" },
-  medium:    { color: "text-[#E5FF00]", key: "medium" },
+  facile:    { color: "text-ok", key: "easy" },
+  easy:      { color: "text-ok", key: "easy" },
+  medio:     { color: "text-volt", key: "medium" },
+  medium:    { color: "text-volt", key: "medium" },
   avanzato:  { color: "text-[#FF6A00]", key: "advanced" },
   advanced:  { color: "text-[#FF6A00]", key: "advanced" },
 };
@@ -27,12 +27,12 @@ export default function DiagnoseAction({ t, index, action, isActive, isSaved, fe
   const diffLabel = t(`diagnose.difficulty_${diff.key}`);
   return (
     <div
-      className={`p-5 transition-colors ${isActive ? "bg-[#00FF66]/5" : "hover:bg-[#0F0F12]"}`}
+      className={`p-5 transition-colors ${isActive ? "bg-ok/5" : "hover:bg-panel"}`}
       data-testid={`diagnose-action-${index}`}
     >
       <div className="flex items-start gap-4">
         <div className="flex flex-col items-center shrink-0">
-          <div className={`w-8 h-8 border font-black flex items-center justify-center ${isActive ? "border-[#00FF66]/60 bg-[#00FF66]/15 text-[#00FF66]" : "border-[#E5FF00]/50 bg-[#E5FF00]/10 text-[#E5FF00]"}`}>
+          <div className={`w-8 h-8 border font-black flex items-center justify-center ${isActive ? "border-ok/60 bg-ok/15 text-ok" : "border-volt/50 bg-volt/10 text-volt"}`}>
             {isActive ? <CheckCircle2 size={14} /> : (action.priority || index + 1)}
           </div>
           <Icon size={14} className="text-zinc-500 mt-2" />
@@ -41,13 +41,13 @@ export default function DiagnoseAction({ t, index, action, isActive, isSaved, fe
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <h4 className={`font-display font-black text-base tracking-tight ${isActive ? "text-zinc-400 line-through" : "text-white"}`}>{action.title}</h4>
             {isActive ? (
-              <span className="text-[11px] font-mono uppercase tracking-widest text-[#00FF66] border border-[#00FF66]/40 bg-[#00FF66]/10 px-1.5">{t("diagnose.already_active")}</span>
+              <span className="text-[11px] font-mono uppercase tracking-widest text-ok border border-ok/40 bg-ok/10 px-1.5">{t("diagnose.already_active")}</span>
             ) : (
               <span className={`text-[11px] font-mono uppercase tracking-widest ${diff.color}`}>{diffLabel}</span>
             )}
           </div>
           {!isActive && action.impact && (
-            <div className="inline-flex items-center gap-1.5 text-xs text-[#00FF66] mb-2 font-mono">
+            <div className="inline-flex items-center gap-1.5 text-xs text-ok mb-2 font-mono">
               <Zap size={11} /> {action.impact}
             </div>
           )}
@@ -57,14 +57,14 @@ export default function DiagnoseAction({ t, index, action, isActive, isSaved, fe
             <div className="mb-3">
               <button
                 onClick={onToggleVerify}
-                className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-[#00E0FF] transition-colors"
+                className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-info transition-colors"
                 data-testid={`diagnose-action-${index}-verify-toggle`}
               >
                 <Eye size={11} /> {t("diagnose.verify_toggle")}
                 <ChevronRight size={11} className={`transition-transform ${verifyOpen ? "rotate-90" : ""}`} />
               </button>
               {verifyOpen && (
-                <div className="mt-2 p-3 border border-[#00E0FF]/30 bg-[#00E0FF]/5 text-xs text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap" data-testid={`diagnose-action-${index}-verify`}>
+                <div className="mt-2 p-3 border border-info/30 bg-info/5 text-xs text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap" data-testid={`diagnose-action-${index}-verify`}>
                   {action.verify}
                 </div>
               )}
@@ -77,7 +77,7 @@ export default function DiagnoseAction({ t, index, action, isActive, isSaved, fe
                 <Link
                   to={action.kind === "driver" ? "/app/pc" : "/app/desktop"}
                   data-testid={`diagnose-action-${index}-apply`}
-                  className="inline-flex items-center gap-1.5 bg-[#E5FF00] text-black font-bold px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest hover:bg-white transition-colors"
+                  className="inline-flex items-center gap-1.5 bg-volt text-black font-bold px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest hover:bg-white transition-colors"
                 >
                   <MonitorDown size={12} /> {action.cta || t("diagnose.cta_apply_default")}
                 </Link>
@@ -85,7 +85,7 @@ export default function DiagnoseAction({ t, index, action, isActive, isSaved, fe
                   onClick={() => onApply(action)}
                   disabled={isSaved}
                   data-testid={`diagnose-action-${index}-save`}
-                  className="inline-flex items-center gap-1.5 border border-[#2A2A35] hover:border-[#00E0FF] text-zinc-300 hover:text-[#00E0FF] px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-1.5 border border-hud hover:border-info text-zinc-300 hover:text-info px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {isSaved ? <><Check size={12} /> {t("diagnose.saved")}</> : <><Bookmark size={12} /> {t("diagnose.save")}</>}
                 </button>
@@ -96,8 +96,8 @@ export default function DiagnoseAction({ t, index, action, isActive, isSaved, fe
               data-testid={`diagnose-action-${index}-mark-active`}
               className={`inline-flex items-center gap-1.5 border px-3 py-1.5 text-[11px] font-mono uppercase tracking-widest transition-colors ${
                 isActive
-                  ? "border-[#00FF66]/50 bg-[#00FF66]/10 text-[#00FF66] hover:bg-[#00FF66]/20"
-                  : "border-[#2A2A35] hover:border-[#00FF66] text-zinc-400 hover:text-[#00FF66]"
+                  ? "border-ok/50 bg-ok/10 text-ok hover:bg-ok/20"
+                  : "border-hud hover:border-ok text-zinc-400 hover:text-ok"
               }`}
             >
               <CheckCircle2 size={12} /> {isActive ? t("diagnose.mark_inactive") : t("diagnose.mark_active")}
@@ -108,7 +108,7 @@ export default function DiagnoseAction({ t, index, action, isActive, isSaved, fe
                 onClick={() => onSubmitFeedback(action, "up")}
                 data-testid={`diagnose-action-${index}-thumb-up`}
                 aria-label="Utile"
-                className={`p-1.5 border transition-colors ${feedback === "up" ? "border-[#00FF66] bg-[#00FF66]/10 text-[#00FF66]" : "border-transparent text-zinc-600 hover:text-[#00FF66] hover:border-[#2A2A35]"}`}
+                className={`p-1.5 border transition-colors ${feedback === "up" ? "border-ok bg-ok/10 text-ok" : "border-transparent text-zinc-600 hover:text-ok hover:border-hud"}`}
               >
                 <ThumbsUp size={12} />
               </button>
@@ -116,7 +116,7 @@ export default function DiagnoseAction({ t, index, action, isActive, isSaved, fe
                 onClick={() => onSubmitFeedback(action, "down")}
                 data-testid={`diagnose-action-${index}-thumb-down`}
                 aria-label={t("diagnose.thumb_not_useful")}
-                className={`p-1.5 border transition-colors ${feedback === "down" ? "border-[#FF3B30] bg-[#FF3B30]/10 text-[#FF3B30]" : "border-transparent text-zinc-600 hover:text-[#FF3B30] hover:border-[#2A2A35]"}`}
+                className={`p-1.5 border transition-colors ${feedback === "down" ? "border-bad bg-bad/10 text-bad" : "border-transparent text-zinc-600 hover:text-bad hover:border-hud"}`}
               >
                 <ThumbsDown size={12} />
               </button>

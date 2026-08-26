@@ -48,31 +48,31 @@ export default function PrivacyTelemetry() {
   const c = COPY[lang];
   usePageMeta(c.meta_t, c.meta_d);
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100">
+    <div className="min-h-screen bg-ink text-zinc-100">
       <MarketingNav />
       <main className="max-w-6xl mx-auto px-6 pt-28 pb-20">
-        <div className="text-xs font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-3">{c.eyebrow}</div>
+        <div className="text-xs font-mono tracking-[0.2em] uppercase text-volt mb-3">{c.eyebrow}</div>
         <h1 className="font-display font-black text-4xl sm:text-5xl tracking-tighter mb-4 max-w-2xl">{c.title}</h1>
         <p className="text-zinc-400 text-base sm:text-lg max-w-xl leading-relaxed mb-14">{c.sub}</p>
 
         {/* Collected vs Never */}
         <div className="grid md:grid-cols-2 gap-4 mb-16">
-          <div className="bg-[#0F0F12] border border-[#00FF66]/30 border-l-2 border-l-[#00FF66] p-6" data-testid="collected-col">
-            <div className="text-xs font-mono uppercase tracking-widest text-[#00FF66] mb-4">{c.collected}</div>
+          <div className="bg-panel border border-ok/30 border-l-2 border-l-ok p-6" data-testid="collected-col">
+            <div className="text-xs font-mono uppercase tracking-widest text-ok mb-4">{c.collected}</div>
             <ul className="space-y-3">
               {c.collected_list.map((it) => (
                 <li key={it} className="flex items-center gap-3 text-sm text-zinc-200">
-                  <span className="w-5 h-5 border border-[#00FF66] flex items-center justify-center shrink-0"><Check size={12} className="text-[#00FF66]" /></span>{it}
+                  <span className="w-5 h-5 border border-ok flex items-center justify-center shrink-0"><Check size={12} className="text-ok" /></span>{it}
                 </li>
               ))}
             </ul>
           </div>
-          <div className="bg-[#0F0F12] border border-[#FF3B30]/30 border-l-2 border-l-[#FF3B30] p-6" data-testid="never-col">
-            <div className="text-xs font-mono uppercase tracking-widest text-[#FF3B30] mb-4">{c.never}</div>
+          <div className="bg-panel border border-bad/30 border-l-2 border-l-bad p-6" data-testid="never-col">
+            <div className="text-xs font-mono uppercase tracking-widest text-bad mb-4">{c.never}</div>
             <ul className="space-y-3">
               {c.never_list.map((it) => (
                 <li key={it} className="flex items-center gap-3 text-sm text-zinc-200">
-                  <span className="w-5 h-5 border border-[#FF3B30] flex items-center justify-center shrink-0"><X size={12} className="text-[#FF3B30]" /></span>{it}
+                  <span className="w-5 h-5 border border-bad flex items-center justify-center shrink-0"><X size={12} className="text-bad" /></span>{it}
                 </li>
               ))}
             </ul>
@@ -80,8 +80,8 @@ export default function PrivacyTelemetry() {
         </div>
 
         {/* Local only */}
-        <div className="bg-[#0F0F12] border border-[#2A2A35] p-6 mb-16 flex items-start gap-4" data-testid="local-only">
-          <div className="w-11 h-11 border border-[#2A2A35] flex items-center justify-center text-[#E5FF00] shrink-0"><Server size={20} /></div>
+        <div className="bg-panel border border-hud p-6 mb-16 flex items-start gap-4" data-testid="local-only">
+          <div className="w-11 h-11 border border-hud flex items-center justify-center text-volt shrink-0"><Server size={20} /></div>
           <div>
             <h2 className="font-display font-black text-xl tracking-tight mb-2">{c.local_title}</h2>
             <p className="text-zinc-400 text-sm leading-relaxed max-w-2xl">{c.local_d}</p>
@@ -92,15 +92,15 @@ export default function PrivacyTelemetry() {
         <h2 className="font-display font-black text-2xl tracking-tight mb-6">{c.tiers_title}</h2>
         <div className="grid md:grid-cols-3 gap-4">
           {c.tiers.map((tier) => (
-            <div key={tier.t} className="bg-[#0F0F12] border border-[#1A1A24] p-6" data-testid={`tier-${tier.t.toLowerCase()}`}>
+            <div key={tier.t} className="bg-panel border border-hud-soft p-6" data-testid={`tier-${tier.t.toLowerCase()}`}>
               <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 border border-[#2A2A35] flex items-center justify-center text-[#E5FF00]"><tier.icon size={18} /></div>
-                <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 border border-[#1A1A24] px-2 py-1">[ {tier.tag} ]</span>
+                <div className="w-10 h-10 border border-hud flex items-center justify-center text-volt"><tier.icon size={18} /></div>
+                <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 border border-hud-soft px-2 py-1">[ {tier.tag} ]</span>
               </div>
               <h3 className="font-display font-bold text-lg mb-3">{tier.t}</h3>
               <ul className="space-y-2">
                 {tier.items.map((it) => (
-                  <li key={it} className="flex items-center gap-2 text-sm text-zinc-400"><Check size={13} className="text-[#00FF66] shrink-0" /> {it}</li>
+                  <li key={it} className="flex items-center gap-2 text-sm text-zinc-400"><Check size={13} className="text-ok shrink-0" /> {it}</li>
                 ))}
               </ul>
             </div>

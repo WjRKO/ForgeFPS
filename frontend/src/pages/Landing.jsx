@@ -73,17 +73,17 @@ function HeroMockup() {
     >
       <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}>
         {/* main HUD panel */}
-        <div className="bg-[#0F0F12] border border-[#2A2A35] p-5 relative overflow-hidden">
-          <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-[#E5FF00] via-transparent to-transparent" />
+        <div className="bg-panel border border-hud p-5 relative overflow-hidden">
+          <div className="absolute top-0 left-0 h-[2px] w-full bg-gradient-to-r from-volt via-transparent to-transparent" />
           <div className="flex items-center justify-between mb-4">
             <span className="text-[11px] font-mono tracking-[0.2em] uppercase text-zinc-500">// live telemetry</span>
-            <span className="flex items-center gap-1.5 text-[11px] font-mono text-[#00FF66]"><span className="w-1.5 h-1.5 bg-[#00FF66] rounded-full animate-pulse" /> ONLINE</span>
+            <span className="flex items-center gap-1.5 text-[11px] font-mono text-ok"><span className="w-1.5 h-1.5 bg-ok rounded-full animate-pulse" /> ONLINE</span>
           </div>
           <div className="flex items-center gap-5">
             <div className="relative shrink-0" style={{ width: 120, height: 120 }}>
               <HealthRing />
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="font-display font-black text-3xl text-[#00FF66]">92</span>
+                <span className="font-display font-black text-3xl text-ok">92</span>
                 <span className="text-[11px] uppercase tracking-widest text-zinc-500">Health</span>
               </div>
             </div>
@@ -94,7 +94,7 @@ function HeroMockup() {
                 { l: "RAM", v: "38%", c: "#E5FF00", i: Activity },
                 { l: "PING", v: "12ms", c: "#00FF66", i: Zap },
               ].map((s) => (
-                <div key={s.l} className="bg-black border border-[#1A1A24] p-2">
+                <div key={s.l} className="bg-black border border-hud-soft p-2">
                   <div className="flex items-center gap-1 text-[11px] uppercase tracking-widest text-zinc-500"><s.i size={10} style={{ color: s.c }} /> {s.l}</div>
                   <div className="font-display font-bold text-sm mt-0.5" style={{ color: s.c }}>{s.v}</div>
                 </div>
@@ -103,7 +103,7 @@ function HeroMockup() {
           </div>
           <div className="mt-4">
             <div className="flex items-center justify-between text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-1">
-              <span>FPS · Cyberpunk 2077</span><span className="text-[#00FF66]">+58%</span>
+              <span>FPS · Cyberpunk 2077</span><span className="text-ok">+58%</span>
             </div>
             <div className="h-16">
               <ResponsiveContainer width="100%" height="100%">
@@ -123,7 +123,7 @@ function HeroMockup() {
         {/* floating badge */}
         <motion.div
           animate={{ y: [0, 8, 0] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -bottom-5 -left-5 bg-[#E5FF00] text-black px-4 py-2 hidden sm:block shadow-[0_8px_30px_rgba(229,255,0,0.25)]">
+          className="absolute -bottom-5 -left-5 bg-volt text-black px-4 py-2 hidden sm:block shadow-[0_8px_30px_rgba(229,255,0,0.25)]">
           <div className="text-[11px] font-mono uppercase tracking-widest">tweaks applied</div>
           <div className="font-display font-black text-lg leading-none">35 / 35</div>
         </motion.div>
@@ -139,17 +139,17 @@ function AdvisorChat() {
     { who: "ai", text: t("landing.demo_a") },
   ];
   return (
-    <div className="bg-[#0F0F12] border border-[#1A1A24] p-4 space-y-3">
+    <div className="bg-panel border border-hud-soft p-4 space-y-3">
       {msgs.map((m, i) => (
         <motion.div key={`${m.who}-${m.text.slice(0, 20)}`} {...fadeUp} transition={{ delay: 0.1 + i * 0.25, ease: EASE }}
           className={`flex ${m.who === "ai" ? "justify-start" : "justify-end"}`}>
-          <div className={`max-w-[85%] px-3 py-2 text-xs leading-relaxed border ${m.who === "ai" ? "bg-[#00E0FF]/10 border-[#00E0FF]/30 text-zinc-200" : "bg-black border-[#2A2A35] text-zinc-400"}`}>
+          <div className={`max-w-[85%] px-3 py-2 text-xs leading-relaxed border ${m.who === "ai" ? "bg-info/10 border-info/30 text-zinc-200" : "bg-black border-hud text-zinc-400"}`}>
             {m.text}
           </div>
         </motion.div>
       ))}
-      <div className="flex items-center gap-1 text-[11px] font-mono text-[#00E0FF] pl-1">
-        <span className="w-1.5 h-1.5 bg-[#00E0FF] rounded-full animate-pulse" /> AI Advisor
+      <div className="flex items-center gap-1 text-[11px] font-mono text-info pl-1">
+        <span className="w-1.5 h-1.5 bg-info rounded-full animate-pulse" /> AI Advisor
       </div>
     </div>
   );
@@ -157,17 +157,17 @@ function AdvisorChat() {
 
 function HealthMockup() {
   return (
-    <div className="bg-[#0F0F12] border border-[#1A1A24] p-5 flex items-center gap-5">
+    <div className="bg-panel border border-hud-soft p-5 flex items-center gap-5">
       <div className="relative shrink-0" style={{ width: 110, height: 110 }}>
         <HealthRing score={88} size={110} />
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-display font-black text-2xl text-[#00FF66]">88</span>
+          <span className="font-display font-black text-2xl text-ok">88</span>
           <span className="text-[11px] uppercase tracking-widest text-zinc-500">Good</span>
         </div>
       </div>
       <div className="flex-1 space-y-2">
         {[["CPU 5800X", "48°C", "#00FF66"], ["RTX 3070", "61°C", "#00E0FF"], ["Boost", "+42% FPS", "#E5FF00"]].map(([a, b, c]) => (
-          <div key={a} className="flex items-center justify-between bg-black border border-[#1A1A24] px-3 py-2 text-xs">
+          <div key={a} className="flex items-center justify-between bg-black border border-hud-soft px-3 py-2 text-xs">
             <span className="text-zinc-400">{a}</span><span className="font-bold" style={{ color: c }}>{b}</span>
           </div>
         ))}
@@ -181,16 +181,16 @@ function BuildMockup() {
     ["GPU", "RTX 4070 Super"], ["CPU", "Ryzen 7 7800X3D"], ["RAM", "32GB DDR5 6000"], ["SSD", "2TB NVMe Gen4"],
   ];
   return (
-    <div className="bg-[#0F0F12] border border-[#1A1A24] p-4">
+    <div className="bg-panel border border-hud-soft p-4">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[11px] font-mono tracking-[0.2em] uppercase text-zinc-500">// build · €1500</span>
-        <span className="text-[#E5FF00] font-display font-black text-sm">~180 FPS</span>
+        <span className="text-volt font-display font-black text-sm">~180 FPS</span>
       </div>
       <div className="space-y-1.5">
         {rows.map(([k, v], i) => (
           <motion.div key={k} {...fadeUp} transition={{ delay: i * 0.12, ease: EASE }}
-            className="flex items-center gap-3 bg-black border border-[#1A1A24] px-3 py-2">
-            <Check size={14} className="text-[#00FF66] shrink-0" />
+            className="flex items-center gap-3 bg-black border border-hud-soft px-3 py-2">
+            <Check size={14} className="text-ok shrink-0" />
             <span className="text-[11px] uppercase tracking-widest text-zinc-500 w-10">{k}</span>
             <span className="text-sm text-zinc-100">{v}</span>
           </motion.div>
@@ -202,13 +202,13 @@ function BuildMockup() {
 
 function PriceMockup() {
   return (
-    <div className="bg-[#0F0F12] border border-[#1A1A24] p-4">
+    <div className="bg-panel border border-hud-soft p-4">
       <div className="flex items-center justify-between mb-2">
         <div className="text-sm text-zinc-200">RTX 4070 Super</div>
-        <div className="flex items-center gap-1.5 text-xs text-[#00FF66]"><Bell size={12} /> -20%</div>
+        <div className="flex items-center gap-1.5 text-xs text-ok"><Bell size={12} /> -20%</div>
       </div>
       <div className="flex items-end gap-3 mb-2">
-        <span className="font-display font-black text-2xl text-[#00E0FF]">€599</span>
+        <span className="font-display font-black text-2xl text-info">€599</span>
         <span className="text-sm text-zinc-600 line-through mb-1">€749</span>
       </div>
       <div className="h-20">
@@ -226,20 +226,20 @@ function PriceMockup() {
 
 function TerminalMockup() {
   return (
-    <div className="bg-black border border-[#1A1A24]">
-      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-[#1A1A24]">
-        <span className="w-2.5 h-2.5 rounded-full bg-[#FF3B30]" />
-        <span className="w-2.5 h-2.5 rounded-full bg-[#E5FF00]" />
-        <span className="w-2.5 h-2.5 rounded-full bg-[#00FF66]" />
+    <div className="bg-black border border-hud-soft">
+      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-hud-soft">
+        <span className="w-2.5 h-2.5 rounded-full bg-bad" />
+        <span className="w-2.5 h-2.5 rounded-full bg-volt" />
+        <span className="w-2.5 h-2.5 rounded-full bg-ok" />
         <span className="ml-2 text-[11px] font-mono text-zinc-600">PowerShell</span>
       </div>
       <div className="p-4 font-mono text-xs leading-relaxed">
-        <div className="text-zinc-500">PS C:\Users\Streamer&gt; <span className="text-[#00FF66]">.\forgefps-setup.exe --verify</span></div>
-        <div className="text-zinc-400 mt-2">[<span className="text-[#00FF66]">✓</span>] SHA256 verified · signed installer</div>
-        <div className="text-zinc-400">[<span className="text-[#00FF66]">✓</span>] Hardware detected · RTX 3070</div>
-        <div className="text-zinc-400">[<span className="text-[#00FF66]">✓</span>] Power plan · Ultimate</div>
-        <div className="text-zinc-400">[<span className="text-[#00FF66]">✓</span>] 35 adaptive tweaks applied · reversible</div>
-        <div className="text-[#00FF66] mt-1">Done. <span className="cursor-blink">▊</span></div>
+        <div className="text-zinc-500">PS C:\Users\Streamer&gt; <span className="text-ok">.\forgefps-setup.exe --verify</span></div>
+        <div className="text-zinc-400 mt-2">[<span className="text-ok">✓</span>] SHA256 verified · signed installer</div>
+        <div className="text-zinc-400">[<span className="text-ok">✓</span>] Hardware detected · RTX 3070</div>
+        <div className="text-zinc-400">[<span className="text-ok">✓</span>] Power plan · Ultimate</div>
+        <div className="text-zinc-400">[<span className="text-ok">✓</span>] 35 adaptive tweaks applied · reversible</div>
+        <div className="text-ok mt-1">Done. <span className="cursor-blink">▊</span></div>
       </div>
     </div>
   );
@@ -304,27 +304,27 @@ export default function Landing() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100 overflow-x-hidden">
+    <div className="min-h-screen bg-ink text-zinc-100 overflow-x-hidden">
       <MarketingNav />
 
       {/* HERO */}
       <section className="relative pt-32 pb-20 px-6 overflow-hidden">
         <div className="absolute inset-0 grid-bg opacity-[0.4] z-0" />
-        <div className="absolute -top-32 -right-32 w-[500px] h-[500px] bg-[#E5FF00]/5 blur-[120px] rounded-full z-0" />
+        <div className="absolute -top-32 -right-32 w-[500px] h-[500px] bg-volt/5 blur-[120px] rounded-full z-0" />
         <div className="relative z-10 max-w-6xl mx-auto grid lg:grid-cols-2 gap-14 items-center">
           <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: EASE }}>
-            <div className="inline-flex items-center gap-2 border border-[#2A2A35] bg-black/40 px-3 py-1 mb-6 text-xs font-mono uppercase tracking-widest text-[#E5FF00]">
+            <div className="inline-flex items-center gap-2 border border-hud bg-black/40 px-3 py-1 mb-6 text-xs font-mono uppercase tracking-widest text-volt">
               <Gauge size={14} /> {t("landing.badge")}
             </div>
             <h1 className="font-display font-black text-4xl sm:text-5xl lg:text-6xl tracking-tighter leading-[1.05] sm:leading-[0.95] mb-6">
-              {t("landing.hero1")}<br /><span className="text-[#E5FF00]">{t("landing.hero2")}</span>
+              {t("landing.hero1")}<br /><span className="text-volt">{t("landing.hero2")}</span>
             </h1>
             <p className="text-zinc-400 text-base sm:text-lg max-w-xl mb-8 leading-relaxed">{t("landing.hero_sub")}</p>
             <div className="flex flex-col sm:flex-row gap-3">
-              <a href="#demo" data-testid="hero-cta-btn" className="group inline-flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold px-6 py-3.5 hover:bg-[#D4EC00] transition-colors btn-volt">
+              <a href="#demo" data-testid="hero-cta-btn" className="group inline-flex items-center justify-center gap-2 bg-volt text-black font-bold px-6 py-3.5 hover:bg-volt-dim transition-colors btn-volt">
                 {t("landing.cta")} <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
               </a>
-              <Link to="/login" className="inline-flex items-center justify-center gap-2 border border-[#2A2A35] px-6 py-3.5 hover:border-[#E5FF00] hover:-translate-y-0.5 transition-all">
+              <Link to="/login" className="inline-flex items-center justify-center gap-2 border border-hud px-6 py-3.5 hover:border-volt hover:-translate-y-0.5 transition-all">
                 {t("landing.have_account")}
               </Link>
             </div>
@@ -346,10 +346,10 @@ export default function Landing() {
       </section>
 
       {/* TRUST STRIP */}
-      <section className="border-y border-[#1A1A24] bg-[#050505]">
+      <section className="border-y border-hud-soft bg-ink">
         <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4">
           {trust.map((s, i) => (
-            <div key={s.l} className={`p-6 text-center ${i < 3 ? "md:border-r" : ""} ${i < 2 ? "border-r" : ""} ${i < 2 ? "border-b md:border-b-0" : ""} border-[#1A1A24]`}>
+            <div key={s.l} className={`p-6 text-center ${i < 3 ? "md:border-r" : ""} ${i < 2 ? "border-r" : ""} ${i < 2 ? "border-b md:border-b-0" : ""} border-hud-soft`}>
               <div className="font-display font-black text-3xl sm:text-4xl tracking-tighter" style={{ color: s.c }}><Counter value={s.v} /></div>
               <div className="text-xs font-mono uppercase tracking-widest text-zinc-500 mt-1">{s.l}</div>
             </div>
@@ -371,10 +371,10 @@ export default function Landing() {
         <div className="grid md:grid-cols-3 gap-4">
           {steps.map((s, i) => (
             <motion.div key={s.t} {...fadeUp} transition={{ delay: i * 0.12, ease: EASE }}
-              className="group bg-[#0F0F12] border border-[#1A1A24] border-l-2 border-l-transparent hover:border-l-[#E5FF00] hover:-translate-y-1 transition-all duration-300 p-6">
+              className="group bg-panel border border-hud-soft border-l-2 border-l-transparent hover:border-l-volt hover:-translate-y-1 transition-all duration-300 p-6">
               <div className="flex items-center justify-between mb-4">
-                <div className="w-11 h-11 border border-[#2A2A35] flex items-center justify-center text-[#E5FF00]"><s.i size={20} className="icon-pop" /></div>
-                <span className="font-display font-black text-4xl text-[#E5FF00]/40 group-hover:text-[#E5FF00]/70 transition-colors">0{i + 1}</span>
+                <div className="w-11 h-11 border border-hud flex items-center justify-center text-volt"><s.i size={20} className="icon-pop" /></div>
+                <span className="font-display font-black text-4xl text-volt/40 group-hover:text-volt/70 transition-colors">0{i + 1}</span>
               </div>
               <h3 className="font-display font-bold text-lg mb-2">{s.t}</h3>
               <p className="text-zinc-500 text-sm leading-relaxed">{s.d}</p>
@@ -397,48 +397,48 @@ export default function Landing() {
       </section>
 
       {/* CLOSING CTA */}
-      <section className="relative border-y border-[#2A2A35] bg-[#0F0F12] py-28 px-6 overflow-hidden">
+      <section className="relative border-y border-hud bg-panel py-28 px-6 overflow-hidden">
         <div className="absolute inset-0 grid-bg opacity-30" />
-        <div className="absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-[#E5FF00]/60" />
-        <div className="absolute bottom-6 right-6 w-8 h-8 border-b-2 border-r-2 border-[#E5FF00]/60" />
+        <div className="absolute top-6 left-6 w-8 h-8 border-t-2 border-l-2 border-volt/60" />
+        <div className="absolute bottom-6 right-6 w-8 h-8 border-b-2 border-r-2 border-volt/60" />
         <motion.div {...fadeUp} className="relative z-10 max-w-2xl mx-auto text-center">
-          <div className="text-xs font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-4">{t("landing.cta_eyebrow")}</div>
+          <div className="text-xs font-mono tracking-[0.2em] uppercase text-volt mb-4">{t("landing.cta_eyebrow")}</div>
           <h2 className="font-display font-black text-3xl sm:text-4xl lg:text-5xl tracking-tighter mb-4">{t("landing.cta_title")}</h2>
           <p className="text-zinc-400 text-base mb-8">{t("landing.cta_sub")}</p>
-          <Link to="/register" data-testid="cta-bottom-btn" className="group inline-flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold px-8 py-4 hover:bg-[#D4EC00] transition-colors btn-volt">
+          <Link to="/register" data-testid="cta-bottom-btn" className="group inline-flex items-center justify-center gap-2 bg-volt text-black font-bold px-8 py-4 hover:bg-volt-dim transition-colors btn-volt">
             {t("landing.cta_btn")} <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
           </Link>
         </motion.div>
       </section>
 
       {/* FOOTER */}
-      <footer className="bg-[#050505] border-t border-[#1A1A24] px-6 py-14">
+      <footer className="bg-ink border-t border-hud-soft px-6 py-14">
         <div className="max-w-6xl mx-auto grid md:grid-cols-5 gap-10">
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-7 h-7 bg-[#E5FF00] flex items-center justify-center"><Zap size={15} className="text-black" /></div>
-              <span className="font-display font-black tracking-tighter">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
+              <div className="w-7 h-7 bg-volt flex items-center justify-center"><Zap size={15} className="text-black" /></div>
+              <span className="font-display font-black tracking-tighter">FRAME<span className="text-volt">FORGE</span></span>
             </div>
             <p className="text-zinc-500 text-sm max-w-xs leading-relaxed">{t("landing.footer_bio")}</p>
           </div>
           <div>
             <div className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">{t("landing.footer_product")}</div>
             <ul className="space-y-0.5 text-sm text-zinc-400">
-              <li><Link to="/security" className="inline-block py-2.5 hover:text-[#E5FF00] transition-colors">{t("landing.nav_security")}</Link></li>
-              <li><Link to="/privacy-telemetry" className="inline-block py-2.5 hover:text-[#E5FF00] transition-colors">{t("landing.nav_privacy")}</Link></li>
-              <li><Link to="/guida" className="inline-block py-2.5 hover:text-[#E5FF00] transition-colors">{t("landing.nav_guide")}</Link></li>
-              <li><Link to="/changelog" className="inline-block py-2.5 hover:text-[#E5FF00] transition-colors">{t("landing.nav_changelog")}</Link></li>
-              <li><Link to="/pricing" className="inline-block py-2.5 hover:text-[#E5FF00] transition-colors">{t("landing.nav_pricing")}</Link></li>
+              <li><Link to="/security" className="inline-block py-2.5 hover:text-volt transition-colors">{t("landing.nav_security")}</Link></li>
+              <li><Link to="/privacy-telemetry" className="inline-block py-2.5 hover:text-volt transition-colors">{t("landing.nav_privacy")}</Link></li>
+              <li><Link to="/guida" className="inline-block py-2.5 hover:text-volt transition-colors">{t("landing.nav_guide")}</Link></li>
+              <li><Link to="/changelog" className="inline-block py-2.5 hover:text-volt transition-colors">{t("landing.nav_changelog")}</Link></li>
+              <li><Link to="/pricing" className="inline-block py-2.5 hover:text-volt transition-colors">{t("landing.nav_pricing")}</Link></li>
             </ul>
           </div>
           <FooterCommunity t={t} />
           <div>
             <div className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-4">{t("landing.footer_account")}</div>
             <ul className="space-y-0.5 text-sm text-zinc-400">
-              <li><Link to="/login" className="inline-block py-2.5 hover:text-[#E5FF00] transition-colors">{t("landing.login")}</Link></li>
-              <li><Link to="/register" className="inline-block py-2.5 hover:text-[#E5FF00] transition-colors">{t("landing.start")}</Link></li>
+              <li><Link to="/login" className="inline-block py-2.5 hover:text-volt transition-colors">{t("landing.login")}</Link></li>
+              <li><Link to="/register" className="inline-block py-2.5 hover:text-volt transition-colors">{t("landing.start")}</Link></li>
             </ul>
-            <div className="flex items-center gap-2 mt-5 text-xs text-[#00FF66]"><ShieldCheck size={13} /> {t("landing.footer_status")}</div>
+            <div className="flex items-center gap-2 mt-5 text-xs text-ok"><ShieldCheck size={13} /> {t("landing.footer_status")}</div>
           </div>
         </div>
         <FooterLegal t={t} />

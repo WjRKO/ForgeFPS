@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { LineChart as LineIcon } from "lucide-react";
 import api from "@/lib/api";
+import { HUDCard } from "@/components/hud";
 
 
 const fmtTime = (iso) => {
@@ -26,13 +27,13 @@ export default function HealthHistoryCard() {
   const rows = points.map((p) => ({ ...p, label: fmtTime(p.created_at) }));
 
   return (
-    <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick p-6 mb-4" data-testid="health-history-card">
+    <HUDCard testid="health-history-card" pad="p-6" className="hud-tick mb-4">
       <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-1 flex items-center gap-2">
-        <LineIcon size={14} className="text-[#E5FF00]" /> {c.title}
+        <LineIcon size={14} className="text-volt" /> {c.title}
       </div>
       <p className="text-xs text-zinc-600 mb-4">{c.sub}</p>
       {limitedDays && (
-        <p className="text-[11px] text-[#E5FF00]/80 -mt-2 mb-4" data-testid="health-history-limited">{c.limited}</p>
+        <p className="text-[11px] text-volt/80 -mt-2 mb-4" data-testid="health-history-limited">{c.limited}</p>
       )}
       <div style={{ width: "100%", height: 240 }}>
         <ResponsiveContainer>
@@ -49,10 +50,10 @@ export default function HealthHistoryCard() {
         </ResponsiveContainer>
       </div>
       <div className="flex flex-wrap gap-4 mt-3 text-xs">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-[#E5FF00]" /> {c.score}</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-[#00E0FF]" /> {c.cpu}</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-[#FF3B30]" /> {c.gpu}</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-volt" /> {c.score}</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-info" /> {c.cpu}</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-bad" /> {c.gpu}</span>
       </div>
-    </div>
+    </HUDCard>
   );
 }

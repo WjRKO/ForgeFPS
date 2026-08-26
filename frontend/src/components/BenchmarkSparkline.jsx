@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TrendingUp } from "lucide-react";
 import api from "@/lib/api";
+import { HUDCard } from "@/components/hud";
 
 /**
  * Mini sparkline of benchmark scores over the last N days.
@@ -48,7 +49,7 @@ export default function BenchmarkSparkline({ days = 30, refreshKey = 0 }) {
   const trendPct = first.v ? Math.round(((latest.v - first.v) / first.v) * 100) : 0;
 
   return (
-    <div className="bg-[#0F0F12] border border-[#2A2A35] p-4 mb-4" data-testid="benchmark-sparkline">
+    <HUDCard testid="benchmark-sparkline" pad="p-4" className="mb-4">
       <div className="flex items-center justify-between mb-2">
         <div className="text-xs uppercase tracking-widest text-zinc-500 flex items-center gap-1.5">
           <TrendingUp size={12} /> {t("bench.spark_title", { defaultValue: "Andamento" })} · {days}gg
@@ -56,7 +57,7 @@ export default function BenchmarkSparkline({ days = 30, refreshKey = 0 }) {
         <div className="flex items-center gap-3 text-xs">
           <span className="text-zinc-600">{t("bench.spark_min", { defaultValue: "min" })}: <span className="text-zinc-300 font-bold">{min}</span></span>
           <span className="text-zinc-600">{t("bench.spark_max", { defaultValue: "max" })}: <span className="text-zinc-300 font-bold">{max}</span></span>
-          <span className={`font-bold ${trendPct >= 0 ? "text-[#00FF66]" : "text-[#FF3B30]"}`}>
+          <span className={`font-bold ${trendPct >= 0 ? "text-ok" : "text-bad"}`}>
             {trendPct > 0 ? "+" : ""}{trendPct}%
           </span>
         </div>
@@ -78,6 +79,6 @@ export default function BenchmarkSparkline({ days = 30, refreshKey = 0 }) {
       <div className="text-xs text-zinc-600 mt-1">
         {t("bench.spark_runs", { defaultValue: "Run totali" })}: <span className="text-zinc-300 font-bold">{data?.stats?.count ?? points.length}</span>
       </div>
-    </div>
+    </HUDCard>
   );
 }

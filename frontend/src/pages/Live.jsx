@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import api from "@/lib/api";
 import { SessionSummary } from "@/components/SessionSummary";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
-import { PrimaryButton } from "@/components/hud";
+import { HUDCard, PrimaryButton } from "@/components/hud";
 import ObsOverlayPanel from "@/components/ObsOverlayPanel";
 import CurrentGameCard from "@/components/CurrentGameCard";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
@@ -44,7 +44,7 @@ const buildSummary = (a) => {
   };
 };
 
-const tempClass = (v) => (v == null ? "text-zinc-500" : v >= 85 ? "text-[#FF3B30]" : v >= 75 ? "text-[#FF6B00]" : "text-zinc-100");
+const tempClass = (v) => (v == null ? "text-zinc-500" : v >= 85 ? "text-bad" : v >= 75 ? "text-[#FF6B00]" : "text-zinc-100");
 
 const seriesStats = (arr) => {
   const v = arr.filter((x) => x != null && !Number.isNaN(x));
@@ -56,7 +56,7 @@ const seriesStats = (arr) => {
 function BentoCard({ icon: Icon, label, main, mainUnit, mainClass = "", rows = [], testid }) {
   const ghost = main == null;
   return (
-    <div className="bg-[#0F0F12] border border-[#1A1A24] p-4 h-full flex flex-col rounded-none" data-testid={testid}>
+    <div className="bg-panel border border-hud-soft p-4 h-full flex flex-col rounded-none" data-testid={testid}>
       <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-2">
         <Icon size={13} /> {label}
       </div>
@@ -65,7 +65,7 @@ function BentoCard({ icon: Icon, label, main, mainUnit, mainClass = "", rows = [
         <span className={`text-sm ml-1 font-normal ${ghost ? "text-zinc-800" : "text-zinc-500"}`}>{main != null ? mainUnit : ""}</span>
       </div>
       {rows.length > 0 && (
-        <div className="mt-3 pt-2 border-t border-[#1A1A24] space-y-1">
+        <div className="mt-3 pt-2 border-t border-hud-soft space-y-1">
           {rows.map((r) => (
             <div key={r.label} className="flex items-baseline justify-between text-xs" data-testid={r.testid}>
               <span className="text-zinc-600 uppercase tracking-wider text-[11px]">{r.label}</span>
@@ -83,7 +83,7 @@ function BentoCard({ icon: Icon, label, main, mainUnit, mainClass = "", rows = [
 /* --- v0.7.7: compact precision sensor cell (fan / VRM / CPU power / Vcore) --- */
 function PrecisionCell({ icon: Icon, label, value, unit, cls, testid }) {
   return (
-    <div className="bg-[#0F0F12] border border-[#1A1A24] p-3 rounded-none flex items-center gap-3" data-testid={testid}>
+    <div className="bg-panel border border-hud-soft p-3 rounded-none flex items-center gap-3" data-testid={testid}>
       <Icon size={16} className="text-zinc-600 shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-500">{label}</div>
@@ -120,11 +120,11 @@ function TelemetryCharts({ chart, waitingText, t }) {
   const lines = LINES[tab];
   const fixedDomain = tab !== "perf";
   return (
-    <div className="bg-[#0F0F12] border border-[#1A1A24] rounded-none h-full flex flex-col" data-testid="telemetry-charts">
-      <div className="flex border-b border-[#1A1A24]">
+    <div className="bg-panel border border-hud-soft rounded-none h-full flex flex-col" data-testid="telemetry-charts">
+      <div className="flex border-b border-hud-soft">
         {TABS.map((tb) => (
           <button key={tb.id} onClick={() => setTab(tb.id)} data-testid={`chart-tab-${tb.id}`}
-            className={`px-4 py-3 text-[11px] font-bold uppercase tracking-widest transition-colors ${tab === tb.id ? "text-[#E5FF00] border-b-2 border-[#E5FF00] -mb-px bg-black/30" : "text-zinc-500 hover:text-zinc-300"}`}>
+            className={`px-4 py-3 text-[11px] font-bold uppercase tracking-widest transition-colors ${tab === tb.id ? "text-volt border-b-2 border-volt -mb-px bg-black/30" : "text-zinc-500 hover:text-zinc-300"}`}>
             {tb.label}
           </button>
         ))}
@@ -148,7 +148,7 @@ function TelemetryCharts({ chart, waitingText, t }) {
         )}
       </div>
       {chart.length > 0 && (
-        <div className="flex flex-wrap gap-x-6 gap-y-1 px-4 pb-3 pt-1 border-t border-[#1A1A24] text-[11px] font-mono text-zinc-500" data-testid="chart-stats-row">
+        <div className="flex flex-wrap gap-x-6 gap-y-1 px-4 pb-3 pt-1 border-t border-hud-soft text-[11px] font-mono text-zinc-500" data-testid="chart-stats-row">
           {lines.map((l) => {
             const st = seriesStats(chart.map((c) => c[l.k]));
             if (!st) return null;
@@ -170,28 +170,28 @@ function TelemetryCharts({ chart, waitingText, t }) {
 /* --- Compact thermal alert settings (sidebar) --- */
 function AlertSettings({ alerts, setAlerts, onSave, t }) {
   return (
-    <div className="bg-[#0F0F12] border border-[#1A1A24] p-4 rounded-none" data-testid="alert-settings">
+    <div className="bg-panel border border-hud-soft p-4 rounded-none" data-testid="alert-settings">
       <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-zinc-500 mb-3">
-        <Bell size={13} className="text-[#FF3B30]" /> {t("live.alert_title")}
+        <Bell size={13} className="text-bad" /> {t("live.alert_title")}
       </div>
       <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer mb-3" data-testid="alert-enabled">
-        <input type="checkbox" checked={alerts.enabled} onChange={(e) => setAlerts({ ...alerts, enabled: e.target.checked })} className="accent-[#E5FF00] w-4 h-4" />
+        <input type="checkbox" checked={alerts.enabled} onChange={(e) => setAlerts({ ...alerts, enabled: e.target.checked })} className="accent-volt w-4 h-4" />
         {t("live.push_active")}
       </label>
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
           <div className="text-[11px] uppercase tracking-wider text-zinc-600 mb-1">{t("live.cpu_threshold")}</div>
           <input type="number" data-testid="alert-cpu-max" value={alerts.cpu_max} onChange={(e) => setAlerts({ ...alerts, cpu_max: parseInt(e.target.value) || 0 })}
-            className="w-full bg-black border border-[#2A2A35] px-3 py-2 text-sm font-mono focus:border-[#E5FF00] outline-none rounded-none" />
+            className="w-full bg-black border border-hud px-3 py-2 text-sm font-mono focus:border-volt outline-none rounded-none" />
         </div>
         <div>
           <div className="text-[11px] uppercase tracking-wider text-zinc-600 mb-1">{t("live.gpu_threshold")}</div>
           <input type="number" data-testid="alert-gpu-max" value={alerts.gpu_max} onChange={(e) => setAlerts({ ...alerts, gpu_max: parseInt(e.target.value) || 0 })}
-            className="w-full bg-black border border-[#2A2A35] px-3 py-2 text-sm font-mono focus:border-[#E5FF00] outline-none rounded-none" />
+            className="w-full bg-black border border-hud px-3 py-2 text-sm font-mono focus:border-volt outline-none rounded-none" />
         </div>
       </div>
       <button data-testid="save-alerts-btn" onClick={onSave}
-        className="w-full border border-[#E5FF00]/60 text-[#E5FF00] py-2 text-xs font-bold uppercase tracking-widest hover:bg-[#E5FF00] hover:text-black transition-colors rounded-none">
+        className="w-full border border-volt/60 text-volt py-2 text-xs font-bold uppercase tracking-widest hover:bg-volt hover:text-black transition-colors rounded-none">
         {t("common.save")}
       </button>
       <p className="text-[11px] text-zinc-600 mt-3 leading-relaxed">{t("live.alert_hint")}</p>
@@ -274,7 +274,7 @@ export default function Live() {
     i, cpu: s.cpu_util ?? null, gpu: s.gpu_util ?? null, cpuT: s.cpu_temp ?? null, gpuT: s.gpu_temp ?? null, fps: s.fps ?? null, lat: s.latency_ms ?? null,
   })), [data.samples]);
 
-  const fpsClass = last.fps != null && last.fps > 144 ? "text-[#E5FF00]" : "text-zinc-100";
+  const fpsClass = last.fps != null && last.fps > 144 ? "text-volt" : "text-zinc-100";
 
   return (
     <div className="max-w-7xl mx-auto fade-up" data-testid="live-page">
@@ -283,7 +283,7 @@ export default function Live() {
           <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-2">{t("live.eyebrow")}</div>
           <h1 className="font-display font-black text-3xl tracking-tighter uppercase">{t("live.title")}</h1>
         </div>
-        <div className={`flex items-center gap-2 px-3 py-1.5 border text-xs font-bold font-mono uppercase tracking-widest ${data.live ? "border-[#00FF66]/50 text-[#00FF66]" : "border-[#2A2A35] text-zinc-500"}`} data-testid="live-status">
+        <div className={`flex items-center gap-2 px-3 py-1.5 border text-xs font-bold font-mono uppercase tracking-widest ${data.live ? "border-ok/50 text-ok" : "border-hud text-zinc-500"}`} data-testid="live-status">
           <Radio size={14} className={data.live ? "animate-pulse" : ""} /> {data.live ? t("live.link_active") : t("live.agent_off")}
         </div>
       </div>
@@ -312,7 +312,7 @@ export default function Live() {
           game={last.game}
         />
       ) : (
-        <div className="bg-[#0F0F12] border border-[#2A2A35] p-8 mb-4 text-center rounded-none" data-testid="live-offline-hero">
+        <HUDCard testid="live-offline-hero" pad="p-8" className="mb-4 text-center rounded-none">
           <div className="font-mono text-[11px] uppercase tracking-[0.3em] text-zinc-600 mb-3">// {t("live.agent_off")}</div>
           <div className="font-display font-black text-2xl uppercase tracking-tight mb-1">{t("live.start_title")}</div>
           <p className="text-sm text-zinc-500 mb-6 max-w-xl mx-auto">{t("live.start_desc")}</p>
@@ -334,7 +334,7 @@ export default function Live() {
               </div>
             </details>
           </div>
-        </div>
+        </HUDCard>
       )}
 
       <MonitorPreflight
@@ -375,7 +375,7 @@ export default function Live() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <BentoCard icon={Zap} label={last.game ? `${t("live.card_perf")} · ${last.game}` : t("live.card_perf")}
           main={last.fps} mainUnit="FPS" mainClass={fpsClass} testid="stat-fps"
-          rows={[{ label: t("live.st_latency"), value: last.latency_ms, unit: "ms", cls: "text-[#00E0FF]", testid: "stat-latency" }]} />
+          rows={[{ label: t("live.st_latency"), value: last.latency_ms, unit: "ms", cls: "text-info", testid: "stat-latency" }]} />
         <BentoCard icon={Cpu} label={t("live.card_cpu")}
           main={last.cpu_util} mainUnit="%" testid="stat-cpu"
           rows={[{ label: t("live.st_cpu_temp"), value: last.cpu_temp, unit: "°C", cls: tempClass(last.cpu_temp), testid: "stat-cpu-temp" }]} />
@@ -393,9 +393,9 @@ export default function Live() {
       {/* ===== v0.7.7: PRECISION SENSORS STRIP (fan RPM / VRM temp / CPU power / Vcore) ===== */}
       {(last.fan_rpm_max != null || last.vrm_temp != null || last.cpu_power != null || last.cpu_vcore != null) && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4" data-testid="precision-sensors">
-          <PrecisionCell icon={Fan} label={t("live.st_fan_rpm", "Fan RPM")} value={last.fan_rpm_max} unit="RPM" cls="text-[#00E0FF]" testid="stat-fan-rpm" />
+          <PrecisionCell icon={Fan} label={t("live.st_fan_rpm", "Fan RPM")} value={last.fan_rpm_max} unit="RPM" cls="text-info" testid="stat-fan-rpm" />
           <PrecisionCell icon={Thermometer} label={t("live.st_vrm_temp", "VRM Temp")} value={last.vrm_temp} unit="°C" cls={tempClass(last.vrm_temp)} testid="stat-vrm-temp" />
-          <PrecisionCell icon={Zap} label={t("live.st_cpu_power", "CPU Power")} value={last.cpu_power} unit="W" cls="text-[#E5FF00]" testid="stat-cpu-power" />
+          <PrecisionCell icon={Zap} label={t("live.st_cpu_power", "CPU Power")} value={last.cpu_power} unit="W" cls="text-volt" testid="stat-cpu-power" />
           <PrecisionCell icon={Wind} label={t("live.st_cpu_vcore", "Vcore")} value={last.cpu_vcore} unit="V" cls="text-[#B388FF]" testid="stat-cpu-vcore" />
         </div>
       )}
@@ -408,16 +408,16 @@ export default function Live() {
         <div className="space-y-4">
           {data.live && <BottleneckDetector />}
           <AlertSettings alerts={alerts} setAlerts={setAlerts} onSave={saveAlerts} t={t} />
-          <details className="bg-[#0F0F12] border border-[#1A1A24] rounded-none group" data-testid="reflex-card">
+          <details className="bg-panel border border-hud-soft rounded-none group" data-testid="reflex-card">
             <summary className="flex items-center justify-between gap-2 p-4 cursor-pointer select-none text-sm font-bold hover:bg-black/30 transition-colors">
-              <span className="flex items-center gap-2"><Sparkles size={15} className="text-[#00E0FF]" /> {t("live.reflex_title")}</span>
+              <span className="flex items-center gap-2"><Sparkles size={15} className="text-info" /> {t("live.reflex_title")}</span>
               <ChevronDown size={15} className="text-zinc-500 group-open:rotate-180 transition-transform" />
             </summary>
             <div className="px-4 pb-4">
               <p className="text-xs text-zinc-500 mb-3">{t("live.reflex_desc")}</p>
               <ul className="space-y-2 text-sm text-zinc-300">
                 {["reflex_t1", "reflex_t2", "reflex_t3", "reflex_t4"].map((k) => (
-                  <li key={k} className="border-l-2 border-[#00E0FF]/40 pl-3 text-[13px] leading-relaxed" data-testid={`reflex-${k}`}>{t(`live.${k}`)}</li>
+                  <li key={k} className="border-l-2 border-info/40 pl-3 text-[13px] leading-relaxed" data-testid={`reflex-${k}`}>{t(`live.${k}`)}</li>
                 ))}
               </ul>
             </div>

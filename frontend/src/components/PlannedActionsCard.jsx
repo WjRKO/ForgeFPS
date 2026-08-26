@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ListTodo, Check, Trash2, Loader2 } from "lucide-react";
 import api from "@/lib/api";
+import { HUDCard } from "@/components/hud";
 
 /**
  * Lista delle azioni messe da parte con "Salva per dopo" nella diagnosi AI.
@@ -16,9 +17,9 @@ import api from "@/lib/api";
  */
 
 const DIFFICULTY_STYLE = {
-  facile: "text-[#00E0FF] border-[#00E0FF]/40",
-  medio: "text-[#E5FF00] border-[#E5FF00]/40",
-  avanzato: "text-[#FF3B30] border-[#FF3B30]/40",
+  facile: "text-info border-info/40",
+  medio: "text-volt border-volt/40",
+  avanzato: "text-bad border-bad/40",
 };
 
 export default function PlannedActionsCard() {
@@ -62,11 +63,11 @@ export default function PlannedActionsCard() {
   const label = (d) => ({ facile: c.easy, medio: c.medium, avanzato: c.hard }[d] || d);
 
   return (
-    <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick p-6 mb-4" data-testid="planned-actions-card">
+    <HUDCard testid="planned-actions-card" pad="p-6" className="hud-tick mb-4">
       <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-1 flex items-center gap-2">
-        <ListTodo size={14} className="text-[#E5FF00]" /> {c.title}
+        <ListTodo size={14} className="text-volt" /> {c.title}
         {items.length > 0 && (
-          <span className="ml-1 text-[#E5FF00] font-mono" data-testid="planned-actions-count">
+          <span className="ml-1 text-volt font-mono" data-testid="planned-actions-count">
             {items.length}
           </span>
         )}
@@ -80,7 +81,7 @@ export default function PlannedActionsCard() {
           {items.map((a) => (
             <li
               key={a.id}
-              className="border border-[#1A1A24] bg-black p-3 flex items-start justify-between gap-3"
+              className="border border-hud-soft bg-black p-3 flex items-start justify-between gap-3"
               data-testid="planned-action-row"
             >
               <div className="min-w-0">
@@ -90,11 +91,11 @@ export default function PlannedActionsCard() {
                 )}
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   {a.difficulty && (
-                    <span className={`text-[11px] uppercase tracking-wider border px-1.5 py-0.5 ${DIFFICULTY_STYLE[a.difficulty] || "text-zinc-500 border-[#2A2A35]"}`}>
+                    <span className={`text-[11px] uppercase tracking-wider border px-1.5 py-0.5 ${DIFFICULTY_STYLE[a.difficulty] || "text-zinc-500 border-hud"}`}>
                       {label(a.difficulty)}
                     </span>
                   )}
-                  {a.impact && <span className="text-[11px] text-[#00E0FF]">{a.impact}</span>}
+                  {a.impact && <span className="text-[11px] text-info">{a.impact}</span>}
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
@@ -104,7 +105,7 @@ export default function PlannedActionsCard() {
                   title={c.done}
                   aria-label={c.done}
                   data-testid="planned-action-done"
-                  className="p-2 border border-[#2A2A35] text-zinc-400 hover:text-[#E5FF00] hover:border-[#E5FF00]/50 transition-colors disabled:opacity-40"
+                  className="p-2 border border-hud text-zinc-400 hover:text-volt hover:border-volt/50 transition-colors disabled:opacity-40"
                 >
                   {busy === a.id ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                 </button>
@@ -114,7 +115,7 @@ export default function PlannedActionsCard() {
                   title={c.remove}
                   aria-label={c.remove}
                   data-testid="planned-action-delete"
-                  className="p-2 border border-[#2A2A35] text-zinc-500 hover:text-[#FF3B30] hover:border-[#FF3B30]/50 transition-colors disabled:opacity-40"
+                  className="p-2 border border-hud text-zinc-500 hover:text-bad hover:border-bad/50 transition-colors disabled:opacity-40"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -123,6 +124,6 @@ export default function PlannedActionsCard() {
           ))}
         </ul>
       )}
-    </div>
+    </HUDCard>
   );
 }

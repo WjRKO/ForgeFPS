@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Gauge, Loader2, Swords, MonitorDown, Search, Sparkles, RefreshCw, Settings2, Save, Zap } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiErrorDetail } from "@/lib/api";
-import { PrimaryButton } from "@/components/hud";
+import { HUDCard, PrimaryButton } from "@/components/hud";
 import { SecureRunBlock } from "@/components/SecureRunBlock";
 import PlanUpgradeBanner from "@/components/PlanUpgradeBanner";
 
@@ -156,48 +156,48 @@ export default function Games() {
             description={t("plan_banner.advtweaks.desc")} testid="booster-locked" />
         </div>
       ) : (
-      <div className="bg-gradient-to-br from-[#00E0FF]/10 to-transparent border border-[#00E0FF]/40 p-5 mb-5" data-testid="booster-card">
-        <div className="flex items-center gap-2 text-sm font-bold mb-1 text-[#00E0FF]"><Zap size={16} /> {t("games.booster_title")}</div>
+      <div className="bg-gradient-to-br from-info/10 to-transparent border border-info/40 p-5 mb-5" data-testid="booster-card">
+        <div className="flex items-center gap-2 text-sm font-bold mb-1 text-info"><Zap size={16} /> {t("games.booster_title")}</div>
         <p className="text-xs text-zinc-400 mb-3 leading-relaxed">{t("games.booster_desc")}</p>
         <SecureRunBlock token={token} mode="booster" testid="booster-run-cmd" />
 
         <button onClick={() => setShowBoostCfg((v) => !v)} data-testid="booster-config-toggle"
-          className="mt-3 inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-[#00E0FF] transition-colors">
+          className="mt-3 inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-info transition-colors">
           <Settings2 size={13} /> {showBoostCfg ? t("games.hide_customize") : t("games.customize")}
         </button>
 
         {showBoostCfg && (
-          <div className="mt-3 bg-black/50 border border-[#2A2A35] p-4" data-testid="booster-config">
+          <div className="mt-3 bg-black/50 border border-hud p-4" data-testid="booster-config">
             <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer select-none mb-2" data-testid="booster-priority-toggle">
-              <input type="checkbox" checked={boostCfg.boost_priority} onChange={(e) => setBoostCfg((s) => ({ ...s, boost_priority: e.target.checked }))} className="accent-[#00E0FF] w-4 h-4" />
+              <input type="checkbox" checked={boostCfg.boost_priority} onChange={(e) => setBoostCfg((s) => ({ ...s, boost_priority: e.target.checked }))} className="accent-info w-4 h-4" />
               {t("games.booster_priority")}
             </label>
             <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer select-none mb-2" data-testid="booster-power-toggle">
-              <input type="checkbox" checked={boostCfg.set_power} onChange={(e) => setBoostCfg((s) => ({ ...s, set_power: e.target.checked }))} className="accent-[#00E0FF] w-4 h-4" />
+              <input type="checkbox" checked={boostCfg.set_power} onChange={(e) => setBoostCfg((s) => ({ ...s, set_power: e.target.checked }))} className="accent-info w-4 h-4" />
               {t("games.booster_power_toggle")}
             </label>
             <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer select-none mb-3" data-testid="booster-purge-toggle">
-              <input type="checkbox" checked={boostCfg.purge_ram} onChange={(e) => setBoostCfg((s) => ({ ...s, purge_ram: e.target.checked }))} className="accent-[#00E0FF] w-4 h-4" />
+              <input type="checkbox" checked={boostCfg.purge_ram} onChange={(e) => setBoostCfg((s) => ({ ...s, purge_ram: e.target.checked }))} className="accent-info w-4 h-4" />
               {t("games.booster_purge")}
             </label>
             {/* App in esecuzione da chiudere - lista dinamica (non piu' categorie generiche) */}
-            <div className="border-t border-[#2A2A35] pt-3 mb-3">
+            <div className="border-t border-hud pt-3 mb-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-xs uppercase tracking-widest text-zinc-500">{t("games.booster_close")}</div>
                 <button onClick={loadRunningApps} data-testid="booster-refresh-running"
-                  className="text-[11px] text-zinc-500 hover:text-[#00E0FF] transition-colors inline-flex items-center gap-1">
+                  className="text-[11px] text-zinc-500 hover:text-info transition-colors inline-flex items-center gap-1">
                   <RefreshCw size={11} /> {t("games.refresh_short") || "aggiorna"}
                 </button>
               </div>
 
               {runningApps.length === 0 ? (
-                <div className="bg-black/30 border border-[#2A2A35] px-3 py-4 text-xs text-zinc-500 text-center leading-relaxed" data-testid="booster-no-running">
+                <div className="bg-black/30 border border-hud px-3 py-4 text-xs text-zinc-500 text-center leading-relaxed" data-testid="booster-no-running">
                   {t("games.booster_no_running") || "Nessuna app in background rilevata. Avvia il FrameForge Agent con Ottimizza o Sync per aggiornare la lista."}
                 </div>
               ) : (
                 <>
-                  <div className="text-[11px] text-[#00FF66] mb-2 flex items-center gap-1.5" data-testid="booster-running-summary">
-                    <span className="w-2 h-2 rounded-full bg-[#00FF66] animate-pulse" />
+                  <div className="text-[11px] text-ok mb-2 flex items-center gap-1.5" data-testid="booster-running-summary">
+                    <span className="w-2 h-2 rounded-full bg-ok animate-pulse" />
                     {(t("games.booster_running_count", { count: runningApps.length }) || `${runningApps.length} app in background rilevate`)}
                     {runningAt ? <span className="text-zinc-500"> · {new Date(runningAt).toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span> : null}
                   </div>
@@ -209,11 +209,11 @@ export default function Games() {
                         <label key={proc} data-testid={`booster-app-${proc}`}
                           className={`flex items-center gap-2 text-sm cursor-pointer select-none px-2 py-1.5 border transition-colors ${
                             checked
-                              ? "bg-[#00E0FF]/10 border-[#00E0FF]/40 text-white"
-                              : "border-[#1A1A24] text-zinc-300 hover:border-[#2A2A35]"
+                              ? "bg-info/10 border-info/40 text-white"
+                              : "border-hud-soft text-zinc-300 hover:border-hud"
                           }`}>
                           <input type="checkbox" checked={checked} onChange={() => toggleBoostApp(proc)}
-                            className="accent-[#00E0FF] w-4 h-4" />
+                            className="accent-info w-4 h-4" />
                           <span className="flex-1 truncate">{label}</span>
                           <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">{proc}</span>
                         </label>
@@ -229,18 +229,18 @@ export default function Games() {
               )}
             </div>
             <button onClick={saveBoostConfig} disabled={savingBoost} data-testid="booster-save"
-              className="inline-flex items-center gap-2 bg-[#00E0FF] text-black font-bold px-4 py-2 text-sm hover:bg-[#00C8E0] transition-colors disabled:opacity-60">
+              className="inline-flex items-center gap-2 bg-info text-black font-bold px-4 py-2 text-sm hover:bg-[#00C8E0] transition-colors disabled:opacity-60">
               {savingBoost ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {t("games.save_settings")}
             </button>
           </div>
         )}
 
         {boostSessions.length > 0 && (
-          <div className="mt-3 border-t border-[#2A2A35] pt-3" data-testid="booster-sessions">
+          <div className="mt-3 border-t border-hud pt-3" data-testid="booster-sessions">
             <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{t("games.booster_sessions")}</div>
             <div className="space-y-1">
               {boostSessions.slice(0, 5).map((s, i) => (
-                <div key={s.session_id || `${s.game}-${s.started_at || i}`} className="flex items-center justify-between text-xs bg-black/40 border border-[#1A1A24] px-3 py-1.5" data-testid={`booster-session-${i}`}>
+                <div key={s.session_id || `${s.game}-${s.started_at || i}`} className="flex items-center justify-between text-xs bg-black/40 border border-hud-soft px-3 py-1.5" data-testid={`booster-session-${i}`}>
                   <span className="text-zinc-200 font-semibold">{s.game}</span>
                   <span className="text-zinc-500">{Math.round((s.duration_s || 0) / 60)} {t("games.booster_min")} · {(s.actions || []).length} {t("games.booster_actions")}</span>
                 </div>
@@ -253,15 +253,15 @@ export default function Games() {
 
       <div className="grid lg:grid-cols-[1fr_1.1fr] gap-4">
         {/* Detected games */}
-        <div className="bg-[#0F0F12] border border-[#2A2A35] p-5">
+        <HUDCard>
           <div className="flex items-center justify-between mb-3">
-            <div className="text-xs uppercase tracking-widest text-zinc-500 flex items-center gap-2"><Swords size={14} className="text-[#E5FF00]" /> {t("games.detected")} ({games.length})</div>
-            <button onClick={refresh} data-testid="games-refresh" aria-label={t("a11y.refresh")} className="text-zinc-500 hover:text-[#E5FF00] transition-colors"><RefreshCw size={14} className={refreshing ? "animate-spin" : ""} /></button>
+            <div className="text-xs uppercase tracking-widest text-zinc-500 flex items-center gap-2"><Swords size={14} className="text-volt" /> {t("games.detected")} ({games.length})</div>
+            <button onClick={refresh} data-testid="games-refresh" aria-label={t("a11y.refresh")} className="text-zinc-500 hover:text-volt transition-colors"><RefreshCw size={14} className={refreshing ? "animate-spin" : ""} /></button>
           </div>
 
           {games.length === 0 ? (
             <div className="text-sm text-zinc-400 leading-relaxed">
-              <div className="flex items-center gap-2 text-zinc-300 mb-2"><MonitorDown size={16} className="text-[#E5FF00]" /> {t("games.no_games")}</div>
+              <div className="flex items-center gap-2 text-zinc-300 mb-2"><MonitorDown size={16} className="text-volt" /> {t("games.no_games")}</div>
               <p className="text-xs text-zinc-500 mb-3">{t("games.no_games_hint")}</p>
               <SecureRunBlock token={token} mode="sync" testid="games-sync-cmd" />
             </div>
@@ -269,19 +269,19 @@ export default function Games() {
             <div className="flex flex-wrap gap-2">
               {games.map((g, i) => (
                 <button key={g} data-testid={`game-chip-${i}`} onClick={() => estimate(g)}
-                  className={`text-xs px-3 py-1.5 border transition-colors ${game === g ? "bg-[#E5FF00] text-black border-[#E5FF00] font-bold" : "border-[#2A2A35] text-zinc-300 hover:border-[#E5FF00]"}`}>
+                  className={`text-xs px-3 py-1.5 border transition-colors ${game === g ? "bg-volt text-black border-volt font-bold" : "border-hud text-zinc-300 hover:border-volt"}`}>
                   {g}
                 </button>
               ))}
             </div>
           )}
 
-          <div className="mt-4 pt-4 border-t border-[#2A2A35]">
+          <div className="mt-4 pt-4 border-t border-hud">
             <label className="text-xs uppercase tracking-widest text-zinc-500">{t("games.analyze_title")}</label>
             <div className="flex gap-2 mt-1">
               <input data-testid="game-input" value={game} onChange={(e) => setGame(e.target.value)} placeholder={t("games.analyze_ph")}
                 onKeyDown={(e) => e.key === "Enter" && estimate()}
-                className="flex-1 bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 text-sm" />
+                className="flex-1 bg-black border border-hud focus:border-volt outline-none px-3 py-2 text-sm" />
               <PrimaryButton testid="game-search-btn" onClick={() => estimate()} disabled={loading} className="!px-4">
                 {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
               </PrimaryButton>
@@ -289,28 +289,28 @@ export default function Games() {
             <div className="flex gap-2 mt-3">
               {RES.map((r) => (
                 <button key={r} data-testid={`res-${r}`} onClick={() => setRes(r)}
-                  className={`flex-1 py-1.5 text-xs border transition-colors ${res === r ? "bg-[#E5FF00] text-black border-[#E5FF00] font-bold" : "border-[#2A2A35] text-zinc-400 hover:border-[#E5FF00]"}`}>{r}</button>
+                  className={`flex-1 py-1.5 text-xs border transition-colors ${res === r ? "bg-volt text-black border-volt font-bold" : "border-hud text-zinc-400 hover:border-volt"}`}>{r}</button>
               ))}
             </div>
-            {!hasSpecs && <p className="text-[11px] text-zinc-500 mt-2">{t("games.no_specs_hint")} <Link to="/app/pc" className="text-[#E5FF00] hover:underline">{t("nav.pc")}</Link>.</p>}
+            {!hasSpecs && <p className="text-[11px] text-zinc-500 mt-2">{t("games.no_specs_hint")} <Link to="/app/pc" className="text-volt hover:underline">{t("nav.pc")}</Link>.</p>}
           </div>
-        </div>
+        </HUDCard>
 
         {/* FPS result */}
-        <div className="bg-[#0F0F12] border border-[#2A2A35] p-5">
-          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2"><Gauge size={14} className="text-[#E5FF00]" /> {t("games.analysis")}</div>
-          {err && <div className="text-xs text-[#FF3B30]">{err}</div>}
+        <HUDCard>
+          <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2"><Gauge size={14} className="text-volt" /> {t("games.analysis")}</div>
+          {err && <div className="text-xs text-bad">{err}</div>}
           {!fps && !loading && !err && (
             <div className="h-56 flex flex-col items-center justify-center text-center text-zinc-600">
-              <Sparkles size={28} className="text-[#E5FF00] mb-3" />
+              <Sparkles size={28} className="text-volt mb-3" />
               <p className="text-sm text-zinc-500 max-w-xs">{t("games.empty_hint")}</p>
             </div>
           )}
-          {loading && <div className="h-56 flex items-center justify-center"><Loader2 size={24} className="animate-spin text-[#E5FF00]" /></div>}
+          {loading && <div className="h-56 flex items-center justify-center"><Loader2 size={24} className="animate-spin text-volt" /></div>}
           {fps && !loading && (
             <div className="fade-up" data-testid="fps-result">
               <div className="text-sm text-zinc-300 mb-3">{fps.game} · {fps.resolution} <span className="text-xs text-zinc-500">({t("common.reliability")} {fps.confidence})</span></div>
-              <div className={`text-[11px] mb-3 px-2.5 py-1.5 border ${fps.fleet ? "border-[#00E0FF]/30 bg-[#00E0FF]/5 text-[#00E0FF]" : "border-[#1F1F28] bg-black/30 text-zinc-500"}`} data-testid="fps-source">
+              <div className={`text-[11px] mb-3 px-2.5 py-1.5 border ${fps.fleet ? "border-info/30 bg-info/5 text-info" : "border-[#1F1F28] bg-black/30 text-zinc-500"}`} data-testid="fps-source">
                 {fps.fleet
                   ? t("games.src_fleet", { n: fps.fleet.users, fps: fps.fleet.fps_median })
                   : t("games.src_ai")}
@@ -319,31 +319,31 @@ export default function Games() {
                 {fps.estimates.map((e, i) => (
                   <div key={e.preset || i} data-testid={`fps-bar-${i}`}>
                     <div className="flex justify-between text-xs mb-1"><span className="text-zinc-400">{e.preset}</span><span className="font-bold text-zinc-100">{e.fps} FPS</span></div>
-                    <div className="h-2 bg-black border border-[#1A1A24]">
+                    <div className="h-2 bg-black border border-hud-soft">
                       <div className="h-full" style={{ width: `${(e.fps / maxFps) * 100}%`, background: e.fps >= 60 ? "#00FF66" : e.fps >= 30 ? "#E5FF00" : "#FF3B30" }} />
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="mt-4 text-sm"><span className="text-zinc-500">{t("games.recommended_preset")} </span><span className="text-[#E5FF00] font-bold">{fps.recommended_preset}</span></div>
+              <div className="mt-4 text-sm"><span className="text-zinc-500">{t("games.recommended_preset")} </span><span className="text-volt font-bold">{fps.recommended_preset}</span></div>
               <p className="text-xs text-zinc-500 mt-2 leading-relaxed">{fps.notes}</p>
             </div>
           )}
-        </div>
+        </HUDCard>
       </div>
 
       {recTpl && (
-        <div className="mt-4 bg-gradient-to-br from-[#00E0FF]/10 to-transparent border border-[#00E0FF]/40 p-5" data-testid="rec-preset-card">
-          <div className="flex items-center gap-2 text-sm font-bold mb-1 text-[#00E0FF]">
+        <div className="mt-4 bg-gradient-to-br from-info/10 to-transparent border border-info/40 p-5" data-testid="rec-preset-card">
+          <div className="flex items-center gap-2 text-sm font-bold mb-1 text-info">
             <Settings2 size={16} /> {t("games.rec_title")}
           </div>
           <p className="text-xs text-zinc-400 mb-3">
-            {t("games.rec_for")} <span className="text-zinc-200 font-semibold">{game}</span>: <span className="text-[#00E0FF] font-bold">{recTpl.game_name}</span>
+            {t("games.rec_for")} <span className="text-zinc-200 font-semibold">{game}</span>: <span className="text-info font-bold">{recTpl.game_name}</span>
             <span className="text-zinc-500"> · {recTpl.preset_label}</span>
           </p>
           <div className="flex flex-wrap gap-1.5 mb-3">
             {recTweakNames.map((n) => (
-              <span key={n} className="text-[11px] bg-black border border-[#1A1A24] px-2 py-0.5 text-zinc-400">{n}</span>
+              <span key={n} className="text-[11px] bg-black border border-hud-soft px-2 py-0.5 text-zinc-400">{n}</span>
             ))}
             {recTpl.tweak_ids.length > 8 && <span className="text-[11px] text-zinc-600 px-1">+{recTpl.tweak_ids.length - 8}</span>}
           </div>

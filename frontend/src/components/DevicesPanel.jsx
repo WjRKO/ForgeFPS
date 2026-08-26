@@ -32,55 +32,55 @@ export const DevicesPanel = () => {
   };
 
   return (
-    <div className="border border-[#2A2A35] bg-[#0F0F12] hud-tick mb-6" data-testid="devices-panel">
-      <div className="p-4 border-b border-[#2A2A35] flex items-center gap-2">
-        <Monitor size={14} className="text-[#E5FF00]" />
+    <div className="border border-hud bg-panel hud-tick mb-6" data-testid="devices-panel">
+      <div className="p-4 border-b border-hud flex items-center gap-2">
+        <Monitor size={14} className="text-volt" />
         <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">{c.title}</span>
         <span className="text-[11px] font-mono text-zinc-600">{data.devices.length}/{data.limit}</span>
       </div>
-      <div className="divide-y divide-[#1A1A24]">
+      <div className="divide-y divide-hud-soft">
         {data.devices.map((d) => {
           const I = ROLE_ICONS[d.role] || Monitor;
           return (
             <div key={d.device_id} className="flex flex-wrap items-center gap-3 p-3" data-testid={`device-row-${d.device_id}`}>
-              <I size={16} className={d.is_active ? "text-[#E5FF00]" : "text-zinc-500"} />
+              <I size={16} className={d.is_active ? "text-volt" : "text-zinc-500"} />
               <div className="flex-1 min-w-[160px]">
                 {editing === d.device_id ? (
                   <input autoFocus value={name} onChange={(e) => setName(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && save(d.device_id, { name })}
                     onBlur={() => save(d.device_id, { name })}
                     data-testid={`device-name-input-${d.device_id}`}
-                    className="bg-black border border-[#E5FF00] px-2 py-1 text-sm outline-none w-full max-w-[220px]" />
+                    className="bg-black border border-volt px-2 py-1 text-sm outline-none w-full max-w-[220px]" />
                 ) : (
                   <button onClick={() => { setEditing(d.device_id); setName(d.name); }}
                     data-testid={`device-rename-${d.device_id}`}
-                    className="flex items-center gap-1.5 text-sm font-semibold text-zinc-100 hover:text-[#E5FF00] transition-colors">
+                    className="flex items-center gap-1.5 text-sm font-semibold text-zinc-100 hover:text-volt transition-colors">
                     {d.name} <Pencil size={11} className="text-zinc-600" />
                   </button>
                 )}
                 <div className="text-[11px] text-zinc-600 font-mono">
-                  <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${d.online ? "bg-[#00FF66]" : "bg-zinc-600"}`} />
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${d.online ? "bg-ok" : "bg-zinc-600"}`} />
                   {c.last}: {d.last_seen ? new Date(d.last_seen).toLocaleString() : c.never}
                   {d.health_score != null && ` · Health ${d.health_score}`}
                 </div>
               </div>
               <select value={d.role} onChange={(e) => save(d.device_id, { role: e.target.value })}
                 data-testid={`device-role-${d.device_id}`}
-                className="bg-black border border-[#2A2A35] text-xs text-zinc-300 px-2 py-1.5 outline-none focus:border-[#E5FF00]">
+                className="bg-black border border-hud text-xs text-zinc-300 px-2 py-1.5 outline-none focus:border-volt">
                 {["gaming", "streaming", "laptop", "other"].map((r) => <option key={r} value={r}>{c[r]}</option>)}
               </select>
               {d.is_active ? (
-                <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-[#E5FF00] border border-[#E5FF00]/40 bg-[#E5FF00]/10 px-2 py-1.5" data-testid={`device-active-${d.device_id}`}>
+                <span className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-volt border border-volt/40 bg-volt/10 px-2 py-1.5" data-testid={`device-active-${d.device_id}`}>
                   <Check size={11} /> {c.active}
                 </span>
               ) : (
                 <button onClick={() => activate(d.device_id)} data-testid={`device-activate-${d.device_id}`}
-                  className="text-[11px] font-bold uppercase tracking-widest border border-[#2A2A35] text-zinc-400 px-2 py-1.5 hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors">
+                  className="text-[11px] font-bold uppercase tracking-widest border border-hud text-zinc-400 px-2 py-1.5 hover:border-volt hover:text-volt transition-colors">
                   {c.use}
                 </button>
               )}
               <button onClick={() => remove(d.device_id)} data-testid={`device-delete-${d.device_id}`}
-                className="text-zinc-600 hover:text-[#FF3B30] transition-colors p-1"><Trash2 size={14} /></button>
+                className="text-zinc-600 hover:text-bad transition-colors p-1"><Trash2 size={14} /></button>
             </div>
           );
         })}

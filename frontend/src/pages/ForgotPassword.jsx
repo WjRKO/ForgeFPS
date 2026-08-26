@@ -15,6 +15,7 @@ import { Zap, Loader2, Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import api from "@/lib/api";
+import { HUDCard } from "@/components/hud";
 
 export default function ForgotPassword() {
   const { t } = useTranslation();
@@ -40,19 +41,19 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] grid-bg flex items-center justify-center px-6 text-zinc-100">
+    <div className="min-h-screen bg-ink grid-bg flex items-center justify-center px-6 text-zinc-100">
       <div className="absolute top-4 right-4"><LanguageSwitcher /></div>
       <div className="w-full max-w-md">
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-9 h-9 bg-[#E5FF00] flex items-center justify-center"><Zap size={20} className="text-black" /></div>
-          <span className="font-display font-black tracking-tighter text-xl">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
+          <div className="w-9 h-9 bg-volt flex items-center justify-center"><Zap size={20} className="text-black" /></div>
+          <span className="font-display font-black tracking-tighter text-xl">FRAME<span className="text-volt">FORGE</span></span>
         </Link>
 
-        <div className="bg-[#0F0F12] border border-[#2A2A35] p-8">
+        <HUDCard pad="p-8">
           {sent ? (
             <div data-testid="forgot-sent">
-              <div className="w-12 h-12 border border-[#00FF66]/40 bg-[#00FF66]/10 flex items-center justify-center mb-4">
-                <CheckCircle2 size={22} className="text-[#00FF66]" />
+              <div className="w-12 h-12 border border-ok/40 bg-ok/10 flex items-center justify-center mb-4">
+                <CheckCircle2 size={22} className="text-ok" />
               </div>
               <h1 className="font-display font-bold text-2xl tracking-tight mb-2">
                 {t("auth.forgot_sent_title", { defaultValue: "Controlla la tua casella" })}
@@ -64,7 +65,7 @@ export default function ForgotPassword() {
                 {t("auth.forgot_sent_hint", { defaultValue: "Il link scade dopo 1 ora. Non hai ricevuto nulla dopo 10 minuti? Contatta il supporto o riprova." })}
               </p>
               <Link to="/login" data-testid="forgot-back-login"
-                className="inline-flex items-center gap-2 text-sm text-[#E5FF00] hover:underline">
+                className="inline-flex items-center gap-2 text-sm text-volt hover:underline">
                 <ArrowLeft size={14} /> {t("auth.back_to_login", { defaultValue: "Torna al login" })}
               </Link>
             </div>
@@ -78,7 +79,7 @@ export default function ForgotPassword() {
               </p>
 
               {error && (
-                <div data-testid="forgot-error" className="mb-4 text-sm text-[#FF3B30] border border-[#FF3B30]/40 bg-[#FF3B30]/10 px-3 py-2">
+                <div data-testid="forgot-error" className="mb-4 text-sm text-bad border border-bad/40 bg-bad/10 px-3 py-2">
                   {error}
                 </div>
               )}
@@ -88,7 +89,7 @@ export default function ForgotPassword() {
                   <label className="text-xs uppercase tracking-widest text-zinc-500">
                     {t("auth.email", { defaultValue: "Email" })}
                   </label>
-                  <div className="flex items-center gap-2 border-b border-[#2A2A35] focus-within:border-[#E5FF00] mt-1 transition-colors">
+                  <div className="flex items-center gap-2 border-b border-hud focus-within:border-volt mt-1 transition-colors">
                     <Mail size={14} className="text-zinc-500" />
                     <input data-testid="forgot-email-input" type="email" required autoFocus
                       value={email} onChange={(e) => setEmail(e.target.value)}
@@ -96,7 +97,7 @@ export default function ForgotPassword() {
                   </div>
                 </div>
                 <button type="submit" data-testid="forgot-submit-btn" disabled={loading}
-                  className="w-full bg-[#E5FF00] text-black font-bold py-3 hover:bg-[#D4EC00] transition-colors flex items-center justify-center gap-2 disabled:opacity-60">
+                  className="w-full bg-volt text-black font-bold py-3 hover:bg-volt-dim transition-colors flex items-center justify-center gap-2 disabled:opacity-60">
                   {loading && <Loader2 size={16} className="animate-spin" />}
                   {t("auth.forgot_submit", { defaultValue: "Manda il link" })}
                 </button>
@@ -104,13 +105,13 @@ export default function ForgotPassword() {
 
               <div className="mt-6 text-sm text-zinc-500 text-center">
                 <Link to="/login" data-testid="forgot-cancel"
-                  className="text-[#E5FF00] hover:underline inline-flex items-center gap-1">
+                  className="text-volt hover:underline inline-flex items-center gap-1">
                   <ArrowLeft size={14} /> {t("auth.back_to_login", { defaultValue: "Torna al login" })}
                 </Link>
               </div>
             </>
           )}
-        </div>
+        </HUDCard>
       </div>
     </div>
   );

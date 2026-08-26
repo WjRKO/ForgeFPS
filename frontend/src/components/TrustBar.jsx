@@ -43,7 +43,7 @@ export const TrustBar = ({ className = "" }) => {
             {it.href && <ExternalLink size={11} className="text-zinc-600 group-hover:text-zinc-300 transition-colors" />}
           </>
         );
-        const base = "group inline-flex items-center gap-2 bg-[#0F0F12] border border-[#2A2A35] px-3.5 py-3 text-xs font-medium hover:border-[#E5FF00]/50 transition-colors";
+        const base = "group inline-flex items-center gap-2 bg-panel border border-hud px-3.5 py-3 text-xs font-medium hover:border-volt/50 transition-colors";
         if (it.to) {
           return (
             <Link key={it.testid} to={it.to} data-testid={it.testid} className={base}>
@@ -56,7 +56,7 @@ export const TrustBar = ({ className = "" }) => {
             {inner}
           </a>
         ) : (
-          <div key={it.testid} data-testid={it.testid} className={base.replace(" hover:border-[#E5FF00]/50 transition-colors", "")}>
+          <div key={it.testid} data-testid={it.testid} className={base.replace(" hover:border-volt/50 transition-colors", "")}>
             {inner}
           </div>
         );

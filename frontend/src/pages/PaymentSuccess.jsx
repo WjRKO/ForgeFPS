@@ -77,33 +77,33 @@ export default function PaymentSuccess() {
   }, [sessionId]);
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100">
+    <div className="min-h-screen bg-ink text-zinc-100">
       <MarketingNav />
       <main className="max-w-2xl mx-auto px-6 pt-32 pb-24 text-center" data-testid="payment-success">
         {state === "checking" && (
           <>
-            <Loader2 size={48} className="text-[#E5FF00] mx-auto mb-6 animate-spin" />
+            <Loader2 size={48} className="text-volt mx-auto mb-6 animate-spin" />
             <h1 className="font-display font-black text-3xl tracking-tighter mb-3">{c.checking}</h1>
             <p className="text-zinc-500 text-sm">Session: <span className="font-mono">{sessionId?.slice(0, 20)}...</span></p>
           </>
         )}
         {state === "success" && (
           <>
-            <CheckCircle2 size={56} className="text-[#00FF66] mx-auto mb-6" />
+            <CheckCircle2 size={56} className="text-ok mx-auto mb-6" />
             <h1 className="font-display font-black text-4xl tracking-tighter mb-3" data-testid="success-title">{c.success}</h1>
             <p className="text-zinc-400 mb-8">{c.success_hint}</p>
             <Link to="/app" data-testid="go-dashboard-btn"
-              className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-6 py-3 uppercase tracking-wide text-sm hover:bg-[#D4EC00] transition-colors">
+              className="inline-flex items-center gap-2 bg-volt text-black font-bold px-6 py-3 uppercase tracking-wide text-sm hover:bg-volt-dim transition-colors">
               {c.to_dashboard} <ArrowRight size={15} />
             </Link>
           </>
         )}
         {state === "failed" && (
           <>
-            <XCircle size={56} className="text-[#FF3B30] mx-auto mb-6" />
+            <XCircle size={56} className="text-bad mx-auto mb-6" />
             <h1 className="font-display font-black text-3xl tracking-tighter mb-3">{c.failed}</h1>
             <p className="text-zinc-400 mb-8">{c.failed_hint}</p>
-            <Link to="/pricing" className="inline-flex items-center gap-2 border border-[#2A2A35] px-6 py-3 uppercase tracking-wide text-sm hover:border-[#E5FF00] transition-colors">
+            <Link to="/pricing" className="inline-flex items-center gap-2 border border-hud px-6 py-3 uppercase tracking-wide text-sm hover:border-volt transition-colors">
               {c.to_pricing} <ArrowRight size={15} />
             </Link>
           </>
@@ -112,7 +112,7 @@ export default function PaymentSuccess() {
           <>
             <Loader2 size={48} className="text-[#FFA500] mx-auto mb-6" />
             <h1 className="font-display font-black text-2xl tracking-tighter mb-3">{c.timeout}</h1>
-            <Link to="/app" className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-6 py-3 uppercase tracking-wide text-sm hover:bg-[#D4EC00] transition-colors">
+            <Link to="/app" className="inline-flex items-center gap-2 bg-volt text-black font-bold px-6 py-3 uppercase tracking-wide text-sm hover:bg-volt-dim transition-colors">
               {c.to_dashboard} <ArrowRight size={15} />
             </Link>
           </>

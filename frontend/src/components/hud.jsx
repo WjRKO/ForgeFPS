@@ -15,7 +15,7 @@ export const item = {
 
 export function PageHeader({ eyebrow, title, subtitle, actions }) {
   return (
-    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 pb-5 border-b border-[#1A1A24]">
+    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 pb-5 border-b border-hud-soft">
       <div>
         {eyebrow && <div className="text-xs font-mono uppercase tracking-[0.2em] text-zinc-500 mb-2">{eyebrow}</div>}
         <h1 className="font-display font-black text-3xl sm:text-4xl tracking-tighter">{title}</h1>
@@ -27,11 +27,11 @@ export function PageHeader({ eyebrow, title, subtitle, actions }) {
 }
 
 const BADGE = {
-  volt: "bg-[#E5FF00]/10 text-[#E5FF00] border-[#E5FF00]/30",
-  green: "bg-[#00FF66]/10 text-[#00FF66] border-[#00FF66]/30",
-  cyan: "bg-[#00E0FF]/10 text-[#00E0FF] border-[#00E0FF]/30",
-  red: "bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/30",
-  neutral: "bg-[#1A1A24] text-zinc-400 border-[#2A2A35]",
+  volt: "bg-volt/10 text-volt border-volt/30",
+  green: "bg-ok/10 text-ok border-ok/30",
+  cyan: "bg-info/10 text-info border-info/30",
+  red: "bg-bad/10 text-bad border-bad/30",
+  neutral: "bg-hud-soft text-zinc-400 border-hud",
 };
 export function Badge({ tone = "neutral", icon: Icon, children, testid }) {
   return (
@@ -46,13 +46,13 @@ export function Badge({ tone = "neutral", icon: Icon, children, testid }) {
 // without duplicating the Tailwind cocktail. Prefer the JSX components below
 // when possible; use the class constants when you need to wrap a <Link>.
 export const BTN_CLASSES = {
-  primary: "inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2.5 text-sm hover:bg-[#D4EE00] disabled:opacity-60 disabled:cursor-not-allowed transition-colors",
-  secondary: "inline-flex items-center gap-2 border border-[#2A2A35] text-zinc-300 px-3 py-2 text-sm hover:border-[#E5FF00] hover:text-[#E5FF00] disabled:opacity-60 disabled:cursor-not-allowed transition-colors",
+  primary: "inline-flex items-center gap-2 bg-volt text-black font-bold px-4 py-2.5 text-sm hover:bg-[#D4EE00] disabled:opacity-60 disabled:cursor-not-allowed transition-colors",
+  secondary: "inline-flex items-center gap-2 border border-hud text-zinc-300 px-3 py-2 text-sm hover:border-volt hover:text-volt disabled:opacity-60 disabled:cursor-not-allowed transition-colors",
   ghost: "inline-flex items-center gap-2 px-2 py-1.5 text-sm text-zinc-400 hover:text-zinc-100 transition-colors",
   // Mono/uppercase HUD variant: matches the "// eyebrow" typography used in headers
-  primaryMono: "inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-5 py-2.5 text-xs font-mono uppercase tracking-widest hover:bg-white transition-colors",
-  secondaryMono: "inline-flex items-center gap-2 border border-[#E5FF00]/50 text-[#E5FF00] hover:bg-[#E5FF00]/10 px-4 py-2 text-xs font-mono uppercase tracking-widest transition-colors",
-  ghostMono: "inline-flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-[#E5FF00] hover:underline transition-colors",
+  primaryMono: "inline-flex items-center gap-2 bg-volt text-black font-bold px-5 py-2.5 text-xs font-mono uppercase tracking-widest hover:bg-white transition-colors",
+  secondaryMono: "inline-flex items-center gap-2 border border-volt/50 text-volt hover:bg-volt/10 px-4 py-2 text-xs font-mono uppercase tracking-widest transition-colors",
+  ghostMono: "inline-flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-volt hover:underline transition-colors",
 };
 
 // PrimaryButton: solid accent (yellow #E5FF00), MAX 1 per page — the "hero" CTA
@@ -77,8 +77,8 @@ export function SecondaryButton({ icon: Icon, children, testid, className = "", 
 export function GhostButton({ icon: Icon, children, testid, tone = "muted", className = "", ...rest }) {
   const tones = {
     muted: "text-zinc-400 hover:text-zinc-100",
-    accent: "text-[#E5FF00] hover:text-[#F5FF66]",
-    danger: "text-[#FF3B30] hover:text-[#FF5B50]",
+    accent: "text-volt hover:text-[#F5FF66]",
+    danger: "text-bad hover:text-[#FF5B50]",
   };
   return (
     <button data-testid={testid}
@@ -90,8 +90,8 @@ export function GhostButton({ icon: Icon, children, testid, tone = "muted", clas
 
 export function EmptyState({ icon: Icon, title, description, action }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center py-16 px-6 border border-dashed border-[#2A2A35] bg-[#0F0F12]/40 gap-3">
-      {Icon && <div className="p-4 bg-[#1A1A24] border border-[#2A2A35] text-zinc-500 mb-1"><Icon size={26} /></div>}
+    <div className="flex flex-col items-center justify-center text-center py-16 px-6 border border-dashed border-hud bg-panel/40 gap-3">
+      {Icon && <div className="p-4 bg-hud-soft border border-hud text-zinc-500 mb-1"><Icon size={26} /></div>}
       {title && <div className="font-display font-bold text-lg">{title}</div>}
       {description && <p className="text-zinc-500 text-sm max-w-sm">{description}</p>}
       {action}
@@ -154,11 +154,11 @@ export function Section({ title, hint, actions, children, className = "" }) {
   );
 }
 
-export function HUDCard({ children, className = "", featured = false, testid }) {
+export function HUDCard({ children, className = "", featured = false, pad = "p-5", testid }) {
   return (
     <div data-testid={testid}
-      className={`relative overflow-hidden bg-[#0F0F12] border border-[#2A2A35] p-5 flex flex-col ${className}`}>
-      {featured && <span className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-[#E5FF00]/60 to-transparent" />}
+      className={`relative overflow-hidden bg-panel border border-hud ${pad} flex flex-col ${className}`}>
+      {featured && <span className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-volt/60 to-transparent" />}
       {children}
     </div>
   );

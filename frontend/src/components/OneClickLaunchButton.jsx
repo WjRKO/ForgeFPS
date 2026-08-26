@@ -95,7 +95,7 @@ export default function OneClickLaunchButton({
         onClick={launch}
         disabled={isBusy}
         data-testid={`${testid}-btn`}
-        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold uppercase tracking-widest text-xs px-6 py-3 hover:bg-[#D4EC00] transition-colors disabled:opacity-60 disabled:cursor-wait"
+        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-volt text-black font-bold uppercase tracking-widest text-xs px-6 py-3 hover:bg-volt-dim transition-colors disabled:opacity-60 disabled:cursor-wait"
       >
         {isBusy ? <Loader2 size={15} className="animate-spin" /> : <Play size={15} />}
         <span>{isBusy ? (state === "launching" ? (isEn() ? "Launching..." : "Avvio...") : (isEn() ? "Running..." : "In corso...")) : (label || (isEn() ? "Launch with 1 click" : "Avvia con 1 click"))}</span>
@@ -103,7 +103,7 @@ export default function OneClickLaunchButton({
       {failed && (
         <div className="flex items-center gap-2 text-[11px] text-[#FF9500]" data-testid={`${testid}-fallback`}>
           <span>{isEn() ? "If you don't have the agent, download it first:" : "Se non hai l'agent, scaricalo prima:"}</span>
-          <Link to="/app/desktop" className="inline-flex items-center gap-1 text-[#00E0FF] hover:underline">
+          <Link to="/app/desktop" className="inline-flex items-center gap-1 text-info hover:underline">
             <Download size={11} /> {isEn() ? "Install FrameForge Agent" : "Installa FrameForge Agent"}
             <ExternalLink size={10} />
           </Link>

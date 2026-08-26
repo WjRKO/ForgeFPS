@@ -79,14 +79,14 @@ export default function MonitorLiveControl({ startedAt, sampleCount, game }) {
   const stopPending = stopRequestedAt && Date.now() - stopRequestedAt < 15000;
 
   return (
-    <div className="bg-[#0F0F12] border border-[#FF3B30]/40 hud-tick p-5 mb-6" data-testid="monitor-live-control">
+    <div className="bg-panel border border-bad/40 hud-tick p-5 mb-6" data-testid="monitor-live-control">
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2 shrink-0">
           <span className="relative flex h-3 w-3">
-            <span className={`absolute inline-flex h-full w-full rounded-full bg-[#FF3B30] opacity-75 ${stopPending ? "" : "animate-ping"}`} />
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-[#FF3B30]" />
+            <span className={`absolute inline-flex h-full w-full rounded-full bg-bad opacity-75 ${stopPending ? "" : "animate-ping"}`} />
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-bad" />
           </span>
-          <span className="font-display font-black text-lg text-[#FF3B30]">REC</span>
+          <span className="font-display font-black text-lg text-bad">REC</span>
         </div>
 
         <div className="flex items-baseline gap-2">
@@ -94,32 +94,32 @@ export default function MonitorLiveControl({ startedAt, sampleCount, game }) {
           <span className="text-xs text-zinc-500 uppercase tracking-widest">{t("live.duration", { defaultValue: "durata" })}</span>
         </div>
 
-        <div className="flex items-baseline gap-2 border-l border-[#1A1A24] pl-4">
+        <div className="flex items-baseline gap-2 border-l border-hud-soft pl-4">
           <span className="font-mono text-xl tabular-nums text-zinc-300" data-testid="live-samples">{sampleCount}</span>
           <span className="text-xs text-zinc-500 uppercase tracking-widest">{t("live.samples", { defaultValue: "sample" })}</span>
         </div>
 
         {game && (
-          <div className="flex items-center gap-1.5 bg-black border border-[#00FF66]/40 text-[#00FF66] px-2.5 py-1 text-xs font-bold uppercase" data-testid="live-game">
+          <div className="flex items-center gap-1.5 bg-black border border-ok/40 text-ok px-2.5 py-1 text-xs font-bold uppercase" data-testid="live-game">
             <Gamepad2 size={12} /> {game}
           </div>
         )}
 
         <div className="flex items-center gap-2 ml-auto">
           <button onClick={copyUri} data-testid="live-copy-uri"
-            className="inline-flex items-center gap-1.5 border border-[#2A2A35] px-3 py-2 text-xs hover:border-[#E5FF00] btn-ghost"
+            className="inline-flex items-center gap-1.5 border border-hud px-3 py-2 text-xs hover:border-volt btn-ghost"
             title={t("live.copy_uri_hint", { defaultValue: "Copia il link monitor (per riavviare)" })}>
             <Copy size={13} /> {t("live.copy_uri", { defaultValue: "Copia link" })}
           </button>
           <button onClick={requestStop} disabled={stopping || stopPending} data-testid="live-stop-btn"
-            className="inline-flex items-center gap-1.5 bg-[#FF3B30]/10 border border-[#FF3B30]/60 text-[#FF3B30] px-3 py-2 text-xs font-bold hover:bg-[#FF3B30]/20 disabled:opacity-60 transition-colors">
+            className="inline-flex items-center gap-1.5 bg-bad/10 border border-bad/60 text-bad px-3 py-2 text-xs font-bold hover:bg-bad/20 disabled:opacity-60 transition-colors">
             {stopping || stopPending ? <Loader2 size={13} className="animate-spin" /> : <Square size={13} />}
             {stopPending ? t("live.stopping", { defaultValue: "In arresto…" }) : t("live.stop", { defaultValue: "Ferma" })}
           </button>
         </div>
       </div>
       {stopPending && (
-        <div className="text-xs text-zinc-500 mt-3 border-t border-[#1A1A24] pt-3" data-testid="stop-pending-hint">
+        <div className="text-xs text-zinc-500 mt-3 border-t border-hud-soft pt-3" data-testid="stop-pending-hint">
           {t("live.stop_pending_hint", { defaultValue: "Il monitor si chiuderà al prossimo tick (max ~2s). Se resta aperto, chiudi la finestra sul PC manualmente." })}
         </div>
       )}

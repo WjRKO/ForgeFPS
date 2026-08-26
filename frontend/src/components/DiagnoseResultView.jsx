@@ -15,7 +15,7 @@ export default function DiagnoseResultView({ d }) {
   } = d;
 
   return (
-    <div className="border border-[#00E0FF]/40 bg-gradient-to-br from-[#00E0FF]/5 to-transparent" data-testid="diagnose-result">
+    <div className="border border-info/40 bg-gradient-to-br from-info/5 to-transparent" data-testid="diagnose-result">
       <DiagnoseHeader
         t={t}
         result={result}
@@ -28,7 +28,7 @@ export default function DiagnoseResultView({ d }) {
 
       {!collapsed && (
         <>
-          <div className="divide-y divide-[#1A1A24]" data-testid="diagnose-actions-list">
+          <div className="divide-y divide-hud-soft" data-testid="diagnose-actions-list">
             {(result.actions || []).map((a, i) => (
               <DiagnoseAction
                 key={a.title || i}
@@ -47,10 +47,10 @@ export default function DiagnoseResultView({ d }) {
             ))}
           </div>
 
-          <div className="p-4 border-t border-[#1A1A24] flex items-center justify-between text-xs">
+          <div className="p-4 border-t border-hud-soft flex items-center justify-between text-xs">
             <button
               onClick={run}
-              className="inline-flex items-center gap-1.5 text-zinc-500 hover:text-[#E5FF00] font-mono uppercase tracking-widest transition-colors"
+              className="inline-flex items-center gap-1.5 text-zinc-500 hover:text-volt font-mono uppercase tracking-widest transition-colors"
               data-testid="diagnose-again"
             >
               <RefreshCw size={11} /> {t("diagnose.regenerate")}

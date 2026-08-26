@@ -17,18 +17,18 @@ export function relTime(iso, t) {
 export default function DiagnoseHeader({ t, result, createdAt, collapsed, outcome, onToggleCollapsed, onDismiss }) {
   const collapseLabel = collapsed ? t("diagnose.toggle_expand") : t("diagnose.toggle_collapse");
   return (
-    <div className="p-5 border-b border-[#1A1A24] flex items-start gap-3">
+    <div className="p-5 border-b border-hud-soft flex items-start gap-3">
       <button
         onClick={onToggleCollapsed}
-        className="w-10 h-10 bg-[#00E0FF]/15 border border-[#00E0FF]/40 flex items-center justify-center shrink-0 hover:bg-[#00E0FF]/25 transition-colors group"
+        className="w-10 h-10 bg-info/15 border border-info/40 flex items-center justify-center shrink-0 hover:bg-info/25 transition-colors group"
         data-testid="diagnose-collapse-toggle"
         aria-label={collapseLabel}
         aria-expanded={!collapsed}
         title={collapseLabel}
       >
         {collapsed
-          ? <ChevronRight size={18} className="text-[#00E0FF] group-hover:translate-x-0.5 transition-transform" />
-          : <ChevronDown size={18} className="text-[#00E0FF]" />}
+          ? <ChevronRight size={18} className="text-info group-hover:translate-x-0.5 transition-transform" />
+          : <ChevronDown size={18} className="text-info" />}
       </button>
       <button
         onClick={onToggleCollapsed}
@@ -37,7 +37,7 @@ export default function DiagnoseHeader({ t, result, createdAt, collapsed, outcom
         aria-label={collapseLabel}
       >
         <div className="flex items-center gap-2 flex-wrap mb-1">
-          <div className="text-[11px] font-mono uppercase tracking-widest text-[#00E0FF]">
+          <div className="text-[11px] font-mono uppercase tracking-widest text-info">
             {t("diagnose.header_prefix")} · {(result.actions || []).length} {t("diagnose.header_actions")}
           </div>
           {createdAt && (
@@ -50,7 +50,7 @@ export default function DiagnoseHeader({ t, result, createdAt, collapsed, outcom
             </span>
           )}
           {collapsed && (
-            <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 border border-[#2A2A35] px-1.5 py-0.5">
+            <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 border border-hud px-1.5 py-0.5">
               {t("diagnose.collapsed_badge")}
             </span>
           )}
@@ -62,8 +62,8 @@ export default function DiagnoseHeader({ t, result, createdAt, collapsed, outcom
           <div
             className={`mt-2 inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest border px-2 py-0.5 ${
               outcome.delta > 0
-                ? "border-[#00FF66]/40 bg-[#00FF66]/10 text-[#00FF66]"
-                : "border-[#FF3B30]/40 bg-[#FF3B30]/10 text-[#FF3B30]"
+                ? "border-ok/40 bg-ok/10 text-ok"
+                : "border-bad/40 bg-bad/10 text-bad"
             }`}
             data-testid="outcome-badge"
           >

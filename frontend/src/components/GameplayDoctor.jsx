@@ -5,8 +5,8 @@ import { Stethoscope, Loader2, AlertTriangle, CheckCircle2, Wrench, Share2, Chev
 import api from "@/lib/api";
 
 const SEV = { high: "#FF3B30", medium: "#FF6B00", low: "#E5FF00" };
-const HEALTH = { good: "text-[#00FF87]", minor: "text-[#E5FF00]", bad: "text-[#FF3B30]" };
-const CONF = { high: "text-[#00FF87] border-[#00FF87]/40", medium: "text-[#E5FF00] border-[#E5FF00]/40", low: "text-zinc-400 border-zinc-600" };
+const HEALTH = { good: "text-[#00FF87]", minor: "text-volt", bad: "text-bad" };
+const CONF = { high: "text-[#00FF87] border-[#00FF87]/40", medium: "text-volt border-volt/40", low: "text-zinc-400 border-zinc-600" };
 
 function Timeline({ timeline, onEvent, t }) {
   const fps = (timeline?.fps || []).filter((p) => typeof p.fps === "number");
@@ -20,7 +20,7 @@ function Timeline({ timeline, onEvent, t }) {
   return (
     <div data-testid="gd-timeline">
       <div className="text-[11px] uppercase tracking-widest text-zinc-600 font-mono mb-1">{t("live.gd_timeline")} · FPS</div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-24 bg-black/40 border border-[#1A1A24]">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-24 bg-black/40 border border-hud-soft">
         <polyline points={pts} fill="none" stroke="#E5FF00" strokeWidth="1.5" opacity="0.85" />
         {(timeline?.events || []).map((e, i) => (
           <circle key={i} cx={x(e.m)} cy={H - 12} r="4.5" fill={e.type === "hitch" ? "#FF3B30" : "#FF6B00"}
@@ -60,7 +60,7 @@ function Issue({ issue, t, expanded, onToggle, onApply }) {
         ) : null}
       </button>
       {expanded && (
-        <div className="px-4 pb-3 space-y-1.5 border-t border-[#1A1A24] pt-2" data-testid="gd-tech-detail">
+        <div className="px-4 pb-3 space-y-1.5 border-t border-hud-soft pt-2" data-testid="gd-tech-detail">
           <p className="text-xs text-zinc-500"><span className="text-zinc-400 font-semibold">{t("live.gd_evidence")}:</span> {issue.evidence}</p>
           <p className="text-xs text-zinc-500"><span className="text-zinc-400 font-semibold">{t("live.gd_diagnosis")}:</span> {issue.diagnosis}</p>
           {issue.tech_detail && <p className="text-xs text-zinc-600 font-mono">{issue.tech_detail}</p>}
@@ -83,7 +83,7 @@ function Issue({ issue, t, expanded, onToggle, onApply }) {
             qui sopra resta comunque. Il backend risolve e verifica entrambi. */}
         {issue.fix?.primary?.gui_tweak_name && (
           <button onClick={() => onApply(issue.fix.primary.gui_tweak)} data-testid={`gd-apply-${issue.id || issue.type}`}
-            className="inline-flex items-center gap-1.5 text-left text-[11px] font-bold uppercase tracking-widest bg-[#E5FF00] text-black px-3 py-1.5 hover:bg-[#c9e000] transition-colors">
+            className="inline-flex items-center gap-1.5 text-left text-[11px] font-bold uppercase tracking-widest bg-volt text-black px-3 py-1.5 hover:bg-[#c9e000] transition-colors">
             <Wrench size={11} className="shrink-0" /> {t("live.gd_apply_gui")}: {issue.fix.primary.gui_tweak_name}
           </button>
         )}
@@ -164,31 +164,31 @@ export default function GameplayDoctor() {
     if (typeof v !== "number") return null;
     const good = invert ? v < 0 : v > 0;
     return (
-      <span className={`inline-flex items-center gap-0.5 font-mono ${good ? "text-[#00FF87]" : "text-[#FF3B30]"}`}>
+      <span className={`inline-flex items-center gap-0.5 font-mono ${good ? "text-[#00FF87]" : "text-bad"}`}>
         {good ? <TrendingUp size={10} /> : <TrendingDown size={10} />}{v > 0 ? "+" : ""}{v}%
       </span>
     );
   };
 
   return (
-    <div className="border border-[#1A1A24] bg-[#0E0E12]" data-testid="gameplay-doctor">
-      <div className="flex items-center justify-between gap-3 p-4 border-b border-[#1A1A24]">
+    <div className="border border-hud-soft bg-[#0E0E12]" data-testid="gameplay-doctor">
+      <div className="flex items-center justify-between gap-3 p-4 border-b border-hud-soft">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.25em] text-[#E5FF00] font-mono">// Gameplay Doctor</div>
+          <div className="text-[11px] uppercase tracking-[0.25em] text-volt font-mono">// Gameplay Doctor</div>
           <div className="text-sm font-bold text-zinc-100 mt-0.5 flex items-center gap-2">
-            <Stethoscope size={15} className="text-[#E5FF00]" /> {t("live.gd_title")}
+            <Stethoscope size={15} className="text-volt" /> {t("live.gd_title")}
           </div>
         </div>
         <div className="flex items-center gap-2">
           {rep && !busy && (
             <button onClick={share} disabled={sharing} data-testid="gd-share-btn" title={t("live.gd_share")}
-              className="flex items-center gap-2 border border-[#2A2A35] text-zinc-300 font-bold text-xs uppercase tracking-widest px-3 py-2.5 hover:border-[#E5FF00] hover:text-[#E5FF00] transition-colors disabled:opacity-60">
+              className="flex items-center gap-2 border border-hud text-zinc-300 font-bold text-xs uppercase tracking-widest px-3 py-2.5 hover:border-volt hover:text-volt transition-colors disabled:opacity-60">
               {sharing ? <Loader2 size={13} className="animate-spin" /> : <Share2 size={13} />}
               <span className="hidden sm:inline">{t("live.gd_share")}</span>
             </button>
           )}
           <button onClick={analyze} disabled={busy} data-testid="gd-analyze-btn"
-            className="flex items-center gap-2 bg-[#E5FF00] text-black font-bold text-xs uppercase tracking-widest px-4 py-2.5 hover:bg-[#c9e000] transition-colors disabled:opacity-60">
+            className="flex items-center gap-2 bg-volt text-black font-bold text-xs uppercase tracking-widest px-4 py-2.5 hover:bg-[#c9e000] transition-colors disabled:opacity-60">
             {busy ? <Loader2 size={13} className="animate-spin" /> : <Stethoscope size={13} />}
             {busy ? t("live.gd_loading") : t("live.gd_btn")}
           </button>
@@ -200,7 +200,7 @@ export default function GameplayDoctor() {
         {rep && !busy && (
           <>
             {/* Executive summary */}
-            <div className="flex items-start gap-4 border border-[#1A1A24] bg-black/40 p-4" data-testid="gd-exec-summary">
+            <div className="flex items-start gap-4 border border-hud-soft bg-black/40 p-4" data-testid="gd-exec-summary">
               {typeof rep.score === "number" && (
                 <div className="text-center shrink-0" data-testid="gd-score">
                   <div className={`font-display font-black text-4xl leading-none ${HEALTH[rep.health] || "text-zinc-100"}`}>{rep.score}</div>
@@ -262,8 +262,8 @@ export default function GameplayDoctor() {
             {rep.positive && <p className="text-xs text-[#00FF87]/80">✓ {rep.positive}</p>}
 
             {/* Card compatta per condivisione (off-screen, esportata dal bottone Share) */}
-            <div className="fixed -left-[2000px] top-0 w-[600px] p-8 bg-[#0A0A0C]" ref={shareRef} aria-hidden="true">
-              <div className="text-[11px] uppercase tracking-[0.3em] text-[#E5FF00] font-mono mb-4">// GAMEPLAY DOCTOR</div>
+            <div className="fixed -left-[2000px] top-0 w-[600px] p-8 bg-panel-deep" ref={shareRef} aria-hidden="true">
+              <div className="text-[11px] uppercase tracking-[0.3em] text-volt font-mono mb-4">// GAMEPLAY DOCTOR</div>
               <div className="flex items-center gap-6 mb-5">
                 <div className={`font-display font-black text-7xl leading-none ${HEALTH[rep.health] || "text-zinc-100"}`}>{rep.score}</div>
                 <div>
@@ -282,8 +282,8 @@ export default function GameplayDoctor() {
                 <div className="text-[#00FF87] text-sm mb-2">✓ {t("live.gd_clean")}</div>
               )}
               {ex?.main_fix && <div className="text-zinc-400 text-xs mb-5">→ {ex.main_fix}</div>}
-              <div className="flex items-center justify-between pt-3 border-t border-[#1A1A24]">
-                <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-zinc-500">FRAME<span className="text-[#E5FF00]">FORGE</span></span>
+              <div className="flex items-center justify-between pt-3 border-t border-hud-soft">
+                <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-zinc-500">FRAME<span className="text-volt">FORGE</span></span>
                 <span className="text-[11px] font-mono text-zinc-600">forgefps.dev</span>
               </div>
             </div>

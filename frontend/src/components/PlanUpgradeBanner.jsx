@@ -67,7 +67,7 @@ export default function PlanUpgradeBanner({
 
   return (
     <div
-      className={`relative overflow-hidden bg-gradient-to-br from-[#0F0F12] to-[#0A0A0F] border-2 ${padding}`}
+      className={`relative overflow-hidden bg-gradient-to-br from-panel to-[#0A0A0F] border-2 ${padding}`}
       style={{ borderColor: `${cfg.accent}66` }}
       data-testid={testid}
     >
@@ -104,7 +104,7 @@ export default function PlanUpgradeBanner({
               return (
                 <div
                   key={f.title}
-                  className="flex items-start gap-3 bg-black/30 border border-[#2A2A35] p-3"
+                  className="flex items-start gap-3 bg-black/30 border border-hud p-3"
                   data-testid={`${testid}-feature-${i}`}
                 >
                   {Icon && <Icon size={16} className="shrink-0 mt-0.5" style={{ color: cfg.accent }} />}

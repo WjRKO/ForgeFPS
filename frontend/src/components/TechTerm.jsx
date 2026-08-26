@@ -51,15 +51,15 @@ export default function TechTerm({ term, children, iconOnly = false, testid }) {
         <TooltipTrigger asChild>
           <span
             data-testid={testid || `tech-term-${term}`}
-            className={`inline-flex items-baseline gap-1 cursor-help ${iconOnly ? "" : "border-b border-dashed border-[#00E0FF]/40 hover:border-[#00E0FF]"}`}>
+            className={`inline-flex items-baseline gap-1 cursor-help ${iconOnly ? "" : "border-b border-dashed border-info/40 hover:border-info"}`}>
             {!iconOnly && children}
-            <HelpCircle size={11} className="text-[#00E0FF]/70 hover:text-[#00E0FF] shrink-0 translate-y-[1px]" />
+            <HelpCircle size={11} className="text-info/70 hover:text-info shrink-0 translate-y-[1px]" />
           </span>
         </TooltipTrigger>
         <TooltipContent
           side="top"
           sideOffset={8}
-          className="max-w-xs bg-[#16161C] border-2 border-[#00E0FF] text-white text-xs leading-relaxed shadow-[0_10px_32px_rgba(0,0,0,0.85)] px-4 py-3 font-normal"
+          className="max-w-xs bg-[#16161C] border-2 border-info text-white text-xs leading-relaxed shadow-[0_10px_32px_rgba(0,0,0,0.85)] px-4 py-3 font-normal"
         >
           {definition}
         </TooltipContent>

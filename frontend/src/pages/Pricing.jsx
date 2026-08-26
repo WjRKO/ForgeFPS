@@ -271,17 +271,17 @@ const COPY = {
 
 function BillingToggle({ annual, onToggle, c }) {
   return (
-    <div className="inline-flex items-center bg-[#0F0F12] border border-[#2A2A35] p-1" data-testid="billing-toggle">
+    <div className="inline-flex items-center bg-panel border border-hud p-1" data-testid="billing-toggle">
       <button
         onClick={() => onToggle(false)}
         data-testid="toggle-monthly"
-        className={`px-4 py-2 text-xs uppercase tracking-widest font-mono transition-colors ${!annual ? "bg-[#E5FF00] text-black font-bold" : "text-zinc-400 hover:text-zinc-200"}`}>
+        className={`px-4 py-2 text-xs uppercase tracking-widest font-mono transition-colors ${!annual ? "bg-volt text-black font-bold" : "text-zinc-400 hover:text-zinc-200"}`}>
         {c.toggle_monthly}
       </button>
       <button
         onClick={() => onToggle(true)}
         data-testid="toggle-annual"
-        className={`px-4 py-2 text-xs uppercase tracking-widest font-mono transition-colors relative ${annual ? "bg-[#E5FF00] text-black font-bold" : "text-zinc-400 hover:text-zinc-200"}`}>
+        className={`px-4 py-2 text-xs uppercase tracking-widest font-mono transition-colors relative ${annual ? "bg-volt text-black font-bold" : "text-zinc-400 hover:text-zinc-200"}`}>
         {c.toggle_annual}
       </button>
     </div>
@@ -300,15 +300,15 @@ function PricingCard({ tier, annual, c, onCta, isLogged, lang }) {
   return (
     <div
       data-testid={`pricing-${tier.key}`}
-      className={`relative flex flex-col bg-[#0F0F12] p-7 transition-transform hover:-translate-y-1 ${isBest ? "border-2 border-[#E5FF00] shadow-[0_0_40px_-10px_#E5FF0055]" : "border border-[#2A2A35]"}`}
+      className={`relative flex flex-col bg-panel p-7 transition-transform hover:-translate-y-1 ${isBest ? "border-2 border-volt shadow-[0_0_40px_-10px_#E5FF0055]" : "border border-hud"}`}
     >
       {isBest && (
-        <span className="absolute -top-3 left-7 bg-[#E5FF00] text-black text-[11px] font-mono uppercase tracking-widest px-2 py-1 flex items-center gap-1">
+        <span className="absolute -top-3 left-7 bg-volt text-black text-[11px] font-mono uppercase tracking-widest px-2 py-1 flex items-center gap-1">
           <Sparkles size={11} /> {c.best_badge}
         </span>
       )}
 
-      <div className="w-11 h-11 border border-[#2A2A35] flex items-center justify-center mb-4" style={{ color: tier.accent }}>
+      <div className="w-11 h-11 border border-hud flex items-center justify-center mb-4" style={{ color: tier.accent }}>
         <Icon size={20} />
       </div>
 
@@ -331,7 +331,7 @@ function PricingCard({ tier, annual, c, onCta, isLogged, lang }) {
       </div>
 
       {tier.trial && (
-        <div className="mb-5 -mx-2 px-3 py-1.5 bg-[#E5FF00]/10 border-l-2 border-[#E5FF00] text-[11px] font-mono uppercase tracking-wider text-[#E5FF00] flex items-center gap-1.5">
+        <div className="mb-5 -mx-2 px-3 py-1.5 bg-volt/10 border-l-2 border-volt text-[11px] font-mono uppercase tracking-wider text-volt flex items-center gap-1.5">
           <Gift size={12} /> {c.trial_badge}
         </div>
       )}
@@ -349,9 +349,9 @@ function PricingCard({ tier, annual, c, onCta, isLogged, lang }) {
         data-testid={`pricing-cta-${tier.key}`}
         className={`group inline-flex items-center justify-center gap-2 py-3 uppercase tracking-wide text-sm font-bold transition-colors ${
           isBest
-            ? "bg-[#E5FF00] text-black hover:bg-[#D4EC00] btn-volt"
+            ? "bg-volt text-black hover:bg-volt-dim btn-volt"
             : tier.key === "streamer"
-            ? "bg-[#00E0FF] text-black hover:bg-[#00C0DD]"
+            ? "bg-info text-black hover:bg-[#00C0DD]"
             : "bg-zinc-100 text-black hover:bg-white"
         }`}
       >
@@ -367,45 +367,45 @@ function ComparisonTable({ c }) {
   return (
     <section className="mt-24" data-testid="comparison-table">
       <div className="mb-6">
-        <div className="text-xs font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-2">// {c.comparison_title.toLowerCase()}</div>
+        <div className="text-xs font-mono tracking-[0.2em] uppercase text-volt mb-2">// {c.comparison_title.toLowerCase()}</div>
         <h2 className="font-display font-black text-3xl tracking-tighter">{c.comparison_title}</h2>
         <p className="text-xs text-zinc-500 mt-2 md:hidden">{c.comparison_hint}</p>
       </div>
 
-      <div className="overflow-x-auto border border-[#2A2A35]">
+      <div className="overflow-x-auto border border-hud">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[#2A2A35] bg-[#0F0F12]">
+            <tr className="border-b border-hud bg-panel">
               <th className="p-4 text-left text-xs uppercase tracking-widest text-zinc-500 font-mono">Feature</th>
               <th className="p-4 text-center text-xs uppercase tracking-widest text-zinc-400 font-display font-black">Starter</th>
-              <th className="p-4 text-center text-xs uppercase tracking-widest text-[#E5FF00] font-display font-black">Pro</th>
-              <th className="p-4 text-center text-xs uppercase tracking-widest text-[#00E0FF] font-display font-black">Streamer</th>
+              <th className="p-4 text-center text-xs uppercase tracking-widest text-volt font-display font-black">Pro</th>
+              <th className="p-4 text-center text-xs uppercase tracking-widest text-info font-display font-black">Streamer</th>
             </tr>
           </thead>
           <tbody>
             {c.features_matrix.map((row) => (
-              <tr key={row.label} className="border-b border-[#1A1A24] hover:bg-[#0F0F12] transition-colors">
+              <tr key={row.label} className="border-b border-hud-soft hover:bg-panel transition-colors">
                 <td className="p-3.5 text-zinc-300">{row.label}</td>
                 {row.values.map((v, j) => (
-                  <td key={`${row.label}-${j}`} className={`p-3.5 text-center ${row.highlight_streamer && j === 2 ? "bg-[#00E0FF]/5" : ""}`}>
-                    {v === true ? <Check size={16} className="inline text-[#00FF66]" /> :
+                  <td key={`${row.label}-${j}`} className={`p-3.5 text-center ${row.highlight_streamer && j === 2 ? "bg-info/5" : ""}`}>
+                    {v === true ? <Check size={16} className="inline text-ok" /> :
                      v === false ? <XIcon size={14} className="inline text-zinc-700" /> :
                      <span className="text-xs text-zinc-300">{v}</span>}
                   </td>
                 ))}
               </tr>
             ))}
-            <tr className="border-b border-[#2A2A35] bg-black/60">
+            <tr className="border-b border-hud bg-black/60">
               <td className="p-4 uppercase tracking-widest text-xs text-zinc-500 font-mono">{c.comparison_footer_monthly}</td>
               <td className="p-4 text-center text-zinc-400 font-display font-black">€0</td>
-              <td className="p-4 text-center text-[#E5FF00] font-display font-black text-lg">€7</td>
-              <td className="p-4 text-center text-[#00E0FF] font-display font-black text-lg">€16</td>
+              <td className="p-4 text-center text-volt font-display font-black text-lg">€7</td>
+              <td className="p-4 text-center text-info font-display font-black text-lg">€16</td>
             </tr>
             <tr className="bg-black/60">
               <td className="p-4 uppercase tracking-widest text-xs text-zinc-500 font-mono">{c.comparison_footer_annual}</td>
               <td className="p-4 text-center text-zinc-500">—</td>
-              <td className="p-4 text-center text-[#E5FF00] font-display font-black">{c.pro_annual_effective}<span className="text-xs text-zinc-400 font-sans">{c.per_month}</span></td>
-              <td className="p-4 text-center text-[#00E0FF] font-display font-black">{c.streamer_annual_effective}<span className="text-xs text-zinc-400 font-sans">{c.per_month}</span></td>
+              <td className="p-4 text-center text-volt font-display font-black">{c.pro_annual_effective}<span className="text-xs text-zinc-400 font-sans">{c.per_month}</span></td>
+              <td className="p-4 text-center text-info font-display font-black">{c.streamer_annual_effective}<span className="text-xs text-zinc-400 font-sans">{c.per_month}</span></td>
             </tr>
           </tbody>
         </table>
@@ -420,8 +420,8 @@ function TrustSignals({ c }) {
       {c.trust_signals.map((t) => {
         const Icon = t.icon;
         return (
-          <div key={t.label} className="bg-[#0F0F12] border border-[#2A2A35] p-5">
-            <Icon size={18} className="text-[#E5FF00] mb-3" />
+          <div key={t.label} className="bg-panel border border-hud p-5">
+            <Icon size={18} className="text-volt mb-3" />
             <div className="font-bold text-sm text-zinc-100 mb-1">{t.label}</div>
             <div className="text-xs text-zinc-500 leading-relaxed">{t.desc}</div>
           </div>
@@ -434,14 +434,14 @@ function TrustSignals({ c }) {
 function FaqItem({ q, a, idx }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border-b border-[#2A2A35]" data-testid={`faq-item-${idx}`}>
+    <div className="border-b border-hud" data-testid={`faq-item-${idx}`}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between py-4 text-left hover:text-[#E5FF00] transition-colors group"
+        className="w-full flex items-center justify-between py-4 text-left hover:text-volt transition-colors group"
         data-testid={`faq-toggle-${idx}`}
       >
         <span className="font-display font-bold text-base pr-4">{q}</span>
-        <ChevronDown size={18} className={`shrink-0 text-zinc-500 group-hover:text-[#E5FF00] transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown size={18} className={`shrink-0 text-zinc-500 group-hover:text-volt transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <div className="pb-5 text-sm text-zinc-400 leading-relaxed" data-testid={`faq-answer-${idx}`}>{a}</div>
@@ -454,7 +454,7 @@ function FaqSection({ c }) {
   return (
     <section className="mt-24 max-w-3xl" data-testid="faq-section">
       <div className="mb-6">
-        <div className="text-xs font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-2">// faq</div>
+        <div className="text-xs font-mono tracking-[0.2em] uppercase text-volt mb-2">// faq</div>
         <h2 className="font-display font-black text-3xl tracking-tighter">{c.faq_title}</h2>
       </div>
       <div>
@@ -526,12 +526,12 @@ export default function Pricing() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100">
+    <div className="min-h-screen bg-ink text-zinc-100">
       <MarketingNav />
 
       {/* Hero */}
       <main className="max-w-6xl mx-auto px-6 pt-28 pb-24">
-        <div className="text-xs font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-3">{c.eyebrow}</div>
+        <div className="text-xs font-mono tracking-[0.2em] uppercase text-volt mb-3">{c.eyebrow}</div>
         <h1 className="font-display font-black text-4xl sm:text-5xl lg:text-6xl tracking-tighter mb-4">{c.title}</h1>
         <p className="text-zinc-400 text-base sm:text-lg max-w-2xl leading-relaxed mb-4">{c.sub}</p>
         <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-10" data-testid="social-proof">{c.social_proof}</p>
@@ -558,14 +558,14 @@ export default function Pricing() {
         <FaqSection c={c} />
 
         {/* Closing CTA */}
-        <section className="mt-24 bg-[#0F0F12] border border-[#2A2A35] p-10 text-center" data-testid="closing-cta">
-          <Wallet size={28} className="text-[#E5FF00] mx-auto mb-4" />
+        <section className="mt-24 bg-panel border border-hud p-10 text-center" data-testid="closing-cta">
+          <Wallet size={28} className="text-volt mx-auto mb-4" />
           <h2 className="font-display font-black text-3xl tracking-tighter mb-3">{c.closing_title}</h2>
           <p className="text-zinc-400 max-w-xl mx-auto leading-relaxed mb-6">{c.closing_body}</p>
           <Link
             to={user ? "/app" : "/register"}
             data-testid="closing-cta-btn"
-            className="group inline-flex items-center justify-center gap-2 bg-[#E5FF00] text-black font-bold py-3 px-6 uppercase tracking-wide text-sm hover:bg-[#D4EC00] transition-colors btn-volt"
+            className="group inline-flex items-center justify-center gap-2 bg-volt text-black font-bold py-3 px-6 uppercase tracking-wide text-sm hover:bg-volt-dim transition-colors btn-volt"
           >
             {user ? c.already_logged : c.closing_cta}
             <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />

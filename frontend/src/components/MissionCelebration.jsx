@@ -40,22 +40,22 @@ export const MissionCelebration = () => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -16, scale: 0.95 }}
             transition={{ duration: 0.35, ease: [0.2, 0.9, 0.3, 1.2] }}
-            className="relative flex items-center gap-4 bg-[#0F0F12] border-2 border-[#E5FF00] px-6 py-4 shadow-[0_0_0_4px_rgba(229,255,0,0.15),0_16px_48px_rgba(0,0,0,0.7)]"
+            className="relative flex items-center gap-4 bg-panel border-2 border-volt px-6 py-4 shadow-[0_0_0_4px_rgba(229,255,0,0.15),0_16px_48px_rgba(0,0,0,0.7)]"
             data-testid="mission-celebration"
           >
-            <div className="w-12 h-12 flex items-center justify-center border-2 border-[#E5FF00] text-[#E5FF00] bg-black/50">
+            <div className="w-12 h-12 flex items-center justify-center border-2 border-volt text-volt bg-black/50">
               <Swords size={22} />
             </div>
             <div>
-              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.3em] text-[#E5FF00]">
-                <span className="w-2 h-2 bg-[#00FF66] rounded-full animate-pulse" />
+              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.3em] text-volt">
+                <span className="w-2 h-2 bg-ok rounded-full animate-pulse" />
                 {t("missions.celebrate", "Missione completata")}
               </div>
               <div className="font-display font-black text-xl tracking-tight text-white mt-0.5">
                 {en ? current.name_en : current.name_it}
               </div>
             </div>
-            <div className="absolute -top-3 right-3 px-2.5 py-0.5 bg-black border-2 border-[#E5FF00] text-[#E5FF00] text-xs font-black tracking-widest">
+            <div className="absolute -top-3 right-3 px-2.5 py-0.5 bg-black border-2 border-volt text-volt text-xs font-black tracking-widest">
               +{current.xp} XP
             </div>
           </motion.div>

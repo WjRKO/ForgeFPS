@@ -13,14 +13,14 @@ export function DiagnoseIdleCTA({ onRun, isEn, t }) {
     <button
       onClick={onRun}
       data-testid="diagnose-btn"
-      className="w-full group border border-[#E5FF00]/40 hover:border-[#E5FF00] bg-gradient-to-r from-[#E5FF00]/10 via-[#00E0FF]/5 to-transparent hover:from-[#E5FF00]/20 hover:via-[#00E0FF]/10 p-5 transition-all text-left"
+      className="w-full group border border-volt/40 hover:border-volt bg-gradient-to-r from-volt/10 via-info/5 to-transparent hover:from-volt/20 hover:via-info/10 p-5 transition-all text-left"
     >
       <div className="flex items-center gap-4">
-        <div className="w-12 h-12 bg-[#E5FF00] text-black flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+        <div className="w-12 h-12 bg-volt text-black flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
           <Stethoscope size={24} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#E5FF00] mb-1">
+          <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-volt mb-1">
             // AI COACH · KILLER FEATURE
           </div>
           <h3 className="font-display font-black text-xl tracking-tighter text-white mb-0.5">
@@ -32,7 +32,7 @@ export function DiagnoseIdleCTA({ onRun, isEn, t }) {
               : "Un click. 3-5 azioni prioritizzate solo per il tuo hardware: impatto stimato, difficoltà, applica in un tap."}
           </p>
         </div>
-        <ChevronRight size={20} className="text-[#E5FF00] group-hover:translate-x-1 transition-transform" />
+        <ChevronRight size={20} className="text-volt group-hover:translate-x-1 transition-transform" />
       </div>
     </button>
   );
@@ -41,10 +41,10 @@ export function DiagnoseIdleCTA({ onRun, isEn, t }) {
 export function DiagnoseLoading({ isEn }) {
   return (
     <div
-      className="border border-[#E5FF00]/40 bg-[#0F0F12] p-8 flex flex-col items-center gap-3"
+      className="border border-volt/40 bg-panel p-8 flex flex-col items-center gap-3"
       data-testid="diagnose-loading"
     >
-      <Loader2 size={32} className="text-[#E5FF00] animate-spin" />
+      <Loader2 size={32} className="text-volt animate-spin" />
       <div className="text-sm text-zinc-300 font-mono uppercase tracking-widest">
         {isEn ? "AI is analyzing your PC..." : "L'AI sta analizzando il tuo PC..."}
       </div>
@@ -58,18 +58,18 @@ export function DiagnoseLoading({ isEn }) {
 export function DiagnoseErrorView({ error, isEn, onRetry, onDismiss }) {
   return (
     <div
-      className="border border-[#FF3B30]/50 bg-[#FF3B30]/5 p-4 flex items-start gap-3"
+      className="border border-bad/50 bg-bad/5 p-4 flex items-start gap-3"
       data-testid="diagnose-error"
     >
-      <AlertTriangle size={20} className="text-[#FF3B30] shrink-0 mt-0.5" />
+      <AlertTriangle size={20} className="text-bad shrink-0 mt-0.5" />
       <div className="flex-1">
-        <div className="font-semibold text-[#FF3B30] mb-1">
+        <div className="font-semibold text-bad mb-1">
           {isEn ? "Diagnosis failed" : "Diagnosi fallita"}
         </div>
         <div className="text-sm text-zinc-400 mb-3">{error}</div>
         <button
           onClick={onRetry}
-          className="text-xs font-mono uppercase tracking-widest text-[#E5FF00] hover:underline"
+          className="text-xs font-mono uppercase tracking-widest text-volt hover:underline"
           data-testid="diagnose-retry"
         >
           {isEn ? "Retry →" : "Riprova →"}
@@ -86,12 +86,12 @@ export function DiagnoseEmpty() {
   const { t } = useTranslation();
   return (
     <div
-      className="mb-6 border border-[#E5FF00]/30 bg-gradient-to-br from-[#E5FF00]/10 to-transparent p-5"
+      className="mb-6 border border-volt/30 bg-gradient-to-br from-volt/10 to-transparent p-5"
       data-testid="diagnose-empty"
     >
       <div className="flex items-start gap-4">
-        <div className="w-12 h-12 bg-[#E5FF00]/20 border border-[#E5FF00]/40 flex items-center justify-center shrink-0">
-          <Stethoscope size={24} className="text-[#E5FF00]" />
+        <div className="w-12 h-12 bg-volt/20 border border-volt/40 flex items-center justify-center shrink-0">
+          <Stethoscope size={24} className="text-volt" />
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-display font-black text-lg tracking-tight text-white mb-1">
@@ -102,7 +102,7 @@ export function DiagnoseEmpty() {
           </p>
           <Link
             to="/app/desktop"
-            className="inline-flex items-center gap-1.5 border border-[#E5FF00]/50 text-[#E5FF00] hover:bg-[#E5FF00]/10 px-4 py-2 text-xs font-mono uppercase tracking-widest transition-colors"
+            className="inline-flex items-center gap-1.5 border border-volt/50 text-volt hover:bg-volt/10 px-4 py-2 text-xs font-mono uppercase tracking-widest transition-colors"
             data-testid="diagnose-connect-cta"
           >
             <MonitorDown size={13} /> {t("diagnose.connect_cta")} →

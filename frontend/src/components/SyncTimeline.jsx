@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { Activity } from "lucide-react";
 import api from "@/lib/api";
+import { HUDCard } from "@/components/hud";
 
 /**
  * Compact 7-day sync activity strip: one cell per day with intensity based
@@ -60,14 +61,14 @@ export default function SyncTimeline({ days = 7 }) {
   const lastScore = events[events.length - 1]?.score;
 
   return (
-    <div className="bg-[#0F0F12] border border-[#2A2A35] p-4 mb-4" data-testid="sync-timeline">
+    <HUDCard testid="sync-timeline" pad="p-4" className="mb-4">
       <div className="flex items-center justify-between mb-3">
         <div className="text-xs uppercase tracking-widest text-zinc-500 flex items-center gap-1.5">
-          <Activity size={12} className="text-[#00FF66]" /> {t("mypcpage.sync_activity", { defaultValue: "Attività sync" })} · {days}gg
+          <Activity size={12} className="text-ok" /> {t("mypcpage.sync_activity", { defaultValue: "Attività sync" })} · {days}gg
         </div>
         <div className="text-xs text-zinc-500">
           {t("mypcpage.sync_total", { defaultValue: "Sync" })}: <span className="text-zinc-300 font-bold">{totalSyncs}</span>
-          {lastScore != null && <span className="ml-3">Health: <span className="text-[#E5FF00] font-bold">{lastScore}</span></span>}
+          {lastScore != null && <span className="ml-3">Health: <span className="text-volt font-bold">{lastScore}</span></span>}
         </div>
       </div>
       <div className="flex items-end gap-1">
@@ -87,6 +88,6 @@ export default function SyncTimeline({ days = 7 }) {
           </div>
         ))}
       </div>
-    </div>
+    </HUDCard>
   );
 }

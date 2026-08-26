@@ -56,12 +56,12 @@ export default function Security() {
   const c = COPY[lang];
   usePageMeta(c.meta_t, c.meta_d);
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-100">
+    <div className="min-h-screen bg-ink text-zinc-100">
       <MarketingNav />
       <main className="max-w-6xl mx-auto px-6 pt-28 pb-20">
         <div className="grid-bg absolute inset-x-0 top-0 h-[400px] opacity-30 -z-0 pointer-events-none" />
         <div className="relative">
-          <div className="text-xs font-mono tracking-[0.2em] uppercase text-[#E5FF00] mb-3">{c.eyebrow}</div>
+          <div className="text-xs font-mono tracking-[0.2em] uppercase text-volt mb-3">{c.eyebrow}</div>
           <h1 className="font-display font-black text-4xl sm:text-5xl tracking-tighter mb-4 max-w-2xl">{c.title}</h1>
           <p className="text-zinc-400 text-base sm:text-lg max-w-xl leading-relaxed mb-8">{c.sub}</p>
           <TrustBar className="justify-start mb-6" />
@@ -73,14 +73,14 @@ export default function Security() {
           <div className="grid md:grid-cols-3 gap-4 items-stretch relative">
             {c.arch.map((a, i) => (
               <motion.div key={i} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.12 }}
-                className="relative bg-[#0F0F12] border border-[#2A2A35] p-6" data-testid={`arch-node-${i}`}>
-                <div className="w-11 h-11 border border-[#2A2A35] flex items-center justify-center text-[#E5FF00] mb-4"><a.icon size={20} /></div>
+                className="relative bg-panel border border-hud p-6" data-testid={`arch-node-${i}`}>
+                <div className="w-11 h-11 border border-hud flex items-center justify-center text-volt mb-4"><a.icon size={20} /></div>
                 <h3 className="font-display font-bold text-lg mb-2">{a.t}</h3>
                 <p className="text-zinc-500 text-sm leading-relaxed">{a.d}</p>
                 {i < c.arch.length - 1 && (
                   <>
-                    <ArrowRight className="hidden md:block absolute -right-[26px] top-1/2 -translate-y-1/2 text-[#E5FF00] z-10" size={18} />
-                    <ArrowDown className="md:hidden mx-auto text-[#E5FF00] mt-3" size={18} />
+                    <ArrowRight className="hidden md:block absolute -right-[26px] top-1/2 -translate-y-1/2 text-volt z-10" size={18} />
+                    <ArrowDown className="md:hidden mx-auto text-volt mt-3" size={18} />
                   </>
                 )}
               </motion.div>
@@ -93,8 +93,8 @@ export default function Security() {
           <h2 className="font-display font-black text-2xl tracking-tight mb-6">{c.badges_title}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {c.badges.map((b, i) => (
-              <div key={i} className="flex items-center gap-3 bg-[#0F0F12] border border-[#1A1A24] px-4 py-4" data-testid={`trust-badge-${i}`}>
-                <div className="w-4 h-4 border border-[#00FF66] flex items-center justify-center shrink-0"><ShieldCheck size={11} className="text-[#00FF66]" /></div>
+              <div key={i} className="flex items-center gap-3 bg-panel border border-hud-soft px-4 py-4" data-testid={`trust-badge-${i}`}>
+                <div className="w-4 h-4 border border-ok flex items-center justify-center shrink-0"><ShieldCheck size={11} className="text-ok" /></div>
                 <span className="text-sm text-zinc-200">{b.t}</span>
               </div>
             ))}

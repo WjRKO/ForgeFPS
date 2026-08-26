@@ -41,16 +41,16 @@ export const ActiveMissionsCard = ({ data: dataProp }) => {
               <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 shrink-0 ${badgeCls}`}>{badge}</span>
             )}
             <span className="text-sm font-semibold text-zinc-100 truncate">{en ? m.name_en : m.name_it}</span>
-            <span className="text-[11px] font-mono text-[#E5FF00] shrink-0">+{m.xp} XP</span>
+            <span className="text-[11px] font-mono text-volt shrink-0">+{m.xp} XP</span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex-1 h-1.5 bg-[#0A0A0C] border border-[#2A2A35] overflow-hidden">
-              <div className="h-full bg-[#E5FF00] transition-all duration-500" style={{ width: `${pct}%` }} />
+            <div className="flex-1 h-1.5 bg-panel-deep border border-hud overflow-hidden">
+              <div className="h-full bg-volt transition-all duration-500" style={{ width: `${pct}%` }} />
             </div>
             <span className="text-[11px] font-mono text-zinc-500 tabular-nums shrink-0">{m.progress}/{m.target}</span>
           </div>
         </div>
-        <span className="flex items-center gap-1 text-[11px] font-mono uppercase tracking-widest text-zinc-500 group-hover:text-[#E5FF00] transition-colors shrink-0">
+        <span className="flex items-center gap-1 text-[11px] font-mono uppercase tracking-widest text-zinc-500 group-hover:text-volt transition-colors shrink-0">
           {en ? m.cta_en : m.cta_it}
           <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
         </span>
@@ -59,10 +59,10 @@ export const ActiveMissionsCard = ({ data: dataProp }) => {
   };
 
   return (
-    <div className="border border-[#2A2A35] bg-[#0F0F12] hud-tick" data-testid="active-missions-card">
-      <div className="p-4 border-b border-[#2A2A35] flex items-center justify-between">
+    <div className="border border-hud bg-panel hud-tick" data-testid="active-missions-card">
+      <div className="p-4 border-b border-hud flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Swords size={14} className="text-[#E5FF00]" />
+          <Swords size={14} className="text-volt" />
           <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-zinc-500">
             {t("missions.dash_title", "Missioni attive")}
           </span>
@@ -73,25 +73,25 @@ export const ActiveMissionsCard = ({ data: dataProp }) => {
             </span>
           )}
           {data.tier && (
-            <span className="text-[11px] font-black uppercase tracking-widest px-1.5 py-0.5 border border-[#2A2A35] text-zinc-400" data-testid="missions-card-tier">
+            <span className="text-[11px] font-black uppercase tracking-widest px-1.5 py-0.5 border border-hud text-zinc-400" data-testid="missions-card-tier">
               {data.tier} · {data.xp} XP
             </span>
           )}
         </div>
-        <Link to="/app/milestones" data-testid="missions-see-all" className="text-[11px] font-mono uppercase text-[#E5FF00] hover:underline">
+        <Link to="/app/milestones" data-testid="missions-see-all" className="text-[11px] font-mono uppercase text-volt hover:underline">
           {t("missions.dash_all", "Tutte")} →
         </Link>
       </div>
       {isEmpty ? (
-        <Link to="/app/milestones" data-testid="missions-empty-cta" className="flex items-center gap-3 p-4 text-sm text-zinc-400 hover:text-[#E5FF00] transition-colors">
+        <Link to="/app/milestones" data-testid="missions-empty-cta" className="flex items-center gap-3 p-4 text-sm text-zinc-400 hover:text-volt transition-colors">
           <Target size={16} className="text-zinc-600" />
           {t("missions.dash_pick", "Nessuna missione attiva — scegli le tue missioni →")}
         </Link>
       ) : (
-        <div className="divide-y divide-[#1A1A24]">
+        <div className="divide-y divide-hud-soft">
           {chainStep && (
             <Row m={chainStep} badge={t("missions.chain_badge", "Recluta")}
-              badgeCls="bg-[#E5FF00]/15 text-[#E5FF00] border border-[#E5FF00]/40"
+              badgeCls="bg-volt/15 text-volt border border-volt/40"
               testid={`mission-chain-${chainStep.code}`} />
           )}
           {daily.map((m) => (
@@ -101,7 +101,7 @@ export const ActiveMissionsCard = ({ data: dataProp }) => {
           ))}
           {weekly.map((m) => (
             <Row key={m.code} m={m} badge={t("missions.weekly_badge", "Week")}
-              badgeCls="bg-[#00E0FF]/15 text-[#00E0FF] border border-[#00E0FF]/40"
+              badgeCls="bg-info/15 text-info border border-info/40"
               testid={`mission-weekly-${m.template}`} />
           ))}
           {active.map((m) => (

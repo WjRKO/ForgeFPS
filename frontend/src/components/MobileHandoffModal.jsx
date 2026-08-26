@@ -91,7 +91,7 @@ export default function MobileHandoffModal({ open, onClose }) {
       data-testid="mobile-handoff-overlay"
     >
       <div
-        className="max-w-md w-full bg-[#0F0F12] border border-[#2A2A35] p-6 relative"
+        className="max-w-md w-full bg-panel border border-hud p-6 relative"
         onClick={(e) => e.stopPropagation()}
         data-testid="mobile-handoff-modal"
       >
@@ -104,7 +104,7 @@ export default function MobileHandoffModal({ open, onClose }) {
           <X size={18} />
         </button>
 
-        <div className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] mb-2 flex items-center gap-2">
+        <div className="text-[11px] font-mono uppercase tracking-widest text-volt mb-2 flex items-center gap-2">
           <Smartphone size={12} /> {isEn() ? "// CONTINUE ON YOUR PHONE" : "// CONTINUA SUL TELEFONO"}
         </div>
         <h2 className="font-display font-black text-xl tracking-tight text-white mb-1">{isEn() ? "Open the Dashboard on mobile" : "Apri la Dashboard sul mobile"}</h2>
@@ -113,13 +113,13 @@ export default function MobileHandoffModal({ open, onClose }) {
         </p>
 
         <div className="flex justify-center items-center mb-5 min-h-[240px]">
-          {state === "loading" && <Loader2 size={40} className="text-[#E5FF00] animate-spin" />}
+          {state === "loading" && <Loader2 size={40} className="text-volt animate-spin" />}
           {state === "error" && (
             <div className="text-center">
-              <div className="text-[#FF3B30] text-sm mb-3" data-testid="mobile-handoff-error">{errorMsg}</div>
+              <div className="text-bad text-sm mb-3" data-testid="mobile-handoff-error">{errorMsg}</div>
               <button
                 onClick={generate}
-                className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-[#E5FF00] hover:underline"
+                className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-volt hover:underline"
                 data-testid="mobile-handoff-retry"
               >
                 <RefreshCw size={11} /> {isEn() ? "Retry" : "Riprova"}
@@ -133,7 +133,7 @@ export default function MobileHandoffModal({ open, onClose }) {
           )}
           {state === "consumed" && (
             <div className="text-center" data-testid="mobile-handoff-consumed">
-              <CheckCircle2 size={56} className="text-[#00FF66] mx-auto mb-3" />
+              <CheckCircle2 size={56} className="text-ok mx-auto mb-3" />
               <div className="text-white font-display font-black text-lg mb-1">Device connesso</div>
               <div className="text-zinc-400 text-sm">{deviceLabel || "Dispositivo"} ha effettuato l'accesso</div>
             </div>
@@ -143,7 +143,7 @@ export default function MobileHandoffModal({ open, onClose }) {
               <div className="text-zinc-500 text-sm mb-3">{isEn() ? "The QR has expired" : "Il QR è scaduto"}</div>
               <button
                 onClick={generate}
-                className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-[#E5FF00] hover:underline"
+                className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-widest text-volt hover:underline"
                 data-testid="mobile-handoff-regenerate"
               >
                 <RefreshCw size={11} /> {isEn() ? "Generate new QR" : "Genera nuovo QR"}
@@ -156,13 +156,13 @@ export default function MobileHandoffModal({ open, onClose }) {
           <>
             <div className="flex items-center justify-between text-xs font-mono uppercase tracking-widest mb-3">
               <span className="text-zinc-500">{isEn() ? "Expires in" : "Scade tra"}</span>
-              <span className={remaining < 60 ? "text-[#FF3B30]" : "text-[#00FF66]"} data-testid="mobile-handoff-countdown">
+              <span className={remaining < 60 ? "text-bad" : "text-ok"} data-testid="mobile-handoff-countdown">
                 {mm}:{ss}
               </span>
             </div>
             <button
               onClick={generate}
-              className="w-full inline-flex items-center justify-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-[#E5FF00] py-2 border-t border-[#1A1A24] transition-colors"
+              className="w-full inline-flex items-center justify-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-zinc-500 hover:text-volt py-2 border-t border-hud-soft transition-colors"
               data-testid="mobile-handoff-regenerate-active"
             >
               <RefreshCw size={11} /> {isEn() ? "Regenerate" : "Rigenera"}
@@ -170,7 +170,7 @@ export default function MobileHandoffModal({ open, onClose }) {
           </>
         )}
 
-        <div className="mt-4 pt-4 border-t border-[#1A1A24] text-[11px] text-zinc-600 leading-relaxed">
+        <div className="mt-4 pt-4 border-t border-hud-soft text-[11px] text-zinc-600 leading-relaxed">
           <strong className="text-zinc-500">{isEn() ? "Security:" : "Sicurezza:"}</strong> {isEn() ? "the link expires in 5 minutes and is single-use. If someone intercepts it after use, it won't work." : "il link scade in 5 minuti ed è a uso singolo. Se qualcuno lo intercetta dopo l'uso, non funziona."}
         </div>
       </div>

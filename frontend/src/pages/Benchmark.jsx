@@ -4,7 +4,7 @@ import { Gauge, TrendingUp, TrendingDown, Minus, Sparkles, Share2, Loader2, Chec
 import { toast } from "sonner";
 import i18n from "@/i18n";
 import api, { formatApiErrorDetail } from "@/lib/api";
-import { PageHeader } from "@/components/hud";
+import { HUDCard, PageHeader } from "@/components/hud";
 import { useSilentLaunch } from "@/hooks/useSilentLaunch";
 import BrowserPopupHint from "@/components/BrowserPopupHint";
 import FleetPercentileCard from "@/components/FleetPercentileCard";
@@ -82,13 +82,13 @@ function BenchmarkCard({ bench }) {
     return <Minus size={13} />;
   };
   const cellBorderClass = (key) => {
-    if (key === "score") return "sm:col-span-2 border-[#E5FF00]/50";
-    if (key === "overall") return "sm:col-span-2 border-[#00E0FF]/40";
+    if (key === "score") return "sm:col-span-2 border-volt/50";
+    if (key === "overall") return "sm:col-span-2 border-info/40";
     return "";
   };
   const valueClass = (key) => {
-    if (key === "score") return "text-2xl text-[#E5FF00]";
-    if (key === "overall") return "text-2xl text-[#00E0FF]";
+    if (key === "score") return "text-2xl text-volt";
+    if (key === "overall") return "text-2xl text-info";
     return "text-lg text-zinc-100";
   };
   const shareIcon = () => {
@@ -103,9 +103,9 @@ function BenchmarkCard({ bench }) {
   };
 
   return (
-    <div className="bg-[#0F0F12] border border-[#2A2A35] hud-tick p-6 mb-4" data-testid="benchmark-card">
+    <HUDCard testid="benchmark-card" pad="p-6" className="hud-tick mb-4">
       <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4 flex items-center gap-2">
-        <Gauge size={14} className="text-[#00E0FF]" /> {t("mypcpage.bench")} {hasCompare ? t("mypcpage.bench_compare") : t("mypcpage.bench_last")}
+        <Gauge size={14} className="text-info" /> {t("mypcpage.bench")} {hasCompare ? t("mypcpage.bench_compare") : t("mypcpage.bench_last")}
       </div>
       {!hasCompare && (
         <p className="text-xs text-zinc-500 mb-4">{t("mypcpage.bench_hint")}</p>
@@ -123,11 +123,11 @@ function BenchmarkCard({ bench }) {
             improved = m.higherBetter ? av >= bv : av <= bv;
           }
           return (
-            <div key={m.key} className={`bg-black border border-[#1A1A24] p-3 ${cellBorderClass(m.key)}`} data-testid={`bench-${m.key}`}>
+            <div key={m.key} className={`bg-black border border-hud-soft p-3 ${cellBorderClass(m.key)}`} data-testid={`bench-${m.key}`}>
               <div className="flex items-center justify-between">
                 <div className="text-xs uppercase tracking-widest text-zinc-500">{t(`mypcpage.${m.lk}`)}</div>
                 {delta != null && (
-                  <div className={`flex items-center gap-1 text-xs font-bold ${improved ? "text-[#00FF66]" : "text-[#FF3B30]"}`}>
+                  <div className={`flex items-center gap-1 text-xs font-bold ${improved ? "text-ok" : "text-bad"}`}>
                     {deltaIcon(delta)}
                     {delta > 0 ? "+" : ""}{delta}%
                   </div>
@@ -141,31 +141,31 @@ function BenchmarkCard({ bench }) {
           );
         })}
       </div>
-      <div className="mt-4 border-t border-[#1A1A24] pt-3">
+      <div className="mt-4 border-t border-hud-soft pt-3">
         <div className="flex flex-wrap gap-2 mb-3">
           {!explanation && (
             <button onClick={explain} disabled={explaining} data-testid="bench-explain-btn"
-              className="inline-flex items-center gap-2 bg-[#00E0FF]/10 border border-[#00E0FF]/50 text-[#00E0FF] px-4 py-2 text-xs font-bold hover:bg-[#00E0FF]/20 transition-colors disabled:opacity-60">
+              className="inline-flex items-center gap-2 bg-info/10 border border-info/50 text-info px-4 py-2 text-xs font-bold hover:bg-info/20 transition-colors disabled:opacity-60">
               {explaining ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
               {explaining ? t("mypcpage.bench_explaining") : t("mypcpage.bench_explain")}
             </button>
           )}
           <button onClick={shareOnDiscord} disabled={sharing || shared} data-testid="bench-share-btn"
-            className={`inline-flex items-center gap-2 border px-4 py-2 text-xs font-bold transition-colors disabled:opacity-60 ${shared ? "bg-[#00FF66]/10 border-[#00FF66]/50 text-[#00FF66]" : "bg-[#5865F2]/10 border-[#5865F2]/50 text-[#5865F2] hover:bg-[#5865F2]/20"}`}>
+            className={`inline-flex items-center gap-2 border px-4 py-2 text-xs font-bold transition-colors disabled:opacity-60 ${shared ? "bg-ok/10 border-ok/50 text-ok" : "bg-[#5865F2]/10 border-[#5865F2]/50 text-[#5865F2] hover:bg-[#5865F2]/20"}`}>
             {shareIcon()}
             {shareLabel()}
           </button>
         </div>
-        {explainErr && <div className="text-xs text-[#FF3B30] mt-2" data-testid="bench-explain-err">{explainErr}</div>}
+        {explainErr && <div className="text-xs text-bad mt-2" data-testid="bench-explain-err">{explainErr}</div>}
         {explanation && (
-          <div className="bg-black border border-[#00E0FF]/30 p-4 mt-1" data-testid="bench-explanation">
-            <div className="text-xs uppercase tracking-widest text-[#00E0FF] mb-2 flex items-center gap-1.5"><Sparkles size={12} /> {t("mypcpage.bench_explain_title")}</div>
+          <div className="bg-black border border-info/30 p-4 mt-1" data-testid="bench-explanation">
+            <div className="text-xs uppercase tracking-widest text-info mb-2 flex items-center gap-1.5"><Sparkles size={12} /> {t("mypcpage.bench_explain_title")}</div>
             <div className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">{explanation.replace(/\*\*/g, "")}</div>
           </div>
         )}
       </div>
       {latest.ts && (
-        <div className="mt-3 text-xs text-zinc-600 border-t border-[#1A1A24] pt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="mt-3 text-xs text-zinc-600 border-t border-hud-soft pt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
           <span>{t("mypcpage.last_run")} {(() => { try { return new Date(latest.ts).toLocaleString((i18n.resolvedLanguage || i18n.language || "en").slice(0, 2)); } catch { return new Date(latest.ts).toLocaleString(); } })()}</span>
           {after?.cv_pct != null && (
             <span className={after.reliable === false ? "text-amber-500/90" : "text-zinc-500"} data-testid="bench-reliability">
@@ -175,7 +175,7 @@ function BenchmarkCard({ bench }) {
           )}
         </div>
       )}
-    </div>
+    </HUDCard>
   );
 }
 
@@ -260,12 +260,12 @@ export default function Benchmark() {
       <PageHeader eyebrow={t("bench.eyebrow", { defaultValue: "// benchmark" })} title={t("bench.title", { defaultValue: "Benchmark del sistema" })}
         actions={<>
           <button data-testid="silent-bench-btn" onClick={guardedLaunch} disabled={benchLaunch.running}
-            className="flex items-center gap-2 border border-[#E5FF00]/50 text-[#E5FF00] px-3 py-2 text-sm hover:bg-[#E5FF00]/10 disabled:opacity-60 transition-colors">
+            className="flex items-center gap-2 border border-volt/50 text-volt px-3 py-2 text-sm hover:bg-volt/10 disabled:opacity-60 transition-colors">
             {benchLaunch.running ? <Loader2 size={15} className="animate-spin" /> : <Zap size={15} />}
             {t("bench.run_now", { defaultValue: "Benchmark ora" })}
           </button>
           <button data-testid="refresh-bench-btn" onClick={() => { load(); setRefreshKey((k) => k + 1); }} disabled={loading}
-            className="flex items-center gap-2 border border-[#2A2A35] px-3 py-2 text-sm hover:border-[#E5FF00] btn-ghost">
+            className="flex items-center gap-2 border border-hud px-3 py-2 text-sm hover:border-volt btn-ghost">
             <Loader2 size={15} className={loading ? "animate-spin" : "hidden"} />
             <Sparkles size={15} className={loading ? "hidden" : ""} />
             {t("bench.refresh", { defaultValue: "Ricarica" })}
@@ -275,20 +275,20 @@ export default function Benchmark() {
       <BrowserPopupHint testid="bench-popup-hint" />
 
       {/* Tabs: Quick vs Full Benchmark */}
-      <div className="flex items-center gap-1 border-b border-[#2A2A35] mb-5">
+      <div className="flex items-center gap-1 border-b border-hud mb-5">
         <button
           onClick={() => setTab("quick")}
           data-testid="tab-quick-bench"
-          className={`px-4 py-2 text-xs uppercase tracking-widest font-mono transition-colors border-b-2 ${tab === "quick" ? "text-[#E5FF00] border-[#E5FF00]" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}
+          className={`px-4 py-2 text-xs uppercase tracking-widest font-mono transition-colors border-b-2 ${tab === "quick" ? "text-volt border-volt" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}
         >
           Quick Benchmark
         </button>
         <button
           onClick={() => setTab("full")}
           data-testid="tab-full-bench"
-          className={`px-4 py-2 text-xs uppercase tracking-widest font-mono transition-colors border-b-2 ${tab === "full" ? "text-[#00E0FF] border-[#00E0FF]" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}
+          className={`px-4 py-2 text-xs uppercase tracking-widest font-mono transition-colors border-b-2 ${tab === "full" ? "text-info border-info" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}
         >
-          Full Benchmark <span className="text-[#00E0FF] text-[11px] ml-1">v2</span>
+          Full Benchmark <span className="text-info text-[11px] ml-1">v2</span>
         </button>
       </div>
 
@@ -309,7 +309,7 @@ export default function Benchmark() {
           <BenchmarkCard bench={bench} />
         </>
       ) : (
-        <div className="bg-[#0F0F12] border border-[#2A2A35] p-8 text-center" data-testid="bench-empty">
+        <HUDCard testid="bench-empty" pad="p-8" className="text-center">
           <Gauge size={40} className="mx-auto text-zinc-600 mb-3" />
           <div className="text-sm text-zinc-300 font-semibold mb-1">
             {t("bench.empty_title", { defaultValue: "Nessun benchmark ancora" })}
@@ -318,11 +318,11 @@ export default function Benchmark() {
             {t("bench.empty_desc", { defaultValue: "Esegui il benchmark per misurare CPU, RAM, disco e latenza di rete. Ripeti dopo un'ottimizzazione per vedere il confronto prima/dopo." })}
           </p>
           <button onClick={guardedLaunch} disabled={benchLaunch.running} data-testid="bench-cta"
-            className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2.5 text-sm hover:bg-[#D4EE00] disabled:opacity-60 transition-colors">
+            className="inline-flex items-center gap-2 bg-volt text-black font-bold px-4 py-2.5 text-sm hover:bg-[#D4EE00] disabled:opacity-60 transition-colors">
             {benchLaunch.running ? <Loader2 size={15} className="animate-spin" /> : <Zap size={15} />}
             {t("bench.run_first", { defaultValue: "Esegui il primo benchmark" })}
           </button>
-        </div>
+        </HUDCard>
       )}
       </>
       )}

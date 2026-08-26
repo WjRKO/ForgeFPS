@@ -28,9 +28,9 @@ function ProductCard({ p, t, editing, editTitle, setEditTitle, startEdit, saveTi
 
   return (
     <motion.div variants={item} data-testid={`product-row-${p.id}`}
-      className="group bg-[#0F0F12] border border-[#1A1A24] hover:border-[#2A2A35] hud-tick p-4 flex flex-col transition-colors">
+      className="group bg-panel border border-hud-soft hover:border-hud hud-tick p-4 flex flex-col transition-colors">
       <div className="flex items-start gap-3">
-        <Link to={`/app/tracker/${p.id}`} className="w-12 h-12 bg-black border border-[#2A2A35] flex items-center justify-center overflow-hidden shrink-0">
+        <Link to={`/app/tracker/${p.id}`} className="w-12 h-12 bg-black border border-hud flex items-center justify-center overflow-hidden shrink-0">
           {p.image ? <img src={p.image} alt="" className="w-full h-full object-contain" /> : <Zap size={16} className="text-zinc-600" />}
         </Link>
         <div className="flex-1 min-w-0">
@@ -39,14 +39,14 @@ function ProductCard({ p, t, editing, editTitle, setEditTitle, startEdit, saveTi
               <input autoFocus data-testid={`edit-title-input-${p.id}`} value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") saveTitle(p.id); if (e.key === "Escape") setEditing(null); }}
                 placeholder={t("tracker.name_ph")}
-                className="flex-1 bg-black border border-[#E5FF00] outline-none px-2 py-1 text-sm min-w-0" />
-              <button data-testid={`save-title-${p.id}`} onClick={() => saveTitle(p.id)} className="p-1 text-[#00FF66] hover:bg-[#141419]"><Check size={14} /></button>
-              <button onClick={() => setEditing(null)} className="p-1 text-zinc-500 hover:bg-[#141419]"><X size={14} /></button>
+                className="flex-1 bg-black border border-volt outline-none px-2 py-1 text-sm min-w-0" />
+              <button data-testid={`save-title-${p.id}`} onClick={() => saveTitle(p.id)} className="p-1 text-ok hover:bg-panel-hover"><Check size={14} /></button>
+              <button onClick={() => setEditing(null)} className="p-1 text-zinc-500 hover:bg-panel-hover"><X size={14} /></button>
             </div>
           ) : (
             <div className="flex items-start gap-1.5">
-              <Link to={`/app/tracker/${p.id}`} className={`text-sm leading-snug line-clamp-2 hover:text-[#E5FF00] transition-colors ${untitled ? "text-zinc-500 italic" : ""}`}>{untitled ? t("tracker.no_title") : p.title}</Link>
-              <button data-testid={`edit-title-${p.id}`} onClick={() => startEdit(p)} className="text-zinc-600 hover:text-[#E5FF00] shrink-0 mt-0.5" title={t("tracker.edit_name")}><Pencil size={12} /></button>
+              <Link to={`/app/tracker/${p.id}`} className={`text-sm leading-snug line-clamp-2 hover:text-volt transition-colors ${untitled ? "text-zinc-500 italic" : ""}`}>{untitled ? t("tracker.no_title") : p.title}</Link>
+              <button data-testid={`edit-title-${p.id}`} onClick={() => startEdit(p)} className="text-zinc-600 hover:text-volt shrink-0 mt-0.5" title={t("tracker.edit_name")}><Pencil size={12} /></button>
             </div>
           )}
           <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-600 mt-1">{p.store || p.platform}</div>
@@ -57,7 +57,7 @@ function ProductCard({ p, t, editing, editTitle, setEditTitle, startEdit, saveTi
         <div>
           <div className="font-display font-black text-2xl tracking-tighter">{p.current_price != null ? p.current_price : "—"} <span className="text-xs text-zinc-500">{p.current_price != null ? p.currency : ""}</span></div>
           {diff !== 0 && (
-            <div className={`text-xs font-mono flex items-center gap-1 mt-0.5 ${diff < 0 ? "text-[#00FF66]" : "text-[#FF3B30]"}`}>
+            <div className={`text-xs font-mono flex items-center gap-1 mt-0.5 ${diff < 0 ? "text-ok" : "text-bad"}`}>
               {diff < 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />}{Math.abs(diff).toFixed(2)} {p.currency}
             </div>
           )}
@@ -79,18 +79,18 @@ function ProductCard({ p, t, editing, editTitle, setEditTitle, startEdit, saveTi
           <div className="flex justify-between text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-1">
             <span>{t("tracker.target")} {p.target_price}€</span><span>{Math.round(progress)}% {t("tracker.to_target")}</span>
           </div>
-          <div className="h-1.5 bg-black border border-[#1A1A24]">
-            <div className="h-full bg-[#E5FF00] transition-all duration-700" style={{ width: `${progress}%` }} />
+          <div className="h-1.5 bg-black border border-hud-soft">
+            <div className="h-full bg-volt transition-all duration-700" style={{ width: `${progress}%` }} />
           </div>
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-1 mt-3 pt-3 border-t border-[#1A1A24]">
-        <a href={p.url} target="_blank" rel="noreferrer" className="p-2 text-zinc-500 hover:text-[#E5FF00] transition-colors"><ExternalLink size={15} /></a>
-        <button data-testid={`refresh-${p.id}`} onClick={() => refresh(p.id)} className="p-2 text-zinc-500 hover:text-[#E5FF00] transition-colors">
+      <div className="flex items-center justify-end gap-1 mt-3 pt-3 border-t border-hud-soft">
+        <a href={p.url} target="_blank" rel="noreferrer" className="p-2 text-zinc-500 hover:text-volt transition-colors"><ExternalLink size={15} /></a>
+        <button data-testid={`refresh-${p.id}`} onClick={() => refresh(p.id)} className="p-2 text-zinc-500 hover:text-volt transition-colors">
           <RefreshCw size={15} className={refreshing[p.id] ? "animate-spin" : ""} />
         </button>
-        <button data-testid={`delete-product-${p.id}`} onClick={() => remove(p.id)} className="p-2 text-zinc-500 hover:text-[#FF3B30] transition-colors"><Trash2 size={15} /></button>
+        <button data-testid={`delete-product-${p.id}`} onClick={() => remove(p.id)} className="p-2 text-zinc-500 hover:text-bad transition-colors"><Trash2 size={15} /></button>
       </div>
     </motion.div>
   );
@@ -156,29 +156,29 @@ export default function Tracker() {
       <PageHeader eyebrow={t("tracker.eyebrow")} title={t("tracker.title")} />
 
       <div className="grid lg:grid-cols-2 gap-4 mb-8">
-        <div className="bg-[#0F0F12] border border-[#1A1A24] hud-tick p-5">
+        <div className="bg-panel border border-hud-soft hud-tick p-5">
           <div className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-3">{t("tracker.add_url_title")}</div>
           <div className="flex gap-2">
             <input data-testid="track-url-input" value={url} onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && track()} placeholder={t("tracker.url_ph")}
-              className="flex-1 bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 text-sm" />
+              className="flex-1 bg-black border border-hud focus:border-volt outline-none px-3 py-2 text-sm" />
             <button data-testid="track-btn" onClick={() => track()} disabled={adding}
-              className="bg-[#E5FF00] text-black px-4 font-bold hover:bg-[#D4EC00] transition-colors disabled:opacity-60 flex items-center gap-1 btn-volt">
+              className="bg-volt text-black px-4 font-bold hover:bg-volt-dim transition-colors disabled:opacity-60 flex items-center gap-1 btn-volt">
               {adding ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
             </button>
           </div>
-          {error && <div data-testid="track-error" className="mt-2 text-xs text-[#FF3B30]">{error}</div>}
+          {error && <div data-testid="track-error" className="mt-2 text-xs text-bad">{error}</div>}
           <div className="mt-2 text-[11px] text-zinc-600">{t("tracker.stores_hint")}</div>
         </div>
 
-        <div className="bg-[#0F0F12] border border-[#1A1A24] hud-tick p-5">
+        <div className="bg-panel border border-hud-soft hud-tick p-5">
           <div className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-3">{t("tracker.search_title")}</div>
           <div className="flex gap-2">
             <input data-testid="search-input" value={query} onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && search()} placeholder={t("tracker.search_ph")}
-              className="flex-1 bg-black border border-[#2A2A35] focus:border-[#E5FF00] outline-none px-3 py-2 text-sm" />
+              className="flex-1 bg-black border border-hud focus:border-volt outline-none px-3 py-2 text-sm" />
             <button data-testid="search-btn" onClick={search} disabled={searching} aria-label={t("a11y.search")}
-              className="bg-[#E5FF00] text-black px-4 font-bold hover:bg-[#D4EC00] transition-colors disabled:opacity-60 flex items-center gap-1 btn-volt">
+              className="bg-volt text-black px-4 font-bold hover:bg-volt-dim transition-colors disabled:opacity-60 flex items-center gap-1 btn-volt">
               {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
             </button>
           </div>
@@ -193,14 +193,14 @@ export default function Tracker() {
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {results.map((r, i) => (
-                <div key={i} className="bg-[#0F0F12] border border-[#1A1A24] hover:border-[#2A2A35] card-hover hud-tick p-4 flex flex-col">
-                  <div className="h-24 bg-black border border-[#2A2A35] flex items-center justify-center mb-3 overflow-hidden">
+                <div key={i} className="bg-panel border border-hud-soft hover:border-hud card-hover hud-tick p-4 flex flex-col">
+                  <div className="h-24 bg-black border border-hud flex items-center justify-center mb-3 overflow-hidden">
                     {r.image ? <img src={r.image} alt="" className="h-full object-contain" /> : <Zap size={18} className="text-zinc-600" />}
                   </div>
                   <div className="text-xs text-zinc-200 line-clamp-2 flex-1">{r.title}</div>
                   <div className="flex items-center justify-between mt-3">
                     <span className="font-bold text-sm">{r.price != null ? `${r.price} €` : "n/d"}</span>
-                    <button data-testid={`add-result-${i}`} onClick={() => track(r.url)} className="text-xs bg-[#E5FF00] text-black font-bold px-2 py-1 hover:bg-[#D4EC00] btn-volt">{t("tracker.track_btn")}</button>
+                    <button data-testid={`add-result-${i}`} onClick={() => track(r.url)} className="text-xs bg-volt text-black font-bold px-2 py-1 hover:bg-volt-dim btn-volt">{t("tracker.track_btn")}</button>
                   </div>
                 </div>
               ))}
@@ -216,9 +216,9 @@ export default function Tracker() {
       {groupEntries.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-4" data-testid="group-summary">
           {groupEntries.map(([name, g]) => (
-            <div key={name} className="bg-[#0F0F12] border border-[#2A2A35] px-3 py-2">
+            <div key={name} className="bg-panel border border-hud px-3 py-2">
               <div className="text-[11px] font-mono text-zinc-500 truncate max-w-[180px]">{name}</div>
-              <div className="text-sm font-bold">{g.count} {t("tracker.parts")} · <span className="text-[#E5FF00]">€{g.total.toFixed(2)}</span></div>
+              <div className="text-sm font-bold">{g.count} {t("tracker.parts")} · <span className="text-volt">€{g.total.toFixed(2)}</span></div>
             </div>
           ))}
         </div>
@@ -229,7 +229,7 @@ export default function Tracker() {
       ) : products.length === 0 ? (
         <EmptyState icon={Zap} title={t("tracker.empty_title")} description={t("tracker.empty")}
           action={<button data-testid="tracker-empty-focus" onClick={() => document.querySelector('[data-testid="track-url-input"]')?.focus()}
-            className="mt-2 border border-[#E5FF00] text-[#E5FF00] hover:bg-[#E5FF00] hover:text-black px-5 py-2 text-xs font-mono uppercase tracking-widest transition-colors flex items-center gap-2"><Plus size={14} /> {t("tracker.add_url_title")}</button>} />
+            className="mt-2 border border-volt text-volt hover:bg-volt hover:text-black px-5 py-2 text-xs font-mono uppercase tracking-widest transition-colors flex items-center gap-2"><Plus size={14} /> {t("tracker.add_url_title")}</button>} />
       ) : (
         <motion.div variants={stagger} initial="hidden" animate="show" className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {products.map((p) => (

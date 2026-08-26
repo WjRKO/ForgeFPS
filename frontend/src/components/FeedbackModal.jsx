@@ -112,7 +112,7 @@ export default function FeedbackModal({ open, onClose }) {
       <form
         onSubmit={submit}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg bg-[#0F0F12] border-2 border-[#E5FF00]/40 relative"
+        className="w-full max-w-lg bg-panel border-2 border-volt/40 relative"
         data-testid="feedback-modal"
       >
         <button
@@ -125,8 +125,8 @@ export default function FeedbackModal({ open, onClose }) {
           <X size={16} />
         </button>
 
-        <div className="p-6 border-b border-[#1A1A24]">
-          <div className="text-[11px] font-mono uppercase tracking-widest text-[#E5FF00] mb-1">// {en ? "we listen" : "ti ascoltiamo"}</div>
+        <div className="p-6 border-b border-hud-soft">
+          <div className="text-[11px] font-mono uppercase tracking-widest text-volt mb-1">// {en ? "we listen" : "ti ascoltiamo"}</div>
           <h2 className="font-display font-black text-2xl tracking-tighter text-white">
             {en ? "Send feedback" : "Invia feedback"}
           </h2>
@@ -155,7 +155,7 @@ export default function FeedbackModal({ open, onClose }) {
                     className={`flex items-center justify-center gap-2 py-2.5 border text-xs font-bold uppercase tracking-widest transition-all ${
                       active
                         ? "text-black"
-                        : "border-[#2A2A35] text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                        : "border-hud text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
                     }`}
                     style={active ? { backgroundColor: k.color, borderColor: k.color } : {}}
                   >
@@ -171,7 +171,7 @@ export default function FeedbackModal({ open, onClose }) {
               <div className="text-[11px] font-mono uppercase tracking-widest text-zinc-500">
                 {en ? "your message" : "il tuo messaggio"}
               </div>
-              <div className={`text-[11px] font-mono ${message.length > MAX_MSG * 0.9 ? "text-[#FF3B30]" : "text-zinc-600"}`}>
+              <div className={`text-[11px] font-mono ${message.length > MAX_MSG * 0.9 ? "text-bad" : "text-zinc-600"}`}>
                 {message.length}/{MAX_MSG}
               </div>
             </div>
@@ -184,7 +184,7 @@ export default function FeedbackModal({ open, onClose }) {
                 : "Descrivi cosa e' successo, cosa ti aspettavi, o la tua idea..."}
               rows={5}
               data-testid="feedback-message"
-              className="w-full bg-black/60 border border-[#2A2A35] focus:border-[#E5FF00] px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 outline-none resize-none transition-colors"
+              className="w-full bg-black/60 border border-hud focus:border-volt px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 outline-none resize-none transition-colors"
             />
           </div>
 
@@ -193,8 +193,8 @@ export default function FeedbackModal({ open, onClose }) {
               {en ? "screenshot (optional)" : "screenshot (opzionale)"}
             </div>
             {screenshot ? (
-              <div className="flex items-center gap-3 border border-[#2A2A35] bg-black/40 p-3">
-                <img src={screenshot} alt="preview" className="w-14 h-14 object-cover border border-[#2A2A35]" />
+              <div className="flex items-center gap-3 border border-hud bg-black/40 p-3">
+                <img src={screenshot} alt="preview" className="w-14 h-14 object-cover border border-hud" />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-zinc-300 truncate">{screenshotName}</div>
                   <div className="text-[11px] text-zinc-600 font-mono">{Math.round(screenshot.length / 1024)} KB</div>
@@ -202,7 +202,7 @@ export default function FeedbackModal({ open, onClose }) {
                 <button
                   type="button"
                   onClick={() => { setScreenshot(null); setScreenshotName(""); }}
-                  className="text-zinc-500 hover:text-[#FF3B30] p-1"
+                  className="text-zinc-500 hover:text-bad p-1"
                   data-testid="feedback-remove-screenshot"
                 >
                   <X size={14} />
@@ -210,7 +210,7 @@ export default function FeedbackModal({ open, onClose }) {
               </div>
             ) : (
               <label
-                className="flex flex-col items-center justify-center gap-2 border border-dashed border-[#2A2A35] hover:border-[#E5FF00]/60 bg-black/20 py-6 cursor-pointer transition-colors"
+                className="flex flex-col items-center justify-center gap-2 border border-dashed border-hud hover:border-volt/60 bg-black/20 py-6 cursor-pointer transition-colors"
                 data-testid="feedback-attach-label"
               >
                 <ImageIcon size={20} className="text-zinc-500" />
@@ -230,7 +230,7 @@ export default function FeedbackModal({ open, onClose }) {
           </div>
         </div>
 
-        <div className="p-6 border-t border-[#1A1A24] flex items-center justify-between gap-3">
+        <div className="p-6 border-t border-hud-soft flex items-center justify-between gap-3">
           <div className="text-[11px] text-zinc-600 font-mono">
             {en ? `page: ${location.pathname}` : `pagina: ${location.pathname}`}
           </div>
@@ -240,8 +240,8 @@ export default function FeedbackModal({ open, onClose }) {
             data-testid="feedback-submit"
             className={`inline-flex items-center gap-2 font-bold uppercase tracking-widest text-xs px-5 py-2.5 transition-all ${
               done
-                ? "bg-[#00FF66] text-black"
-                : "bg-[#E5FF00] text-black hover:bg-[#F5FF66] disabled:opacity-50 disabled:cursor-not-allowed"
+                ? "bg-ok text-black"
+                : "bg-volt text-black hover:bg-[#F5FF66] disabled:opacity-50 disabled:cursor-not-allowed"
             }`}
           >
             {busy ? <Loader2 size={13} className="animate-spin" /> : done ? <Check size={13} /> : <Send size={13} />}

@@ -8,19 +8,19 @@ import { SecureRunBlock } from "@/components/SecureRunBlock";
 function ProfileCard({ p, catalog, token, onDelete }) {
   const names = p.tweak_ids.map((id) => catalog.find((c) => c.id === id)?.name).filter(Boolean);
   return (
-    <div className="bg-[#0F0F12] border border-[#2A2A35] p-5" data-testid={`profile-${p.id}`}>
+    <div className="bg-panel border border-hud p-5" data-testid={`profile-${p.id}`}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Gamepad2 size={18} className="text-[#E5FF00]" />
+          <Gamepad2 size={18} className="text-volt" />
           <h3 className="font-display font-bold text-base">{p.game_name}</h3>
-          {p.template && <span className="text-[11px] uppercase tracking-widest border border-[#2A2A35] px-1.5 py-0.5 text-zinc-500">{p.preset_label || "Preset"}</span>}
+          {p.template && <span className="text-[11px] uppercase tracking-widest border border-hud px-1.5 py-0.5 text-zinc-500">{p.preset_label || "Preset"}</span>}
         </div>
         {!p.template && (
-          <button data-testid={`delete-profile-${p.id}`} onClick={() => onDelete(p.id)} className="text-zinc-600 hover:text-[#FF3B30] transition-colors"><Trash2 size={16} /></button>
+          <button data-testid={`delete-profile-${p.id}`} onClick={() => onDelete(p.id)} className="text-zinc-600 hover:text-bad transition-colors"><Trash2 size={16} /></button>
         )}
       </div>
       <div className="flex flex-wrap gap-1.5 mb-4" data-testid={`profile-tweaks-${p.id}`}>
-        {names.map((n) => <span key={n} className="text-[11px] bg-black border border-[#1A1A24] px-2 py-0.5 text-zinc-400">{n}</span>)}
+        {names.map((n) => <span key={n} className="text-[11px] bg-black border border-hud-soft px-2 py-0.5 text-zinc-400">{n}</span>)}
       </div>
       <SecureRunBlock token={token} mode="optimize" profile={p.id} testid={`profile-run-${p.id}`} />
     </div>
@@ -74,36 +74,36 @@ export default function Profiles() {
           <p className="text-zinc-500 text-sm mt-1">{t("profiles.subtitle")}</p>
         </div>
         <button data-testid="new-profile-btn" onClick={() => setCreating((c) => !c)}
-          className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2.5 text-sm hover:bg-[#c9e000] transition-colors">
+          className="inline-flex items-center gap-2 bg-volt text-black font-bold px-4 py-2.5 text-sm hover:bg-[#c9e000] transition-colors">
           {creating ? <X size={16} /> : <Plus size={16} />} {creating ? t("common.cancel") : t("profiles.new")}
         </button>
       </div>
 
       {creating && (
-        <div className="bg-[#0F0F12] border border-[#E5FF00]/40 p-5 mb-6" data-testid="create-profile-form">
+        <div className="bg-panel border border-volt/40 p-5 mb-6" data-testid="create-profile-form">
           <input data-testid="profile-name-input" value={name} onChange={(e) => setName(e.target.value)}
             placeholder={t("profiles.name_ph")}
-            className="w-full bg-black border border-[#2A2A35] px-3 py-2.5 text-sm mb-4 focus:border-[#E5FF00] outline-none" />
+            className="w-full bg-black border border-hud px-3 py-2.5 text-sm mb-4 focus:border-volt outline-none" />
           {cats.map((cat) => (
             <div key={cat} className="mb-4">
               <div className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{CAT_LABELS[cat]}</div>
               <div className="grid sm:grid-cols-2 gap-1.5">
                 {(catalogByCat[cat] || []).map((c) => (
-                  <label key={c.id} data-testid={`tweak-opt-${c.id}`} className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer border border-[#1A1A24] px-2 py-1.5 hover:border-[#2A2A35]">
-                    <input type="checkbox" checked={selected.includes(c.id)} onChange={() => toggle(c.id)} className="accent-[#E5FF00]" />
+                  <label key={c.id} data-testid={`tweak-opt-${c.id}`} className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer border border-hud-soft px-2 py-1.5 hover:border-hud">
+                    <input type="checkbox" checked={selected.includes(c.id)} onChange={() => toggle(c.id)} className="accent-volt" />
                     {c.name}
                   </label>
                 ))}
               </div>
             </div>
           ))}
-          <button data-testid="save-profile-btn" onClick={save} className="inline-flex items-center gap-2 bg-[#E5FF00] text-black font-bold px-4 py-2.5 text-sm">
+          <button data-testid="save-profile-btn" onClick={save} className="inline-flex items-center gap-2 bg-volt text-black font-bold px-4 py-2.5 text-sm">
             <Save size={16} /> {t("profiles.save_profile")} ({selected.length})
           </button>
         </div>
       )}
 
-      <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2"><Zap size={13} className="text-[#E5FF00]" /> {t("profiles.presets")}</div>
+      <div className="text-xs uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2"><Zap size={13} className="text-volt" /> {t("profiles.presets")}</div>
       <div className="grid md:grid-cols-2 gap-3 mb-8">
         {templates.map((tp) => <ProfileCard key={tp.id} p={tp} catalog={catalog} token={token} onDelete={del} />)}
       </div>
