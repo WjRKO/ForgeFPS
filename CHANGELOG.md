@@ -9,6 +9,174 @@ Formato: [Keep a Changelog](https://keepachangelog.com/it/1.1.0/) — Versioning
 
 _Prossime feature in sviluppo — vedi `/app/memory/ROADMAP.md`._
 
+### Added — quali programmi all'avvio si spengono, e il bottone per spegnerli
+
+La lista delle app all'avvio era un elenco senza giudizio, con sotto una riga
+che spiegava come aprire il Task Manager. Dentro quell'elenco pero' ci sono
+l'antivirus, il driver audio e il touchpad: "disattiva quello che non ti serve"
+e' il consiglio che lascia un utente senza suono.
+
+Ogni voce ha ora un verdetto, calcolato dal server e non dall'AI
+(`backend/startup_kb.py`, stessa filosofia della knowledge base dei servizi):
+
+- **Sicuro** — il programma resta installato e funziona, all'avvio ci sta per
+  comodita': updater, launcher di giochi, chat, suite RGB.
+- **Valuta** — spegnerlo cambia qualcosa che potresti volere: la sincronia del
+  cloud che non parte, la VPN che non sale, le macro che non rispondono. Con il
+  motivo scritto accanto, perche' la decisione e' dell'utente.
+- **Non toccare** — sicurezza, driver, input. Qui il bottone non c'e'.
+
+Lo sconosciuto vale "valuta", mai "sicuro": un default ottimista significa
+proporre di spegnere qualcosa che nessuno ha guardato. Su un PC reale, 37 voci
+attive: 12 sicure, 22 da valutare, 3 intoccabili.
+
+Il verdetto si calcola **in lettura**, non al sync: le regole si aggiornano piu'
+spesso di quanto la gente sincronizzi, e un giudizio congelato resterebbe quello
+vecchio finche' l'utente non rilancia l'agent.
+
+Le regole verso "critico" e "valuta" guardano anche percorso e riga di comando —
+sbagliare in eccesso costa una domanda in piu'. Quelle verso "sicuro" no, solo
+nome, nome leggibile ed editore: il percorso raggruppa per cartella e non per
+funzione, e sotto `ASUS\ArmouryDevice\` stanno sia la suite RGB (spegnibile)
+sia il motore di riduzione del rumore e l'agente di alimentazione del mouse, che
+un match sul percorso dichiarava sicuri insieme a lei.
+
+**Il bottone.** "Disattiva" nella scheda Il mio PC. Il browser non scrive nel
+registro del PC e non deve poterlo: il clic diventa un'azione in attesa sul
+backend, l'agent la ritira al primo sync e la applica sulla macchina, con il
+proprio token. La riga mostra "si spegne al prossimo sync" finche' non e' fatta,
+e il sync parte da solo subito dopo il clic.
+
+Come si spegne, per fonte — sempre nel modo previsto da Windows, mai
+disinstallando o cancellando niente:
+
+| Fonte | Cosa scriviamo |
+|---|---|
+| Chiave `Run` / `RunOnce` | `StartupApproved`, gli stessi 12 byte del Task Manager |
+| Cartella Esecuzione automatica | `StartupApproved\StartupFolder` |
+| Attivita' pianificata | `Disable-ScheduledTask` |
+| Servizio | tipo di avvio a `Disabled` |
+| App UWP/Store | `State = DisabledByUser`, come l'interruttore in Impostazioni |
+
+L'inverso dell'azione e' l'azione stessa, quindi non passa dal backup dei tweak:
+lo stesso bottone riaccende. Finisce pero' nel journal, perche' "cosa mi hai
+fatto al PC" e' la domanda da cui dipende la fiducia, e una modifica decisa dal
+browser ha piu' bisogno di essere registrata, non meno.
+
+Due controlli, non uno: il backend rifiuta lo spegnimento di una voce critica
+(il verdetto non e' un consiglio che un payload modificato possa aggirare), e
+l'agent rifiuta comunque di toccare antivirus, firewall e sicurezza — chi scrive
+nel registro non si fida di una lista che arriva dalla rete.
+
+**L'elevazione.** Servizi, attivita' pianificate e cartella di avvio comune
+vivono in HKLM: su un PC vero sono meta' delle voci, e senza permessi di
+amministratore la dashboard le mostrava, lasciava cliccare e poi falliva. Ora
+l'agent, se non e' elevato, si rilancia come amministratore per quelle azioni —
+una finestra che applica la coda e si chiude, niente sync e niente rilevazione.
+
+Le voci dell'utente (chiavi `Run` in HKCU, cartella personale, app dello Store)
+si applicano **prima**, senza chiedere niente a nessuno: una sola azione di
+sistema in coda non deve tenerle in ostaggio dietro un prompt di Windows che
+l'utente magari non guarda. Una voce intoccabile non fa comparire il prompt
+affatto — sarebbe un permesso chiesto per poi rifiutare comunque. E se il
+permesso viene negato l'azione viene provata lo stesso: fallisce con il motivo
+scritto ("servono i permessi di amministratore"), che arriva alla dashboard.
+Un'azione appesa per sempre e' peggio di un fallimento spiegato.
+
+
+### Changed — l'avvio del PC visto per intero, e una volta sola
+
+La scheda "app all'avvio" arrivava da quattro fonti e ne mancavano altrettante,
+e il numero mostrato accanto veniva da una **seconda rilevazione indipendente**:
+sullo stesso PC `health.startup_count` e la lista non tornavano, perche'
+leggevano chiavi di registro diverse e il conteggio ignorava servizi e app
+Store. Ora il numero e' quello della lista, punto.
+
+Cosa non vedevamo (misurato su un PC reale: 37 voci prima, 59 dopo):
+
+- **App UWP/Store** — Teams, Xbox, Collegamento al telefono, Terminale: vivono
+  nel ramo `AppModel\SystemAppData` del registro e non compaiono ne' in `Run`
+  ne' nella cartella Esecuzione automatica. Il Task Manager ne elencava sette
+  che noi non avevamo.
+- `RunOnce`, `Run` a 32 bit dell'utente, `Policies\Explorer\Run`.
+- I servizi di terze parti oltre i primi quindici: il taglio era `-First 15` per
+  fonte, su un ordine che PowerShell non garantisce. Due sync di fila
+  restituivano liste diverse a PC fermo.
+
+Cosa dicevamo di sbagliato:
+
+- Lo stato attivo/disattivo usciva da un dizionario piatto che fondeva HKCU e
+  HKLM: due voci omonime in rami diversi si sovrascrivevano lo stato a vicenda.
+  E una voce **senza** record in `StartupApproved` risultava "sconosciuta"
+  quando invece e' semplicemente attiva — Windows scrive quella chiave solo
+  dopo il primo toggle dal Task Manager.
+- Per un servizio, `enabled` era "sta girando adesso": un servizio Auto appena
+  crashato veniva riportato come disattivato. Ora "parte all'avvio" e "sta
+  girando" sono due campi distinti.
+- La RAM era associata per nome file: sommava le istanze di utenti diversi e,
+  per le voci che lanciano `rundll32` o `explorer`, mostrava la RAM dell'host
+  generico. Ora il match e' sul path del processo.
+- Le voci scritte come `%ProgramFiles%\...` non passavano `Test-Path`, quindi
+  restavano senza editore. Le variabili d'ambiente vengono espanse.
+
+Cosa si vede in piu': il **nome leggibile** dell'eseguibile (quello che mostra
+il Task Manager, non `RTHDVCPL`), l'editore anche per i file non firmati (dai
+metadati, non solo dalla firma), e l'**impatto in millisecondi** dagli eventi
+101/103 del log Diagnostics-Performance — la stessa fonte da cui il Task Manager
+ricava la sua colonna "Impatto all'avvio". Quel log richiede permessi
+amministratore: senza, il campo resta vuoto invece di mostrare una stima
+inventata. La lista e' ordinata per impatto misurato, poi per RAM.
+
+Una app registrata sia in `Run` sia nella cartella Esecuzione automatica adesso
+e' **una** voce: il dedup e' sull'eseguibile risolto, non sulla coppia
+nome+fonte.
+
+La firma Authenticode non viene piu' verificata per gli eseguibili dentro
+`%SystemRoot%`: e' la voce piu' cara della rilevazione (~60 ms a file) e su un
+binario di sistema non dice niente che i metadati non dicano gia'. Fuori di li'
+resta, perche' e' l'unica fonte attendibile su chi ha scritto un eseguibile che
+parte da solo a ogni logon. Per quei file `signed` resta `null` — "non
+controllato", che non e' `false`, "controllato e non valido".
+
+### Fixed — non consigliare di spegnere i servizi che partono su richiesta
+
+`Get-ServicesAudit` non distingueva un servizio "Manuale" da un "Manuale (avvio
+trigger)". Sono 77 su 220 su un PC normale: partono quando un evento li chiama
+(Bluetooth accoppiato, stampante collegata, VPN che sale) e si fermano da soli.
+Disattivarli non toglie un millisecondo all'avvio, rompe la funzione che li
+chiama — e l'analisi li marcava `disattiva` insieme agli altri, RAM
+"risparmiabile" inclusa. Il flag si legge dalla sottochiave `TriggerInfo` del
+registro, che `Win32_Service` non espone.
+
+Nell'audit entrano anche avvio ritardato, account di esecuzione e la RAM dei
+servizi ospitati in un `svchost` condiviso (ripartita fra i servizi che ci
+stanno dentro), che prima era vuota per meta' dei servizi. Il tetto di 220 non
+taglia piu' in ordine alfabetico — perdeva tutta la coda dell'alfabeto, WSearch
+e SysMain compresi — ma tiene per primi i servizi di terze parti, poi gli Auto,
+poi quelli in esecuzione.
+
+I servizi Defender arrivano col nome localizzato ("Servizio Microsoft Defender
+Antivirus"): il filtro anti-rumore cercava "windows defender" e non li prendeva.
+
+### Fixed — un rilevatore nuovo non e' un PC cambiato
+
+Con piu' fonti, voci fuse e un ordinamento diverso, il primo sync dopo
+l'aggiornamento avrebbe annunciato decine di "nuovi programmi all'avvio" e
+segnato come "fatti" servizi che nessuno ha toccato: il confronto fra due sync
+e' per nome, e i nomi si erano mossi da soli. L'agent dichiara ora una revisione
+del rilevatore (`startup_rev`); quando cambia, quel sync registra solo la nuova
+base senza produrre eventi di cambiamento.
+
+### Fixed — un esito consegnato due volte non riapre la cronologia
+
+L'agent rimanda gli esiti delle azioni di avvio se la risposta si perde per
+strada. La seconda consegna riscriveva `done_at` di un'azione gia' chiusa,
+spostandola in cima alla cronologia come se fosse appena successa, e la
+contava di nuovo fra quelle applicate. Adesso si chiude solo cio' che era
+ancora in attesa. Un'azione riaccodata dopo ha comunque un id nuovo, quindi
+nessun esito legittimo va perso.
+
+
 ### Security — il link di reset arriva all'utente, non ai log
 
 `POST /api/auth/forgot-password` stampava il token su stdout:

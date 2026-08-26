@@ -15,18 +15,20 @@ from fastapi.responses import PlainTextResponse
 
 import ai_engine
 import push
+from bson import ObjectId
 from database import db, now_iso
 from helpers import specs_to_text, compute_health, compute_hw_insights, get_or_create_agent_token, grade_bufferbloat
 from desktop_agent import AGENT_SCRIPT
 from ps_agent import PS_SCRIPT
 from services.gpu_catalog_service import find_gpu_reference, compute_health_vs_reference
-from models import SpecsInput, GoalInput, FpsInput, FpsUpgradeInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput, AgentDiagInput
+from models import SpecsInput, GoalInput, FpsInput, FpsUpgradeInput, PcSpecsInput, TelemetryInput, AlertInput, PrematchInput, NetResultInput, ReportPhaseInput, BoosterInput, BenchExplainInput, AgentDiagInput, StartupToggleInput, StartupActionResultsInput
 from routers.profiles import resolve_tweak_ids, TWEAK_CATALOG, TEMPLATES
 from routers.advisor import _check_ai_rate_limit
 from plan_gate import require_pro, require_streamer, get_entitlements, plan_402
 from devices import resolve_device, device_filter
 from hardware import cpu_family as _cpu_family, gpu_family as _gpu_family
 from system_changes import build_change_events, analyze_trend, correlate
+from startup_kb import classify_startup, annotate_startup, summarize_startup
 import specs_merge
 
 logger = logging.getLogger("boostpc.pc")
@@ -424,7 +426,21 @@ def build(get_current_user):
             prev = await db.pc_specs.find_one(
                 dflt,
                 {"_id": 0, "data": 1, "data_meta": 1, "startup": 1, "services_audit": 1,
-                 "startup_done": 1, "services_done": 1})
+                 "startup_done": 1, "services_done": 1, "startup_rev": 1})
+        # Versione del rilevatore di avvio/servizi dell'agent. Quando cambia, la
+        # lista si muove per un motivo che non e' l'utente: fonti nuove (app
+        # UWP), voci fuse per eseguibile, un ordinamento diverso davanti al
+        # tetto di 220 servizi. Senza questo confronto il primo sync dopo un
+        # aggiornamento dell'agent annuncerebbe decine di "nuovi programmi
+        # all'avvio" e segnerebbe come "fatto" servizi che nessuno ha toccato.
+        _rev = data.startup_rev
+        _rev_changed = bool(prev) and _rev is not None and prev.get("startup_rev") != _rev
+        # Registrata solo insieme a una lista vera: memorizzarla su un invio che
+        # non porta lo startup marcherebbe come "gia' vista" una revisione di cui
+        # il documento non ha ancora i dati, e il salto varrebbe per il sync
+        # sbagliato.
+        if _rev is not None and data.startup is not None:
+            fields["startup_rev"] = _rev
         if data.data:
             # Fondere, non sostituire: una scansione degradata produce meno campi,
             # e sostituendo quei campi non diventavano vecchi, diventavano vuoti.
@@ -456,7 +472,7 @@ def build(get_current_user):
                 # else: skip elementi malformati (nessun errore, invio non blocca)
             fields["startup"] = _norm
             # Tracking 'fatto': voci prima attive che ora risultano disattivate o rimosse
-            if prev and _norm:
+            if prev and _norm and not _rev_changed:
                 from services_kb import is_startup_noise
                 _newby = {str(i.get("name") or "").lower(): i for i in _norm if isinstance(i, dict)}
                 _done = {str(d.get("name") or "").lower(): d for d in (prev.get("startup_done") or []) if isinstance(d, dict)}
@@ -481,7 +497,7 @@ def build(get_current_user):
             # Tracking 'fatto': servizi consigliati (disattiva/valuta) spariti dall'audit
             # = passati a Disabled o disinstallati (l'agent invia solo Auto+Manual).
             # Guard len>=10: evita falsi positivi su scan parziali.
-            if prev and len(_audit) >= 10 and prev.get("services_audit"):
+            if prev and len(_audit) >= 10 and prev.get("services_audit") and not _rev_changed:
                 from services_kb import analyze_services
                 _prev_items = analyze_services(prev["services_audit"]).get("items", [])
                 _new_names = {str(i.get("name") or "").lower() for i in _audit}
@@ -535,7 +551,9 @@ def build(get_current_user):
         # non c'e' nulla da confrontare e ogni campo risulterebbe "cambiato").
         if prev:
             try:
-                events = build_change_events(prev, fields.get("data"), fields.get("startup"))
+                events = build_change_events(
+                    prev, fields.get("data"),
+                    None if _rev_changed else fields.get("startup"))
                 if events:
                     ts = now_iso()
                     await db.system_changes.insert_many([
@@ -1173,12 +1191,44 @@ def build(get_current_user):
     @r.get("/pc-specs")
     async def get_specs(user: dict = Depends(get_current_user)):
         doc = await db.pc_specs.find_one(await device_filter(db, str(user["_id"])), {"_id": 0})
-        # Flag 'noise' a read-time: voci di sistema/driver non azionabili (KB aggiornabile)
+        # Flag 'noise' e verdetto di sicurezza a read-time, non alla scrittura:
+        # le due knowledge base si aggiornano molto piu' spesso di quanto la
+        # gente sincronizzi, e un giudizio congelato al momento del sync
+        # resterebbe quello vecchio finche' l'utente non rilancia l'agent.
         if doc and isinstance(doc.get("startup"), list):
             from services_kb import is_startup_noise
             for s in doc["startup"]:
                 if isinstance(s, dict) and is_startup_noise(s.get("name"), s.get("publisher")):
                     s["noise"] = True
+            annotate_startup(doc["startup"])
+            doc["startup_summary"] = summarize_startup(doc["startup"])
+            pending = await db.startup_actions.find(
+                {**(await device_filter(db, str(user["_id"]))), "status": "pending"},
+                {"_id": 0, "name": 1, "source": 1, "enable": 1}).to_list(60)
+            # In attesa = l'utente ha gia' cliccato ma l'agent non e' ancora
+            # passato: senza questo, il bottone tornerebbe com'era e sembrerebbe
+            # che il clic non abbia fatto niente.
+            attese = {(p.get("name"), p.get("source")): p.get("enable") for p in pending}
+            # E l'ultimo esito, per la stessa ragione al contrario: un'azione
+            # che fallisce (tipicamente "servono i permessi di amministratore")
+            # spariva senza lasciare traccia, e la voce tornava ad avere il suo
+            # bottone come se il clic non fosse mai avvenuto. Si guarda solo la
+            # PIU' RECENTE per voce: un errore di ieri non deve restare appeso a
+            # una voce spenta oggi.
+            chiuse = await db.startup_actions.find(
+                {**(await device_filter(db, str(user["_id"]))), "status": {"$in": ["done", "failed"]}},
+                {"_id": 0, "name": 1, "source": 1, "status": 1, "msg": 1}).sort("done_at", -1).to_list(120)
+            ultime = {}
+            for c in chiuse:
+                ultime.setdefault((c.get("name"), c.get("source")), c)
+            for s in doc["startup"]:
+                if not isinstance(s, dict):
+                    continue
+                k = (s.get("name"), s.get("source"))
+                if k in attese:
+                    s["pending_enable"] = attese[k]
+                elif ultime.get(k, {}).get("status") == "failed":
+                    s["last_error"] = ultime[k].get("msg") or ""
         return doc
 
     @r.post("/pc-specs")
@@ -1486,6 +1536,122 @@ def build(get_current_user):
                 raise HTTPException(status_code=402,
                     detail="Credito LLM esaurito. Ricarica da Profilo -> Universal Key -> Add Balance.")
             raise HTTPException(status_code=502, detail=msg)
+
+    # ---------------- Spegnere una voce di avvio dalla dashboard ----------------
+    # Il browser non puo' scrivere nel registro del PC dell'utente, e non deve
+    # poterlo: la decisione presa qui diventa un'azione in attesa, che l'agent
+    # ritira e applica al primo sync. Il giro lungo e' anche la garanzia — chi
+    # esegue e' un programma che gira sul PC dell'utente col suo token, non una
+    # chiamata di rete che arriva da fuori.
+
+    async def _startup_action_doc(uid, did, voce, enable, verdetto):
+        return {
+            "user_id": uid, **({"device_id": did} if did else {}),
+            "name": str(voce.get("name") or ""), "source": str(voce.get("source") or ""),
+            "enable": bool(enable), "entry": voce, "safety": verdetto["safety"],
+            "status": "pending", "msg": "", "created_at": now_iso(), "done_at": None,
+        }
+
+    @r.post("/startup/toggle")
+    async def startup_toggle(payload: StartupToggleInput, user: dict = Depends(get_current_user)):
+        uid = str(user["_id"])
+        filt = await device_filter(db, uid)
+        doc = await db.pc_specs.find_one(filt, {"_id": 0, "startup": 1})
+        voci = [v for v in ((doc or {}).get("startup") or []) if isinstance(v, dict)]
+        voce = next((v for v in voci
+                     if str(v.get("name") or "") == payload.name
+                     and (payload.source is None or str(v.get("source") or "") == payload.source)), None)
+        if not voce:
+            raise HTTPException(status_code=404,
+                detail="Voce di avvio non trovata: sincronizza di nuovo il PC e riprova.")
+        verdetto = classify_startup(voce)
+        # Il verdetto non e' un consiglio da poter ignorare lato client: la
+        # richiesta di spegnere una voce critica viene rifiutata qui, dove
+        # nessuno puo' saltare il controllo cambiando il payload.
+        if not payload.enable and not verdetto["can_disable"]:
+            raise HTTPException(status_code=400,
+                detail="Questa voce e' necessaria al sistema e non si disattiva dall'app.")
+        did = filt.get("device_id")
+        chiave = {"user_id": uid, **({"device_id": did} if did else {}),
+                  "name": payload.name, "source": str(voce.get("source") or ""), "status": "pending"}
+        nuovo = await _startup_action_doc(uid, did, voce, payload.enable, verdetto)
+        # Upsert sulla stessa voce: cliccare due volte non accoda due azioni, e
+        # ripensarci (spegni -> riaccendi) sostituisce quella in attesa invece
+        # di lasciarne due che si annullano a vicenda in ordine ignoto.
+        await db.startup_actions.update_one(chiave, {"$set": nuovo}, upsert=True)
+        return {"ok": True, "pending": True, "name": payload.name,
+                "enable": payload.enable, "safety": verdetto["safety"]}
+
+    @r.get("/startup/actions")
+    async def startup_actions_list(user: dict = Depends(get_current_user)):
+        """Cosa aspetta di essere applicato, per l'indicatore nella scheda."""
+        uid = str(user["_id"])
+        filt = await device_filter(db, uid)
+        cur = db.startup_actions.find({**filt, "status": "pending"},
+                                      {"_id": 0, "entry": 0}).sort("created_at", 1)
+        pending = await cur.to_list(60)
+        recenti = await db.startup_actions.find(
+            {**filt, "status": {"$in": ["done", "failed"]}},
+            {"_id": 0, "entry": 0}).sort("done_at", -1).to_list(10)
+        return {"pending": pending, "recent": recenti}
+
+    @r.delete("/startup/actions")
+    async def startup_actions_clear(user: dict = Depends(get_current_user)):
+        """Annulla le azioni non ancora applicate."""
+        uid = str(user["_id"])
+        filt = await device_filter(db, uid)
+        res = await db.startup_actions.delete_many({**filt, "status": "pending"})
+        return {"ok": True, "removed": res.deleted_count}
+
+    @r.get("/agent/startup-actions")
+    async def agent_startup_actions(x_agent_token: str = Header(default=""),
+                                    x_device: str = Header(default="")):
+        rec = await db.agent_tokens.find_one({"token": x_agent_token})
+        if not rec:
+            raise HTTPException(status_code=401, detail="Token agent non valido")
+        uid = rec["user_id"]
+        did = await resolve_device(db, uid, x_device)
+        filt = {"user_id": uid, **({"device_id": did} if did else {})}
+        azioni = await db.startup_actions.find({**filt, "status": "pending"}).sort("created_at", 1).to_list(40)
+        out = []
+        for a in azioni:
+            out.append({"id": str(a["_id"]), "enable": bool(a.get("enable")),
+                        "entry": a.get("entry") or {}})
+        return {"actions": out}
+
+    @r.post("/agent/startup-actions/result")
+    async def agent_startup_actions_result(payload: StartupActionResultsInput,
+                                           x_agent_token: str = Header(default=""),
+                                           x_device: str = Header(default="")):
+        rec = await db.agent_tokens.find_one({"token": x_agent_token})
+        if not rec:
+            raise HTTPException(status_code=401, detail="Token agent non valido")
+        uid = rec["user_id"]
+        aggiornate = 0
+        for res in (payload.results or [])[:40]:
+            if not isinstance(res, dict):
+                continue
+            try:
+                oid = ObjectId(str(res.get("id")))
+            except Exception:
+                continue
+            ok = bool(res.get("ok"))
+            upd = await db.startup_actions.update_one(
+                # Il filtro sull'utente non e' ridondante: l'id arriva dalla
+                # rete, e senza, un token valido potrebbe chiudere l'azione di
+                # un altro account indovinandone l'id.
+                #
+                # E si chiude solo quello che era ancora in attesa: l'agent
+                # rimanda gli esiti se la risposta si perde, e senza questo la
+                # seconda consegna riscriveva `done_at` di un'azione gia'
+                # chiusa, spostandola in cima alla cronologia come se fosse
+                # appena successa. Un'azione riaccodata dopo ha comunque un _id
+                # nuovo, quindi nessun esito legittimo va perso.
+                {"_id": oid, "user_id": uid, "status": "pending"},
+                {"$set": {"status": "done" if ok else "failed",
+                          "msg": str(res.get("msg") or "")[:300], "done_at": now_iso()}})
+            aggiornate += upd.modified_count
+        return {"ok": True, "updated": aggiornate}
 
     @r.get("/desktop-agent/download")
     async def download_agent(user: dict = Depends(get_current_user)):

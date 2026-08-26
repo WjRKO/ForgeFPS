@@ -142,6 +142,9 @@ async def _ensure_indexes():
     await db.agent_tokens.create_index("user_id")
     await db.push_subscriptions.create_index("user_id")
     await db.pc_specs.create_index("user_id")
+    # La coda delle azioni di avvio si legge sempre per utente e stato: e' la
+    # query che fa l'agent a ogni sync, quindi ogni PC collegato.
+    await db.startup_actions.create_index([("user_id", 1), ("status", 1)])
 
     # Collezioni per-utente che prima non avevano indici: ogni lettura era una
     # scansione completa. Le forme sono ricavate dalle query esistenti, non

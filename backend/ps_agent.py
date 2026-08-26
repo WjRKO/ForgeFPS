@@ -729,48 +729,16 @@ function Get-PowerPlanNormalized {
 }
 
 function Get-StartupCount {
-  # Accurate: enabled Run entries (excludes disabled via StartupApproved) + startup folders + third-party logon tasks.
-  $names = New-Object 'System.Collections.Generic.HashSet[string]'
-  $disabled = New-Object 'System.Collections.Generic.HashSet[string]'
-  foreach ($sa in @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
-                    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
-                    'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
-                    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder')) {
-    $p = Get-ItemProperty $sa -ErrorAction SilentlyContinue
-    if ($p) {
-      foreach ($prop in $p.PSObject.Properties) {
-        if ($prop.Name -like 'PS*') { continue }
-        $b = $prop.Value
-        if ($b -is [byte[]] -and $b.Length -gt 0 -and ($b[0] -band 1)) { [void]$disabled.Add($prop.Name.ToLower()) }
-      }
-    }
-  }
-  foreach ($rk in @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Run',
-                    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run',
-                    'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run')) {
-    $p = Get-ItemProperty $rk -ErrorAction SilentlyContinue
-    if ($p) {
-      foreach ($prop in $p.PSObject.Properties) {
-        if ($prop.Name -like 'PS*') { continue }
-        if (-not $disabled.Contains($prop.Name.ToLower())) { [void]$names.Add($prop.Name.ToLower()) }
-      }
-    }
-  }
-  foreach ($sf in @([Environment]::GetFolderPath('Startup'), [Environment]::GetFolderPath('CommonStartup'))) {
-    if ($sf -and (Test-Path $sf)) {
-      foreach ($f in (Get-ChildItem $sf -File -ErrorAction SilentlyContinue)) {
-        if ($f.Name -notlike 'desktop.ini' -and -not $disabled.Contains($f.Name.ToLower())) { [void]$names.Add($f.Name.ToLower()) }
-      }
-    }
-  }
+  # Derivato dalla lista, non piu' ricalcolato a parte: erano due rilevazioni
+  # separate e sullo stesso PC davano numeri diversi (il conteggio ignorava
+  # servizi di terze parti e app UWP, e leggeva una chiave StartupApproved
+  # diversa da quella della lista). Ora la scheda 'Il mio PC' e il punteggio
+  # salute parlano dello stesso insieme di voci.
   try {
-    $tasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
-      $_.State -ne 'Disabled' -and $_.TaskPath -notlike '\Microsoft\*' -and
-      ($_.Triggers | Where-Object { "$($_.CimClass.CimClassName)" -eq 'MSFT_TaskLogonTrigger' })
-    }
-    foreach ($t in $tasks) { [void]$names.Add(('task:' + $t.TaskName).ToLower()) }
-  } catch {}
-  return $names.Count
+    $n = 0
+    foreach ($e in (Get-StartupListCached)) { if ($e.enabled -ne $false) { $n++ } }
+    return $n
+  } catch { return 0 }
 }
 
 function Get-CleanableMb {
@@ -1365,80 +1333,244 @@ function Get-Health {
   return $h
 }
 
-function Get-StartupList {
-  # v0.8.1: rilevamento PRO multi-fonte: registry Run (con stato reale StartupApproved),
-  # cartelle Esecuzione automatica, task pianificati al logon, servizi auto di terze parti.
-  # Per ogni voce: publisher (firma digitale), path exe, RAM corrente se in esecuzione.
-  $al = New-Object System.Collections.ArrayList
-  $approved = @{}
-  foreach ($k in @(
-    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
-    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder',
-    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run',
-    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32')) {
-    try {
-      $key = Get-Item $k -ErrorAction SilentlyContinue
-      if ($key) {
-        foreach ($n in $key.GetValueNames()) {
-          $v = $key.GetValue($n)
-          if ($v -is [byte[]] -and $v.Length -gt 0) { $approved[$n.ToLower()] = (($v[0] % 2) -eq 0) }
-        }
-      }
-    } catch {}
-  }
-  $procRam = @{}
+function Get-StartupImpact {
+  # Impatto reale all'avvio: eventi 101 (app) e 103 (servizio) del log
+  # Diagnostics-Performance, la stessa fonte da cui il Task Manager ricava la
+  # colonna "Impatto all'avvio". Il log richiede permessi amministratore: senza,
+  # torniamo una mappa vuota invece di stimare un impatto che non abbiamo.
+  if ($null -ne $script:__ffImpact) { return $script:__ffImpact }
+  $map = @{}
   try {
-    Get-Process -ErrorAction SilentlyContinue | ForEach-Object {
-      $n = $_.ProcessName.ToLower()
-      if ($procRam.ContainsKey($n)) { $procRam[$n] += $_.WorkingSet64 } else { $procRam[$n] = $_.WorkingSet64 }
+    $evs = @(Get-WinEvent -FilterHashtable @{
+      LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'
+      Id      = @(101, 103)
+    } -MaxEvents 300 -ErrorAction Stop)
+    foreach ($e in $evs) {
+      try {
+        $vals = @{}
+        foreach ($n in ([xml]$e.ToXml()).Event.EventData.Data) { $vals["$($n.Name)"] = "$($n.'#text')" }
+        $ms = $null
+        foreach ($f in @('TotalTime', 'DegradationTime')) {
+          if ($vals.ContainsKey($f) -and $vals[$f] -match '^\d+$') { $ms = [int]$vals[$f]; break }
+        }
+        if ($null -eq $ms) { continue }
+        foreach ($f in @('FileName', 'Path', 'Name', 'FriendlyName')) {
+          if (-not $vals.ContainsKey($f)) { continue }
+          $k = "$($vals[$f])"
+          if (-not $k) { continue }
+          try { $k = [System.IO.Path]::GetFileName($k) } catch {}
+          $k = "$k".ToLower()
+          # Gli eventi arrivano dal piu' recente: il primo che vediamo per una
+          # chiave e' l'ultimo avvio, ed e' quello che vogliamo mostrare.
+          if ($k -and -not $map.ContainsKey($k)) { $map[$k] = $ms }
+        }
+      } catch {}
     }
   } catch {}
-  $sigCache = @{}
-  function _exeFromCmd([string]$cmd) {
-    if (-not $cmd) { return $null }
-    if ($cmd -match '^"([^"]+\.exe)"') { return $Matches[1] }
-    if ($cmd -match '^([^\s]+\.exe)') { return $Matches[1] }
-    if ($cmd.ToLower().Contains('.exe')) { $i = $cmd.ToLower().IndexOf('.exe'); return $cmd.Substring(0, $i + 4).Trim('"') }
-    return $null
-  }
-  function _publisher([string]$exe) {
-    if (-not $exe) { return $null }
-    if ($sigCache.ContainsKey($exe)) { return $sigCache[$exe] }
-    $pub = $null
+  $script:__ffImpact = $map
+  return $map
+}
+
+function Get-ProcIndex {
+  # Indice dei processi vivi per path completo, con il nome file solo come
+  # ripiego: associare per nome sommava le istanze di utenti diversi e
+  # attribuiva a una voce di avvio la RAM di host generici come rundll32.
+  $byPath = @{}; $byName = @{}
+  try {
+    foreach ($p in (Get-Process -ErrorAction SilentlyContinue)) {
+      $mb = [math]::Round($p.WorkingSet64 / 1MB)
+      $pt = $null
+      try { $pt = $p.Path } catch {}
+      if ($pt) {
+        $k = "$pt".ToLower()
+        if ($byPath.ContainsKey($k)) { $byPath[$k] += $mb } else { $byPath[$k] = $mb }
+      }
+      $n = $p.ProcessName.ToLower()
+      if ($byName.ContainsKey($n)) { $byName[$n] += $mb } else { $byName[$n] = $mb }
+    }
+  } catch {}
+  return @{ path = $byPath; name = $byName }
+}
+
+function Get-StartupList {
+  # v0.8.2 - rilevamento multi-fonte. Rispetto alla 0.8.1:
+  #  - lo stato attivo/disattivo e' letto per scope: HKCU e HKLM avevano un
+  #    unico dizionario piatto e due voci omonime si sovrascrivevano a vicenda;
+  #  - una voce senza record in StartupApproved e' ATTIVA, non 'sconosciuta':
+  #    Windows scrive quella chiave solo dopo il primo toggle dal Task Manager;
+  #  - nuove fonti: app UWP/Store (StartupTasks), RunOnce, Wow6432Node utente,
+  #    Policies\Explorer\Run, e i servizi Auto portano anche il flag delayed;
+  #  - RAM associata per path del processo invece che per nome file;
+  #  - impatto in ms dal log Diagnostics-Performance quando siamo elevati;
+  #  - dedup per eseguibile risolto (una app registrata in Run E nella cartella
+  #    Esecuzione automatica e' una app sola) e ordinamento deterministico prima
+  #    del taglio, che prima tagliava voci diverse a ogni sync.
+  $al = New-Object System.Collections.ArrayList
+  $genericHosts = @('rundll32', 'explorer', 'cmd', 'powershell', 'pwsh', 'wscript', 'cscript',
+                    'mshta', 'regsvr32', 'svchost', 'dllhost', 'conhost', 'msiexec', 'schtasks', 'control')
+
+  $approved = @{}
+  foreach ($sa in @(
+    @{ p = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run';             s = 'hkcu:run' },
+    @{ p = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32';           s = 'hkcu:run' },
+    @{ p = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder';   s = 'user:folder' },
+    @{ p = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run';             s = 'hklm:run' },
+    @{ p = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32';           s = 'hklm:run' },
+    @{ p = 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'; s = 'hklm:run' },
+    @{ p = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder';   s = 'common:folder' })) {
     try {
-      if (Test-Path $exe) {
-        $sig = Get-AuthenticodeSignature $exe -ErrorAction SilentlyContinue
-        if ($sig -and $sig.SignerCertificate -and $sig.SignerCertificate.Subject -match 'CN=("[^"]+"|[^,]+)') { $pub = $Matches[1].Trim('"') }
+      $key = Get-Item $sa.p -ErrorAction SilentlyContinue
+      if (-not $key) { continue }
+      foreach ($n in $key.GetValueNames()) {
+        $v = $key.GetValue($n)
+        # byte[0]: pari = abilitata, dispari = disabilitata dal Task Manager.
+        if ($v -is [byte[]] -and $v.Length -gt 0) { $approved[($sa.s + '|' + "$n".ToLower())] = (($v[0] % 2) -eq 0) }
       }
     } catch {}
-    $sigCache[$exe] = $pub
-    return $pub
   }
-  function _add($name, $cmd, $loc, $src, $usr) {
-    if (-not $name) { return }
-    foreach ($e in $al) { if ($e.name -eq "$name" -and $e.source -eq $src) { return } }
-    $exe = _exeFromCmd "$cmd"
-    $ram = $null
-    if ($exe) {
-      $bn = [System.IO.Path]::GetFileNameWithoutExtension($exe).ToLower()
-      if ($procRam.ContainsKey($bn)) { $ram = [math]::Round($procRam[$bn] / 1MB) }
+  function _approvedState($scope, $name) {
+    # StartupApproved\StartupFolder indicizza col nome file CON estensione,
+    # le chiavi Run col nome del valore: proviamo entrambe le forme.
+    foreach ($n in @("$name", [System.IO.Path]::GetFileNameWithoutExtension("$name"))) {
+      if (-not $n) { continue }
+      $k = "$scope|" + "$n".ToLower()
+      if ($approved.ContainsKey($k)) { return $approved[$k] }
     }
-    $en = $null
-    if ($approved.ContainsKey("$name".ToLower())) { $en = $approved["$name".ToLower()] }
-    [void]$al.Add(@{
-      name = "$name"; command = "$cmd"; user = "$usr"; location = "$loc"
-      source = $src; enabled = $en; publisher = (_publisher $exe); ram_mb = $ram
-    })
+    return $null
   }
+
+  $impact = Get-StartupImpact
+  $procs = Get-ProcIndex
+  $infoCache = @{}
+  # Con il separatore finale: senza, una cartella tipo C:\WindowsOld passerebbe
+  # per parte di Windows e salterebbe la verifica della firma.
+  $winRoot = $null
+  if ($env:SystemRoot) { $winRoot = ("$env:SystemRoot".TrimEnd('\') + '\').ToLower() }
+
+  function _expand([string]$p) {
+    if (-not $p) { return $p }
+    try { return [Environment]::ExpandEnvironmentVariables($p) } catch { return $p }
+  }
+  function _exeFromCmd([string]$cmd) {
+    if (-not $cmd) { return $null }
+    # Espansione delle variabili d'ambiente: senza, ogni voce scritta come
+    # %ProgramFiles%\... falliva il Test-Path e restava senza publisher.
+    $c = (_expand $cmd).Trim()
+    $exe = $null
+    if ($c -match '^"([^"]+?\.exe)"') { $exe = $Matches[1] }
+    elseif ($c -match '^([A-Za-z]:\\[^"]+?\.exe)(\s|$)') { $exe = $Matches[1] }
+    elseif ($c -match '^([^\s"]+\.exe)') { $exe = $Matches[1] }
+    elseif ($c.ToLower().Contains('.exe')) { $i = $c.ToLower().IndexOf('.exe'); $exe = $c.Substring(0, $i + 4).Trim('"') }
+    if (-not $exe) { return $null }
+    return "$exe".Trim()
+  }
+  function _fileInfo([string]$exe) {
+    # Publisher e nome leggibile. Ordine: firma Authenticode (attendibile), poi
+    # i metadati del file, che coprono i tool di terze parti non firmati. Il
+    # FileDescription e' quello che il Task Manager mostra in colonna: senza,
+    # l'utente legge nomi di chiave di registro tipo 'RTHDVCPL'.
+    # `signed` resta $null quando la firma non e' stata verificata (file dentro
+    # %SystemRoot%): $null vuol dire "non controllato", $false "controllato e
+    # non valido", e le due cose non vanno confuse.
+    if (-not $exe) { return @{ publisher = $null; display = $null; signed = $null } }
+    $k = "$exe".ToLower()
+    if ($infoCache.ContainsKey($k)) { return $infoCache[$k] }
+    $pub = $null; $disp = $null; $signed = $null
+    try {
+      if (Test-Path -LiteralPath $exe -PathType Leaf) {
+        # La verifica della firma costa ~60 ms a file ed e' la voce piu' pesante
+        # della rilevazione. Su quello che sta dentro %SystemRoot% non dice
+        # niente che non sappiamo gia' — sono binari Microsoft — quindi li' ci si
+        # ferma ai metadati, che il publisher lo danno lo stesso. Per tutto il
+        # resto la firma resta l'unica fonte attendibile su CHI ha scritto un
+        # eseguibile che parte da solo a ogni logon.
+        if (-not ($winRoot -and $k.StartsWith($winRoot))) {
+          try {
+            $sig = Get-AuthenticodeSignature -LiteralPath $exe -ErrorAction SilentlyContinue
+            if ($sig) {
+              $signed = ("$($sig.Status)" -eq 'Valid')
+              if ($sig.SignerCertificate -and $sig.SignerCertificate.Subject -match 'CN=("[^"]+"|[^,]+)') { $pub = $Matches[1].Trim('"') }
+            }
+          } catch {}
+        }
+        try {
+          $vi = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exe)
+          if ($vi) {
+            if (-not $pub -and $vi.CompanyName) { $pub = "$($vi.CompanyName)".Trim() }
+            if ($vi.FileDescription) { $disp = "$($vi.FileDescription)".Trim() }
+            # Un FileDescription lasciato al segnaposto dell'IDE ("TODO:
+            # <descrizione file>", che su una build cinese esce pure in cinese)
+            # e' peggio del nome grezzo: si scarta e si prova il ProductName.
+            if ($disp -and ($disp -match '^(?i)todo\b' -or $disp.Length -lt 2)) { $disp = $null }
+            if (-not $disp -and $vi.ProductName) { $disp = "$($vi.ProductName)".Trim() }
+          }
+        } catch {}
+      }
+    } catch {}
+    $r = @{ publisher = $pub; display = $disp; signed = $signed }
+    $infoCache[$k] = $r
+    return $r
+  }
+  function _add($name, $cmd, $loc, $src, $usr, $enabled, $extra) {
+    if (-not $name) { return }
+    $exe = _exeFromCmd "$cmd"
+    $base = $null
+    if ($exe) { try { $base = [System.IO.Path]::GetFileNameWithoutExtension($exe).ToLower() } catch {} }
+    $isHost = ($base -and ($genericHosts -contains $base))
+    # Dedup sull'eseguibile risolto: la stessa app registrata in Run e nella
+    # cartella Esecuzione automatica resta UNA voce che parte, non due.
+    $key = $(if ($exe -and -not $isHost) { "$exe".ToLower() } else { "$name|$src".ToLower() })
+    foreach ($e in $al) {
+      if ("$($e.dedup_key)" -eq $key) {
+        if (-not $e.also) { $e.also = @() }
+        if ($e.also -notcontains "$src") { $e.also = @($e.also) + "$src" }
+        if ($enabled -eq $true) { $e.enabled = $true }
+        return
+      }
+    }
+    $info = _fileInfo $exe
+    $ram = $null
+    if ($exe -and -not $isHost) {
+      $pk = "$exe".ToLower()
+      if ($procs.path.ContainsKey($pk)) { $ram = $procs.path[$pk] }
+      elseif ($base -and $procs.name.ContainsKey($base)) { $ram = $procs.name[$base] }
+    }
+    $imp = $null
+    foreach ($ik in @($(if ($exe) { ([System.IO.Path]::GetFileName($exe)).ToLower() } else { $null }), "$name".ToLower())) {
+      if ($ik -and $impact.ContainsKey($ik)) { $imp = $impact[$ik]; break }
+    }
+    $it = @{
+      name = "$name"; command = "$cmd"; user = "$usr"; location = "$loc"
+      source = $src; enabled = $enabled; publisher = $info.publisher
+      display = $info.display; signed = $info.signed; path = $exe
+      running = ($null -ne $ram); ram_mb = $ram; impact_ms = $imp; dedup_key = $key
+    }
+    if ($extra) { foreach ($ek in $extra.Keys) { $it[$ek] = $extra[$ek] } }
+    [void]$al.Add($it)
+  }
+
+  # --- chiavi Run / RunOnce / Policies, a 32 e 64 bit, macchina e utente ---
   foreach ($rk in @(
-    @{ p = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run'; u = 'SYSTEM' },
-    @{ p = 'HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Run'; u = 'SYSTEM' },
-    @{ p = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'; u = "$env:USERNAME" })) {
+    @{ p = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run';                   u = 'SYSTEM';        s = 'hklm:run'; o = 'registry' },
+    @{ p = 'HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Run';       u = 'SYSTEM';        s = 'hklm:run'; o = 'registry' },
+    @{ p = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run'; u = 'SYSTEM';        s = 'hklm:run'; o = 'registry' },
+    @{ p = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run';                   u = "$env:USERNAME"; s = 'hkcu:run'; o = 'registry' },
+    @{ p = 'HKCU:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Run';       u = "$env:USERNAME"; s = 'hkcu:run'; o = 'registry' },
+    @{ p = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer\Run'; u = "$env:USERNAME"; s = 'hkcu:run'; o = 'registry' },
+    @{ p = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce';               u = 'SYSTEM';        s = 'hklm:run'; o = 'runonce' },
+    @{ p = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce';               u = "$env:USERNAME"; s = 'hkcu:run'; o = 'runonce' })) {
     try {
       $key = Get-Item $rk.p -ErrorAction SilentlyContinue
-      if ($key) { foreach ($n in $key.GetValueNames()) { _add $n ($key.GetValue($n)) $rk.p 'registry' $rk.u } }
+      if (-not $key) { continue }
+      foreach ($n in $key.GetValueNames()) {
+        if (-not $n) { continue }
+        $st = _approvedState $rk.s $n
+        if ($null -eq $st) { $st = $true }
+        _add $n ($key.GetValue($n)) $rk.p $rk.o $rk.u $st $null
+      }
     } catch {}
   }
+
   # Risoluzione .lnk senza oggetti COM shell (pattern che triggera l'euristica
   # anti-persistenza di Defender): semplice lettura bytes + regex sul path.
   function _lnkTarget([string]$lnk) {
@@ -1451,58 +1583,419 @@ function Get-StartupList {
     } catch {}
     return $null
   }
-  foreach ($fd in @([Environment]::GetFolderPath('Startup'), [Environment]::GetFolderPath('CommonStartup'))) {
-    if (-not $fd -or -not (Test-Path $fd)) { continue }
-    Get-ChildItem $fd -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'desktop.ini' } | Select-Object -First 15 | ForEach-Object {
+  foreach ($fdd in @(
+    @{ p = [Environment]::GetFolderPath('Startup');       s = 'user:folder';   u = "$env:USERNAME" },
+    @{ p = [Environment]::GetFolderPath('CommonStartup'); s = 'common:folder'; u = 'SYSTEM' })) {
+    if (-not $fdd.p -or -not (Test-Path $fdd.p)) { continue }
+    Get-ChildItem $fdd.p -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'desktop.ini' } | ForEach-Object {
       $target = $_.FullName
       if ($_.Extension -eq '.lnk') { $t2 = _lnkTarget $_.FullName; if ($t2) { $target = $t2 } }
-      _add $_.BaseName $target $fd 'folder' "$env:USERNAME"
-      if ($al.Count -gt 0) {
-        # StartupApproved\StartupFolder usa il nome file CON estensione (es. app.lnk)
-        $k1 = $_.Name.ToLower(); $k2 = $_.BaseName.ToLower()
-        if ($approved.ContainsKey($k1)) { $al[$al.Count - 1].enabled = $approved[$k1] }
-        elseif ($approved.ContainsKey($k2)) { $al[$al.Count - 1].enabled = $approved[$k2] }
-      }
+      $st = _approvedState $fdd.s $_.Name
+      if ($null -eq $st) { $st = $true }
+      # `file` col nome completo: e' la chiave con cui StartupApproved indicizza
+      # le voci di cartella, e senza non si riesce a disattivarle dall'app.
+      _add $_.BaseName $target $fdd.p 'folder' $fdd.u $st @{ file = "$($_.Name)" }
     }
   }
+
+  # --- task pianificati al logon/boot, esclusi quelli di Windows ---
   try {
     Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
-      $_.TaskPath -notlike '\Microsoft*' -and $_.State -ne 'Disabled' -and
-      ($_.Triggers | Where-Object { $_.CimClass.CimClassName -match 'Logon|Boot' })
-    } | Select-Object -First 15 | ForEach-Object {
+      $_.TaskPath -notlike '\Microsoft\*' -and
+      ($_.Triggers | Where-Object { "$($_.CimClass.CimClassName)" -match 'Logon|Boot' })
+    } | ForEach-Object {
       $act = ''
       try { $act = ($_.Actions | Select-Object -First 1).Execute } catch {}
-      _add $_.TaskName $act $_.TaskPath 'task' "$env:USERNAME"
-      if ($al.Count -gt 0) { $al[$al.Count - 1].enabled = $true }
+      _add $_.TaskName $act $_.TaskPath 'task' "$env:USERNAME" ("$($_.State)" -ne 'Disabled') $null
     }
   } catch {}
+
+  # --- servizi Auto di terze parti ---
   try {
     Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object {
       $_.StartMode -eq 'Auto' -and $_.PathName -and $_.PathName -notmatch '(?i)\\Windows\\'
-    } | Select-Object -First 15 | ForEach-Object {
-      _add $_.DisplayName $_.PathName 'services' 'service' 'SYSTEM'
-      if ($al.Count -gt 0) { $al[$al.Count - 1].enabled = ($_.State -eq 'Running') }
+    } | ForEach-Object {
+      $dl = $false
+      try { $dl = [bool]$_.DelayedAutoStart } catch {}
+      # enabled = parte all'avvio (StartMode Auto). Che stia girando ORA e' un
+      # altro fatto: prima erano lo stesso campo, e un servizio Auto appena
+      # crashato veniva riportato come disattivato.
+      _add $_.DisplayName $_.PathName 'services' 'service' "$($_.StartName)" $true `
+        @{ svc_name = "$($_.Name)"; running = ("$($_.State)" -eq 'Running'); delayed = $dl }
     }
   } catch {}
+
+  # --- app UWP/Store: Spotify, WhatsApp, Teams, Discord da Store. Il Task
+  # Manager le elenca insieme alle altre, Run e cartelle non le vedono. ---
+  try {
+    $uwpRoot = 'HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData'
+    $uwp = New-Object System.Collections.ArrayList
+    if (Test-Path $uwpRoot) {
+      foreach ($pkg in (Get-ChildItem $uwpRoot -ErrorAction SilentlyContinue)) {
+        foreach ($tk in (Get-ChildItem $pkg.PSPath -ErrorAction SilentlyContinue)) {
+          # Sotto ogni pacchetto ci sono anche sottochiavi di servizio (PSR,
+          # Schemas, ApplicationFrame...). Il discriminante e' il valore che si
+          # chiama esattamente 'State': PSR ha WnfStateName, Schemas StateSchema.
+          $k = $null
+          try { $k = Get-Item $tk.PSPath -ErrorAction SilentlyContinue } catch {}
+          if (-not $k -or ($k.GetValueNames() -notcontains 'State')) { continue }
+          $st = $null
+          try {
+            $v = $k.GetValue('State')
+            # StartupTaskState: 0 Disabled, 1 DisabledByUser, 2 Enabled,
+            # 3 DisabledByPolicy, 4 EnabledByPolicy.
+            if ($null -ne $v) { $st = (@(2, 4) -contains [int]$v) }
+          } catch {}
+          [void]$uwp.Add(@{ pfn = "$($pkg.PSChildName)"; task = "$($tk.PSChildName)"; state = $st })
+        }
+      }
+    }
+    if ($uwp.Count -gt 0) {
+      # Get-AppxPackage costa qualche secondo: la chiamiamo solo se c'e'
+      # davvero almeno una app UWP che parte al logon.
+      $pkgName = @{}
+      try { Get-AppxPackage -ErrorAction SilentlyContinue | ForEach-Object { $pkgName["$($_.PackageFamilyName)"] = "$($_.Name)" } } catch {}
+      foreach ($u in $uwp) {
+        $disp = $(if ($pkgName.ContainsKey($u.pfn)) { $pkgName[$u.pfn] } else { ("$($u.pfn)" -split '_')[0] })
+        _add $disp '' $u.pfn 'uwp' "$env:USERNAME" $u.state @{ display = $disp; package = $u.pfn; task_id = $u.task }
+      }
+    }
+  } catch {}
+
   if ($al.Count -eq 0) {
     try {
       Get-CimInstance Win32_StartupCommand -ErrorAction Stop | Select-Object -First 40 | ForEach-Object {
-        _add $_.Name $_.Command $_.Location 'registry' $_.User
+        _add $_.Name $_.Command $_.Location 'registry' $_.User $true $null
       }
     } catch {}
   }
-  if ($al.Count -gt 60) {
-    $trim = New-Object System.Collections.ArrayList
-    foreach ($e in ($al | Select-Object -First 60)) { [void]$trim.Add($e) }
-    $al = $trim
+
+  # Ordinamento deterministico prima del taglio: attive per prime, poi per
+  # impatto misurato, poi per RAM, poi per nome. Prima ogni fonte aveva il suo
+  # Select -First su un ordine non garantito, e la lista sembrava cambiare da
+  # sola tra un sync e l'altro senza che fosse cambiato niente sul PC.
+  $sorted = @($al | Sort-Object `
+    @{ Expression = { if ($_.enabled -eq $false) { 1 } else { 0 } } }, `
+    @{ Expression = { if ($null -ne $_.impact_ms) { - [int]$_.impact_ms } else { 0 } } }, `
+    @{ Expression = { if ($null -ne $_.ram_mb) { - [int]$_.ram_mb } else { 0 } } }, `
+    @{ Expression = { "$($_.name)".ToLower() } })
+  $out = New-Object System.Collections.ArrayList
+  foreach ($e in ($sorted | Select-Object -First 80)) {
+    try { $e.Remove('dedup_key') } catch {}
+    [void]$out.Add($e)
   }
-  return ,$al
+  return ,$out
+}
+
+function Get-StartupListCached {
+  # Cache breve: Get-Health (per il conteggio) e Send-Data (per la lista)
+  # chiedono la stessa rilevazione a pochi millisecondi di distanza, e la
+  # rilevazione costa (firme digitali, event log, Appx). Scade dopo pochi
+  # secondi E a ogni modifica registrata nel backup: dopo aver applicato un
+  # tweak la lista DEVE essere riletta, altrimenti l'invio post-ottimizzazione
+  # racconterebbe lo stato di prima.
+  $now = [DateTime]::UtcNow
+  $bk = 0; try { $bk = [int]$script:BK.Count } catch {}
+  if ($script:__ffStartup -and $script:__ffStartupAt -and
+      ($now - $script:__ffStartupAt).TotalSeconds -lt 45 -and $script:__ffStartupBk -eq $bk) {
+    return $script:__ffStartup
+  }
+  # Una forma sola, decisa qui. `return ,$lista` protegge le liste di un solo
+  # elemento dall'appiattimento di PowerShell (vedi i test sulle liste), ma
+  # quell'involucro sopravvive un livello in piu' o in meno a seconda di come il
+  # chiamante consuma il risultato: chi contava le voci si e' ritrovato a
+  # contarne una, con dentro tutte le altre. Qui si appiattisce una volta e
+  # basta, e da qui in giu' la lista e' sempre una lista di voci.
+  #
+  # E si restituisce SENZA la virgola davanti: quell'involucro fa contare un
+  # elemento solo a chiunque scriva `@(Get-StartupListCached)`, che e' il modo
+  # naturale di chiederne una lista. La protezione sulle liste di un elemento
+  # resta dove serve davvero, cioe' al confine JSON, dove il backend riavvolge
+  # gli scalari (models.py::_coerce_list).
+  $flat = New-Object System.Collections.ArrayList
+  foreach ($e in (Get-StartupList)) {
+    if ($e -is [System.Collections.IDictionary] -or $e -is [string] -or -not ($e -is [System.Collections.IEnumerable])) {
+      [void]$flat.Add($e)
+    } else {
+      foreach ($x in $e) { [void]$flat.Add($x) }
+    }
+  }
+  $script:__ffStartup = $flat
+  $script:__ffStartupAt = $now
+  $script:__ffStartupBk = $bk
+  return $script:__ffStartup
+}
+
+# ---------------- Azioni sulle voci di avvio ----------------
+# L'utente clicca "Disattiva" nella dashboard; il browser non puo' scrivere nel
+# registro del PC, quindi la decisione viaggia come azione in attesa e viene
+# eseguita qui, al primo sync. Nessuna azione viene inventata dall'agent.
+#
+# Disattivare NON disinstalla e non cancella niente: si scrive lo stesso stato
+# che scriverebbe il Task Manager, e la stessa funzione riaccende. Per questo
+# non passa dal backup dei tweak: l'inverso dell'azione e' l'azione stessa.
+
+# L'agent non si fida di una lista che arriva dalla rete per scrivere nel
+# registro: qualunque cosa dica il backend, queste non si toccano.
+$script:STARTUP_INTOCCABILI = '(?i)defender|antimalware|securityhealth|windows security|sicurezza di windows|wscsvc|mpssvc|firewall'
+
+function Test-StartupIntoccabile($voce) {
+  $t = "$($voce.name) $($voce.display) $($voce.publisher) $($voce.svc_name)"
+  return ($t -match $script:STARTUP_INTOCCABILI)
+}
+
+function Get-StartupApprovedTarget($voce) {
+  # Dove Windows registra "questa voce e' spenta": chiave e nome del valore.
+  $loc = "$($voce.location)"
+  if ("$($voce.source)" -eq 'folder') {
+    # Cartella comune o dell'utente: la prima e' in HKLM e richiede i permessi
+    # di amministratore, e sono due chiavi diverse con lo stesso nome.
+    $mia = [Environment]::GetFolderPath('Startup')
+    $comune = $true
+    if ($mia -and $loc) { $comune = ($loc.TrimEnd('\').ToLower() -ne $mia.TrimEnd('\').ToLower()) }
+    $hive = $(if ($comune) { 'HKLM:' } else { 'HKCU:' })
+    $val = $(if ($voce.file) { "$($voce.file)" } else { "$($voce.name).lnk" })
+    return @{ key = "$hive\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder"; value = $val }
+  }
+  # Run: l'approvazione sta nello stesso ramo della chiave Run, e la variante a
+  # 32 bit si chiama Run32 - non e' sotto Wow6432Node come la Run che descrive.
+  $hive = $(if ($loc -like 'HKLM:*') { 'HKLM:' } else { 'HKCU:' })
+  $sotto = $(if ($loc -match '(?i)wow6432node') { 'Run32' } else { 'Run' })
+  return @{ key = "$hive\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\$sotto"; value = "$($voce.name)" }
+}
+
+function Set-StartupApproved($key, $value, $enable) {
+  if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+  # Dodici byte: il primo dice attiva (pari) o spenta (dispari), gli otto in
+  # coda sono l'istante del cambio come FILETIME. E' esattamente il formato che
+  # scrive il Task Manager: scriverne un altro funziona lo stesso, ma la voce
+  # apparirebbe "mai toccata" a chi la guarda da li'.
+  $b = New-Object byte[] 12
+  $b[0] = $(if ($enable) { 2 } else { 3 })
+  $ft = [BitConverter]::GetBytes([DateTime]::UtcNow.ToFileTimeUtc())
+  [Array]::Copy($ft, 0, $b, 4, 8)
+  New-ItemProperty -Path $key -Name $value -PropertyType Binary -Value $b -Force | Out-Null
+}
+
+function Test-StartupServeAdmin($voce) {
+  # Servizi, attivita' pianificate di sistema e cartella di avvio comune vivono
+  # in HKLM o nello store macchina: senza elevazione la scrittura fallisce, e
+  # l'errore che torna Windows ("Accesso negato") non dice all'utente cosa
+  # deve fare. Le voci dell'utente - chiavi Run in HKCU, cartella personale,
+  # app dello Store - si spengono senza chiedere niente a nessuno.
+  $src = "$($voce.source)"
+  if ($src -eq 'service' -or $src -eq 'task') { return $true }
+  if ($src -eq 'folder') {
+    $mia = [Environment]::GetFolderPath('Startup')
+    if ($mia -and $voce.location) { return ("$($voce.location)".TrimEnd('\').ToLower() -ne $mia.TrimEnd('\').ToLower()) }
+    return $true
+  }
+  return ("$($voce.location)" -like 'HKLM:*')
+}
+
+function Set-StartupEntry($voce, $enable) {
+  if (Test-StartupIntoccabile $voce) {
+    return @{ ok = $false; msg = 'voce di sicurezza: non modificabile dall app' }
+  }
+  if ((Test-StartupServeAdmin $voce) -and -not (Test-Admin)) {
+    return @{ ok = $false; msg = 'servono i permessi di amministratore: rilancia FrameForge come amministratore' }
+  }
+  try {
+    switch ("$($voce.source)") {
+      'service' {
+        $n = "$($voce.svc_name)"
+        if (-not $n) { return @{ ok = $false; msg = 'servizio senza nome interno' } }
+        if (Test-ForbiddenSvc $n) { return @{ ok = $false; msg = 'servizio protetto' } }
+        if ($enable) {
+          Set-Service $n -StartupType Automatic -ErrorAction Stop
+          Start-Service $n -ErrorAction SilentlyContinue
+        } else {
+          Stop-Service $n -Force -ErrorAction SilentlyContinue
+          Set-Service $n -StartupType Disabled -ErrorAction Stop
+        }
+      }
+      'task' {
+        $tp = "$($voce.location)"; if (-not $tp) { $tp = '\' }
+        if ($enable) { Enable-ScheduledTask -TaskName "$($voce.name)" -TaskPath $tp -ErrorAction Stop | Out-Null }
+        else { Disable-ScheduledTask -TaskName "$($voce.name)" -TaskPath $tp -ErrorAction Stop | Out-Null }
+      }
+      'uwp' {
+        $k = "HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData\$($voce.package)\$($voce.task_id)"
+        if (-not (Test-Path $k)) { return @{ ok = $false; msg = 'chiave AppModel non trovata' } }
+        # 2 = Enabled, 1 = DisabledByUser: gli stessi valori che scrive Windows
+        # quando l'interruttore lo muove l'utente da Impostazioni.
+        New-ItemProperty -Path $k -Name 'State' -PropertyType DWord -Value $(if ($enable) { 2 } else { 1 }) -Force | Out-Null
+      }
+      default {
+        $t = Get-StartupApprovedTarget $voce
+        if (Test-ForbiddenReg $t.key) { return @{ ok = $false; msg = 'area di registro protetta' } }
+        Set-StartupApproved $t.key $t.value $enable
+      }
+    }
+    return @{ ok = $true; msg = '' }
+  } catch {
+    return @{ ok = $false; msg = "$($_.Exception.Message)" }
+  }
+}
+
+function Get-StartupActionEntry($a) {
+  # Le azioni vecchie viaggiavano piatte, quelle nuove dentro `entry`.
+  $voce = $a.entry
+  if (-not $voce) { $voce = $a }
+  return $voce
+}
+
+function Invoke-StartupBatch($azioni) {
+  # Applica un gruppo di azioni e ne riferisce l'esito al backend. Ritorna
+  # quante sono riuscite. Il sync prosegue comunque: un'azione che fallisce non
+  # deve impedire l'invio dei dati, altrimenti l'utente perde anche la ragione
+  # per cui e' fallita.
+  $esiti = New-Object System.Collections.ArrayList
+  $fatte = 0
+  foreach ($a in $azioni) {
+    $voce = Get-StartupActionEntry $a
+    $enable = [bool]$a.enable
+    $res = Set-StartupEntry $voce $enable
+    $etichetta = "$($voce.display)"; if (-not $etichetta) { $etichetta = "$($voce.name)" }
+    if ($res.ok) {
+      $fatte++
+      Say-Ok ("   {0}: {1}" -f $etichetta, $(if ($enable) { 'riattivata' } else { 'disattivata' }))
+    } else {
+      Say-Warn ("   {0}: non riuscito ({1})" -f $etichetta, $res.msg)
+    }
+    [void]$esiti.Add(@{ id = "$($a.id)"; ok = [bool]$res.ok; msg = "$($res.msg)" })
+    # La cronologia serve a rispondere a "cosa mi hai fatto al PC": un'azione
+    # decisa dal browser ha piu' bisogno di finirci, non meno.
+    try {
+      Write-Journal $(if ($enable) { 'startup-on' } else { 'startup-off' }) `
+        @{ id = "startup:$($voce.name)"; name = $etichetta; cat = 'avvio' } @() ([bool]$res.ok) "$($res.msg)"
+    } catch {}
+  }
+  if ($esiti.Count -gt 0) {
+    try {
+      $body = [System.Text.Encoding]::UTF8.GetBytes((@{ results = @($esiti) } | ConvertTo-Json -Depth 5 -Compress))
+      Invoke-RestMethod -Uri "$BACKEND/api/agent/startup-actions/result" -Method Post `
+        -ContentType 'application/json; charset=utf-8' `
+        -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body -TimeoutSec 12 | Out-Null
+    } catch {}
+  }
+  return $fatte
+}
+
+function Start-StartupElevato {
+  # Rilancia QUESTO script come amministratore in modalita' 'startup': la copia
+  # elevata ritira le azioni rimaste in coda, le applica e chiude. Ritorna
+  # $true solo se la copia elevata e' davvero partita ed e' terminata.
+  #
+  # Il permesso lo da' l'utente al prompt di Windows, e se lo nega Start-Process
+  # solleva: quel `catch` e' il "no" dell'utente, e da li' si torna alla strada
+  # normale (l'azione fallisce con un messaggio che spiega perche').
+  $file = $PSCommandPath
+  if (-not $file) {
+    # Avviato dall'exe: sul disco non c'e' un .ps1 da rilanciare, si riscarica
+    # lo stesso script dal backend - identico al bottone "Riavvia come
+    # Amministratore" della GUI.
+    $file = Join-Path $env:TEMP 'forgefps.ps1'
+    try { Invoke-RestMethod -Uri "$BACKEND/api/agent/script?t=$TOKEN" -OutFile $file -TimeoutSec 30 } catch { return $false }
+    if (-not (Test-Path $file)) { return $false }
+  }
+  $p = $null
+  try {
+    $p = Start-Process powershell -Verb RunAs -PassThru -ErrorAction Stop -ArgumentList `
+         '-NoProfile','-ExecutionPolicy','Bypass','-File',$file,'-Token',$TOKEN,'-Mode','startup'
+  } catch {
+    Say-Warn '   Permesso negato: le voci di sistema restano come sono.'
+    return $false
+  }
+  if (-not $p) { return $false }
+  # Aspettare non e' pignoleria: subito dopo, il sync fotografa l'avvio. Senza
+  # attesa manderebbe alla dashboard lo stato di prima, e la voce appena spenta
+  # risulterebbe ancora accesa fino al sync successivo.
+  if (-not $p.WaitForExit(90000)) {
+    Say-Warn '   La finestra elevata ci sta mettendo troppo: proseguo, gli esiti arriveranno da soli.'
+    return $false
+  }
+  return $true
+}
+
+function Invoke-StartupActions {
+  param([switch]$NoElevate)
+  # Ritorna quante azioni sono andate a buon fine in QUESTO processo: quelle
+  # passate alla copia elevata le conta lei.
+  $azioni = @()
+  try {
+    $r = Invoke-RestMethod -Uri "$BACKEND/api/agent/startup-actions" -Method Get `
+         -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -TimeoutSec 12
+    if ($r -and $r.actions) { $azioni = @($r.actions) }
+  } catch { return 0 }
+  if ($azioni.Count -eq 0) { return 0 }
+
+  Say ("`n[STEP] Applico {0} azione/i decise dalla dashboard..." -f $azioni.Count) 'Cyan'
+
+  # Servizi, attivita' pianificate e cartella di avvio comune vivono in HKLM:
+  # senza elevazione fallirebbero tutte insieme. Si separano PRIMA di toccare
+  # qualcosa, cosi' le voci dell'utente si applicano subito comunque - una
+  # sola azione di sistema in coda non deve tenerle in ostaggio dietro un
+  # prompt di Windows.
+  $subito = New-Object System.Collections.ArrayList
+  $daElevare = New-Object System.Collections.ArrayList
+  $possoElevare = (-not $NoElevate) -and (-not (Test-Admin))
+  foreach ($a in $azioni) {
+    $voce = Get-StartupActionEntry $a
+    # Una voce intoccabile va rifiutata subito col suo messaggio: chiedere
+    # l'elevazione per poi negarla comunque sarebbe un prompt per niente.
+    if ($possoElevare -and (Test-StartupServeAdmin $voce) -and -not (Test-StartupIntoccabile $voce)) {
+      [void]$daElevare.Add($a)
+    } else {
+      [void]$subito.Add($a)
+    }
+  }
+
+  $fatte = 0
+  if ($subito.Count -gt 0) { $fatte = Invoke-StartupBatch @($subito) }
+
+  if ($daElevare.Count -gt 0) {
+    Say-Warn ("   {0} voce/i sono di sistema (servizio, attivita' pianificata o cartella di avvio comune)." -f $daElevare.Count)
+    Say "       Windows chiedera' conferma: e' FrameForge che riparte come amministratore per applicarle." 'Gray'
+    if (Start-StartupElevato) {
+      Say-Ok '   Voci di sistema applicate dalla finestra elevata.'
+    } else {
+      # L'elevazione non c'e' stata: si applicano lo stesso, falliscono con il
+      # messaggio esplicito di Set-StartupEntry e la dashboard lo mostra. Meglio
+      # un "non riuscito, serve l'amministratore" che un'azione appesa per sempre.
+      $fatte += Invoke-StartupBatch @($daElevare)
+    }
+  }
+
+  # La lista in cache descrive il PC di un istante fa: dopo aver spento
+  # qualcosa va riletta, se no il sync racconta lo stato di prima.
+  $script:__ffStartupAt = $null
+  return $fatte
+}
+
+function Get-ServiceTriggers {
+  # Servizi trigger-start: nel Task Manager sono i 'Manuale (avvio trigger)'.
+  # Win32_Service non espone il flag, ma il registro ha la subkey TriggerInfo.
+  # Senza questa distinzione un servizio che parte solo quando serve sembrava
+  # un Manual qualsiasi, e consigliarne la disattivazione era un consiglio
+  # sbagliato: si rompono Bluetooth, stampa, VPN e simili.
+  if ($null -ne $script:__ffTriggers) { return $script:__ffTriggers }
+  $set = New-Object 'System.Collections.Generic.HashSet[string]'
+  try {
+    foreach ($k in (Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services' -ErrorAction SilentlyContinue)) {
+      if (Test-Path (Join-Path $k.PSPath 'TriggerInfo')) { [void]$set.Add("$($k.PSChildName)".ToLower()) }
+    }
+  } catch {}
+  $script:__ffTriggers = $set
+  return $set
 }
 
 function Get-ServicesAudit {
-  # Audit servizi per l'analisi 'quali disattivare': stato, tipo avvio, dipendenze
-  # reali (quanti servizi dipendono da questo), RAM (solo processi dedicati, non
-  # svchost condivisi) e flag Microsoft (path dentro \Windows\).
+  # Audit servizi per l'analisi 'quali disattivare': stato, tipo avvio,
+  # dipendenze reali (quanti servizi dipendono da questo), RAM e flag Microsoft.
+  # v0.8.2: aggiunti trigger-start, avvio ritardato, account di esecuzione e la
+  # RAM dei servizi in svchost condiviso (ripartita sul processo che li ospita),
+  # che prima era sempre null per meta' dei servizi. Ordinamento deterministico.
   $al = New-Object System.Collections.ArrayList
   try {
     $procs = @{}
@@ -1510,20 +2003,50 @@ function Get-ServicesAudit {
     $deps = @{}
     Get-Service -ErrorAction SilentlyContinue | ForEach-Object {
       foreach ($d in $_.ServicesDependedOn) {
-        $dn = $d.Name.ToLower()
+        $dn = "$($d.Name)".ToLower()
         if ($deps.ContainsKey($dn)) { $deps[$dn]++ } else { $deps[$dn] = 1 }
       }
     }
-    Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object { $_.StartMode -in @('Auto', 'Manual') } | Select-Object -First 200 | ForEach-Object {
-      $shared = ($_.PathName -match '(?i)svchost\.exe\s+-k')
-      $ram = $null
-      if (-not $shared -and $_.ProcessId -gt 0 -and $procs.ContainsKey([int]$_.ProcessId)) { $ram = $procs[[int]$_.ProcessId] }
-      $dn = "$($_.Name)".ToLower()
+    $triggers = Get-ServiceTriggers
+    $svcs = @(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object { $_.StartMode -in @('Auto', 'Manual') })
+    # Quanti servizi vivi condividono lo stesso processo: serve a ripartire la
+    # RAM di un svchost fra i servizi che ci stanno dentro invece di buttarla.
+    $share = @{}
+    foreach ($s in $svcs) {
+      $sp = [int]$s.ProcessId
+      if ($sp -gt 0) {
+        if ($share.ContainsKey($sp)) { $share[$sp]++ } else { $share[$sp] = 1 }
+      }
+    }
+    # Il tetto di 220 taglia (qui ci sono ~300 servizi Auto+Manual su un PC
+    # normale) e va deciso, non subito: prima i servizi di terze parti, che sono
+    # quelli su cui si puo' davvero intervenire, poi gli Auto, poi quelli in
+    # esecuzione, poi per RAM. Ordinare per nome buttava via tutta la coda
+    # dell'alfabeto, WSearch e SysMain compresi.
+    $ranked = $svcs | Sort-Object `
+      @{ Expression = { if ("$($_.PathName)" -match '(?i)\\Windows\\') { 1 } else { 0 } } }, `
+      @{ Expression = { if ("$($_.StartMode)" -eq 'Auto') { 0 } else { 1 } } }, `
+      @{ Expression = { if ("$($_.State)" -eq 'Running') { 0 } else { 1 } } }, `
+      @{ Expression = { $p = [int]$_.ProcessId; if ($p -gt 0 -and $procs.ContainsKey($p)) { - [int]$procs[$p] } else { 0 } } }, `
+      @{ Expression = { "$($_.Name)".ToLower() } }
+    foreach ($s in ($ranked | Select-Object -First 220)) {
+      $shared = ("$($s.PathName)" -match '(?i)svchost\.exe\s+-k')
+      $sp = [int]$s.ProcessId
+      $ram = $null; $ramShared = $false
+      if ($sp -gt 0 -and $procs.ContainsKey($sp)) {
+        $n = $(if ($share.ContainsKey($sp)) { [int]$share[$sp] } else { 1 })
+        if ($n -le 1) { $ram = $procs[$sp] }
+        else { $ram = [math]::Round($procs[$sp] / $n); $ramShared = $true }
+      }
+      $dn = "$($s.Name)".ToLower()
+      $dl = $false
+      try { $dl = [bool]$s.DelayedAutoStart } catch {}
       [void]$al.Add(@{
-        name = "$($_.Name)"; display = "$($_.DisplayName)"; state = "$($_.State)"
-        start_mode = "$($_.StartMode)"; shared = $shared; ram_mb = $ram
+        name = "$($s.Name)"; display = "$($s.DisplayName)"; state = "$($s.State)"
+        start_mode = "$($s.StartMode)"; shared = $shared; ram_mb = $ram; ram_shared = $ramShared
+        trigger_start = $triggers.Contains($dn); delayed = $dl; account = "$($s.StartName)"
         dependents = $(if ($deps.ContainsKey($dn)) { [int]$deps[$dn] } else { 0 })
-        ms = ([bool]($_.PathName -match '(?i)\\Windows\\'))
+        ms = ([bool]("$($s.PathName)" -match '(?i)\\Windows\\'))
       })
     }
   } catch {}
@@ -2014,8 +2537,15 @@ function Send-AgentDiag($event, $detail) {
       -Headers @{ 'X-Agent-Token' = $TOKEN } -Body ($body | ConvertTo-Json -Depth 4 -Compress) -TimeoutSec 8 | Out-Null
   } catch {}
 }
+# Versione del rilevatore avvio/servizi. Va alzata quando la rilevazione cambia
+# COSA vede o COME lo raggruppa: il backend la usa per non scambiare "il PC e'
+# cambiato" con "e' cambiato il modo in cui lo guardiamo", che altrimenti al
+# primo sync dopo un aggiornamento produce decine di falsi "nuovo programma
+# all'avvio" e segna come fatti servizi che nessuno ha toccato.
+$script:STARTUP_REV = 2
+
 function Send-Data($specs, $health, $startup) {
-  $body = @{ data = $specs; health = $health; startup = $startup }
+  $body = @{ data = $specs; health = $health; startup = $startup; startup_rev = $script:STARTUP_REV }
   try { $svc = Get-ServicesAudit; if ($svc -and $svc.Count -gt 0) { $body.services_audit = $svc } } catch {}
   $body = [System.Text.Encoding]::UTF8.GetBytes(($body | ConvertTo-Json -Depth 6 -Compress))
   try { Invoke-RestMethod -Uri "$BACKEND/api/agent/report-specs" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $body | Out-Null } catch {}
@@ -3748,7 +4278,7 @@ __GUI_HTML__
             # sincrono, cosi' il client lo consuma con lo stesso codice.
             [void]$steps.Add((New-JobStep 'Invio i dati aggiornati a FrameForge...' {
               param($j, $a)
-              Send-Data (Get-Specs) (Get-Health) (Get-StartupList)
+              Send-Data (Get-Specs) (Get-Health) (Get-StartupListCached)
               WebLog '[ OK ] Ottimizzazioni applicate. Dati inviati a FrameForge. Riavvio consigliato.'
               $j.result.ok = $true
               $j.result.tweaks = Get-TweakDto
@@ -4247,7 +4777,7 @@ function Show-Gui {
       Send-Benchmark @{ before = $before; after = $after; ts = (Get-Date).ToString('o') }
     }
     Refresh-Status
-    Send-Data (Get-Specs) (Get-Health) (Get-StartupList)
+    Send-Data (Get-Specs) (Get-Health) (Get-StartupListCached)
     GuiLog 'FATTO. Dati inviati a FrameForge. Riavvio consigliato.'
     $script:APPLYBTN.Enabled = $true
   })
@@ -4320,13 +4850,29 @@ if ($MODE -eq 'autopilot' -or $MODE -eq 'cleanup') {
     Invoke-WebRequest -Uri "$BACKEND/api/autopilot/agent/result" -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -Body $__apBytes -UseBasicParsing -TimeoutSec 20 | Out-Null
     Say "[AUTO-PILOT] Rapporto inviato al dashboard." 'Green'
   } catch { Say ("[AUTO-PILOT] Invio rapporto fallito: {0}" -f $_.Exception.Message) 'Red' }
-  try { Send-Data (Get-Specs) $__apAfter (Get-StartupList) } catch {}
+  try { Send-Data (Get-Specs) $__apAfter (Get-StartupListCached) } catch {}
   Say "`n[DONE] Auto-Pilot completato. Controlla il rapporto sul dashboard." 'Green'
   Start-Sleep -Seconds 3
   return
 }
 
 if ($MODE -eq 'restore') { Say "`n[STEP] Ripristino dal backup..." 'Cyan'; Say ('   ' + (Invoke-Restore)) 'Green'; try { Invoke-RestMethod -Uri "$BACKEND/api/autopilot/agent/restore-done" -Method Post -Headers @{ 'X-Agent-Token' = $TOKEN; 'X-Device' = $env:COMPUTERNAME } -TimeoutSec 10 | Out-Null } catch {}; return }
+
+if ($MODE -eq 'startup') {
+  # La copia elevata che lancia Start-StartupElevato: fa solo le azioni in coda
+  # e chiude. Niente sync, niente rilevazione - la fotografia del PC la manda il
+  # processo che l'ha chiamata, appena questa finestra si chiude.
+  #
+  # `-NoElevate` chiude il cerchio: se per qualche motivo questa copia NON e'
+  # elevata (UAC spento, criterio di gruppo), riprova a elevarsi all'infinito.
+  Say "`n== FrameForge - azioni di avvio (amministratore) ==" 'Cyan'
+  if (-not (Test-Admin)) {
+    Say-Warn '   Questa finestra non ha i permessi di amministratore: le voci di sistema falliranno.'
+  }
+  $n = Invoke-StartupActions -NoElevate
+  Say ("`n[ OK ] {0} azione/i applicate. Puoi chiudere questa finestra." -f $n) 'Green'
+  return
+}
 
 if ($MODE -eq 'benchmark') {
   Say "`n[STEP] Benchmark (CPU / RAM / Disco / Rete)..." 'Cyan'
@@ -4418,15 +4964,16 @@ if ($MODE -eq 'optimize') {
 
   $__scanSpecs = $null; $__scanHealth = $null; $__scanStartup = $null; $__scanSvc = $null
   try { $__scanSpecs = Get-Specs;         Say ("  specs: CPU={0}, GPU={1}, RAM={2}" -f $__scanSpecs.cpu, $__scanSpecs.gpu, $__scanSpecs.ram) 'DarkGray' } catch { Say ("  Get-Specs FAIL: {0}" -f $_.Exception.Message) 'Red' }
+  try { [void](Invoke-StartupActions) } catch {}
   try { $__scanHealth = Get-Health;       Say ("  health: {0} chiavi" -f $__scanHealth.Count) 'DarkGray' } catch { Say ("  Get-Health FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
-  try { $__scanStartup = Get-StartupList; Say ("  startup: {0} app all'avvio" -f $__scanStartup.Count) 'DarkGray' } catch { Say ("  Get-StartupList FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
+  try { $__scanStartup = Get-StartupListCached; Say ("  startup: {0} app all'avvio" -f $__scanStartup.Count) 'DarkGray' } catch { Say ("  Get-StartupList FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
   try { $__scanSvc = Get-ServicesAudit;   Say ("  servizi: {0} controllati" -f $__scanSvc.Count) 'DarkGray' } catch { Say ("  Get-ServicesAudit FAIL: {0}" -f $_.Exception.Message) 'Yellow' }
 
   if ($__scanSpecs) {
     $__body = @{}
     if ($__scanSpecs)   { $__body.data    = $__scanSpecs }
     if ($__scanHealth)  { $__body.health  = $__scanHealth }
-    if ($__scanStartup) { $__body.startup = $__scanStartup }
+    if ($__scanStartup) { $__body.startup = $__scanStartup; $__body.startup_rev = $script:STARTUP_REV }
     if ($__scanSvc -and $__scanSvc.Count -gt 0) { $__body.services_audit = $__scanSvc }
     $__ok = __FsPost $__body 'specs+health+startup'
     if ($__ok) {
@@ -4482,7 +5029,7 @@ if ($MODE -eq 'optimize') {
     Save-Backup
     $after = Run-Benchmark; Show-Bench $after 'DOPO'
     Send-Benchmark @{ before = $before; after = $after; ts = (Get-Date).ToString('o') }
-    Send-Data (Get-Specs) (Get-Health) (Get-StartupList)
+    Send-Data (Get-Specs) (Get-Health) (Get-StartupListCached)
   }
   return
 }
@@ -5474,6 +6021,10 @@ public static class FFWin {
 }
 
 # default: sync (safe)
+# Prima le azioni in attesa, poi la rilevazione: al contrario, la dashboard
+# riceverebbe la fotografia di prima e la voce appena spenta risulterebbe ancora
+# accesa fino al sync successivo.
+try { [void](Invoke-StartupActions) } catch {}
 Say "`n[STEP] Rilevamento hardware, salute e avvio..." 'Cyan'
 if (-not (Test-Admin)) { Say-Info '   Suggerimento: esegui in PowerShell (Amministratore) per temperature CPU/GPU reali e analisi piu precisa.' }
 $specs = Get-Specs
@@ -5504,7 +6055,7 @@ elseif (Test-Admin) {
     Say-Info '   Il driver sensori CPU non ha risposto (possibile blocco antivirus). La temp GPU funziona comunque.'
   }
 }
-Send-Data $specs $health (Get-StartupList)
+Send-Data $specs $health (Get-StartupListCached)
 $games = Get-Games
 if ($games.Count -gt 0) { Send-Games $games; Say ("   Giochi rilevati: {0}" -f $games.Count) 'DarkGray' }
 $running = Get-RunningApps

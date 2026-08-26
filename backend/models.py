@@ -52,6 +52,9 @@ class SpecsInput(BaseModel):
     # ricchi). Normalizzato server-side in _normalize_startup prima di scrivere.
     startup: Optional[list[Any]] = None
     services_audit: Optional[list[Any]] = None
+    # Versione del rilevatore avvio/servizi dell'agent: serve a distinguere "e'
+    # cambiato il PC" da "e' cambiato come lo guardiamo" (vedi report-specs).
+    startup_rev: Optional[int] = None
     benchmark: Optional[dict[str, Any]] = None
     games: Optional[list[str]] = None
     running_apps: Optional[list[str]] = None
@@ -163,3 +166,20 @@ class LabCheckInput(BaseModel):
 class LabEventInput(BaseModel):
     type: str = Field(max_length=40)
     data: Optional[dict[str, Any]] = None
+
+
+class StartupToggleInput(BaseModel):
+    """Accensione/spegnimento di una voce di avvio decisa dalla dashboard.
+
+    La voce si identifica con nome + fonte, che e' la coppia con cui l'agent la
+    rileva: due programmi possono chiamarsi uguale in un servizio e in una
+    chiave Run, e sono due cose diverse da spegnere.
+    """
+    name: str = Field(min_length=1, max_length=260)
+    source: Optional[str] = Field(default=None, pattern="^(registry|runonce|folder|task|service|uwp)$")
+    enable: bool = False
+
+
+class StartupActionResultsInput(BaseModel):
+    """Esiti riportati dall'agent dopo aver applicato le azioni in attesa."""
+    results: list[dict[str, Any]] = Field(default_factory=list)
